@@ -160,6 +160,12 @@ struct Arr {
 };
 
 template <typename T>
+const T& last(const Arr<T> a) {
+	assert(!a.isEmpty());
+	return a[a.size - 1];
+}
+
+template <typename T>
 struct PtrsIter {
 	const T* ptr;
 
@@ -470,6 +476,14 @@ inline Str strLiteral(const char* c) {
 
 template <typename T>
 inline void unused(__attribute__((unused)) T& t) {}
+template <typename T, typename U>
+inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u) {}
+template <typename T, typename U, typename V>
+inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u, __attribute__((unused)) V& v) {}
+template <typename T, typename U, typename V, typename W>
+inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u, __attribute__((unused)) V& v, __attribute__((unused)) W& w) {}
+template <typename T, typename U, typename V, typename W, typename X>
+inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u, __attribute__((unused)) V& v, __attribute__((unused)) W& w, __attribute__((unused)) X& x) {}
 
 template <typename Success, typename Failure>
 struct Result {

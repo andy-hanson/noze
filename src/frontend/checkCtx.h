@@ -42,6 +42,8 @@ struct CheckCtx {
 	const Arr<const Module*> imports;
 	ArrBuilder<const Diagnostic> diagsBuilder = ArrBuilder<const Diagnostic>{};
 
+	CheckCtx(const CheckCtx&) = delete;
+
 	inline void diag(const SourceRange range, const Diag diag) {
 		diagsBuilder.add(arena, Diagnostic{path, range, diag});
 	}
