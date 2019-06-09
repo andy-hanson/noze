@@ -150,7 +150,7 @@ namespace {
 
 	bool bodyUsesIt(const ExprAst body) {
 		return someInOwnBody(body, [](const ExprAst it) {
-			return it.kind.isIdentifier() && strEq(it.kind.asIdentifier().name, "it");
+			return it.kind.isIdentifier() && strEqLiteral(it.kind.asIdentifier().name, "it");
 		});
 	}
 

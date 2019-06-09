@@ -80,15 +80,15 @@ const Lexer::ExpressionToken Lexer::takeExpressionToken()  {
 				return takeOperator(begin);
 			else if (isLowerCaseLetter(c)) {
 				const Str name = takeNameRest(begin);
-				return strEq(name, "actor")
+				return strEqLiteral(name, "actor")
 					? ExpressionToken{ExpressionToken::Kind::actor}
-					: strEq(name, "match")
+					: strEqLiteral(name, "match")
 					? ExpressionToken{ExpressionToken::Kind::match}
-					: strEq(name, "new")
+					: strEqLiteral(name, "new")
 					? ExpressionToken{ExpressionToken::Kind::_new}
-					: strEq(name, "new-arr")
+					: strEqLiteral(name, "new-arr")
 					 ? ExpressionToken{ExpressionToken::Kind::newArr}
-					: strEq(name, "when")
+					: strEqLiteral(name, "when")
 					? ExpressionToken{ExpressionToken::Kind::when}
 					: ExpressionToken{NameAndRange{range(begin), name}};
 			} else if (isDigit(c))

@@ -1,6 +1,7 @@
 #include "./check.h"
 
 #include "./checkCtx.h"
+#include "./checkExpr.h" // checkFunctionBody
 #include "./typeFromAst.h"
 
 namespace {
@@ -353,14 +354,45 @@ namespace {
 
 	template <typename T>
 	const Dict<const Str, T*, strEq> buildDeclsDict(CheckCtx& ctx, const Arr<T> ts, const Diag::DuplicateDeclaration::Kind kind) {
-		unused(ctx); unused(ts); unused(kind);
-		return todo<Dict<const Str, T*, strEq>>("buildDeclsDict");
+		return buildDict<const Str, T*, strEq>{}(
+			ctx.arena,
+			ts,
+			[](T& it) {
+				return KeyValuePair<const Str, T*>{it.name, &it};
+			},
+			[&](const Str name, __attribute__((unused)) T* _, T* t) {
+				ctx.diag(t->range, Diag{Diag::DuplicateDeclaration{kind, name}});
+			});
 	}
 
 	struct FunsAndMap {
 		const Arr<const FunDecl> funs;
 		const FunsMap funsMap;
 	};
+
+	const Arr<const SpecUse> checkSpecUses(
+		CheckCtx& ctx,
+		const Arr<const SpecUseAst> asts,
+		const StructsAndAliasesMap& structsAndAliasesMap,
+		const SpecsMap& specsMap,
+		const TypeParamsScope& typeParamsScope
+	) {
+		return mapOpWithIndex<const SpecUse>{}(ctx.arena, asts, [&](const SpecUseAst ast, const size_t index) {
+			Opt<const SpecDecl*> opSpec = tryFindSpec(ctx, ast.spec, ast.range, specsMap);
+			if (opSpec.has()) {
+				const SpecDecl* spec = opSpec.force();
+				const Arr<const Type> args = typeArgsFromAsts(ctx, ast.typeArgs, structsAndAliasesMap, typeParamsScope, none<MutArr<StructInst*>&>());
+				if (args.size != spec->typeParams.size) {
+					ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, args.size}});
+					return none<const SpecUse>();
+				} else
+					return some<const SpecUse>(SpecUse{spec, args, index});
+			} else {
+				ctx.diag(ast.range, Diag{Diag::NameNotFound{ctx.copyStr(ast.spec), Diag::NameNotFound::Kind::spec}});
+				return none<const SpecUse>();
+			}
+		});
+	}
 
 	const FunsAndMap checkFuns(
 		CheckCtx& ctx,
@@ -369,12 +401,36 @@ namespace {
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const Arr<const FunDeclAst> asts
 	) {
-		unused(ctx);
-		unused(commonTypes);
-		unused(specsMap);
-		unused(structsAndAliasesMap);
-		unused(asts);
-		return todo<const FunsAndMap>("FunsAndMap");
+		const Arr<FunDecl> funs = map<FunDecl>{}(ctx.arena, asts, [&](const FunDeclAst funAst) {
+			const SigAndTypeParams stp = checkSig(
+				ctx, funAst.typeParams, funAst.sig, emptyArr<const TypeParam>(), structsAndAliasesMap, none<MutArr<StructInst*>&>());
+			const TypeParamsScope typeParamsScope = TypeParamsScope{stp.typeParams};
+			const Arr<const SpecUse> specUses = checkSpecUses(ctx, funAst.specUses, structsAndAliasesMap, specsMap, typeParamsScope);
+			const FunFlags flags = FunFlags{funAst.noCtx, funAst.summon, funAst.unsafe, funAst.trusted};
+			return FunDecl{funAst.isPublic, flags, stp.sig, stp.typeParams, specUses};
+		});
+
+		const FunsMap funsMap = buildMultiDict<const Str, const FunDecl*, strEq>{}(
+			ctx.arena,
+			funs,
+			[](const FunDecl& it) {
+				return KeyValuePair<const Str, const FunDecl*>{it.name(), &it};
+			});
+
+		zip(funs, asts, [&](FunDecl& fun, const FunDeclAst funAst) {
+			fun.setBody(funAst.body.match(
+				/*builtin*/ []() {
+					return FunBody::builtin();
+				},
+				/*extern*/ []() {
+					return FunBody::_extern();
+				},
+				[&](const ExprAst e) {
+					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, fun, commonTypes)};
+				}));
+		});
+
+		return FunsAndMap{funs.asConst(), funsMap};
 	}
 
 	template <typename GetCommonTypes>

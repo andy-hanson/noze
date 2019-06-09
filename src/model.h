@@ -114,6 +114,18 @@ public:
 	}
 };
 
+//TODO:MOVE?
+inline bool typeEquals(const Type a, const Type b) {
+	return a.match(
+		/*bogus*/ [&]() { return b.isBogus(); },
+		[&](const TypeParam* p) {
+			return b.isTypeParam() && ptrEquals(p, b.asTypeParam());
+		},
+		[&](const StructInst* s) {
+			return b.isStructInst() && ptrEquals(s, b.asStructInst());
+		});
+}
+
 struct Param {
 	const SourceRange range;
 	const Identifier name;
@@ -262,7 +274,12 @@ struct StructDecl {
 	// Note: purity on the decl does not take type args into account
 	const Purity purity;
 	mutable MutArr<const StructInst*> insts = MutArr<const StructInst*>{};
-	Late<const StructBody> _body;
+private:
+	Late<const StructBody> _body = Late<const StructBody>{};
+public:
+	inline bool bodyIsSet() const {
+		return _body.isSet();
+	}
 	inline StructBody body() const {
 		return _body.get();
 	}
@@ -280,10 +297,11 @@ struct StructInst {
 	const StructDecl* decl;
 	const Arr<const Type> typeArgs;
 	const Purity purity;
+private:
 	// Like decl->body, but has type args filled in.
 	Late<StructBody> _body;
-
-	inline StructInst(const StructDecl* d, const Arr<const Type> t, const Purity p) : decl{d}, typeArgs{t}, purity{p} {
+public:
+	inline StructInst(const StructDecl* d, const Arr<const Type> t, const Purity p) : decl{d}, typeArgs{t}, purity{p}, _body{} {
 		assert(d->typeParams.size == t.size);
 	}
 	inline StructBody body() const {
@@ -305,19 +323,25 @@ struct SpecDecl {
 struct Expr;
 
 struct FunBody {
+private:
 	enum class Kind {
 		builtin,
 		_extern,
 		expr,
 	};
-private:
 	const Kind kind;
 	union {
 		const Expr* expr;
 	};
-public:
 	inline FunBody(const Kind _kind) : kind{_kind} {
 		assert(kind == Kind::builtin || kind == Kind::_extern);
+	}
+public:
+	static inline FunBody builtin() {
+		return FunBody{Kind::builtin};
+	}
+	static inline FunBody _extern() {
+		return FunBody{Kind::_extern};
 	}
 	inline FunBody(const Expr* _expr) : kind{Kind::expr}, expr{_expr} {}
 
@@ -370,7 +394,7 @@ struct FunDecl {
 	const Sig sig;
 	const Arr<const TypeParam> typeParams;
 	const Arr<const SpecUse> specs;
-	Late<FunBody> _body;
+	Late<FunBody> _body = Late<FunBody>{};
 
 	inline const FunBody body() const {
 		return _body.get();
@@ -486,7 +510,7 @@ public:
 
 using StructsAndAliasesMap = Dict<const Str, const StructOrAlias, strEq>;
 using SpecsMap = Dict<const Str, const SpecDecl*, strEq>;
-using FunsMap = MultiDict<Str, FunDecl, strEq>;
+using FunsMap = MultiDict<Str, const FunDecl*, strEq>;
 
 struct Module {
 	const PathAndStorageKind pathAndStorageKind;

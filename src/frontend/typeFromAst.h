@@ -12,13 +12,21 @@ struct TypeParamsScope {
 
 using DelayStructInsts = const Opt<MutArr<StructInst*>&>;
 
-const Type typeFromAst(
-	CheckCtx& ctx,
-	const TypeAst ast,
-	const StructsAndAliasesMap& structsAndAliasesMap,
-	const TypeParamsScope& typeParamsScope,
-	DelayStructInsts delayStructInsts
-);
+const Type instantiateType(Arena& arena, const Type type, const Arr<const TypeParam> typeParams, const Arr<const Type> typeArgs);
+
+const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs);
+
+const StructInst* instantiateStruct(
+	Arena& arena,
+	const StructDecl* decl,
+	const Arr<const Type> typeArgs,
+	DelayStructInsts delayStructInsts);
+
+const StructInst* instantiateStructInst(Arena& arena, const StructInst* structInst, const Arr<const TypeParam> typeParams, const Arr<const Type> typeArgs);
+
+inline const StructInst* instantiateStructNeverDelay(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
+	return instantiateStruct(arena, decl, typeArgs, none<MutArr<StructInst*>&>());
+}
 
 const Opt<const StructInst*> instStructFromAst(
 	CheckCtx& ctx,
@@ -27,13 +35,44 @@ const Opt<const StructInst*> instStructFromAst(
 	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts);
 
-const StructInst* instantiateStruct(
-	Arena& arena,
-	const StructDecl* decl,
-	const Arr<const Type> typeArgs,
-	DelayStructInsts delayStructInsts);
+inline const Opt<const StructInst*> instStructFromAstNeverDelay(
+	CheckCtx& ctx,
+	const TypeAst::InstStruct ast,
+	const StructsAndAliasesMap structsAndAliasesMap,
+	const TypeParamsScope typeParamsScope
+) {
+	return instStructFromAst(ctx, ast, structsAndAliasesMap, typeParamsScope, none<MutArr<StructInst*>&>());
+}
 
-const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs);
+const Type typeFromAst(
+	CheckCtx& ctx,
+	const TypeAst ast,
+	const StructsAndAliasesMap& structsAndAliasesMap,
+	const TypeParamsScope& typeParamsScope,
+	DelayStructInsts delayStructInsts
+);
+
+const Opt<const SpecDecl*> tryFindSpec(
+	CheckCtx& ctx,
+	const Str name,
+	const SourceRange range,
+	const SpecsMap specsMap);
+
+const Arr<const Type> typeArgsFromAsts(
+	CheckCtx& ctx,
+	const Arr<const TypeAst> typeAsts,
+	const StructsAndAliasesMap structsAndAliasesMap,
+	const TypeParamsScope typeParamsScope,
+	DelayStructInsts delayStructInsts
+);
+
+template <typename T>
+Opt<T*> tryGetTypeArg(const Arr<const TypeParam> typeParams, const Arr<T> typeArgs, const TypeParam* typeParam) {
+	const bool hasTypeParam = typeParams.begin() + typeParam->index == typeParam;
+	return hasTypeParam
+		? some<T*>(typeArgs.getPtr(typeParam->index))
+		: none<T*>();
+}
 
 bool typeIsPossiblySendable(const Type type);
 

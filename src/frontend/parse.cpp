@@ -208,17 +208,17 @@ namespace {
 
 	AfterSigKeyword parseAfterSigKeyword(Lexer& lexer) {
 		const Str name = lexer.takeName();
-		if (strEq(name, "noctx"))
+		if (strEqLiteral(name, "noctx"))
 			return AfterSigKeyword::noCtx;
-		else if (strEq(name, "summon"))
+		else if (strEqLiteral(name, "summon"))
 			return AfterSigKeyword::summon;
-		else if (strEq(name, "unsafe"))
+		else if (strEqLiteral(name, "unsafe"))
 			return AfterSigKeyword::unsafe;
-		else if (strEq(name, "trusted"))
+		else if (strEqLiteral(name, "trusted"))
 			return AfterSigKeyword::trusted;
-		else if (strEq(name, "builtin"))
+		else if (strEqLiteral(name, "builtin"))
 			return AfterSigKeyword::builtin;
-		else if (strEq(name, "extern"))
+		else if (strEqLiteral(name, "extern"))
 			return AfterSigKeyword::_extern;
 		else
 			return todo<const AfterSigKeyword>("bad after-sig keyword");

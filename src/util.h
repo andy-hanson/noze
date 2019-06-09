@@ -225,6 +225,11 @@ struct MutSlice {
 	inline MutSlice(T* const b, const size_t s)
 		: isFrozen{false}, begin{b}, size{s} {}
 
+	inline T& operator[](const size_t index) {
+		assert(index < size);
+		return begin[index];
+	}
+
 	inline const T& operator[](const size_t index) const {
 		assert(index < size);
 		return begin[index];
@@ -271,6 +276,10 @@ private:
 
 public:
 	inline MutArr() : slice{nullptr, 0}, _size{0} {}
+
+	inline T& operator[](const size_t index) {
+		return slice[index];
+	}
 
 	inline const T& operator[](const size_t index) const {
 		return slice[index];
@@ -368,6 +377,17 @@ inline Arr<T> arrLiteral(Arena& arena, T a, T b) {
 }
 
 template <typename Out>
+struct fillArr {
+	template <typename Cb>
+	Arr<Out> operator()(Arena& arena, const size_t size, Cb cb) {
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		for (size_t i = 0; i < size; i++)
+			initMemory(out[i], cb(i));
+		return Arr<Out>{out, size};
+	}
+};
+
+template <typename Out>
 struct map {
 	template <typename In, typename Cb>
 	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
@@ -389,11 +409,50 @@ struct mapWithIndex {
 	}
 };
 
+template <typename Out>
+struct mapOpWithIndex {
+	template <typename In, typename Cb>
+	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+		size_t out_i = 0;
+		for (size_t in_i = 0; in_i < in.size; in_i++) {
+			Opt<Out> op = cb(in[in_i], in_i);
+			if (op.has()) {
+				initMemory(out[out_i], op.force());
+				out_i++;
+			}
+		}
+		assert(out_i <= in.size);
+		return Arr<Out>{out, out_i};
+	}
+};
+
 template <typename T, typename U, typename Cb>
 void zip(Arr<T> a, Arr<U> b, Cb cb) {
 	assert(a.size == b.size);
 	for (size_t i = 0; i < a.size; i++)
 		cb(a[i], b[i]);
+}
+
+template <typename T, typename U, typename Cb>
+bool eachCorresponds(const Arr<T> a, const Arr<U> b, Cb cb) {
+	assert(a.size == b.size);
+	for (size_t i = 0; i < a.size; i++) {
+		const bool thisCorresponds = cb(a[i], b[i]);
+		if (!thisCorresponds)
+			return false;
+	}
+	return true;
+}
+
+template <typename T, typename Cb>
+bool every(const Arr<T> a, Cb cb) {
+	for (const T& t : a) {
+		const bool b = cb(t);
+		if (!b)
+			return false;
+	}
+	return true;
 }
 
 using Str = const Arr<const char>;
@@ -493,11 +552,11 @@ template <typename K, typename V, Eq<K> eq>
 struct Dict {
 	Arr<KeyValuePair<K, V>> pairs;
 
-	const Opt<const V> get(const K key) const {
+	const Opt<V> get(const K key) const {
 		for (const KeyValuePair<K, V>& pair : pairs)
 			if (eq(pair.key, key))
-				return some<const V>(pair.value);
-		return none<const V>();
+				return some<V>(pair.value);
+		return none<V>();
 	}
 };
 
@@ -535,7 +594,56 @@ public:
 
 template <typename K, typename V, Eq<K> eq>
 struct MultiDict {
+	Arr<KeyValuePair<K, Arr<V>>> pairs;
+};
 
+template <typename K, typename V, Eq<K> eq>
+struct buildDict {
+	template <typename T, typename GetPair, typename OnConflict>
+	Dict<K, V, eq> operator()(Arena& arena, const Arr<T> inputs, GetPair getPair, OnConflict onConflict) {
+		MutArr<KeyValuePair<K, V>> res;
+		for (const T& input : inputs) {
+			KeyValuePair<K, V> pair = getPair(input);
+			bool wasConflict = false;
+			for (size_t i = 0; i < res.size(); i++)
+				if (eq(res[i].key, pair.key)) {
+					onConflict(pair.key, res[i].value, pair.value);
+					wasConflict = true;
+					break;
+				}
+			if (!wasConflict)
+				res.push(arena, pair);
+		}
+		return Dict<K, V, eq>{res.freeze()};
+	}
+};
+
+template <typename K, typename V, Eq<K> eq>
+struct buildMultiDict {
+	template <typename T, typename GetPair>
+	MultiDict<K, V, eq> operator()(Arena& arena, const Arr<T> inputs, GetPair getPair) {
+		MutArr<KeyValuePair<K, MutArr<V>>> res;
+		for (const T& input : inputs) {
+			KeyValuePair<K, V> pair = getPair(input);
+			bool didAdd = false;
+			for (size_t i = 0; i < res.size(); i++)
+				if (eq(res[i].key, pair.key)) {
+					res[i].value.push(arena, pair.value);
+					didAdd = true;
+					break;
+				}
+			if (!didAdd) {
+				MutArr<V> m = MutArr<V>{};
+				m.push(arena, pair.value);
+				res.push(arena, KeyValuePair<K, MutArr<V>>{pair.key, m});
+			}
+		}
+		const Arr<KeyValuePair<K, MutArr<V>>> arr = res.freeze();
+		const Arr<KeyValuePair<K, Arr<V>>> pairs = map<KeyValuePair<K, Arr<V>>>{}(arena, arr, [](KeyValuePair<K, MutArr<V>> m) {
+			return KeyValuePair<K, Arr<V>>{m.key, m.value.freeze()};
+		});
+		return MultiDict<K, V, eq>{pairs};
+	}
 };
 
 template <typename T>

@@ -422,7 +422,7 @@ public:
 	FunBodyAst(ExprAst e) : kind{Kind::exprAst}, exprAst{e} {}
 
 	template <typename CbBuiltin, typename CbExtern, typename CbExprAst>
-	inline auto match(CbBuiltin cbBuiltin, CbExtern cbExtern, CbExprAst cbExprAst) {
+	inline auto match(CbBuiltin cbBuiltin, CbExtern cbExtern, CbExprAst cbExprAst) const {
 		switch (kind) {
 			case Kind::builtin:
 				return cbBuiltin();
@@ -446,7 +446,7 @@ struct FunDeclAst {
 	const bool summon;
 	const bool unsafe;
 	const bool trusted;
-	const FunBodyAst bod;
+	const FunBodyAst body;
 };
 
 struct ImportAst {

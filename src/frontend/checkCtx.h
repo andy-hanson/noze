@@ -17,8 +17,8 @@ struct IncludeAndImportsIter {
 		index++;
 	}
 
-	inline bool operator==(const IncludeAndImportsIter other) const {
-		return index == other.index;
+	inline bool operator!=(const IncludeAndImportsIter other) const {
+		return index != other.index;
 	}
 };
 
@@ -54,7 +54,7 @@ struct CheckCtx {
 		return diagsBuilder.finish();
 	}
 
-	inline const IncludeAndImportsRange includeAndImportsRange() const {
+	inline IncludeAndImportsRange includeAndImportsRange() const {
 		return IncludeAndImportsRange{include, imports};
 	}
 
