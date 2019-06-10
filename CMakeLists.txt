@@ -5,7 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_executable(test2
 	src/frontend/check.cpp
+	src/frontend/checkCall.cpp
 	src/frontend/checkExpr.cpp
+	src/frontend/inferringType.cpp
 	src/frontend/lexer.cpp
 	src/frontend/parse.cpp
 	src/frontend/parseExpr.cpp

@@ -47,7 +47,7 @@ namespace {
 			return ArgsAndMaybeDedent{emptyArr<const ExprAst>(), none<const size_t>()};
 		else {
 			auto dedents = Cell<const Opt<const size_t>>{none<const size_t>()};
-			auto args = ArrBuilder<const ExprAst>();
+			ArrBuilder<const ExprAst> args {};
 			do {
 				const ExprAndMaybeDedent ad = parseExprArg(lexer, ctx);
 				args.add(lexer.arena, ad.expr);
@@ -107,7 +107,7 @@ namespace {
 			[&](const CallAst e) {
 				return exists(e.args, r);
 			},
-			[](__attribute__((unused)) const CondAst _) {
+			[](const CondAst) {
 				return unreachable<bool>();
 			},
 			[&](const CreateArrAst e) {
@@ -116,34 +116,34 @@ namespace {
 			[&](const CreateRecordAst e) {
 				return exists(e.args, r);
 			},
-			[](__attribute__((unused)) const FunAsLambdaAst _) {
+			[](const FunAsLambdaAst) {
 				return false;
 			},
-			[](__attribute__((unused)) const IdentifierAst _) {
+			[](const IdentifierAst) {
 				return false;
 			},
-			[](__attribute__((unused)) const LambdaAst _) {
+			[](const LambdaAst) {
 				return false;
 			},
-			[](__attribute__((unused)) const LetAst _) {
+			[](const LetAst) {
 				return unreachable<bool>();
 			},
-			[&](const LiteralAst e) {
-				return exists(e.args, r);
+			[](const LiteralAst) {
+				return false;
 			},
-			[](__attribute__((unused)) const MatchAst _) {
+			[](const MatchAst) {
 				return unreachable<bool>();
 			},
 			[&](const MessageSendAst e) {
 				return r(*e.target) || exists(e.args, r);
 			},
-			[](__attribute__((unused)) const NewActorAst _) {
+			[](const NewActorAst) {
 				return unreachable<bool>();
 			},
-			[](__attribute__((unused)) const SeqAst _) {
+			[](const SeqAst) {
 				return unreachable<bool>();
 			},
-			[](__attribute__((unused)) const ThenAst _) {
+			[](const ThenAst) {
 				return unreachable<bool>();
 			});
 	}
@@ -170,7 +170,7 @@ namespace {
 		const ExprAst* matched = alloc(lexer, parseExprNoBlock(lexer));
 		lexer.takeIndent();
 
-		auto cases = ArrBuilder<const MatchAst::CaseAst>{};
+		ArrBuilder<const MatchAst::CaseAst> cases {};
 		const size_t matchDedents = [&]() {
 			while (true) {
 				const Str structName = lexer.takeName();
@@ -225,7 +225,7 @@ namespace {
 			if (lexer.tryTake(')'))
 				return emptyArr<const NewActorAst::Field>();
 			else {
-				auto res = ArrBuilder<const NewActorAst::Field>{};
+				ArrBuilder<const NewActorAst::Field> res {};
 				do {
 					const Str name = lexer.takeName();
 					if (!lexer.tryTake(" = "))
@@ -239,7 +239,7 @@ namespace {
 		}();
 
 		lexer.takeIndent();
-		auto messages = ArrBuilder<const NewActorAst::MessageImpl>{};
+		ArrBuilder<const NewActorAst::MessageImpl> messages {};
 		const size_t extraDedents = [&]() {
 			while (true) {
 				const Str messageName = lexer.takeName();
@@ -248,7 +248,7 @@ namespace {
 					if (lexer.tryTake(')'))
 						return emptyArr<const NameAndRange>();
 					else {
-						auto res = ArrBuilder<const NameAndRange>{};
+						ArrBuilder<const NameAndRange> res {};
 						res.add(lexer.arena, lexer.takeNameAndRange());
 						while (lexer.tryTake(", "))
 							res.add(lexer.arena, lexer.takeNameAndRange());
@@ -271,7 +271,7 @@ namespace {
 	}
 
 	const ExprAndMaybeDedent parseLambda(Lexer& lexer, const Pos start) {
-		auto parameters = ArrBuilder<const LambdaAst::Param>{};
+		ArrBuilder<const LambdaAst::Param> parameters {};
 		bool isFirst = true;
 		while (!lexer.tryTakeIndent()) {
 			if (isFirst)
@@ -320,17 +320,7 @@ namespace {
 			}
 			case Kind::literal: {
 				const Str literal = et.asLiteral();
-				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-				// e.g. `i = 123456789(xyz)`
-				const Arr<const ExprAst> args = lexer.tryTake('(')
-					? [&]() {
-						const ArgsAndMaybeDedent res = parseArgs(lexer, ArgCtx{/*allowBlock*/ false, /*allowCall*/ true});
-						lexer.take(')');
-						assert(!res.dedent.has());
-						return res.args;
-					}()
-					: emptyArr<const ExprAst>();
-				const ExprAst expr = ExprAst{getRange(), ExprAstKind{LiteralAst{literal, typeArgs, args}}};
+				const ExprAst expr = ExprAst{getRange(), ExprAstKind{LiteralAst{literal}}};
 				return noDedent(tryParseDots(lexer, expr));
 			}
 			case Kind::lparen: {

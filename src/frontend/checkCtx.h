@@ -40,7 +40,7 @@ struct CheckCtx {
 	const PathAndStorageKind path;
 	const Opt<const Module*> include;
 	const Arr<const Module*> imports;
-	ArrBuilder<const Diagnostic> diagsBuilder = ArrBuilder<const Diagnostic>{};
+	ArrBuilder<const Diagnostic> diagsBuilder {};
 
 	CheckCtx(const CheckCtx&) = delete;
 

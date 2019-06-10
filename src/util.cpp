@@ -20,11 +20,5 @@ const Str copyStr(Arena& arena, const Str in) {
 
 bool strEq(const Str& a, const Str& b) {
 	return (a.size == b.size) &&
-		(a.size == 0 || strEq(a.tail(), b.tail()));
-}
-
-bool strEqLiteral(const Str s, const char* c) {
-	return *c == '\0'
-		? s.isEmpty()
-		: !s.isEmpty() && strEqLiteral(s.tail(), c + 1);
+		(a.size == 0 || strEq(tail(a), tail(b)));
 }

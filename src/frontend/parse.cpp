@@ -7,7 +7,7 @@
 namespace {
 	const Arr<const TypeParamAst> parseTypeParams(Lexer& lexer) {
 		if (lexer.tryTake('<')) {
-			auto res = ArrBuilder<const TypeParamAst>{};
+			ArrBuilder<const TypeParamAst> res {};
 			do {
 				const Pos start = lexer.at();
 				lexer.take('?');
@@ -46,7 +46,7 @@ namespace {
 		if (lexer.tryTake(')'))
 			return emptyArr<const ParamAst>();
 		else {
-			auto res = ArrBuilder<const ParamAst>{};
+			ArrBuilder<const ParamAst> res {};
 			while (true) {
 				const Pos start = lexer.at();
 				const Str name = lexer.takeName();
@@ -75,7 +75,7 @@ namespace {
 	}
 
 	const Arr<const ImportAst> parseImports(Lexer& lexer) {
-		auto imports = ArrBuilder<const ImportAst>{};
+		ArrBuilder<const ImportAst> imports {};
 		do {
 			imports.add(lexer.arena, parseSingleImport(lexer));
 		} while (lexer.tryTake(' '));
@@ -84,7 +84,7 @@ namespace {
 	}
 
 	const Arr<const SigAst> parseIndentedSigs(Lexer& lexer) {
-		auto res = ArrBuilder<const SigAst>{};
+		ArrBuilder<const SigAst> res {};
 		do {
 			res.add(lexer.arena, parseSig(lexer));
 		} while (lexer.takeNewlineOrSingleDedent() == Lexer::NewlineOrDedent::newline);
@@ -145,7 +145,7 @@ namespace {
 	}
 
 	const Arr<const StructDeclAst::Body::Fields::Field> parseFields(Lexer& lexer) {
-		auto res = ArrBuilder<const StructDeclAst::Body::Fields::Field>{};
+		ArrBuilder<const StructDeclAst::Body::Fields::Field> res {};
 		do {
 			const Str name = lexer.takeName();
 			lexer.take(' ');
@@ -156,7 +156,7 @@ namespace {
 	}
 
 	const Arr<const TypeAst::InstStruct> parseUnionMembers(Lexer& lexer) {
-		auto res = ArrBuilder<const TypeAst::InstStruct>{};
+		ArrBuilder<const TypeAst::InstStruct> res {};
 		do {
 			const Pos start = lexer.at();
 			const Str name = lexer.takeName();
@@ -172,7 +172,7 @@ namespace {
 	};
 
 	const SpecUsesAndSpace parseSpecUses(Lexer& lexer) {
-		auto su = ArrBuilder<const SpecUseAst>{};
+		ArrBuilder<const SpecUseAst> su {};
 		const bool spaceAtEnd = [&]() {
 			while (true) {
 				if (!lexer.tryTake(' '))
@@ -376,10 +376,10 @@ namespace {
 			? parseImports(lexer)
 			: emptyArr<const ImportAst>();
 
-		auto specs = ArrBuilder<const SpecDeclAst>{};
-		auto structAliases = ArrBuilder<const StructAliasAst>{};
-		auto structs = ArrBuilder<const StructDeclAst>{};
-		auto funs = ArrBuilder<const FunDeclAst>{};
+		ArrBuilder<const SpecDeclAst> specs {};
+		ArrBuilder<const StructAliasAst> structAliases {};
+		ArrBuilder<const StructDeclAst> structs {};
+		ArrBuilder<const FunDeclAst> funs {};
 
 		bool isPublic = true;
 		while (true) {

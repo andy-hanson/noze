@@ -137,7 +137,7 @@ const Opt<const StructInst*> instStructFromAst(
 		const size_t nActualTypeArgs = ast.typeArgs.size;
 		if (nActualTypeArgs != nExpectedTypeArgs) {
 			ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForStruct{sOrA, nExpectedTypeArgs, nActualTypeArgs}});
-			return fillArr<const Type>{}(ctx.arena, nExpectedTypeArgs, [](__attribute__((unused)) const size_t _) { return Type::bogus(); });
+			return fillArr<const Type>{}(ctx.arena, nExpectedTypeArgs, [](const size_t) { return Type::bogus(); });
 		} else
 			return typeArgsFromAsts(ctx, ast.typeArgs, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 	}();
@@ -206,7 +206,7 @@ bool typeIsPossiblySendable(const Type type) {
 		/*bogus*/ []() {
 			return true;
 		},
-		[](__attribute__((unused)) const TypeParam* _) {
+		[](const TypeParam*) {
 			// type param *might* have a sendable type arg. Issue errors when instantiating a generic iface, not declaring it.
 			return true;
 		},

@@ -2,8 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
+#include <cstdlib> // malloc
 #include <new> // Support placement new
 #include <cstdio> // printf
 #include <type_traits> // remove_const
@@ -80,9 +79,12 @@ inline Opt<T> some(T value) {
 }
 
 template <typename T>
-void initMemory(const T& to, T from) {
+void initMemory(const T& to, const T& from) {
 	// T may contain const members, so do initialization by blitting
-	std::memcpy(const_cast<typename std::remove_const<T>::type*>(&to), &from, sizeof(T));
+	byte* toByte = const_cast<byte*>(reinterpret_cast<const byte*>(&to));
+	const byte* fromByte = reinterpret_cast<const byte*>(&from);
+	for (size_t i = 0; i < sizeof(T); i++)
+		toByte[i] = fromByte[i];
 }
 
 template <typename T>
@@ -135,7 +137,12 @@ struct Arr {
 		return _begin[index];
 	}
 
-	inline T* getPtr(size_t index) const {
+	inline T* getPtr(size_t index) {
+		assert(index < size);
+		return _begin + index;
+	}
+
+	inline const T* getPtr(size_t index) const {
 		assert(index < size);
 		return _begin + index;
 	}
@@ -149,15 +156,22 @@ struct Arr {
 		return Arr{begin, static_cast<size_t>(end - begin)};
 	}
 
-	inline const Arr<T> tail() const {
-		assert(!isEmpty());
-		return Arr<T>{_begin + 1, size - 1};
-	}
-
 	inline const Arr<const T> asConst() const {
 		return Arr<const T>{_begin, size};
 	}
 };
+
+template <typename T>
+inline const T& first(const Arr<T> a) {
+	assert(!a.isEmpty());
+	return a[0];
+}
+
+template <typename T>
+inline const Arr<T> tail(const Arr<T> a) {
+	assert(!a.isEmpty());
+	return Arr<T>{a._begin + 1, a.size - 1};
+}
 
 template <typename T>
 const T& last(const Arr<T> a) {
@@ -275,6 +289,12 @@ inline Arr<T> slice(Arr<T> a, size_t lo, size_t size) {
 }
 
 template <typename T>
+inline Arr<T> slice(Arr<T> a, size_t lo) {
+	assert(lo <= a.size);
+	return slice(a, lo, a.size - lo);
+}
+
+template <typename T>
 struct MutArr {
 private:
 	MutSlice<T> slice;
@@ -282,6 +302,11 @@ private:
 
 public:
 	inline MutArr() : slice{nullptr, 0}, _size{0} {}
+	MutArr(const MutArr&) = delete;
+	MutArr(MutArr&&) = default;
+	MutArr(Arena& arena, T value) : slice{newUninitializedMutSlice<T>(arena, 1)}, _size{1} {
+		initMemory(slice[0], value);
+	}
 
 	inline T& operator[](const size_t index) {
 		return slice[index];
@@ -291,7 +316,12 @@ public:
 		return slice[index];
 	}
 
-	void push(Arena& arena, T value) {
+	void set(const size_t index, const T value) {
+		assert(index < _size);
+		slice.set(index, value);
+	}
+
+	void push(Arena& arena, const T value) {
 		if (_size == slice.size) {
 			MutSlice<T> oldSlice = slice;
 			slice = newUninitializedMutSlice<T>(arena, slice.size == 0 ? 4 : slice.size * 2);
@@ -302,6 +332,25 @@ public:
 		assert(_size < slice.size);
 		initMemory(slice[_size], value);
 		_size++;
+	}
+
+	const Opt<T> pop() {
+		if (isEmpty())
+			return none<T>();
+		else {
+			_size--;
+			return some<T>(slice[_size]);
+		}
+	}
+
+	const T mustPop() {
+		return pop().force();
+	}
+
+	const Opt<T> peek() const {
+		return isEmpty()
+			? none<T>()
+			: some<T>(slice[_size - 1]);
 	}
 
 	inline size_t size() const {
@@ -321,12 +370,31 @@ public:
 	}
 };
 
+template <typename T, typename Pred>
+void filterUnordered(MutArr<T>& a, Pred pred) {
+	size_t i = 0;
+	while (i < a.size()) {
+		const bool b = pred(a[i]);
+		if (b)
+			i++;
+		else if (i == a.size() - 1)
+			a.mustPop();
+		else {
+			T t = a.mustPop();
+			a.set(i, t);
+		}
+	}
+}
+
 template <typename T>
 struct ArrBuilder {
 private:
 	MutArr<T> inner;
+	ArrBuilder(const ArrBuilder<T>&) = delete;
 
 public:
+	inline ArrBuilder() : inner{} {}
+
 	inline void add(Arena& arena, T value) {
 		inner.push(arena, value);
 	}
@@ -347,6 +415,22 @@ public:
 		return inner.size();
 	}
 };
+
+template <typename T, typename Cb>
+const Opt<T> find(Arr<T> a, Cb cb) {
+	for (T t : a)
+		if (cb(t))
+			return some<T>(t);
+	return none<T>();
+}
+
+template <typename T, typename Cb>
+const Opt<T*> findPtr(Arr<T> a, Cb cb) {
+	for (T* ptr : ptrsRange(a))
+		if (cb(ptr))
+			return some<T*>(ptr);
+	return none<T*>();
+}
 
 template <typename T>
 Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
@@ -385,7 +469,7 @@ inline Arr<T> arrLiteral(Arena& arena, T a, T b) {
 template <typename Out>
 struct fillArr {
 	template <typename Cb>
-	Arr<Out> operator()(Arena& arena, const size_t size, Cb cb) {
+	const Arr<Out> operator()(Arena& arena, const size_t size, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
 		for (size_t i = 0; i < size; i++)
 			initMemory(out[i], cb(i));
@@ -394,9 +478,25 @@ struct fillArr {
 };
 
 template <typename Out>
+struct fillArrOrFail {
+	template <typename Cb>
+	const Opt<const Arr<Out>> operator()(Arena& arena, const size_t size, Cb cb) {
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		for (size_t i = 0; i < size; i++) {
+			const Opt<Out> op = cb(i);
+			if (op.has())
+				initMemory(out[i], op.force());
+			else
+				return none<const Arr<Out>>();
+		}
+		return some<const Arr<Out>>(Arr<Out>{out, size});
+	}
+};
+
+template <typename Out>
 struct map {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
+	Arr<Out> operator()(Arena& arena, Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
 		for (size_t i = 0; i < in.size; i++)
 			initMemory(out[i], cb(in[i]));
@@ -416,6 +516,40 @@ struct mapWithIndex {
 };
 
 template <typename Out>
+struct mapOrFail {
+	template <typename In, typename Cb>
+	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+		for (size_t i = 0; i < in.size; i++) {
+			const Opt<Out> o = cb(in[i]);
+			if (o.has())
+				initMemory(out[i], o.force());
+			else
+				return none<const Arr<Out>>();
+		}
+		return some<const Arr<Out>>(Arr<Out>{out, in.size});
+	}
+};
+
+template <typename Out>
+struct zipOrFail {
+	template <typename In0, typename In1, typename Cb>
+	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+		const size_t size = in0.size;
+		assert(in1.size == size);
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		for (size_t i = 0; i < size; i++) {
+			const Opt<Out> o = cb(in0[i], in1[i]);
+			if (o.has())
+				initMemory(out[i], o.force());
+			else
+				return none<const Arr<Out>>();
+		}
+		return some<const Arr<Out>>(Arr<Out>{out, size});
+	}
+};
+
+template <typename Out>
 struct mapOpWithIndex {
 	template <typename In, typename Cb>
 	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
@@ -430,6 +564,32 @@ struct mapOpWithIndex {
 		}
 		assert(out_i <= in.size);
 		return Arr<Out>{out, out_i};
+	}
+};
+
+template <typename Out>
+struct mapZip {
+	template <typename In0, typename In1, typename Cb>
+	Arr<Out> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+		const size_t size = in0.size;
+		assert(in1.size == size);
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		for (size_t i = 0; i < size; i++)
+			initMemory(out[i], cb(in0[i], in1[i]));
+		return Arr<Out>{out, size};
+	}
+};
+
+template <typename Out>
+struct mapZipPtrs {
+	template <typename In0, typename In1, typename Cb>
+	Arr<Out> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+		const size_t size = in0.size;
+		assert(in1.size == size);
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		for (size_t i = 0; i < size; i++)
+			initMemory(out[i], cb(in0.getPtr(i), in1.getPtr(i)));
+		return Arr<Out>{out, size};
 	}
 };
 
@@ -468,22 +628,26 @@ using MutStr = MutSlice<char>;
 const Str copyStr(Arena& arena, const Str in);
 
 bool strEq(const Str& a, const Str& b);
-bool strEqLiteral(const Str s, const char* c);
-
 inline Str strLiteral(const char* c) {
-	return Str{c, strlen(c)};
+	const char* end = c;
+	while (*end != '\0')
+		++end;
+	return Str{c, static_cast<size_t>(end - c)};
+}
+inline bool strEqLiteral(const Str s, const char* b) {
+	return strEq(s, strLiteral(b));
 }
 
 template <typename T>
-inline void unused(__attribute__((unused)) T& t) {}
+inline void unused(T&) {}
 template <typename T, typename U>
-inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u) {}
+inline void unused(T&, U&) {}
 template <typename T, typename U, typename V>
-inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u, __attribute__((unused)) V& v) {}
+inline void unused(T&, U&, V&) {}
 template <typename T, typename U, typename V, typename W>
-inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u, __attribute__((unused)) V& v, __attribute__((unused)) W& w) {}
+inline void unused(T&, U&, V&, W&) {}
 template <typename T, typename U, typename V, typename W, typename X>
-inline void unused(__attribute__((unused)) T& t, __attribute__((unused)) U& u, __attribute__((unused)) V& v, __attribute__((unused)) W& w, __attribute__((unused)) X& x) {}
+inline void unused(T&, U&, V&, W&, X&) {}
 
 template <typename Success, typename Failure>
 struct Result {
@@ -608,7 +772,12 @@ public:
 
 template <typename K, typename V, Eq<K> eq>
 struct MultiDict {
-	Arr<KeyValuePair<K, Arr<V>>> pairs;
+	const Dict<K, const Arr<V>, eq> inner;
+
+	const Arr<V> get(const K key) const {
+		const Opt<const Arr<V>> res = inner.get(key);
+		return res.has() ? res.force() : emptyArr<V>();
+	}
 };
 
 template <typename K, typename V, Eq<K> eq>
@@ -636,7 +805,7 @@ template <typename K, typename V, Eq<K> eq>
 struct buildMultiDict {
 	template <typename T, typename GetPair>
 	MultiDict<K, V, eq> operator()(Arena& arena, const Arr<T> inputs, GetPair getPair) {
-		MutArr<KeyValuePair<K, MutArr<V>>> res;
+		MutArr<KeyValuePair<K, MutArr<V>>> res {};
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);
 			bool didAdd = false;
@@ -646,17 +815,14 @@ struct buildMultiDict {
 					didAdd = true;
 					break;
 				}
-			if (!didAdd) {
-				MutArr<V> m = MutArr<V>{};
-				m.push(arena, pair.value);
-				res.push(arena, KeyValuePair<K, MutArr<V>>{pair.key, m});
-			}
+			if (!didAdd)
+				res.push(arena, KeyValuePair<K, MutArr<V>>{pair.key, MutArr<V>{arena, pair.value}});
 		}
 		const Arr<KeyValuePair<K, MutArr<V>>> arr = res.freeze();
-		const Arr<KeyValuePair<K, Arr<V>>> pairs = map<KeyValuePair<K, Arr<V>>>{}(arena, arr, [](KeyValuePair<K, MutArr<V>> m) {
-			return KeyValuePair<K, Arr<V>>{m.key, m.value.freeze()};
+		const Arr<KeyValuePair<K, const Arr<V>>> pairs = map<KeyValuePair<K, const Arr<V>>>{}(arena, arr, [](KeyValuePair<K, MutArr<V>>& m) {
+			return KeyValuePair<K, const Arr<V>>{m.key, m.value.freeze()};
 		});
-		return MultiDict<K, V, eq>{pairs};
+		return MultiDict<K, V, eq>{Dict<K, const Arr<V>, eq>{pairs}};
 	}
 };
 
@@ -690,6 +856,8 @@ struct Cell {
 private:
 	T value;
 public:
+	Cell(const Cell&) = delete;
+	Cell(Cell&&) = default;
 	inline Cell(T v) : value{v} {}
 	inline const T& get() const {
 		return value;

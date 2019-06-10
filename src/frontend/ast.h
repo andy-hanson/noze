@@ -92,7 +92,7 @@ struct LambdaAst {
 	};
 
 	const Arr<const Param> params;
-	const ExprAst* bod;
+	const ExprAst* body;
 };
 
 struct LetAst {
@@ -103,8 +103,6 @@ struct LetAst {
 
 struct LiteralAst {
 	const Str literal;
-	const Arr<const TypeAst> typeArgs;
-	const Arr<const ExprAst> args;
 };
 
 struct MatchAst {
@@ -133,7 +131,7 @@ struct NewActorAst {
 	struct MessageImpl {
 		const Str name;
 		const Arr<const NameAndRange> paramNames;
-		const ExprAst* bod;
+		const ExprAst* body;
 	};
 
 	const Arr<const Field> fields;

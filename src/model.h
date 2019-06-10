@@ -273,7 +273,7 @@ struct StructDecl {
 	const Arr<const TypeParam> typeParams;
 	// Note: purity on the decl does not take type args into account
 	const Purity purity;
-	mutable MutArr<const StructInst*> insts = MutArr<const StructInst*>{};
+	mutable MutArr<const StructInst*> insts {};
 private:
 	Late<const StructBody> _body = Late<const StructBody>{};
 public:
@@ -598,12 +598,12 @@ private:
 	const Kind kind;
 	union {
 		const FunDecl* funDecl;
-		const SpecUseSig* specUseSig;
+		const SpecUseSig specUseSig;
 	};
 
 public:
 	inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
-	inline CalledDecl(const SpecUseSig* _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
+	inline CalledDecl(const SpecUseSig _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
 
 	template <typename CbFunDecl, typename CbSpecUseSig>
 	auto match(CbFunDecl cbFunDecl, CbSpecUseSig cbSpecUseSig) const {
@@ -620,19 +620,35 @@ public:
 	inline const Sig* sig() const {
 		return match(
 			[](const FunDecl* f) { return &f->sig; },
-			[](const SpecUseSig* s) { return s->sig; });
+			[](const SpecUseSig s) { return s.sig; });
 	}
 
 	inline const Arr<const TypeParam> typeParams() const {
 		return match(
-			[](const FunDecl* f) { return f->typeParams; },
-			[](__attribute__((unused)) const SpecUseSig* _) { return emptyArr<const TypeParam>(); });
+			[](const FunDecl* f) {
+				return f->typeParams;
+			},
+			[](const SpecUseSig) {
+				return emptyArr<const TypeParam>();
+			});
+	}
+
+	inline size_t arity() const {
+		return sig()->arity();
 	}
 
 	inline const Str name() const {
 		return match(
 			[](const FunDecl* f) { return f->name(); },
-			[](const SpecUseSig* s) { return s->name(); });
+			[](const SpecUseSig s) { return s.name(); });
+	}
+
+	inline const Type returnType() const {
+		return sig()->returnType;
+	}
+
+	inline const Arr<const Param> params() const {
+		return sig()->params;
 	}
 };
 
@@ -862,8 +878,14 @@ private:
 		const StringLiteral stringLiteral;
 		const StructFieldAccess structFieldAccess;
 	};
+	inline Expr(const SourceRange range, const Kind _kind) : _range{range}, kind{_kind} {
+		assert(_kind == Kind::bogus);
+	}
 
 public:
+	static inline Expr bogus(const SourceRange range) {
+		return Expr{range, Kind::bogus};
+	}
 	inline Expr(const SourceRange range, const Call _call)
 		: _range{range}, kind{Kind::call}, call{_call} {}
 	inline Expr(const SourceRange range, const ClosureFieldRef _closureFieldRef)
@@ -900,6 +922,10 @@ public:
 		: _range{range}, kind{Kind::stringLiteral}, stringLiteral{_stringLiteral} {}
 	inline Expr(const SourceRange range, const StructFieldAccess _structFieldAccess)
 		: _range{range}, kind{Kind::structFieldAccess}, structFieldAccess{_structFieldAccess} {}
+
+	inline SourceRange range() const {
+		return _range;
+	}
 
 	template <
 		typename CbBogus,

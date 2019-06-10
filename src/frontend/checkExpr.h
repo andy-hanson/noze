@@ -3,11 +3,15 @@
 #include "../model.h"
 #include "./ast.h"
 #include "./checkCtx.h"
+#include "./inferringType.h"
 
 const Expr* checkFunctionBody(
 	CheckCtx& checkCtx,
 	const ExprAst ast,
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const FunsMap funsMap,
-	const FunDecl fun,
-	const CommonTypes commonTypes);
+	const FunDecl* fun,
+	const CommonTypes& commonTypes
+);
+
+const Expr checkExpr(ExprContext& ctx, const ExprAst ast, Expected& expected);

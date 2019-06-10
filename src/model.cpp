@@ -3,7 +3,7 @@
 bool Type::containsUnresolvedTypeParams() const {
 	return match(
 		/*bogus*/ []() { return true; },
-		[](__attribute__((unused)) const TypeParam* _) { return true; },
+		[](const TypeParam*) { return true; },
 		[](const StructInst* i) {
 			return exists(i->typeArgs, [](const Type t) {
 				return t.containsUnresolvedTypeParams();
@@ -29,7 +29,7 @@ Purity Type::purity() const {
 		/*bogus*/ []() {
 			return Purity::data;
 		},
-		[](__attribute__((unused)) const TypeParam* p) {
+		[](const TypeParam*) {
 			return Purity::data;
 		},
 		[](const StructInst* s) {
@@ -60,25 +60,25 @@ bool Expr::typeIsBogus(Arena& arena) const {
 		[](const Expr::ClosureFieldRef e) {
 			return e.field->type.isBogus();
 		},
-		[](__attribute__((unused)) const Expr::Cond cond) {
+		[](const Expr::Cond) {
 			return todo<bool>("typeIsBogus cond");
 		},
-		[](__attribute__((unused)) const Expr::CreateArr _) {
+		[](const Expr::CreateArr) {
 			return false;
 		},
-		[](__attribute__((unused)) const Expr::CreateRecord _) {
+		[](const Expr::CreateRecord) {
 			return false;
 		},
-		[](__attribute__((unused)) const Expr::FunAsLambda _) {
+		[](const Expr::FunAsLambda) {
 			return false;
 		},
-		[](__attribute__((unused)) const Expr::IfaceImplFieldRef _) {
+		[](const Expr::IfaceImplFieldRef) {
 			return todo<bool>("typeIsBogus ifaceimplfieldref");
 		},
-		[](__attribute__((unused)) const Expr::ImplicitConvertToUnion _) {
+		[](const Expr::ImplicitConvertToUnion) {
 			return todo<bool>("typeIsBogus implicitConvertToUnion");
 		},
-		[](__attribute__((unused)) const Expr::Lambda _) {
+		[](const Expr::Lambda) {
 			return false;
 		},
 		[&](const Expr::Let e) {
@@ -87,13 +87,13 @@ bool Expr::typeIsBogus(Arena& arena) const {
 		[](const Expr::LocalRef e) {
 			return e.local->type.isBogus();
 		},
-		[](__attribute__((unused)) const Expr::Match _) {
+		[](const Expr::Match) {
 			return todo<bool>("typeIsBogus match");
 		},
-		[](__attribute__((unused)) const Expr::MessageSend _) {
+		[](const Expr::MessageSend) {
 			return todo<bool>("typeIsBogus messageSend");
 		},
-		[](__attribute__((unused)) const Expr::NewIfaceImpl _) {
+		[](const Expr::NewIfaceImpl) {
 			return todo<bool>("typeIsBogus newIfaceImpl");
 		},
 		[](const Expr::ParamRef e) {
@@ -102,7 +102,7 @@ bool Expr::typeIsBogus(Arena& arena) const {
 		[&](const Expr::Seq e) {
 			return e.then->typeIsBogus(arena);
 		},
-		[](__attribute__((unused)) const Expr::StringLiteral _) {
+		[](const Expr::StringLiteral) {
 			return false;
 		},
 		[](const Expr::StructFieldAccess e) {
@@ -119,7 +119,7 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		[](const Expr::ClosureFieldRef e) {
 			return e.field->type;
 		},
-		[](__attribute__((unused)) const Expr::Cond e) {
+		[](const Expr::Cond) {
 			return todo<const Type>("getType cond");
 		},
 		[](const Expr::CreateArr e) {
@@ -128,10 +128,10 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		[](const Expr::CreateRecord e) {
 			return Type(e.structInst);
 		},
-		[](__attribute__((unused)) const Expr::FunAsLambda _) {
+		[](const Expr::FunAsLambda) {
 			return todo<const Type>("getType funAsLambda");
 		},
-		[](__attribute__((unused)) const Expr::IfaceImplFieldRef _) {
+		[](const Expr::IfaceImplFieldRef) {
 			return todo<const Type>("getType ifaceImplFieldRef");
 		},
 		[](const Expr::ImplicitConvertToUnion e) {
@@ -146,13 +146,13 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		[](const Expr::LocalRef e) {
 			return e.local->type;
 		},
-		[](__attribute__((unused)) const Expr::Match _) {
+		[](const Expr::Match) {
 			return todo<const Type>("getType match");
 		},
-		[](__attribute__((unused)) const Expr::MessageSend _) {
+		[](const Expr::MessageSend) {
 			return todo<const Type>("getType messageSend");
 		},
-		[](__attribute__((unused)) const Expr::NewIfaceImpl _) {
+		[](const Expr::NewIfaceImpl) {
 			return todo<const Type>("getType newifaceimpl");
 		},
 		[](const Expr::ParamRef e) {
@@ -161,7 +161,7 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		[&](const Expr::Seq e) {
 			return e.then->getType(arena, commonTypes);
 		},
-		[&](__attribute__((unused)) const Expr::StringLiteral _) {
+		[&](const Expr::StringLiteral) {
 			return Type(commonTypes.str);
 		},
 		[](const Expr::StructFieldAccess e) {

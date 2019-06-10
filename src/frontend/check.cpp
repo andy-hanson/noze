@@ -151,7 +151,7 @@ namespace {
 	}
 
 	const Arr<const TypeParam> collectTypeParams(Arena& arena, const SigAst ast, const Arr<const TypeParam> outerTypeParams) {
-		auto res = ArrBuilder<const TypeParam>{};
+		ArrBuilder<const TypeParam> res {};
 		collectTypeParamsInAst(arena, ast.returnType, res, outerTypeParams);
 		for (const ParamAst p : ast.params)
 			collectTypeParamsInAst(arena, p.type, res, outerTypeParams);
@@ -324,7 +324,7 @@ namespace {
 		for (const StructDecl& strukt : structs) {
 			strukt.body().match(
 				/*builtin*/ []() {},
-				[](__attribute__((unused)) const StructBody::Fields& _) {},
+				[](const StructBody::Fields&) {},
 				[](const StructBody::Union& u) {
 					for (const StructInst* member : u.members)
 						if (member->decl->body().isUnion())
@@ -342,12 +342,12 @@ namespace {
 	}
 
 	const StructsAndAliasesMap buildStructsAndAliasesDict(CheckCtx& ctx, const Arr<StructDecl> structs, const Arr<StructAlias> aliases) {
-		auto d = DictBuilder<const Str, const StructOrAlias, strEq>{};
+		DictBuilder<const Str, const StructOrAlias, strEq> d {};
 		for (const StructDecl* decl : ptrsRange(structs))
 			d.add(ctx.arena, decl->name, StructOrAlias{decl});
 		for (const StructAlias* a : ptrsRange(aliases))
 			d.add(ctx.arena, a->name, StructOrAlias{a});
-		return d.finish(ctx.arena, [&](const Str name, __attribute__((unused)) const StructOrAlias _, const StructOrAlias b) {
+		return d.finish(ctx.arena, [&](const Str name, const StructOrAlias, const StructOrAlias b) {
 			ctx.diag(b.range(), Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::structOrAlias, name}});
 		});
 	}
@@ -360,7 +360,7 @@ namespace {
 			[](T& it) {
 				return KeyValuePair<const Str, T*>{it.name, &it};
 			},
-			[&](const Str name, __attribute__((unused)) T* _, T* t) {
+			[&](const Str name, T*, T* t) {
 				ctx.diag(t->range, Diag{Diag::DuplicateDeclaration{kind, name}});
 			});
 	}
@@ -426,7 +426,7 @@ namespace {
 					return FunBody::_extern();
 				},
 				[&](const ExprAst e) {
-					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, fun, commonTypes)};
+					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, &fun, commonTypes)};
 				}));
 		});
 
@@ -442,7 +442,7 @@ namespace {
 		const PathAndStorageKind path,
 		GetCommonTypes getCommonTypes
 	) {
-		CheckCtx ctx = CheckCtx{arena, path, include, imports};
+		CheckCtx ctx {arena, path, include, imports};
 
 		// Since structs may refer to each other, first get a structsAndAliasesMap, *then* fill in bodies
 		const Arr<StructDecl> structs = checkStructsInitial(ctx, ast.structs);
@@ -515,11 +515,7 @@ const Result<const Module*, const Diagnostics> check(
 		imports,
 		ast,
 		path,
-		[&](
-			__attribute__((unused)) CheckCtx& ctx,
-			__attribute__((unused)) const StructsAndAliasesMap& _,
-			__attribute__((unused)) const MutArr<StructInst*>& __
-		) {
+		[&](CheckCtx&, const StructsAndAliasesMap&, const MutArr<StructInst*>&) {
 			return success<const CommonTypes, const Diagnostics>(includeCheck.commonTypes);
 		});
 	return mapSuccess(res, [](const IncludeCheck ic) { return ic.module; });

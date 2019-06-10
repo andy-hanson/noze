@@ -4,7 +4,7 @@ namespace {
 	const TypeAst parseTypeWorker(Lexer& lexer, const bool isInner);
 
 	const Arr<const TypeAst> tryParseTypeArgsWorker(Lexer& lexer, const bool isInner) {
-		auto res = ArrBuilder<const TypeAst>{};
+		ArrBuilder<const TypeAst> res {};
 		// Require '<>' if parsing type args inside of type args.
 		if (!isInner || lexer.tryTake('<')) {
 			while (true) {
@@ -50,7 +50,7 @@ const Opt<const TypeAst> tryParseTypeArg(Lexer& lexer) {
 const TypeAst::InstStruct parseStructType(Lexer& lexer) {
 	const TypeAst t = parseType(lexer);
 	return t.match(
-		[](__attribute__((unused)) const TypeAst::TypeParam _) {
+		[](const TypeAst::TypeParam) {
 			return todo<const TypeAst::InstStruct>("must be a struct");
 		},
 		[](const TypeAst::InstStruct i) {
