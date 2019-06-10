@@ -18,7 +18,7 @@ const Str copyStr(Arena& arena, const Str in) {
 	return map<const char>{}(arena, in, [](const char c) { return c; });
 }
 
-bool strEq(const Str& a, const Str& b) {
+bool strEq(const Str a, const Str b) {
 	return (a.size == b.size) &&
 		(a.size == 0 || strEq(tail(a), tail(b)));
 }

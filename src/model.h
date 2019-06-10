@@ -15,6 +15,10 @@ struct PathAndStorageKind {
 	const StorageKind storageKind;
 };
 
+inline bool pathAndStorageKindEq(const PathAndStorageKind a, const PathAndStorageKind b) {
+	return pathEq(a.path, b.path) && a.storageKind == b.storageKind;
+}
+
 using Identifier = Str;
 
 enum class Purity {
@@ -275,7 +279,7 @@ struct StructDecl {
 	const Purity purity;
 	mutable MutArr<const StructInst*> insts {};
 private:
-	Late<const StructBody> _body = Late<const StructBody>{};
+	Late<const StructBody> _body {};
 public:
 	inline bool bodyIsSet() const {
 		return _body.isSet();
@@ -394,7 +398,7 @@ struct FunDecl {
 	const Sig sig;
 	const Arr<const TypeParam> typeParams;
 	const Arr<const SpecUse> specs;
-	Late<FunBody> _body = Late<FunBody>{};
+	Late<FunBody> _body {};
 
 	inline const FunBody body() const {
 		return _body.get();
@@ -604,6 +608,21 @@ private:
 public:
 	inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
 	inline CalledDecl(const SpecUseSig _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
+
+	inline bool isFunDecl() const {
+		return kind == Kind::funDecl;
+	}
+	inline bool isSpecUseSig() const {
+		return kind == Kind::specUseSig;
+	}
+	inline const FunDecl* asFunDecl() const {
+		assert(isFunDecl());
+		return funDecl;
+	}
+	inline const SpecUseSig asSpecUseSig() const {
+		assert(isSpecUseSig());
+		return specUseSig;
+	}
 
 	template <typename CbFunDecl, typename CbSpecUseSig>
 	auto match(CbFunDecl cbFunDecl, CbSpecUseSig cbSpecUseSig) const {

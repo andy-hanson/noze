@@ -2,6 +2,7 @@
 
 #include "./frontend/ast.h"
 #include "./util.h"
+#include "./concreteModel.h"
 
 int handle(TypeAst const& t) {
 	return t.match(

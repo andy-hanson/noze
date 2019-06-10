@@ -8,6 +8,8 @@
 #include <type_traits> // remove_const
 
 using byte = uint8_t;
+using Int64 = int64_t;
+using Nat64 = uint64_t;
 
 struct Arena {
 	Arena() {
@@ -67,6 +69,16 @@ public:
 		return value;
 	}
 };
+
+template <typename T>
+using Eq = bool(*)(const T, const T);
+
+template <typename T, Eq<T> eqValues>
+bool optEq(const Opt<T> a, const Opt<T> b) {
+	return a.has()
+		? (b.has() && eqValues(a.force(), b.force()))
+		: !b.has();
+}
 
 template <typename T>
 inline Opt<T> none() {
@@ -416,6 +428,281 @@ public:
 	}
 };
 
+using Str = const Arr<const char>;
+using NulTerminatedStr = Str;
+using MutStr = MutSlice<const char>;
+
+const Str copyStr(Arena& arena, const Str in);
+
+bool strEq(const Str a, const Str b);
+inline Str strLiteral(const char* c) {
+	const char* end = c;
+	while (*end != '\0')
+		++end;
+	return Str{c, static_cast<size_t>(end - c)};
+}
+inline bool strEqLiteral(const Str s, const char* b) {
+	return strEq(s, strLiteral(b));
+}
+
+template <typename T>
+inline void unused(T&) {}
+template <typename T, typename U>
+inline void unused(T&, U&) {}
+template <typename T, typename U, typename V>
+inline void unused(T&, U&, V&) {}
+template <typename T, typename U, typename V, typename W>
+inline void unused(T&, U&, V&, W&) {}
+template <typename T, typename U, typename V, typename W, typename X>
+inline void unused(T&, U&, V&, W&, X&) {}
+
+template <typename Success, typename Failure>
+struct Result {
+private:
+	const bool _isSuccess;
+	union {
+		Success success;
+		Failure failure;
+	};
+
+public:
+	using SuccessType = Success;
+	using FailureType = Failure;
+
+	inline Result(const Success s) : _isSuccess{true}, success{s} {}
+	inline Result(const Failure f) : _isSuccess{false}, failure{f} {}
+
+	inline bool isSuccess() const {
+		return _isSuccess;
+	}
+
+	inline Success asSuccess() const {
+		assert(isSuccess());
+		return success;
+	}
+
+	inline Failure asFailure() const {
+		assert(!isSuccess());
+		return failure;
+	}
+};
+
+template <typename Success, typename Failure>
+inline Result<Success, Failure> success(Success s) {
+	return Result<Success, Failure>{s};
+}
+
+template <typename Success, typename Failure>
+inline Result<Success, Failure> failure(Failure f) {
+	return Result<Success, Failure>{f};
+}
+
+template <typename OutSuccess>
+struct mapSuccess {
+	template <typename InSuccess, typename Failure, typename Cb>
+	inline const Result<OutSuccess, Failure> operator()(const Result<InSuccess, Failure> r, Cb cb) {
+		return r.isSuccess()
+			? success<OutSuccess, Failure>(cb(r.asSuccess()))
+			: failure<OutSuccess, Failure>(r.asFailure());
+	}
+};
+
+template <typename OutFailure>
+struct mapFailure {
+	template <typename Success, typename InFailure, typename Cb>
+	inline const Result<Success, OutFailure> operator()(const Result<Success, InFailure> r, Cb cb) {
+		return r.isSuccess()
+			? success<Success, OutFailure>(r.asSuccess())
+			: failure<Success, OutFailure>(cb(r.asFailure()));
+	}
+};
+
+template <typename OutSuccess, typename Failure>
+struct flatMapSuccess {
+	template <typename InSuccess, typename Cb>
+	inline const Result<OutSuccess, Failure> operator()(const Result<InSuccess, Failure> r, Cb cb) {
+		return r.isSuccess()
+			? cb(r.asSuccess())
+			: failure<OutSuccess, Failure>(r.asFailure());
+	}
+};
+
+template <typename T>
+inline bool ptrEquals(T* a, T* b) {
+	return a == b;
+}
+
+template <typename T>
+inline T todo(const char* message) {
+	printf("%s\n", message);
+	throw message;
+}
+
+template <typename K, typename V>
+struct KeyValuePair {
+	K key;
+	V value;
+};
+
+template <typename K, typename V, Eq<K> eq>
+struct Dict {
+	Arr<KeyValuePair<K, V>> pairs;
+
+	const Opt<V> get(const K key) const {
+		for (const KeyValuePair<K, V>& pair : pairs)
+			if (eq(pair.key, key))
+				return some<V>(pair.value);
+		return none<V>();
+	}
+};
+
+template <typename K, typename V, Eq<K> eq>
+struct DictBuilder {
+private:
+	ArrBuilder<KeyValuePair<K, V>> builder;
+
+public:
+	inline DictBuilder() : builder{} {}
+
+	void add(Arena& arena, K key, V value) {
+		builder.add(arena, KeyValuePair<K, V>{key, value});
+	}
+
+	template <typename CbConflict>
+	Dict<K, V, eq> finish(Arena& arena, CbConflict cbConflict) {
+		MutArr<KeyValuePair<K, V>> res;
+		Arr<KeyValuePair<K, V>> allPairs = builder.finish();
+		for (size_t i = 0; i < allPairs.size; i++) {
+			bool isConflict = false;
+			for (size_t j = 0; j < res.size(); j++) {
+				if (eq(allPairs[i].key, res[j].key)) {
+					cbConflict(allPairs[i].key, res[j].value, allPairs[i].value);
+					isConflict = true;
+					break;
+				}
+			}
+			if (!isConflict)
+				res.push(arena, allPairs[i]);
+		}
+		return Dict<K, V, eq>{res.freeze()};
+	}
+};
+
+template <typename K, typename V, Eq<K> eq>
+struct MultiDict {
+	const Dict<K, const Arr<V>, eq> inner;
+
+	const Arr<V> get(const K key) const {
+		const Opt<const Arr<V>> res = inner.get(key);
+		return res.has() ? res.force() : emptyArr<V>();
+	}
+};
+
+template <typename T, Eq<T> eq>
+struct MutSet {
+private:
+	MutArr<T> arr;
+
+	MutSet(const MutSet&) = delete;
+
+public:
+	inline MutSet() : arr{} {}
+
+	void add(Arena& arena, T value) {
+		bool added = tryAdd(arena, value);
+		assert(added);
+	}
+
+	bool tryAdd(Arena& arena, T value) {
+		for (T t : arr.tempAsArr())
+			if (eq(t, value))
+				return false;
+		arr.push(arena, value);
+		return true;
+	}
+};
+
+template <typename K, typename V, Eq<K> eq>
+struct MutDict {
+private:
+	MutArr<KeyValuePair<K, V>> pairs;
+
+public:
+	bool has(const K key) const {
+		return get(key).has();
+	}
+
+	const Opt<V> get(const K key) const {
+		for (const KeyValuePair<K, V>& pair : pairs.tempAsArr())
+			if (eq(pair.key, key))
+				return some<V>(pair.value);
+		return none<V>();
+	}
+
+	void add(Arena& arena, const K key, const V value) {
+		assert(!has(key));
+		pairs.push(arena, KeyValuePair<K, V>{key, value});
+	}
+};
+
+template <typename T>
+struct Late {
+private:
+	bool _isSet;
+	union {
+		T value;
+	};
+public:
+	Late(const Late&) = delete;
+	inline Late() {}
+	inline Late(const T _value) : value{_value} {}
+
+	inline bool isSet() const {
+		return _isSet;
+	}
+
+	inline const T& get() const {
+		assert(_isSet);
+		return value;
+	}
+	inline void set(T v) {
+		assert(!_isSet);
+		initMemory(value, v);
+		_isSet = true;
+	}
+};
+
+template <typename T>
+struct Cell {
+private:
+	T value;
+public:
+	Cell(const Cell&) = delete;
+	Cell(Cell&&) = default;
+	inline Cell(T v) : value{v} {}
+	inline const T& get() const {
+		return value;
+	}
+	inline void set(T v) {
+		overwriteConst(value, v);
+	}
+};
+
+template <typename T>
+inline T unreachable() {
+	assert(0);
+}
+
+inline ssize_t safeSizeTToSSizeT(const size_t s) {
+	assert(s <= 9999);
+	return static_cast<ssize_t>(s);
+}
+
+inline uint safeSizeTToUint(const size_t s) {
+	assert(s <= 9999);
+	return s;
+}
+
 template <typename T, typename Cb>
 const Opt<T> find(Arr<T> a, Cb cb) {
 	for (T t : a)
@@ -516,7 +803,7 @@ struct mapWithIndex {
 };
 
 template <typename Out>
-struct mapOrFail {
+struct mapOrNone {
 	template <typename In, typename Cb>
 	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
@@ -528,6 +815,38 @@ struct mapOrFail {
 				return none<const Arr<Out>>();
 		}
 		return some<const Arr<Out>>(Arr<Out>{out, in.size});
+	}
+};
+
+template <typename OutSuccess, typename OutFailure>
+struct mapOrFail {
+	template <typename In, typename Cb>
+	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena& arena, const Arr<In> in, Cb cb) {
+		OutSuccess* out = static_cast<OutSuccess*>(arena.alloc(sizeof(OutSuccess) * in.size));
+		for (size_t i = 0; i < in.size; i--) {
+			const Result<OutSuccess, OutFailure> result = cb(in[i]);
+			if (result.isSuccess())
+				initMemory(out[i], result.asSuccess());
+			else
+				return failure<const Arr<OutSuccess>, OutFailure>(result.asFailure());
+		}
+		return success<const Arr<OutSuccess>, OutFailure>(Arr<OutSuccess>{out, in.size});
+	}
+};
+
+template <typename OutSuccess, typename OutFailure>
+struct mapOrFailReverse {
+	template <typename In, typename Cb>
+	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena& arena, const Arr<In> in, Cb cb) {
+		OutSuccess* out = static_cast<OutSuccess*>(arena.alloc(sizeof(OutSuccess) * in.size));
+		for (ssize_t i = in.size - 1; i >= 0; i--) {
+			const Result<OutSuccess, OutFailure> result = cb(in[i]);
+			if (result.isSuccess())
+				initMemory(out[i], result.asSuccess());
+			else
+				return failure<const Arr<OutSuccess>, OutFailure>(result.asFailure());
+		}
+		return success<const Arr<OutSuccess>, OutFailure>(Arr<OutSuccess>{out, in.size});
 	}
 };
 
@@ -611,6 +930,11 @@ bool eachCorresponds(const Arr<T> a, const Arr<U> b, Cb cb) {
 	return true;
 }
 
+template <typename T, Eq<T> eq>
+bool arrEq(const Arr<T> a, const Arr<T> b) {
+	return eachCorresponds(a, b, eq);
+}
+
 template <typename T, typename Cb>
 bool every(const Arr<T> a, Cb cb) {
 	for (const T& t : a) {
@@ -620,165 +944,6 @@ bool every(const Arr<T> a, Cb cb) {
 	}
 	return true;
 }
-
-using Str = const Arr<const char>;
-using NulTerminatedStr = Str;
-using MutStr = MutSlice<char>;
-
-const Str copyStr(Arena& arena, const Str in);
-
-bool strEq(const Str& a, const Str& b);
-inline Str strLiteral(const char* c) {
-	const char* end = c;
-	while (*end != '\0')
-		++end;
-	return Str{c, static_cast<size_t>(end - c)};
-}
-inline bool strEqLiteral(const Str s, const char* b) {
-	return strEq(s, strLiteral(b));
-}
-
-template <typename T>
-inline void unused(T&) {}
-template <typename T, typename U>
-inline void unused(T&, U&) {}
-template <typename T, typename U, typename V>
-inline void unused(T&, U&, V&) {}
-template <typename T, typename U, typename V, typename W>
-inline void unused(T&, U&, V&, W&) {}
-template <typename T, typename U, typename V, typename W, typename X>
-inline void unused(T&, U&, V&, W&, X&) {}
-
-template <typename Success, typename Failure>
-struct Result {
-private:
-	const bool _isSuccess;
-	union {
-		Success success;
-		Failure failure;
-	};
-
-public:
-	using SuccessType = Success;
-	using FailureType = Failure;
-
-	inline Result(const Success s) : _isSuccess{true}, success{s} {}
-	inline Result(const Failure f) : _isSuccess{false}, failure{f} {}
-
-	inline bool isSuccess() const {
-		return _isSuccess;
-	}
-
-	inline Success asSuccess() const {
-		assert(isSuccess());
-		return success;
-	}
-
-	inline Failure asFailure() const {
-		assert(!isSuccess());
-		return failure;
-	}
-};
-
-template <typename Success, typename Failure>
-inline Result<Success, Failure> success(Success s) {
-	return Result<Success, Failure>{s};
-}
-
-template <typename Success, typename Failure>
-inline Result<Success, Failure> failure(Failure f) {
-	return Result<Success, Failure>{f};
-}
-
-template <typename InSuccess, typename Failure, typename Cb>
-inline auto mapSuccess(const Result<InSuccess, Failure> r, Cb cb) {
-	using OutSuccess = decltype(cb(r.asSuccess()));
-	return r.isSuccess()
-		? success<OutSuccess, Failure>(cb(r.asSuccess()))
-		: failure<OutSuccess, Failure>(r.asFailure());
-}
-
-template <typename InSuccess, typename Failure, typename Cb>
-inline auto flatMapSuccess(const Result<InSuccess, Failure> r, Cb cb) {
-	using OutSuccess = typename decltype(cb(r.asSuccess()))::SuccessType;
-	return r.isSuccess()
-		? cb(r.asSuccess())
-		: failure<OutSuccess, Failure>(r.asFailure());
-}
-
-template <typename T>
-inline bool ptrEquals(T* a, T* b) {
-	return a == b;
-}
-
-template <typename T>
-inline T todo(const char* message) {
-	printf("%s\n", message);
-	throw message;
-}
-
-template <typename K, typename V>
-struct KeyValuePair {
-	K key;
-	V value;
-};
-
-template <typename T>
-using Eq = bool(*)(const T&, const T&);
-
-template <typename K, typename V, Eq<K> eq>
-struct Dict {
-	Arr<KeyValuePair<K, V>> pairs;
-
-	const Opt<V> get(const K key) const {
-		for (const KeyValuePair<K, V>& pair : pairs)
-			if (eq(pair.key, key))
-				return some<V>(pair.value);
-		return none<V>();
-	}
-};
-
-template <typename K, typename V, Eq<K> eq>
-struct DictBuilder {
-private:
-	ArrBuilder<KeyValuePair<K, V>> builder;
-
-public:
-	inline DictBuilder() : builder{} {}
-
-	void add(Arena& arena, K key, V value) {
-		builder.add(arena, KeyValuePair<K, V>{key, value});
-	}
-
-	template <typename CbConflict>
-	Dict<K, V, eq> finish(Arena& arena, CbConflict cbConflict) {
-		MutArr<KeyValuePair<K, V>> res;
-		Arr<KeyValuePair<K, V>> allPairs = builder.finish();
-		for (size_t i = 0; i < allPairs.size; i++) {
-			bool isConflict = false;
-			for (size_t j = 0; j < res.size(); j++) {
-				if (eq(allPairs[i].key, res[j].key)) {
-					cbConflict(allPairs[i].key, res[j].value, allPairs[i].value);
-					isConflict = true;
-					break;
-				}
-			}
-			if (!isConflict)
-				res.push(arena, allPairs[i]);
-		}
-		return Dict<K, V, eq>{res.freeze()};
-	}
-};
-
-template <typename K, typename V, Eq<K> eq>
-struct MultiDict {
-	const Dict<K, const Arr<V>, eq> inner;
-
-	const Arr<V> get(const K key) const {
-		const Opt<const Arr<V>> res = inner.get(key);
-		return res.has() ? res.force() : emptyArr<V>();
-	}
-};
 
 template <typename K, typename V, Eq<K> eq>
 struct buildDict {
@@ -825,59 +990,3 @@ struct buildMultiDict {
 		return MultiDict<K, V, eq>{Dict<K, const Arr<V>, eq>{pairs}};
 	}
 };
-
-template <typename T>
-struct Late {
-private:
-	bool _isSet;
-	union {
-		T value;
-	};
-public:
-	Late() {}
-
-	inline bool isSet() const {
-		return _isSet;
-	}
-
-	inline const T& get() const {
-		assert(_isSet);
-		return value;
-	}
-	inline void set(T v) {
-		assert(!_isSet);
-		initMemory(value, v);
-		_isSet = true;
-	}
-};
-
-template <typename T>
-struct Cell {
-private:
-	T value;
-public:
-	Cell(const Cell&) = delete;
-	Cell(Cell&&) = default;
-	inline Cell(T v) : value{v} {}
-	inline const T& get() const {
-		return value;
-	}
-	inline void set(T v) {
-		overwriteConst(value, v);
-	}
-};
-
-template <typename T>
-inline T unreachable() {
-	assert(0);
-}
-
-inline ssize_t safeSizeTToSSizeT(const size_t s) {
-	assert(s <= 9999);
-	return static_cast<ssize_t>(s);
-}
-
-inline uint safeSizeTToUint(const size_t s) {
-	assert(s <= 9999);
-	return s;
-}

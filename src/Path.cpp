@@ -1,4 +1,4 @@
-#include "./Path.h"
+ #include "./Path.h"
 
 namespace {
 	template <typename Cb>
@@ -19,7 +19,7 @@ namespace {
 
 	MutStr pathToMutStr(Arena& arena, const Path* path, bool nulTerminated) {
 		const size_t size = pathToStrSize(path, nulTerminated);
-		MutStr res = newUninitializedMutSlice<char>(arena, size);
+		MutStr res = newUninitializedMutSlice<const char>(arena, size);
 		size_t i = size;
 		if (nulTerminated) {
 			i --;
@@ -34,13 +34,13 @@ namespace {
 		assert(i == 0);
 		return res;
 	}
+}
 
-	const Path* addManyChildren(Arena& arena, const Path* a, const Path* b) {
-		const Path* p = b->parent.has()
-			? addManyChildren(arena, a, b->parent.force())
-			: a;
-		return childPath(arena, p, b->baseName);
-	}
+const Path* addManyChildren(Arena& arena, const Path* a, const Path* b) {
+	const Path* p = b->parent.has()
+		? addManyChildren(arena, a, b->parent.force())
+		: a;
+	return childPath(arena, p, b->baseName);
 }
 
 Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath) {
@@ -61,4 +61,8 @@ const Str pathToStr(Arena& arena, const Path* path) {
 
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
 	return pathToMutStr(arena, path, true).freeze().asConst();
+}
+
+bool pathEq(const Path* a, const Path* b) {
+	return strEq(a->baseName, b->baseName) && optEq<const Path*, pathEq>(a->parent, b->parent);
 }

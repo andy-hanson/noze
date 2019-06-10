@@ -30,5 +30,8 @@ struct RelPath {
 
 Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath);
 
+const Path* addManyChildren(Arena& arena, const Path* a, const Path* b);
 const Str pathToStr(Arena& arena, const Path* path);
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path);
+
+bool pathEq(const Path* a, const Path* b);

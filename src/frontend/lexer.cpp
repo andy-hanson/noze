@@ -113,7 +113,7 @@ const Str Lexer::takeStringLiteral() {
 	}
 
 	const size_t size = (ptr - begin) - nEscapes;
-	MutStr res = newUninitializedMutSlice<char>(arena, size);
+	MutStr res = newUninitializedMutSlice<const char>(arena, size);
 
 	size_t outI = 0;
 	ptr = begin;

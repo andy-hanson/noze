@@ -47,7 +47,7 @@ namespace {
 				return ta.has() ? ta.force()->tryGetInferred() : some<const Type>(t);
 			},
 			[&](const StructInst* i) {
-				const Opt<const Arr<const Type>> typeArgs = mapOrFail<const Type>{}(arena, i->typeArgs, [&](const Type t) {
+				const Opt<const Arr<const Type>> typeArgs = mapOrNone<const Type>{}(arena, i->typeArgs, [&](const Type t) {
 					return tryGetDeeplyInstantiatedTypeWorker(arena, t, inferringTypeArgs);
 				});
 				return typeArgs.has()

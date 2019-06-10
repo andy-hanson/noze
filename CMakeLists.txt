@@ -7,12 +7,15 @@ add_executable(test2
 	src/frontend/check.cpp
 	src/frontend/checkCall.cpp
 	src/frontend/checkExpr.cpp
+	src/frontend/compile.cpp
 	src/frontend/inferringType.cpp
 	src/frontend/lexer.cpp
 	src/frontend/parse.cpp
 	src/frontend/parseExpr.cpp
 	src/frontend/parseType.cpp
+	src/frontend/readOnlyStorage.cpp
 	src/frontend/typeFromAst.cpp
+	src/concreteModel.cpp
 	src/main.cpp
 	src/model.cpp
 	src/Path.cpp

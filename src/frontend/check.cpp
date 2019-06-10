@@ -212,7 +212,7 @@ namespace {
 		return st.sig;
 	}
 
-	const Arr<const SpecDecl> checkSpecs(
+	const Arr<const SpecDecl> checkSpecDecls(
 		CheckCtx& ctx,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const Arr<const SpecDeclAst> asts,
@@ -455,14 +455,14 @@ namespace {
 		MutArr<StructInst*> delayStructInsts = MutArr<StructInst*>{};
 
 		checkStructAliasTargets(ctx, structsAndAliasesMap, structAliases, ast.structAliases, delayStructInsts);
-		const Arr<const SpecDecl> specs = checkSpecs(ctx, structsAndAliasesMap, ast.specs, delayStructInsts);
+		const Arr<const SpecDecl> specs = checkSpecDecls(ctx, structsAndAliasesMap, ast.specs, delayStructInsts);
 		const SpecsMap specsMap = buildDeclsDict<const SpecDecl>(ctx, specs, Diag::DuplicateDeclaration::Kind::spec);
 
 		if (ctx.hasDiags())
 			return failure<const IncludeCheck, const Diagnostics>(ctx.diags());
 		else {
 			const Result<const CommonTypes, const Diagnostics> commonTypes = getCommonTypes(ctx, structsAndAliasesMap, delayStructInsts);
-			return flatMapSuccess(commonTypes, [&](const CommonTypes commonTypes) {
+			return flatMapSuccess<const IncludeCheck, const Diagnostics>{}(commonTypes, [&](const CommonTypes commonTypes) {
 				checkStructBodies(ctx, commonTypes, structsAndAliasesMap, structs, ast.structs, delayStructInsts);
 				for (StructInst* i : delayStructInsts.freeze())
 					i->setBody(instantiateStructBody(arena, i->decl, i->typeArgs));
@@ -518,6 +518,6 @@ const Result<const Module*, const Diagnostics> check(
 		[&](CheckCtx&, const StructsAndAliasesMap&, const MutArr<StructInst*>&) {
 			return success<const CommonTypes, const Diagnostics>(includeCheck.commonTypes);
 		});
-	return mapSuccess(res, [](const IncludeCheck ic) { return ic.module; });
+	return mapSuccess<const Module*>{}(res, [](const IncludeCheck ic) { return ic.module; });
 }
 
