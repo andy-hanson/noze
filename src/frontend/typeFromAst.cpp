@@ -55,7 +55,9 @@ const Type instantiateType(Arena& arena, const Type type, const Arr<const TypePa
 
 const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
 	return decl->body().match(
-		/*builtin*/ []() { return StructBody::builtin(); },
+		[](const StructBody::Builtin) {
+			return StructBody{StructBody::Builtin{}};
+		},
 		[&](const StructBody::Fields f) {
 			const Arr<const StructField> fields = map<const StructField>{}(arena, f.fields, [&](const StructField f) {
 				return StructField{instantiateType(arena, f.type, decl->typeParams, typeArgs), f.name, f.index};

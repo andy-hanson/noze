@@ -253,7 +253,7 @@ namespace {
 		if (argType.isStructInst()) {
 			const StructInst* argStructInst = argType.asStructInst();
 			return argStructInst->body().match(
-				/*builtin*/ []() {
+				[](const StructBody::Builtin) {
 					return none<const Expr::StructFieldAccess>();
 				},
 				[&](const StructBody::Fields f) {

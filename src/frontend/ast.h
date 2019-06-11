@@ -323,6 +323,7 @@ struct StructAliasAst {
 
 struct StructDeclAst {
 	struct Body {
+		struct Builtin {};
 		struct Fields {
 			struct Field {
 				const Str name;
@@ -346,18 +347,17 @@ struct StructDeclAst {
 	private:
 		const Kind kind;
 		union {
+			const Builtin builtin;
 			const Fields fields;
 			const Union _union;
 			const Iface iface;
 		};
 
 	public:
-		inline Body(const Kind kind) : kind{kind} {
-			assert(kind == Kind::builtin);
-		}
-		inline Body(const Fields f) : kind{Kind::fields}, fields{f} {}
-		inline Body(const Union u) : kind{Kind::_union}, _union{u} {}
-		inline Body(const Iface i) : kind{Kind::iface}, iface{i} {}
+		inline Body(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+		inline Body(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
+		inline Body(const Union _union) : kind{Kind::_union}, _union{_union} {}
+		inline Body(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
 		inline bool isFields() const {
 			return kind == Kind::fields;
@@ -373,7 +373,7 @@ struct StructDeclAst {
 		inline auto match(CbBuiltin cbBuiltin, CbFields cbFields, CbUnion cbUnion, CbIface cbIface) const {
 			switch (kind) {
 				case Kind::builtin:
-					return cbBuiltin();
+					return cbBuiltin(builtin);
 				case Kind::fields:
 					return cbFields(fields);
 				case Kind::_union:
@@ -403,6 +403,8 @@ struct SpecDeclAst {
 };
 
 struct FunBodyAst {
+	struct Builtin {};
+	struct Extern {};
 	enum class Kind {
 		builtin,
 		_extern,
@@ -411,21 +413,22 @@ struct FunBodyAst {
 private:
 	const Kind kind;
 	union {
+		const Builtin builtin;
+		const Extern _extern;
 		const ExprAst exprAst;
 	};
 public:
-	FunBodyAst(Kind kind) : kind{kind} {
-		assert(kind == Kind::builtin || kind == Kind::_extern);
-	}
-	FunBodyAst(ExprAst e) : kind{Kind::exprAst}, exprAst{e} {}
+	inline FunBodyAst(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	inline FunBodyAst(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
+	inline FunBodyAst(const ExprAst _exprAst) : kind{Kind::exprAst}, exprAst{_exprAst} {}
 
 	template <typename CbBuiltin, typename CbExtern, typename CbExprAst>
 	inline auto match(CbBuiltin cbBuiltin, CbExtern cbExtern, CbExprAst cbExprAst) const {
 		switch (kind) {
 			case Kind::builtin:
-				return cbBuiltin();
+				return cbBuiltin(builtin);
 			case Kind::_extern:
-				return cbExtern();
+				return cbExtern(_extern);
 			case Kind::exprAst:
 				return cbExprAst(exprAst);
 			default:

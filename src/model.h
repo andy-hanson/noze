@@ -160,6 +160,7 @@ struct StructField {
 };
 
 struct StructBody {
+	struct Builtin {};
 	struct Fields {
 		const Arr<const StructField> fields;
 	};
@@ -179,19 +180,15 @@ private:
 	};
 	const Kind kind;
 	union {
+		const Builtin builtin;
 		const Fields fields;
 		const Union _union;
 		const Iface iface;
 	};
 
-	inline StructBody(const Kind _kind) : kind{_kind} {
-		assert(kind == Kind::builtin);
-	}
-
 public:
-	static inline StructBody builtin() {
-		return StructBody{Kind::builtin};
-	}
+	inline StructBody(const Builtin _builtin)
+		: kind{Kind::builtin}, builtin{_builtin} {}
 	inline StructBody(const Fields _fields)
 		: kind{Kind::fields}, fields{_fields} {}
 	inline StructBody(const Union __union)
@@ -238,7 +235,7 @@ public:
 	) const {
 		switch (kind) {
 			case Kind::builtin:
-				return cbBuiltin();
+				return cbBuiltin(builtin);
 			case Kind::fields:
 				return cbFields(fields);
 			case Kind::_union:
@@ -327,6 +324,8 @@ struct SpecDecl {
 struct Expr;
 
 struct FunBody {
+	struct Builtin {};
+	struct Extern {};
 private:
 	enum class Kind {
 		builtin,
@@ -335,18 +334,16 @@ private:
 	};
 	const Kind kind;
 	union {
+		const Builtin builtin;
+		const Extern _extern;
 		const Expr* expr;
 	};
 	inline FunBody(const Kind _kind) : kind{_kind} {
 		assert(kind == Kind::builtin || kind == Kind::_extern);
 	}
 public:
-	static inline FunBody builtin() {
-		return FunBody{Kind::builtin};
-	}
-	static inline FunBody _extern() {
-		return FunBody{Kind::_extern};
-	}
+	inline FunBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	inline FunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
 	inline FunBody(const Expr* _expr) : kind{Kind::expr}, expr{_expr} {}
 
 	inline bool isBuiltin() const {
@@ -359,14 +356,13 @@ public:
 		return kind == Kind::expr;
 	}
 
-
 	template <typename CbBuiltin, typename CbExtern, typename CbExpr>
 	inline auto match(CbBuiltin cbBuiltin, CbExtern cbExtern, CbExpr cbExpr) const {
 		switch (kind) {
 			case Kind::builtin:
-				return cbBuiltin();
+				return cbBuiltin(builtin);
 			case Kind::_extern:
-				return cbExtern();
+				return cbExtern(_extern);
 			case Kind::expr:
 				return cbExpr(expr);
 			default:
@@ -429,6 +425,10 @@ struct FunDecl {
 
 	inline const Arr<const Param> params() const {
 		return sig.params;
+	}
+
+	inline bool arity() const {
+		return sig.arity();
 	}
 
 	inline bool isGeneric() const {

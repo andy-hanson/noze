@@ -10,6 +10,22 @@
 using byte = uint8_t;
 using Int64 = int64_t;
 using Nat64 = uint64_t;
+using Float64 = double;
+
+#define CHAR_BIT 8
+static_assert(sizeof(byte) * CHAR_BIT == 8, "byte");
+static_assert(sizeof(Int64) * CHAR_BIT == 64, "int64");
+static_assert(sizeof(Nat64) * CHAR_BIT == 64, "nat64");
+static_assert(sizeof(Float64) * CHAR_BIT == 64, "float64");
+
+inline size_t max(const size_t a, const size_t b) {
+	return a > b ? a : b;
+}
+
+inline size_t roundUp(const size_t a, const size_t b) {
+	assert(b != 0);
+	return a % b == 0 ? a : roundUp(a + 1, b);
+}
 
 struct Arena {
 	Arena() {
@@ -643,6 +659,17 @@ public:
 		assert(!has(key));
 		pairs.push(arena, KeyValuePair<K, V>{key, value});
 	}
+
+	template <typename GetValue>
+	V getOrAdd(Arena& arena, const K key, GetValue getValue) {
+		for (const KeyValuePair<K, V>& pair : pairs.tempAsArr())
+			if (eq(pair.key, key))
+				return pair.value;
+
+		const V value = getValue();
+		pairs.push(arena, KeyValuePair<K, V>{key, value});
+		return value;
+	}
 };
 
 template <typename T>
@@ -654,6 +681,7 @@ private:
 	};
 public:
 	Late(const Late&) = delete;
+	inline Late(Late&&) = default;
 	inline Late() {}
 	inline Late(const T _value) : value{_value} {}
 
@@ -665,10 +693,16 @@ public:
 		assert(_isSet);
 		return value;
 	}
+
 	inline void set(T v) {
 		assert(!_isSet);
 		initMemory(value, v);
 		_isSet = true;
+	}
+
+	inline void setOverwrite(T v) {
+		assert(_isSet);
+		overwriteConst(value, v);
 	}
 };
 

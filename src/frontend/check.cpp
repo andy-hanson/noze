@@ -280,7 +280,9 @@ namespace {
 		DelayStructInsts delay = some<MutArr<StructInst*>&>(delayStructInsts);
 		zip(structs, asts, [&](StructDecl& strukt, const StructDeclAst& ast) {
 			const StructBody body = ast.body.match(
-				/*builtin*/ []() { return StructBody::builtin(); },
+				[](const StructDeclAst::Body::Builtin) {
+					return StructBody{StructBody::Builtin{}};
+				},
 				[&](const StructDeclAst::Body::Fields f) {
 					const Arr<const StructField> fields = mapWithIndex<const StructField>{}(
 						ctx.arena,
@@ -323,14 +325,14 @@ namespace {
 
 		for (const StructDecl& strukt : structs) {
 			strukt.body().match(
-				/*builtin*/ []() {},
-				[](const StructBody::Fields&) {},
-				[](const StructBody::Union& u) {
+				[](const StructBody::Builtin) {},
+				[](const StructBody::Fields) {},
+				[](const StructBody::Union u) {
 					for (const StructInst* member : u.members)
 						if (member->decl->body().isUnion())
 							todo<void>("unions can't contain unions");
 				},
-				[&](const StructBody::Iface& i) {
+				[&](const StructBody::Iface i) {
 					for (const Message& message : i.messages) {
 						const Sig sig = message.sig;
 						checkSendable(ctx, sig.range, sig.returnType);
@@ -419,11 +421,11 @@ namespace {
 
 		zip(funs, asts, [&](FunDecl& fun, const FunDeclAst funAst) {
 			fun.setBody(funAst.body.match(
-				/*builtin*/ []() {
-					return FunBody::builtin();
+				[](const FunBodyAst::Builtin) {
+					return FunBody{FunBody::Builtin{}};
 				},
-				/*extern*/ []() {
-					return FunBody::_extern();
+				[](const FunBodyAst::Extern) {
+					return FunBody{FunBody::Extern{}};
 				},
 				[&](const ExprAst e) {
 					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, &fun, commonTypes)};

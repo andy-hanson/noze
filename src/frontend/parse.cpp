@@ -276,8 +276,8 @@ namespace {
 			noCtx = true;
 		}
 
-		Opt<const FunBodyAst> body = builtin ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Kind::builtin})
-			: _extern ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Kind::_extern})
+		Opt<const FunBodyAst> body = builtin ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
+			: _extern ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
 			: none<const FunBodyAst>();
 		return SigFlagsAndKwBody{noCtx, summon, unsafe, trusted, body};
 	}
@@ -347,7 +347,7 @@ namespace {
 						case NonFunKeyword::builtin:
 							if (tookIndent)
 								todo<void>("shouldn't indent after builtin");
-							return Body{Body::Kind::builtin};
+							return Body{Body::Builtin{}};
 						case NonFunKeyword::record: {
 							const Arr<const Body::Fields::Field> fields = tookIndent ? parseFields(lexer) : emptyArr<const Body::Fields::Field>();
 							return Body{Body::Fields{fields}};

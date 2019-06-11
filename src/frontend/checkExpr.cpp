@@ -123,7 +123,7 @@ namespace {
 		const StructDecl* decl = si->decl;
 
 		const Opt<const StructBody::Fields> opFields = decl->body().match(
-			/*builtin*/ [&]() {
+			[&](const StructBody::Builtin) {
 				const StructDecl* byVal = ctx.commonTypes.byVal;
 				if (ptrEquals(decl, byVal)) {
 					// We know this will be deeply instantiated since we did that at the beginning of this function

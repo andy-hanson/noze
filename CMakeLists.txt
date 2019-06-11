@@ -4,6 +4,12 @@ project(test2)
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(test2
+	src/concretize/allConstants.cpp
+	src/concretize/builtinInfo.cpp
+	src/concretize/concretizeCtx.cpp
+	src/concretize/concretizeUtil.cpp
+	src/concretize/mangleName.cpp
+	src/concretize/writer.cpp
 	src/frontend/check.cpp
 	src/frontend/checkCall.cpp
 	src/frontend/checkExpr.cpp

@@ -8,11 +8,7 @@ enum class BuiltinStructKind {
 	_byte,
 	_char,
 	float64,
-	funPtr0,
-	funPtr1,
-	funPtr2,
-	funPtr3,
-	funPtr4,
+	funPtrN, // fun-ptr0, fun-ptr1, etc...
 	int64,
 	nat64,
 	ptr,
@@ -34,7 +30,7 @@ enum class BuiltinFunKind {
 	compare, // the `<=>` operator
 	deref,
 	_false,
-	getCTx,
+	getCtx,
 	hardFail,
 	_if,
 	isReferenceType,
@@ -256,6 +252,10 @@ struct ConcreteType {
 	}
 };
 
+inline bool concreteTypeEq(const ConcreteType a, const ConcreteType b) {
+	return a.isPointer == b.isPointer && ptrEquals(a.strukt, b.strukt);
+}
+
 struct ConcreteField {
 	const Str mangledName;
 	const ConcreteType type;
@@ -287,10 +287,12 @@ struct ConstantArrKey {
 	const Arr<const Constant*> elements;
 };
 
+bool constantArrKeyEq(const ConstantArrKey a, const ConstantArrKey b);
+
 struct ConcreteFun;
 struct KnownLambdaBody;
 
-struct Constant {
+struct ConstantKind {
 	struct Array {
 		const ConstantArrKey key;
 		const ConcreteStruct* arrayType;
@@ -316,11 +318,7 @@ struct Constant {
 	struct Lambda {
 		const KnownLambdaBody* knownLambdaBody;
 
-		inline Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} {
-			// If it needs a closure it can't be a constant
-			// (constant things closed over are omitted from the closure)
-			// TODO: assert(!klb->hasClosure);
-		}
+		Lambda(const KnownLambdaBody* klb);
 	};
 
 	struct Null {};
@@ -329,9 +327,7 @@ struct Constant {
 		const Constant* array;
 		const size_t index;
 
-		inline const Constant* deref() const {
-			return array->asArray().elements()[index];
-		}
+		const Constant* deref() const;
 	};
 
 	struct Record {
@@ -379,18 +375,18 @@ private:
 	};
 
 public:
-	inline Constant(const Array a) : kind{Kind::array}, array{a} {}
-	inline Constant(const bool a) : kind{Kind::_bool}, _bool{a} {}
-	inline Constant(const char a) : kind{Kind::_char}, _char{a} {}
-	inline Constant(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
-	inline Constant(const Int64 a) : kind{Kind::int64}, int64{a} {}
-	inline Constant(const Lambda a) : kind{Kind::lambda}, lambda{a} {}
-	inline Constant(const Nat64 a) : kind{Kind::nat64}, nat64{a} {}
-	inline Constant(const Null a) : kind{Kind::_null}, _null{a} {}
-	inline Constant(const Ptr a) : kind{Kind::ptr}, ptr{a} {}
-	inline Constant(const Record a) : kind{Kind::record}, record{a} {}
-	inline Constant(const Union a) : kind{Kind::_union}, _union{a} {}
-	inline Constant(const Void a) : kind{Kind::_void}, _void{a} {}
+	inline ConstantKind(const Array a) : kind{Kind::array}, array{a} {}
+	inline ConstantKind(const bool a) : kind{Kind::_bool}, _bool{a} {}
+	inline ConstantKind(const char a) : kind{Kind::_char}, _char{a} {}
+	inline ConstantKind(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
+	inline ConstantKind(const Int64 a) : kind{Kind::int64}, int64{a} {}
+	inline ConstantKind(const Lambda a) : kind{Kind::lambda}, lambda{a} {}
+	inline ConstantKind(const Nat64 a) : kind{Kind::nat64}, nat64{a} {}
+	inline ConstantKind(const Null a) : kind{Kind::_null}, _null{a} {}
+	inline ConstantKind(const Ptr a) : kind{Kind::ptr}, ptr{a} {}
+	inline ConstantKind(const Record a) : kind{Kind::record}, record{a} {}
+	inline ConstantKind(const Union a) : kind{Kind::_union}, _union{a} {}
+	inline ConstantKind(const Void a) : kind{Kind::_void}, _void{a} {}
 
 	inline bool isArray() const {
 		return kind == Kind::array;
@@ -537,6 +533,14 @@ public:
 	}
 };
 
+struct Constant {
+	const ConstantKind kind;
+	const size_t id;
+	bool isConstantReferenced;
+	inline Constant(const ConstantKind _kind, const size_t _id)
+		: kind{_kind}, id{_id}, isConstantReferenced{false} {}
+};
+
 // NOTE: a Constant can still have a KnownLambdaBody of course!
 struct ConstantOrLambdaOrVariable {
 	struct Variable {};
@@ -602,6 +606,19 @@ public:
 	}
 };
 
+inline bool constantOrLambdaOrVariableEq(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
+	return a.match(
+		[&](const ConstantOrLambdaOrVariable::Variable) {
+			return b.isVariable();
+		},
+		[&](const Constant* ca) {
+			return b.isConstant() && ptrEquals(ca, b.asConstant());
+		},
+		[&](const KnownLambdaBody* klba) {
+			return b.isKnownLambdaBody() && ptrEquals(klba, b.asKnownLambdaBody());
+		});
+}
+
 bool constantOrLambdaOrVariableArrEq(const Arr<const ConstantOrLambdaOrVariable> a, const Arr<const ConstantOrLambdaOrVariable> b);
 
 struct ConcreteExpr;
@@ -610,30 +627,45 @@ struct ConstantOrExpr {
 private:
 	enum class Kind {
 		constant,
-		expr,
+		concreteExpr,
 	};
 	const Kind kind;
 	union {
 		const Constant* constant;
-		const ConcreteExpr* expr;
+		const ConcreteExpr* concreteExpr;
 	};
 public:
 	inline ConstantOrExpr(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
-	inline ConstantOrExpr(const ConcreteExpr* _expr) : kind{Kind::expr}, expr{_expr} {}
+	inline ConstantOrExpr(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
+
+	inline bool isConstant() const {
+		return kind == Kind::constant;
+	}
+	inline bool isConcreteExpr() const {
+		return kind == Kind::concreteExpr;
+	}
+	inline const Constant* asConstant() const {
+		assert(isConstant());
+		return constant;
+	}
+	inline const ConcreteExpr* asConcreteExpr() const {
+		assert(isConcreteExpr());
+		return concreteExpr;
+	}
 
 	template <
 		typename CbConstant,
-		typename CbExpr
+		typename CbConcreteExpr
 	>
 	inline auto match(
 		CbConstant cbConstant,
-		CbExpr cbExpr
-	) {
+		CbConcreteExpr cbConcreteExpr
+	) const {
 		switch (kind) {
 			case Kind::constant:
 				return cbConstant(constant);
-			case Kind::expr:
-				return cbExpr(expr);
+			case Kind::concreteExpr:
+				return cbConcreteExpr(concreteExpr);
 			default:
 				assert(0);
 		}
@@ -665,6 +697,32 @@ public:
 	inline ConcreteFunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
 	inline ConcreteFunBody(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
 	inline ConcreteFunBody(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
+
+	inline bool isBuiltin() const {
+		return kind == Kind::builtin;
+	}
+	inline bool isExtern() const {
+		return kind == Kind::_extern;
+	}
+	inline bool isConstant() const {
+		return kind == Kind::constant;
+	}
+	inline bool isConcreteExpr() const {
+		return kind == Kind::concreteExpr;
+	}
+	inline Builtin asBuiltin() const {
+		assert(isBuiltin());
+		return builtin;
+	}
+	inline const Constant* asConstant() const {
+		assert(isConstant());
+		return constant;
+	}
+	inline const ConcreteExpr* asConcreteExpr() const {
+		assert(isConcreteExpr());
+		return concreteExpr;
+	}
+
 
 	template <
 		typename CbBuiltin,
