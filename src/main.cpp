@@ -29,7 +29,7 @@ void test() {
 	const Arr<int> a = arrLiteral<int>(arena, 1, 2);
 	const Arr<int> b = map<int>()(arena, a, [](int x) { return x + 1; });
 
-	for (size_t i = 0; i < b.size; i++) {
+	for (const size_t i : Range{0, b.size}) {
 		printf("arr elem: %d\n", b[i]);
 	}
 }
@@ -41,6 +41,10 @@ int main(void) {
 	NulTerminatedStr s = pathToNulTerminatedStr(arena, p);
 
 	printf("Path is %s\n", s._begin);
+
+	for (const size_t i : Range{5, 10}) {
+		printf("i = %ld\n", i);
+	}
 
 	return 0;
 }

@@ -88,7 +88,7 @@ struct CheckedExpr {
 };
 
 inline const CheckedExpr bogusWithoutAffectingExpected(const SourceRange range) {
-	return CheckedExpr{Expr::bogus(range)};
+	return CheckedExpr{Expr{range, Expr::Bogus{}}};
 }
 
 bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setTYpe, InferringTypeArgs inferringTypeArgs);
@@ -128,7 +128,7 @@ public:
 	}
 
 	inline const CheckedExpr bogus(const SourceRange range) {
-		type.set(some<const Type>(Type::bogus()));
+		type.set(some<const Type>(Type{Type::Bogus{}}));
 		return bogusWithoutAffectingExpected(range);
 	}
 

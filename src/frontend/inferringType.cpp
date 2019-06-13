@@ -38,8 +38,8 @@ namespace {
 
 	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena& arena, const Type t, const InferringTypeArgs& inferringTypeArgs) {
 		return t.match(
-			/*bogus*/ [&]() {
-				return some<const Type>(t);
+			[](const Type::Bogus) {
+				return some<const Type>(Type{Type::Bogus{}});
 			},
 			[&](const TypeParam* p) {
 				const Opt<const SingleInferringType*> ta = tryGetTypeArg(inferringTypeArgs, p);
@@ -64,8 +64,8 @@ namespace {
 	) {
 		if (expectedType.has())
 			return expectedType.force().match(
-				/*bogus*/ []() {
-					return some<const Type>(Type::bogus());
+				[](const Type::Bogus) {
+					return some<const Type>(Type{Type::Bogus{}});
 				},
 				[&](const TypeParam* p) {
 					if (setType.isTypeParam() && ptrEquals(setType.asTypeParam(), p))

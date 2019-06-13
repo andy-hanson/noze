@@ -66,3 +66,13 @@ inline const Opt<const KnownLambdaBody*> knownLambdaBodyFromConstantOrExpr(const
 		? body.asConcreteExpr()->knownLambdaBody()
 		: none<const KnownLambdaBody*>();
 }
+
+inline const ConcreteFunBody toConcreteFunBody(const ConstantOrExpr ce) {
+	return ce.match(
+		[](const Constant* c) {
+			return ConcreteFunBody{c};
+		},
+		[](const ConcreteExpr* e) {
+			return ConcreteFunBody{e};
+		});
+}

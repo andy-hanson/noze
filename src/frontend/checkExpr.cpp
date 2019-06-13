@@ -419,7 +419,7 @@ namespace {
 		const Type targetType = targetAndType.type;
 
 		return targetType.match(
-			/*bogus*/ [&]() {
+			[&](const Type::Bogus) {
 				return expected.bogus(range);
 			},
 			[&](const TypeParam*) {

@@ -130,8 +130,8 @@ namespace {
 		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(ctx.arena, asts, [&](const TypeParamAst& ast, const size_t i) {
 			return TypeParam{ast.range, ctx.copyStr(ast.name), i};
 		});
-		for (size_t i = 0; i < typeParams.size; i++)
-			for (size_t prev_i = 0; prev_i < i; prev_i++)
+		for (const size_t i : Range{0, typeParams.size})
+			for (const size_t prev_i : Range{0, i})
 				if (strEq(typeParams[prev_i].name, typeParams[i].name))
 					ctx.diag(typeParams[i].range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
 		return typeParams;
@@ -174,8 +174,8 @@ namespace {
 			const Type type = typeFromAst(ctx, ast.type, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 			return Param{ast.range, ctx.copyStr(ast.name), type, index};
 		});
-		for (size_t i = 0; i < params.size; i++)
-			for (size_t prev_i = 0; prev_i < i; prev_i++)
+		for (const size_t i : Range{0, params.size})
+			for (const size_t prev_i : Range{0, i})
 				if (strEq(params[prev_i].name, params[i].name))
 					ctx.diag(params[i].range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
 		return params;
@@ -263,8 +263,8 @@ namespace {
 
 	template <typename T, typename CbEqual>
 	void checkNoEqual(const Arr<T> a, CbEqual eq) {
-		for (size_t i = 0; i < a.size; i++)
-			for (size_t j = 0; j < i; j++)
+		for (const size_t i : Range{0, a.size})
+			for (const size_t j : Range{0, i})
 				if (eq(a[i], a[j]))
 					todo<void>("checkNoEqual");
 	}

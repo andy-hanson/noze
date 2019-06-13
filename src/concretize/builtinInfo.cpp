@@ -53,7 +53,7 @@ namespace {
 		const Str name = sig.name;
 		const Opt<const BuiltinFunInfo> no = none<const BuiltinFunInfo>();
 		const Type rt = sig.returnType;
-		const Type p0 = sig.params.size > 0 ? sig.params[0].type : Type::bogus();
+		const Type p0 = sig.params.size > 0 ? sig.params[0].type : Type{Type::Bogus{}};
 
 		switch (name[0]) {
 			case '<':
@@ -159,7 +159,7 @@ const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {
 	const Str name = s->name;
 	return strEqLiteral(name, "bool") ? BuiltinStructInfo{BuiltinStructKind::_bool, sizeof(bool)}
-		: strEqLiteral(name, "byte") ? BuiltinStructInfo{BuiltinStructKind::_byte, sizeof(byte)}
+		: strEqLiteral(name, "byte") ? BuiltinStructInfo{BuiltinStructKind::byte, sizeof(byte)}
 		: strEqLiteral(name, "char") ? BuiltinStructInfo{BuiltinStructKind::_char, sizeof(char)}
 		: strEqLiteral(name, "float64") ? BuiltinStructInfo{BuiltinStructKind::float64, sizeof(Float64)}
 		: strEqLiteral(name, "fun-ptr0")

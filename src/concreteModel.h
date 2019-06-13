@@ -5,7 +5,7 @@
 
 enum class BuiltinStructKind {
 	_bool,
-	_byte,
+	byte,
 	_char,
 	float64,
 	funPtrN, // fun-ptr0, fun-ptr1, etc...
@@ -501,7 +501,7 @@ public:
 		CbRecord cbRecord,
 		CbUnion cbUnion,
 		CbVoid cbVoid
-	) {
+	) const {
 		switch (kind) {
 			case Kind::array:
 				return cbArray(array);
@@ -816,9 +816,9 @@ struct KnownLambdaBody {
 	// We'll generate this (and cache it here) if this needs to be converted to Fun. This never specializes on args.
 	// The dynamic fun will have a closure parameter added even if we don't need it,
 	// because all lambdas that might be dynamically called need identical signatures.
-	Late<const ConcreteFun*> dynamicInstance;
+	mutable Late<const ConcreteFun*> dynamicInstance;
 	// When this is called directly, we will instantiate it -- this may remove parameters that are constants.
-	MutDict<
+	mutable MutDict<
 		const Arr<const ConstantOrLambdaOrVariable>,
 		const ConcreteFun*,
 		constantOrLambdaOrVariableArrEq
@@ -921,7 +921,7 @@ struct ConcreteExpr {
 	struct Let {
 		const ConcreteLocal* local;
 		const ConcreteExpr* value; // If a constant, we just use 'then' in place of the Let
-		const ConstantOrExpr* then;
+		const ConstantOrExpr then;
 	};
 
 	// This expression is for instantiating the closure of the lambda;

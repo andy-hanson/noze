@@ -27,6 +27,39 @@ inline size_t roundUp(const size_t a, const size_t b) {
 	return a % b == 0 ? a : roundUp(a + 1, b);
 }
 
+struct RangeIter {
+	size_t cur;
+
+	inline size_t operator*() const {
+		return cur;
+	}
+
+	inline void operator++() {
+		cur++;
+	}
+
+	inline bool operator!=(const RangeIter other) const {
+		return cur != other.cur;
+	}
+};
+
+struct Range {
+	const size_t lo;
+	const size_t hi;
+
+	inline Range(const size_t _lo, const size_t _hi) : lo{_lo}, hi{_hi} {
+		assert(lo <= hi);
+	}
+
+	inline RangeIter begin() const {
+		return RangeIter{lo};
+	}
+
+	inline RangeIter end() const {
+		return RangeIter{hi};
+	}
+};
+
 struct Arena {
 	Arena() {
 		begin = nullptr;
@@ -111,7 +144,7 @@ void initMemory(const T& to, const T& from) {
 	// T may contain const members, so do initialization by blitting
 	byte* toByte = const_cast<byte*>(reinterpret_cast<const byte*>(&to));
 	const byte* fromByte = reinterpret_cast<const byte*>(&from);
-	for (size_t i = 0; i < sizeof(T); i++)
+	for (const size_t i : Range{0, sizeof(T)})
 		toByte[i] = fromByte[i];
 }
 
@@ -291,7 +324,7 @@ struct MutSlice {
 
 	void copyFrom(const size_t index, const Arr<const T> arr) {
 		assert(index + arr.size <= size);
-		for (size_t i = 0; i < arr.size; i++)
+		for (const size_t i : Range{0, arr.size})
 			set(index + i, arr[i]);
 	}
 
@@ -353,7 +386,7 @@ public:
 		if (_size == slice.size) {
 			MutSlice<T> oldSlice = slice;
 			slice = newUninitializedMutSlice<T>(arena, slice.size == 0 ? 4 : slice.size * 2);
-			for (size_t i = 0; i < oldSlice.size; i++)
+			for (const size_t i : Range{0, oldSlice.size})
 				initMemory(slice[i], oldSlice[i]);
 		}
 
@@ -395,6 +428,13 @@ public:
 
 	inline const Arr<T> tempAsArr() const {
 		return ::slice<T>(slice.tempAsArr(), 0, _size);
+	}
+
+	void deleteAt(size_t index) {
+		assert(index < _size);
+		for (const size_t i : Range{index, _size - 1})
+			overwriteConst(slice[i], slice[i + 1]);
+		_size--;
 	}
 };
 
@@ -451,7 +491,7 @@ using MutStr = MutSlice<const char>;
 const Str copyStr(Arena& arena, const Str in);
 
 bool strEq(const Str a, const Str b);
-inline Str strLiteral(const char* c) {
+inline const Str strLiteral(const char* c) {
 	const char* end = c;
 	while (*end != '\0')
 		++end;
@@ -471,6 +511,8 @@ template <typename T, typename U, typename V, typename W>
 inline void unused(T&, U&, V&, W&) {}
 template <typename T, typename U, typename V, typename W, typename X>
 inline void unused(T&, U&, V&, W&, X&) {}
+template <typename T, typename U, typename V, typename W, typename X, typename Y>
+inline void unused(T&, U&, V&, W&, X&, Y&) {}
 
 template <typename Success, typename Failure>
 struct Result {
@@ -570,6 +612,10 @@ struct Dict {
 				return some<V>(pair.value);
 		return none<V>();
 	}
+
+	inline const V mustGet(const K key) const {
+		return get(key).force();
+	}
 };
 
 template <typename K, typename V, Eq<K> eq>
@@ -588,9 +634,9 @@ public:
 	Dict<K, V, eq> finish(Arena& arena, CbConflict cbConflict) {
 		MutArr<KeyValuePair<K, V>> res;
 		Arr<KeyValuePair<K, V>> allPairs = builder.finish();
-		for (size_t i = 0; i < allPairs.size; i++) {
+		for (const size_t i : Range{0, allPairs.size}) {
 			bool isConflict = false;
-			for (size_t j = 0; j < res.size(); j++) {
+			for (const size_t j : Range{0, res.size()}) {
 				if (eq(allPairs[i].key, res[j].key)) {
 					cbConflict(allPairs[i].key, res[j].value, allPairs[i].value);
 					isConflict = true;
@@ -644,7 +690,7 @@ private:
 	MutArr<KeyValuePair<K, V>> pairs;
 
 public:
-	bool has(const K key) const {
+	inline bool has(const K key) const {
 		return get(key).has();
 	}
 
@@ -655,13 +701,17 @@ public:
 		return none<V>();
 	}
 
+	inline const V mustGet(const K key) const {
+		return get(key).force();
+	}
+
 	void add(Arena& arena, const K key, const V value) {
 		assert(!has(key));
 		pairs.push(arena, KeyValuePair<K, V>{key, value});
 	}
 
 	template <typename GetValue>
-	V getOrAdd(Arena& arena, const K key, GetValue getValue) {
+	const V getOrAdd(Arena& arena, const K key, GetValue getValue) {
 		for (const KeyValuePair<K, V>& pair : pairs.tempAsArr())
 			if (eq(pair.key, key))
 				return pair.value;
@@ -669,6 +719,20 @@ public:
 		const V value = getValue();
 		pairs.push(arena, KeyValuePair<K, V>{key, value});
 		return value;
+	}
+
+	const Opt<V> tryDeleteAndGet(const K key) {
+		for (const size_t i : Range{0, pairs.size()})
+			if (eq(pairs[i].key, key)) {
+				const V res = pairs[i].value;
+				pairs.deleteAt(i);
+				return some<V>(res);
+			}
+		return none<V>();
+	}
+
+	const V mustDelete(const K key) {
+		return tryDeleteAndGet(key).force();
 	}
 };
 
@@ -705,6 +769,17 @@ public:
 		overwriteConst(value, v);
 	}
 };
+
+template <typename T, typename Cb>
+inline const T lazilySet(Late<T>& late, Cb cb) {
+	if (late.isSet())
+		return late.get();
+	else {
+		const T value = cb();
+		late.set(value);
+		return value;
+	}
+}
 
 template <typename T>
 struct Cell {
@@ -756,9 +831,9 @@ const Opt<T*> findPtr(Arr<T> a, Cb cb) {
 template <typename T>
 Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
 	MutSlice<T> res = newUninitializedMutSlice<T>(arena, a.size + b.size);
-	for (size_t i = 0; i < a.size; i++)
+	for (const size_t i : Range{0, a.size})
 		res.set(i, a[i]);
-	for (size_t i = 0; i < b.size; i++)
+	for (const size_t i : Range{0, b.size})
 		res.set(a.size + i, b[i]);
 	return res.freeze();
 }
@@ -767,7 +842,7 @@ template <typename T>
 Arr<T> prepend(Arena& arena, const T a, const Arr<T> b) {
 	MutSlice<T> res = newUninitializedMutSlice<T>(arena, 1 + b.size);
 	res.set(0, a);
-	for (size_t i = 0; i < b.size; i++)
+	for (const size_t i : Range{0, b.size})
 		res.set(1 + i, b[i]);
 	return res.freeze();
 }
@@ -787,12 +862,21 @@ inline Arr<T> arrLiteral(Arena& arena, T a, T b) {
 	return Arr<T>{out, 2};
 }
 
+template <typename T>
+inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c) {
+	T* out = static_cast<T*>(arena.alloc(sizeof(T) * 3));
+	initMemory(out[0], a);
+	initMemory(out[1], b);
+	initMemory(out[2], c);
+	return Arr<T>{out, 3};
+}
+
 template <typename Out>
 struct fillArr {
 	template <typename Cb>
 	const Arr<Out> operator()(Arena& arena, const size_t size, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
-		for (size_t i = 0; i < size; i++)
+		for (const size_t i : Range{0, size})
 			initMemory(out[i], cb(i));
 		return Arr<Out>{out, size};
 	}
@@ -803,7 +887,7 @@ struct fillArrOrFail {
 	template <typename Cb>
 	const Opt<const Arr<Out>> operator()(Arena& arena, const size_t size, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
-		for (size_t i = 0; i < size; i++) {
+		for (const size_t i : Range{0, size}) {
 			const Opt<Out> op = cb(i);
 			if (op.has())
 				initMemory(out[i], op.force());
@@ -819,8 +903,19 @@ struct map {
 	template <typename In, typename Cb>
 	Arr<Out> operator()(Arena& arena, Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
-		for (size_t i = 0; i < in.size; i++)
+		for (const size_t i : Range{0, in.size})
 			initMemory(out[i], cb(in[i]));
+		return Arr<Out>{out, in.size};
+	}
+};
+
+template <typename Out>
+struct mapPointers {
+	template <typename In, typename Cb>
+	Arr<Out> operator()(Arena& arena, Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+		for (const size_t i : Range{0, in.size})
+			initMemory(out[i], cb(in.getPtr(i)));
 		return Arr<Out>{out, in.size};
 	}
 };
@@ -830,7 +925,7 @@ struct mapWithIndex {
 	template <typename In, typename Cb>
 	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
-		for (size_t i = 0; i < in.size; i++)
+		for (const size_t i : Range{0, in.size})
 			initMemory(out[i], cb(in[i], i));
 		return Arr<Out>{out, in.size};
 	}
@@ -841,7 +936,7 @@ struct mapOrNone {
 	template <typename In, typename Cb>
 	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
-		for (size_t i = 0; i < in.size; i++) {
+		for (const size_t i : Range{0, in.size}) {
 			const Opt<Out> o = cb(in[i]);
 			if (o.has())
 				initMemory(out[i], o.force());
@@ -857,7 +952,7 @@ struct mapOrFail {
 	template <typename In, typename Cb>
 	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena& arena, const Arr<In> in, Cb cb) {
 		OutSuccess* out = static_cast<OutSuccess*>(arena.alloc(sizeof(OutSuccess) * in.size));
-		for (size_t i = 0; i < in.size; i--) {
+		for (const size_t i : Range{0, in.size}) {
 			const Result<OutSuccess, OutFailure> result = cb(in[i]);
 			if (result.isSuccess())
 				initMemory(out[i], result.asSuccess());
@@ -891,7 +986,7 @@ struct zipOrFail {
 		const size_t size = in0.size;
 		assert(in1.size == size);
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
-		for (size_t i = 0; i < size; i++) {
+		for (const size_t i : Range{0, size}) {
 			const Opt<Out> o = cb(in0[i], in1[i]);
 			if (o.has())
 				initMemory(out[i], o.force());
@@ -908,7 +1003,7 @@ struct mapOpWithIndex {
 	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
 		size_t out_i = 0;
-		for (size_t in_i = 0; in_i < in.size; in_i++) {
+		for (const size_t in_i : Range{0, in.size}) {
 			Opt<Out> op = cb(in[in_i], in_i);
 			if (op.has()) {
 				initMemory(out[out_i], op.force());
@@ -927,7 +1022,7 @@ struct mapZip {
 		const size_t size = in0.size;
 		assert(in1.size == size);
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
-		for (size_t i = 0; i < size; i++)
+		for (const size_t i : Range{0, size})
 			initMemory(out[i], cb(in0[i], in1[i]));
 		return Arr<Out>{out, size};
 	}
@@ -940,7 +1035,7 @@ struct mapZipPtrs {
 		const size_t size = in0.size;
 		assert(in1.size == size);
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
-		for (size_t i = 0; i < size; i++)
+		for (const size_t i : Range{0, size})
 			initMemory(out[i], cb(in0.getPtr(i), in1.getPtr(i)));
 		return Arr<Out>{out, size};
 	}
@@ -949,14 +1044,14 @@ struct mapZipPtrs {
 template <typename T, typename U, typename Cb>
 void zip(Arr<T> a, Arr<U> b, Cb cb) {
 	assert(a.size == b.size);
-	for (size_t i = 0; i < a.size; i++)
+	for (const size_t i : Range{0, a.size})
 		cb(a[i], b[i]);
 }
 
 template <typename T, typename U, typename Cb>
 bool eachCorresponds(const Arr<T> a, const Arr<U> b, Cb cb) {
 	assert(a.size == b.size);
-	for (size_t i = 0; i < a.size; i++) {
+	for (const size_t i : Range{0, a.size}) {
 		const bool thisCorresponds = cb(a[i], b[i]);
 		if (!thisCorresponds)
 			return false;
@@ -987,7 +1082,7 @@ struct buildDict {
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);
 			bool wasConflict = false;
-			for (size_t i = 0; i < res.size(); i++)
+			for (const size_t i : Range{0, res.size()})
 				if (eq(res[i].key, pair.key)) {
 					onConflict(pair.key, res[i].value, pair.value);
 					wasConflict = true;
@@ -1008,7 +1103,7 @@ struct buildMultiDict {
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);
 			bool didAdd = false;
-			for (size_t i = 0; i < res.size(); i++)
+			for (const size_t i : Range{0, res.size()})
 				if (eq(res[i].key, pair.key)) {
 					res[i].value.push(arena, pair.value);
 					didAdd = true;

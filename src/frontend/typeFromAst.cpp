@@ -4,10 +4,10 @@ namespace {
 	//TODO:MOVE
 	template<typename T, typename Cb>
 	const Opt<const T*> findInEither(const Arr<T> a, const Arr<T> b, Cb cb) {
-		for (size_t i = 0; i < a.size; i++)
+		for (const size_t i : Range{0, a.size})
 			if (cb(a[i]))
 				return some<const T*>(a.getPtr(i));
-		for (size_t i = 0; i < b.size; i++)
+		for (const size_t i : Range{0, b.size})
 			if (cb(b[i]))
 				return some<const T*>(b.getPtr(i));
 		return none<const T*>();
@@ -43,7 +43,9 @@ namespace {
 
 const Type instantiateType(Arena& arena, const Type type, const Arr<const TypeParam> typeParams, const Arr<const Type> typeArgs) {
 	return type.match(
-		/*bogus*/ []() { return Type::bogus(); },
+		[](const Type::Bogus) {
+			return Type{Type::Bogus{}};
+		},
 		[&](const TypeParam* p) {
 			const Opt<const Type*> op = tryGetTypeArg<const Type>(typeParams, typeArgs, p);
 			return op.has() ? *op.force() : type;
@@ -139,7 +141,9 @@ const Opt<const StructInst*> instStructFromAst(
 		const size_t nActualTypeArgs = ast.typeArgs.size;
 		if (nActualTypeArgs != nExpectedTypeArgs) {
 			ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForStruct{sOrA, nExpectedTypeArgs, nActualTypeArgs}});
-			return fillArr<const Type>{}(ctx.arena, nExpectedTypeArgs, [](const size_t) { return Type::bogus(); });
+			return fillArr<const Type>{}(ctx.arena, nExpectedTypeArgs, [](const size_t) {
+				return Type{Type::Bogus{}};
+			});
 		} else
 			return typeArgsFromAsts(ctx, ast.typeArgs, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 	}();
@@ -174,12 +178,12 @@ const Type typeFromAst(
 				return Type{found.force()};
 			else {
 				ctx.diag(p.range, Diag{Diag::NameNotFound{ctx.copyStr(p.name), Diag::NameNotFound::Kind::typeParam}});
-				return Type::bogus();
+				return Type{Type::Bogus{}};
 			}
 		},
 		[&](const TypeAst::InstStruct iAst) {
 			const Opt<const StructInst*> i = instStructFromAst(ctx, iAst, structsAndAliasesMap, typeParamsScope, delayStructInsts);
-			return i.has() ? Type{i.force()} : Type::bogus();
+			return i.has() ? Type{i.force()} : Type{Type::Bogus{}};
 		});
 }
 
@@ -205,7 +209,7 @@ const Arr<const Type> typeArgsFromAsts(
 
 bool typeIsPossiblySendable(const Type type) {
 	return type.match(
-		/*bogus*/ []() {
+		[](const Type::Bogus) {
 			return true;
 		},
 		[](const TypeParam*) {

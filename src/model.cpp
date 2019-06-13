@@ -2,8 +2,12 @@
 
 bool Type::containsUnresolvedTypeParams() const {
 	return match(
-		/*bogus*/ []() { return true; },
-		[](const TypeParam*) { return true; },
+		[](const Type::Bogus) {
+			return true;
+		},
+		[](const TypeParam*) {
+			return true;
+		},
 		[](const StructInst* i) {
 			return exists(i->typeArgs, [](const Type t) {
 				return t.containsUnresolvedTypeParams();
@@ -13,20 +17,20 @@ bool Type::containsUnresolvedTypeParams() const {
 
 bool Type::typeEquals(const Type other) const {
 	return match(
-		/*bogus*/ [=]() {
+		[&](const Type::Bogus) {
 			return other.isBogus();
 		},
-		[=](const TypeParam* p) {
+		[&](const TypeParam* p) {
 			return other.isTypeParam() && ptrEquals(p, other.asTypeParam());
 		},
-		[=](const StructInst* s) {
+		[&](const StructInst* s) {
 			return other.isStructInst() && ptrEquals(s, other.asStructInst());
 		});
 }
 
 Purity Type::purity() const {
 	return match(
-		/*bogus*/ []() {
+		[](const Type::Bogus) {
 			return Purity::data;
 		},
 		[](const TypeParam*) {
@@ -42,7 +46,7 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 		if (ptrEquals(p, s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{false, s});
 
-	for (size_t i = 0; i < remoteFunTypes.size(); i++)
+	for (const size_t i : Range{0, remoteFunTypes.size()})
 		if (ptrEquals(remoteFunTypes[i], s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{true, funTypes[i]});
 
@@ -51,7 +55,7 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 
 bool Expr::typeIsBogus(Arena& arena) const {
 	return match(
-		/*bogus*/ []() {
+		[](const Expr::Bogus) {
 			return true;
 		},
 		[](const Expr::Call e) {
@@ -112,7 +116,9 @@ bool Expr::typeIsBogus(Arena& arena) const {
 
 const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 	return match(
-		/*bogus*/ []() { return Type::bogus(); },
+		[](const Expr::Bogus) {
+			return Type{Type::Bogus{}};
+		},
 		[](const Expr::Call e) {
 			return e.concreteReturnType;
 		},

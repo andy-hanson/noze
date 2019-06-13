@@ -53,6 +53,7 @@ struct TypeParam {
 struct StructInst;
 
 struct Type {
+	struct Bogus {};
 	enum class Kind {
 		bogus,
 		typeParam,
@@ -61,11 +62,12 @@ struct Type {
 private:
 	const Kind kind;
 	union {
+		const Bogus bogus;
 		const TypeParam* typeParam;
 		const StructInst* structInst;
 	};
 public:
-	inline Type(Kind _kind) : kind{_kind} {}
+	inline Type(const Bogus _bogus) : kind{Kind::bogus}, bogus{_bogus} {}
 	inline Type(const TypeParam* _typeParam) : kind{Kind::typeParam}, typeParam{_typeParam} {}
 	inline Type(const StructInst* _structInst) : kind{Kind::structInst}, structInst{_structInst} {}
 
@@ -81,7 +83,7 @@ public:
 	) const {
 		switch (kind) {
 			case Kind::bogus:
-				return cbBogus();
+				return cbBogus(bogus);
 			case Kind::typeParam:
 				return cbTypeParam(typeParam);
 			case Kind::structInst:
@@ -112,16 +114,14 @@ public:
 	bool containsUnresolvedTypeParams() const;
 	bool typeEquals(const Type other) const;
 	Purity purity() const;
-
-	inline static Type bogus() {
-		return Type{Kind::bogus};
-	}
 };
 
 //TODO:MOVE?
 inline bool typeEquals(const Type a, const Type b) {
 	return a.match(
-		/*bogus*/ [&]() { return b.isBogus(); },
+		[&](const Type::Bogus) {
+			return b.isBogus();
+		},
 		[&](const TypeParam* p) {
 			return b.isTypeParam() && ptrEquals(p, b.asTypeParam());
 		},
@@ -672,6 +672,8 @@ public:
 };
 
 struct Expr {
+	struct Bogus {};
+
 	struct Call {
 		struct Called {
 			const CalledDecl calledDecl;
@@ -691,11 +693,11 @@ struct Expr {
 			return called.calledDecl;
 		}
 
-		inline const Arr<const Type> typeArgs() {
+		inline const Arr<const Type> typeArgs() const {
 			return called.typeArgs;
 		}
 
-		inline const Arr<const CalledDecl> specImpls() {
+		inline const Arr<const CalledDecl> specImpls() const {
 			return called.specImpls;
 		}
 	};
@@ -878,6 +880,7 @@ private:
 	const SourceRange _range;
 	const Kind kind;
 	union {
+		const Bogus bogus;
 		const Call call;
 		const ClosureFieldRef closureFieldRef;
 		const Cond cond;
@@ -902,9 +905,8 @@ private:
 	}
 
 public:
-	static inline Expr bogus(const SourceRange range) {
-		return Expr{range, Kind::bogus};
-	}
+	inline Expr(const SourceRange range, const Bogus _bogus)
+		: _range{range}, kind{Kind::bogus}, bogus{_bogus} {}
 	inline Expr(const SourceRange range, const Call _call)
 		: _range{range}, kind{Kind::call}, call{_call} {}
 	inline Expr(const SourceRange range, const ClosureFieldRef _closureFieldRef)
@@ -990,7 +992,7 @@ public:
 	) const {
 		switch (kind) {
 			case Kind::bogus:
-				return cbBogus();
+				return cbBogus(bogus);
 			case Kind::call:
 				return cbCall(call);
 			case Kind::closureFieldRef:

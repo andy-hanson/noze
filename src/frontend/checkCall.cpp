@@ -83,7 +83,9 @@ namespace {
 	bool matchActualAndCandidateTypeInner(Arena& arena, const Type fromExternal, const Type declaredCandidateType, Candidate& candidate) {
 		const Type fromCandidate = instantiateSpecUse(declaredCandidateType, candidate.called);
 		return fromExternal.match(
-			/*bogus*/ []() { return todo<bool>("bogus"); },
+			[](const Type::Bogus) {
+				return todo<bool>("bogus");
+			},
 			[&](const TypeParam*) {
 				// Case A: expected return type is a type parameter. So the function we're calling must be generic too.
 				// Case B: If providing a type parameter as an argument, must be calling a function that is itself generic.
@@ -98,7 +100,9 @@ namespace {
 			},
 			[&](const StructInst* structInstFromExternal) {
 				return fromCandidate.match(
-					/*bogus*/ []() { return false; },
+					[](const Type::Bogus) {
+						return false;
+					},
 					[&](const TypeParam* p) {
 						return getTypeArg(candidate.inferringTypeArgs(), p)->setTypeNoDiagnostic(arena, fromExternal);
 					},
@@ -130,9 +134,9 @@ namespace {
 
 		const Type instantiatedReturnType = instantiateSpecUse(declaredReturnType, candidate.called);
 		return expectedReturnType.match(
-			/*bogus*/ [&]() {
+			[&](const Type::Bogus) {
 				return instantiatedReturnType.match(
-					/*bogus*/ []() { return true; },
+					[](const Type::Bogus) { return true; },
 					handleTypeParam,
 					[](const StructInst*) { return true; });
 			},
@@ -149,7 +153,9 @@ namespace {
 			},
 			[&](const StructInst* expectedStructInst) {
 				return instantiatedReturnType.match(
-					/*bogus*/ []() { return todo<bool>("matchActualAndCandidateTypeForReturn bogus"); },
+					[](const Type::Bogus) {
+						return todo<bool>("matchActualAndCandidateTypeForReturn bogus");
+					},
 					handleTypeParam,
 					[&](const StructInst* actualStructInst) {
 						if (ptrEquals(expectedStructInst->decl, actualStructInst->decl))
@@ -177,7 +183,7 @@ namespace {
 	const Type getCallReturnType(Arena& arena, const Type declaredReturnType, const CalledDecl called, const Arr<const Type> candidateTypeArgs) {
 		const Type instantiatedDeclaredReturnType = instantiateSpecUse(declaredReturnType, called);
 		return instantiatedDeclaredReturnType.match(
-			/*bogus*/ []() {
+			[](const Type::Bogus) {
 				return todo<const Type>("bogus");
 			},
 			[&](const TypeParam* p) {
@@ -196,7 +202,9 @@ namespace {
 	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type declaredType) {
 		const Type specInstantiated = instantiateSpecUse(declaredType, candidate.called);
 		return specInstantiated.match(
-			/*bogus*/ []() { return Type::bogus(); },
+			[](const Type::Bogus) {
+				return Type{Type::Bogus{}};
+			},
 			[&](const TypeParam* p) {
 				const Opt<SingleInferringType*> sit = tryGetTypeArg(InferringTypeArgs{candidate.called.typeParams(), candidate.typeArgs}, p);
 				const Opt<const Type> inferred = sit.has() ? sit.force()->tryGetInferred() : none<const Type>();
@@ -290,7 +298,7 @@ namespace {
 
 	bool sigTypesEqualNoSub(const Type specType, const Type actual) {
 		return specType.match(
-			/*bogus*/ []() {
+			[](const Type::Bogus) {
 				return todo<bool>("sigTypesEqualNoSub bogus");
 			},
 			[](const TypeParam*) {
@@ -317,7 +325,7 @@ namespace {
 	// This may further need to be substituted by a type arg from the candidate.
 	bool sigTypesEqualOneSub(const Type substitutedFromSpec, const Type actual, const TypeParamsAndArgs candidateTypeArgs) {
 		return substitutedFromSpec.match(
-			/*bogus*/ [&]() {
+			[&](const Type::Bogus) {
 				return todo<bool>("sigtypesequalonesub bogus");
 			},
 			[&](const TypeParam* p) {
@@ -337,7 +345,7 @@ namespace {
 
 	bool sigTypesEqual(const Type typeFromSpec, const Type actual, const TypeArgsScope typeArgs) {
 		return typeFromSpec.match(
-			/*bogus*/ []() {
+			[](const Type::Bogus) {
 				return todo<bool>("sigtypesequal bogus");
 			},
 			[&](const TypeParam* p) {

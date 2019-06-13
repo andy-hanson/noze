@@ -52,7 +52,7 @@ struct FunDeclAndTypeArgs {
 		return TypeArgsScope{decl->typeParams, typeArgs};
 	}
 
-	const FunDeclAndTypeArgs withTypeArgs(const Arr<const ConcreteType> newTypeArgs) {
+	inline const FunDeclAndTypeArgs withTypeArgs(const Arr<const ConcreteType> newTypeArgs) const {
 		return FunDeclAndTypeArgs{decl, newTypeArgs};
 	}
 };
@@ -107,6 +107,10 @@ struct ConcreteFunSource {
 		return containingFunInfo.funDeclAndTypeArgs;
 	}
 
+	inline const Arr<const ConcreteType> typeArgs() const {
+		return containingFunDeclAndTypeArgs().typeArgs;
+	}
+
 	inline const FunDecl* containingFunDecl() const {
 		return containingFunDeclAndTypeArgs().decl;
 	}
@@ -120,7 +124,7 @@ struct ConcreteFunSource {
 struct LambdaInfo {
 	const FunDeclAndTypeArgsAndSpecImpls containingFunDeclAndTypeArgsAndSpecImpls;
 	// For FunAsLambda, this is synthetic
-	const Expr bod;
+	const Expr* body;
 };
 
 struct ConcretizeCtx {
@@ -148,10 +152,28 @@ struct ConcretizeCtx {
 	const ConcreteType voidPtrType();
 };
 
-inline const ConcreteFun* getOrAddNonGenericConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl);
+const ConcreteFun* getOrAddNonGenericConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl);
 
 const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx& ctx, const ConcreteFunKey key);
 
+const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(ConcretizeCtx& ctx, const KnownLambdaBody* klb, const Arr<const ConstantOrLambdaOrVariable> args);
+const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx& ctx, const KnownLambdaBody* klb);
+inline const ConcreteFun* getConcreteFunForCallAndFillBody(
+	ConcretizeCtx& ctx,
+	const FunDecl* decl,
+	const Arr<const ConcreteType> typeArgs,
+	const Arr<const FunDecl*> specImpls,
+	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs
+) {
+	const ConcreteFunKey key = ConcreteFunKey{
+		FunDeclAndTypeArgsAndSpecImpls{
+			FunDeclAndTypeArgs{decl, typeArgs},
+			specImpls},
+		specializeOnArgs};
+	return getOrAddConcreteFunAndFillBody(ctx, key);
+}
+
+const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const StructInst* i, const TypeArgsScope typeArgsScope);
 // TODO: 't' may contain type params, must pass in current context
 const ConcreteType getConcreteType(ConcretizeCtx& ctx, const Type t, const TypeArgsScope typeArgsScope);
 const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope);
@@ -159,3 +181,21 @@ const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr
 void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t);
 
 bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl);
+
+
+//TODO:MOVE?
+struct SpecializeOnArgs {
+	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs;
+	const Arr<const ConstantOrExpr> notSpecializedArgs;
+};
+const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(Arena& arena, const Arr<const ConstantOrExpr> args);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const bool isSummon);
+const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx& ctx, const FunDecl* f, const Arr<const ConstantOrExpr> args);
+
+const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
+	ConcretizeCtx& ctx,
+	const Arr<const ClosureField*> closure,
+	const Arr<const ConstantOrLambdaOrVariable> closureSpecialize,
+	const TypeArgsScope typeArgsScope
+);
+const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx& ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope);
