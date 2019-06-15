@@ -1,7 +1,7 @@
 #pragma once
 
-#include "./SourceRange.h"
 #include "./util.h"
+#include "./util/SourceRange.h"
 
 enum class BuiltinStructKind {
 	_bool,
@@ -179,7 +179,7 @@ enum class SpecialStructKind {
 struct ConcreteStruct {
 	const Str mangledName;
 	const Opt<const SpecialStructKind> special;
-	bool isReferenced = false;
+	mutable bool isStructReferenced = false;
 	Late<const ConcreteStructBody> _body;
 	Late<const size_t> _sizeBytes;
 
@@ -252,8 +252,9 @@ struct ConcreteType {
 	}
 };
 
-inline bool concreteTypeEq(const ConcreteType a, const ConcreteType b) {
-	return a.isPointer == b.isPointer && ptrEquals(a.strukt, b.strukt);
+inline Comparison compareConcreteType(const ConcreteType a, const ConcreteType b) {
+	const Comparison res = comparePointer(a.strukt, b.strukt);
+	return res != Comparison::equal ? res : compareBool(a.isPointer, b.isPointer);
 }
 
 struct ConcreteField {
@@ -287,7 +288,10 @@ struct ConstantArrKey {
 	const Arr<const Constant*> elements;
 };
 
-bool constantArrKeyEq(const ConstantArrKey a, const ConstantArrKey b);
+inline Comparison compareConstantArrKey(const ConstantArrKey a, const ConstantArrKey b) {
+	const Comparison res = compareConcreteType(a.elementType, b.elementType);
+	return res != Comparison::equal ? res : compareArr<const Constant*, comparePointer<const Constant>>(a.elements, b.elements);
+}
 
 struct ConcreteFun;
 struct KnownLambdaBody;
@@ -536,7 +540,7 @@ public:
 struct Constant {
 	const ConstantKind kind;
 	const size_t id;
-	bool isConstantReferenced;
+	mutable bool isConstantReferenced;
 	inline Constant(const ConstantKind _kind, const size_t _id)
 		: kind{_kind}, id{_id}, isConstantReferenced{false} {}
 };
@@ -544,13 +548,14 @@ struct Constant {
 // NOTE: a Constant can still have a KnownLambdaBody of course!
 struct ConstantOrLambdaOrVariable {
 	struct Variable {};
-private:
+
 	enum class Kind {
 		variable,
 		constant,
 		knownLambdaBody,
 	};
 	const Kind kind;
+private:
 	union {
 		const Variable variable;
 		const Constant* constant;
@@ -606,20 +611,26 @@ public:
 	}
 };
 
-inline bool constantOrLambdaOrVariableEq(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
-	return a.match(
-		[&](const ConstantOrLambdaOrVariable::Variable) {
-			return b.isVariable();
-		},
-		[&](const Constant* ca) {
-			return b.isConstant() && ptrEquals(ca, b.asConstant());
-		},
-		[&](const KnownLambdaBody* klba) {
-			return b.isKnownLambdaBody() && ptrEquals(klba, b.asKnownLambdaBody());
-		});
+inline Comparison compareConstantOrLambdaOrVariable(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
+	// variable < constant < knownlambdabody
+	if (a.kind != b.kind)
+		return comparePrimitive(a.kind, b.kind);
+	else
+		return a.match(
+			[](const ConstantOrLambdaOrVariable::Variable) {
+				return Comparison::equal;
+			},
+			[&](const Constant* ca) {
+				return comparePointer(ca, b.asConstant());
+			},
+			[&](const KnownLambdaBody* klba) {
+				return comparePointer(klba, b.asKnownLambdaBody());
+			});
 }
 
-bool constantOrLambdaOrVariableArrEq(const Arr<const ConstantOrLambdaOrVariable> a, const Arr<const ConstantOrLambdaOrVariable> b);
+inline Comparison compareConstantOrLambdaOrVariableArr(const Arr<const ConstantOrLambdaOrVariable> a, const Arr<const ConstantOrLambdaOrVariable> b) {
+	return compareArr<const ConstantOrLambdaOrVariable, compareConstantOrLambdaOrVariable>(a, b);
+}
 
 struct ConcreteExpr;
 
@@ -767,7 +778,7 @@ struct ConcreteFun {
 
 	// We create ConcreteFun lazily, but still possible that we'll create it,
 	// then discover that it can always be evaluated as a constant and doesn't need to be in the compiled program.
-	bool isReferenced = false;
+	mutable bool isFunReferenced = false;
 
 	inline ConcreteFun(const bool _needsCtx, const Opt<const ConcreteType> _closureType, const ConcreteSig _sig, const bool _isCallFun)
 		: needsCtx{_needsCtx}, closureType{_closureType}, sig{_sig}, isCallFun{_isCallFun} {}
@@ -821,7 +832,7 @@ struct KnownLambdaBody {
 	mutable MutDict<
 		const Arr<const ConstantOrLambdaOrVariable>,
 		const ConcreteFun*,
-		constantOrLambdaOrVariableArrEq
+		compareConstantOrLambdaOrVariableArr
 	> directCallInstances;
 
 	KnownLambdaBody(const KnownLambdaBody&) = default;
@@ -995,7 +1006,7 @@ struct ConcreteExpr {
 				const ConcreteStruct* strukt = fieldsStruct.force().strukt;
 				assert(strukt->body().asFields().fields.size == fieldInitializers.size);
 			} else
-				assert(fieldInitializers.isEmpty());
+				assert(isEmpty(fieldInitializers));
 
 			assert(iface->body().asIface().messages.size == messageImpls.size);
 		}
@@ -1112,6 +1123,10 @@ public:
 	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const StructFieldAccess a)
 		: _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldAccess}, structFieldAccess{a} {}
 
+	inline bool isCond() const {
+		return kind == Kind::cond;
+	}
+
 	inline const SourceRange range() const {
 		return _range;
 	}
@@ -1204,5 +1219,5 @@ struct ConcreteProgram {
 	const Arr<const ConcreteStruct*> allStructs;
 	const Arr<const Constant*> allConstants;
 	const Arr<const ConcreteFun*> allFuns;
-	const Arr<const ConcreteExpr::NewIfaceImpl*> allNewIfaceImpls;
+	const Arr<const ConcreteExpr::NewIfaceImpl> allNewIfaceImpls;
 };

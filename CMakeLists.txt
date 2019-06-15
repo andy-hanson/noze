@@ -4,12 +4,14 @@ project(test2)
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(test2
+	src/backend/writeToC.cpp
 	src/concretize/allConstants.cpp
 	src/concretize/builtinInfo.cpp
 	src/concretize/concretizeBuiltin.cpp
 	src/concretize/concretizeCtx.cpp
 	src/concretize/concretizeExpr.cpp
 	src/concretize/concretizeUtil.cpp
+	src/concretize/getReferencedOnly.cpp
 	src/concretize/mangleName.cpp
 	src/concretize/writer.cpp
 	src/frontend/check.cpp
@@ -22,11 +24,13 @@ add_executable(test2
 	src/frontend/parseExpr.cpp
 	src/frontend/parseType.cpp
 	src/frontend/readOnlyStorage.cpp
+	src/frontend/showDiag.cpp
 	src/frontend/typeFromAst.cpp
 	src/concreteModel.cpp
 	src/main.cpp
 	src/model.cpp
 	src/Path.cpp
-	src/util.cpp)
+	src/util.cpp
+	src/util/lineAndColumnGetter.cpp)
 target_compile_options(test2 PRIVATE -Wall -Wextra -Werror -ansi -pedantic)
 

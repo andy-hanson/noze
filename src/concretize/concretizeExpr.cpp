@@ -1,5 +1,6 @@
 #include "./concretizeExpr.h"
 
+#include "../util/arrUtil.h"
 #include "./concretizeUtil.h"
 #include "./mangleName.h"
 
@@ -10,9 +11,10 @@ namespace {
 		ConcreteFun* currentConcreteFun; // This is the ConcreteFun* for a lambda, not its containing fun
 		const Arr<const ConcreteField> fields; // If this is inside a new iface
 		const Arr<const ConcreteField> closure; // If this is inside a lambda
-		MutDict<const Local*, const ConcreteLocal*, ptrEquals<const Local>> locals {};
+		MutDict<const Local*, const ConcreteLocal*, comparePointer<const Local>> locals {};
 
 		ConcretizeExprCtx(const ConcretizeExprCtx&) = delete;
+		ConcretizeExprCtx(ConcretizeExprCtx&&) = default;
 
 		const FunDecl* getSpecImpl(const size_t index) const {
 			unused(index);
@@ -82,7 +84,7 @@ namespace {
 		const FunDecl* f = e.calledDecl().asFunDecl();
 
 		const FunAndArgs funAndArgs = [&]() {
-			const Opt<const KnownLambdaBody*> opKnownLambdaBody = args.isEmpty()
+			const Opt<const KnownLambdaBody*> opKnownLambdaBody = isEmpty(args)
 				? none<const KnownLambdaBody*>()
 				: getKnownLambdaBodyFromConstantOrExpr(args[0]);
 
@@ -152,7 +154,7 @@ namespace {
 	}
 
 	const Opt<const ConcreteType> concreteTypeFromFields(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName) {
-		return fields.isEmpty()
+		return isEmpty(fields)
 			? none<const ConcreteType>()
 			: some<const ConcreteType>(
 				ConcreteType::fromStruct(arena.nu<const ConcreteStruct>()(
@@ -227,23 +229,151 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeMatch(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Match e) {
-		unused(ctx, range, e);
-		return todo<const ConstantOrExpr>("CONCRETIZEMATCH");
+		Arena& arena = ctx.arena();
+		const ConstantOrExpr matched = concretizeExpr(ctx, *e.matched);
+		const ConcreteStruct* matchedUnion = ctx.getConcreteType_forStructInst(e.matchedUnion).mustBeNonPointer();
+		return matched.match(
+			[&](const Constant* c) {
+				const ConstantKind::Union u = c->kind.asUnion();
+				assert(u.unionType == matchedUnion);
+				const Expr::Match::Case kase = e.cases[u.memberIndex];
+				if (kase.local.has()) {
+					const ConcreteLocal* local = concretizeLocal(ctx, kase.local.force(), ConstantOrLambdaOrVariable{u.member});
+					return concretizeWithLocal(ctx, kase.local.force(), local, *kase.then);
+				} else
+					return concretizeExpr(ctx, *kase.then);
+			},
+			[&](const ConcreteExpr* matchedExpr) {
+				const Arr<const ConcreteExpr::Match::Case> cases = map<const ConcreteExpr::Match::Case>{}(arena, e.cases, [&](const Expr::Match::Case kase) {
+					if (kase.local.has()) {
+						const ConcreteLocal* local = concretizeLocal(ctx, kase.local.force(), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+						const ConstantOrExpr then = concretizeWithLocal(ctx, kase.local.force(), local, *kase.then);
+						return ConcreteExpr::Match::Case{some<const ConcreteLocal*>(local), then};
+					} else
+						return ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), concretizeExpr(ctx, *kase.then)};
+				});
+				return ConstantOrExpr{nuExpr(arena, range, ConcreteExpr::Match{matchedExpr, matchedUnion, cases})};
+			});
 	}
 
 	const ConstantOrExpr concretizeNewIfaceImpl(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::NewIfaceImpl e) {
-		unused(ctx, range, e);
-		return todo<const ConstantOrExpr>("CONCRETIZENEWIFACEIMPL");
+		Arena& arena = ctx.arena();
+		const ConcreteStruct* iface = ctx.getConcreteType_forStructInst(e.iface).mustBeNonPointer();
+		const Arr<const ConcreteField> fields = map<const ConcreteField>{}(arena, e.fields, [&](const Expr::NewIfaceImpl::Field f) {
+			return ConcreteField{mangleName(arena, f.name), ctx.getConcreteType(f.type)};
+		});
+		const Arr<const ConstantOrExpr> fieldInitializers = map<const ConstantOrExpr>{}(arena, e.fields, [&](const Expr::NewIfaceImpl::Field f) {
+			return concretizeExpr(ctx, *f.expr);
+		});
+		const Str mangledNameBase = [&]() {
+			Writer writer { arena };
+			writer.writeStr(ctx.currentConcreteFun->mangledName());
+			writer.writeStatic("__ifaceImpl");
+			writer.writeUint(ctx.currentConcreteFun->nextNewIfaceImplIndex++);
+			return writer.finish();
+		}();
+		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls = mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
+			arena,
+			iface->body().asIface().messages,
+			e.messageImpls,
+			[&](const ConcreteSig sig, const Expr body) {
+				ConcretizeExprCtx newCtx = todo<ConcretizeExprCtx>("concretizeexprctx for iface message impl");
+				const ConstantOrExpr concreteBody = concretizeExpr(newCtx, body);
+				const Str mangledName = [&]() {
+					Writer writer { arena };
+					writer.writeStr(mangledNameBase);
+					writer.writeStatic("__");
+					writer.writeStr(sig.mangledName);
+					return writer.finish();
+				}();
+				return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
+			});
+		const Opt<const ConcreteType> fieldsType = concreteTypeFromFields(arena, fields, mangledNameBase);
+		const ConcreteExpr::NewIfaceImpl impl = ConcreteExpr::NewIfaceImpl{iface, fieldsType, fieldInitializers, messageImpls};
+		return nuExpr(arena, range, impl);
+	}
+
+	const ConcreteParam* findCorrespondingConcreteParam(const ConcretizeExprCtx& ctx, const size_t paramIndex) {
+		size_t paramI = 0;
+		for (const size_t i : Range{paramIndex})
+			if (!ctx.concreteFunSource.paramsSpecialize[i].isConstant())
+				paramI++;
+		return ctx.currentConcreteFun->paramsExcludingClosure().getPtr(paramI);
 	}
 
 	const ConstantOrExpr concretizeParamRef(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::ParamRef e) {
-		unused(ctx, range, e);
-		return todo<const ConstantOrExpr>("CONCRETIZEPARAMREF");
+		const size_t paramIndex = e.param->index;
+		// NOTE: we'll never see a ParamRef to a param from outside of a lambda -- that would be a ClosureFieldRef instead.
+		const ConstantOrLambdaOrVariable paramSpecialize = ctx.concreteFunSource.paramsSpecialize[paramIndex];
+		if (paramSpecialize.isConstant())
+			return ConstantOrExpr{paramSpecialize.asConstant()};
+		else {
+			const ConcreteParam* concreteParam = findCorrespondingConcreteParam(ctx, paramIndex);
+			const Opt<const KnownLambdaBody*> knownLambdaBody = getKnownLambdaBodyFromConstantOrLambdaOrVariable(paramSpecialize);
+			return nuExpr(ctx.arena(), range, knownLambdaBody, ConcreteExpr::ParamRef{concreteParam});
+		}
 	}
 
 	const ConstantOrExpr concretizeStructFieldAccess(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::StructFieldAccess e) {
-		unused(ctx, range, e);
-		return todo<const ConstantOrExpr>("CONCRETIZEPARAMREF");
+		Arena& arena = ctx.arena();
+		const ConstantOrExpr target = concretizeExpr(ctx, *e.target);
+		const ConcreteType type = ctx.getConcreteType_forStructInst(e.targetType);
+		const size_t fieldIndex = e.fieldIndex();
+		const Str fieldName = e.field->name;
+		AllConstants& allConstants = ctx.allConstants();
+
+		auto expr = [&]() -> ConstantOrExpr	{
+			const ConcreteField* field = type.strukt->body().asFields().fields.getPtr(fieldIndex);
+			return nuExpr(arena, range, ConcreteExpr::StructFieldAccess{target, field});
+		};
+
+		return target.match(
+			[&](const Constant* c) {
+				const ConstantKind kind = c->kind;
+				if (kind.isRecord()) {
+					const ConstantKind::Record r = kind.asRecord();
+					assert(compareConcreteType(type, r.type) == Comparison::equal);
+					return ConstantOrExpr{r.args[fieldIndex]};
+				} else if (kind.isArray()) {
+					const ConstantKind::Array a = kind.asArray();
+					// Fields are "size", "data"
+					switch (fieldIndex) {
+						case 0:
+							assert(strEqLiteral(fieldName, "size"));
+							return ConstantOrExpr{allConstants.nat64(arena, a.size())};
+						case 1:
+							assert(strEqLiteral(fieldName, "data"));
+							return ConstantOrExpr{allConstants.ptr(arena, c, 0)};
+						default:
+							assert(0);
+					}
+				} else if (kind.isLambda()) {
+					// fun0, fun1, fun2... all have the same field names
+					const KnownLambdaBody* klb = kind.asLambda().knownLambdaBody;
+					switch (fieldIndex) {
+						case 0: {
+							assert(strEqLiteral(fieldName, "fun-ptr"));
+							// instantiate the lambda now
+							const ConcreteFun* cf = instantiateKnownLambdaBodyForDynamic(ctx.concretizeCtx, klb);
+							return ConstantOrExpr{allConstants.funPtr(arena, cf)};
+						}
+						case 1:
+							assert(strEqLiteral(fieldName, "closure"));
+							if (klb->closureType.has())
+								// Constant parts of closure are omitted, so this must be non-constant.
+								return expr();
+							else
+								return ConstantOrExpr(allConstants._null);
+						default:
+							assert(0);
+					}
+				} else
+					// StructFieldAccess on a non-struct?
+					return unreachable<const ConstantOrExpr>();
+			},
+			[&](const ConcreteExpr*) {
+				return expr();
+			});
 	}
 
 	const ConstantOrExpr concretizeExpr(ConcretizeExprCtx& ctx, const Expr expr) {
@@ -297,30 +427,34 @@ namespace {
 					});
 			},
 			[&](const Expr::CreateArr e) {
-				if (e.args.isEmpty())
+				if (isEmpty(e.args))
 					todo<void>("should this ever happen?");
 				const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(e.args);
 				const ConcreteStruct* arrayType = ctx.getConcreteType_forStructInst(e.arrType).mustBeNonPointer();
 				const ConcreteType elementType = ctx.getConcreteType(e.elementType());
-				if (args.isSuccess())
-					return ConstantOrExpr{ctx.allConstants().arr(arena, arrayType, elementType, args.asSuccess())};
-				else {
-					const ConcreteExpr::CreateArr ca = ConcreteExpr::CreateArr{arrayType, elementType, getAllocFun(ctx.concretizeCtx), args.asFailure()};
-					return nuExpr(arena, range, ca);
-				}
+				return args.match(
+					[&](const Arr<const Constant*> constantArgs) {
+						return ConstantOrExpr{ctx.allConstants().arr(arena, arrayType, elementType, constantArgs)};
+					},
+					[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
+						const ConcreteExpr::CreateArr ca = ConcreteExpr::CreateArr{arrayType, elementType, getAllocFun(ctx.concretizeCtx), nonConstantArgs};
+						return nuExpr(arena, range, ca);
+					});
 			},
 			[&](const Expr::CreateRecord e) {
 				const ConcreteType s = ctx.getConcreteType_forStructInst(e.structInst);
 				const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(e.args);
-				if (args.isSuccess())
-					return ConstantOrExpr{ctx.allConstants().record(arena, s, args.asSuccess())};
-				else {
-					const Opt<const ConcreteFun*> alloc = s.isPointer
-						? some<const ConcreteFun*>(getAllocFun(ctx.concretizeCtx))
-						: none<const ConcreteFun*>();
-					const ConcreteExpr::CreateRecord r = ConcreteExpr::CreateRecord{s, alloc, args.asFailure()};
-					return nuExpr(arena, range, r);
-				}
+				return args.match(
+					[&](const Arr<const Constant*> constantArgs) {
+						return ConstantOrExpr{ctx.allConstants().record(arena, s, constantArgs)};
+					},
+					[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
+						const Opt<const ConcreteFun*> alloc = s.isPointer
+							? some<const ConcreteFun*>(getAllocFun(ctx.concretizeCtx))
+							: none<const ConcreteFun*>();
+						const ConcreteExpr::CreateRecord r = ConcreteExpr::CreateRecord{s, alloc, nonConstantArgs};
+						return nuExpr(arena, range, r);
+					});
 			},
 			[&](const Expr::FunAsLambda e) {
 				return concretizeFunAsLambda(ctx, range, e);

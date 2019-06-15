@@ -15,13 +15,27 @@ struct Path {
 	}
 };
 
+inline Comparison compareStr(const Str a, const Str b) {
+	if (isEmpty(a))
+		return Comparison::less;
+	else if (isEmpty(b))
+		return Comparison::greater;
+	else {
+		const Comparison res = compareChar(a[0], b[0]);
+		return res == Comparison::equal ? compareStr(tail(a), tail(b)) : res;
+	}
+}
+
+inline Comparison comparePath(const Path* a, const Path* b) {
+	const Comparison res = compareStr(a->baseName, b->baseName);
+	return res == Comparison::equal ? compareOpt<const Path*, comparePath>(a->parent, b->parent) : res;
+}
+
 inline const Path* childPath(Arena& arena, const Path* p, const Str name) {
 	return arena.nu<const Path>()(some<const Path*>(p), name);
 }
 
-inline const Path* addExt(Arena& arena, const Path* p, const Str ext) {
-	return arena.nu<const Path>()(p->parent, cat(arena, p->baseName, ext));
-}
+const Path* addExt(Arena& arena, const Path* p, const Str ext);
 
 struct RelPath {
 	const uint nParents;

@@ -1,4 +1,6 @@
- #include "./Path.h"
+#include "./Path.h"
+
+#include "./util/arrUtil.h"
 
 namespace {
 	template <typename Cb>
@@ -43,6 +45,10 @@ const Path* addManyChildren(Arena& arena, const Path* a, const Path* b) {
 	return childPath(arena, p, b->baseName);
 }
 
+const Path* addExt(Arena& arena, const Path* p, const Str ext) {
+	return arena.nu<const Path>()(p->parent, cat(arena, p->baseName, ext));
+}
+
 Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath) {
 	Path const* cur = path;
 	for (uint i = 0; i < relPath.nParents; i++) {
@@ -56,11 +62,11 @@ Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPa
 }
 
 const Str pathToStr(Arena& arena, const Path* path) {
-	return pathToMutStr(arena, path, false).freeze().asConst();
+	return asConst(pathToMutStr(arena, path, false).freeze());
 }
 
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
-	return pathToMutStr(arena, path, true).freeze().asConst();
+	return asConst(pathToMutStr(arena, path, true).freeze());
 }
 
 bool pathEq(const Path* a, const Path* b) {

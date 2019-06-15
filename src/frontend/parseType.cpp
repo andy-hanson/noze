@@ -25,8 +25,8 @@ namespace {
 		const bool isTypeParam = lexer.tryTake('?');
 		const Str name = lexer.takeName();
 		const Arr<const TypeAst> typeArgs = tryParseTypeArgsWorker(lexer, isInner);
-		if (isTypeParam && !typeArgs.isEmpty())
-			return lexer.throwAtChar<const TypeAst>(ParseDiag{ParseDiag::Kind::typeParamCantHaveTypeArgs});
+		if (isTypeParam && !isEmpty(typeArgs))
+			return lexer.throwAtChar<const TypeAst>(ParseDiag{ParseDiag::TypeParamCantHaveTypeArgs{}});
 		const SourceRange range = lexer.range(start);
 		return isTypeParam
 			? TypeAst{TypeAst::TypeParam{range, name}}

@@ -1,20 +1,10 @@
 #include "./concretizeBuiltin.h"
 
+#include "../util/arrUtil.h"
 #include "./builtinInfo.h"
 #include "./concretizeUtil.h" // tryGetAllConstant
 
 namespace {
-	enum class Comparison {
-		less,
-		equal,
-		greater,
-	};
-
-	template <typename T>
-	Comparison comparePrimitive(const T a, const T b) {
-		return a < b ? Comparison::less : a > b ? Comparison::greater : Comparison::equal;
-	}
-
 	Comparison constantCompare(const Constant* a, const Constant* b) {
 		return a->kind.match(
 			[&](const ConstantKind::Array) {

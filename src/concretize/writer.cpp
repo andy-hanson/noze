@@ -1,7 +1,7 @@
 #include "./writer.h"
 
 void Writer::writeStr(const Str s) {
-	if (!s.isEmpty()) {
+	if (!isEmpty(s)) {
 		writeChar(s[0]);
 		writeStr(tail(s));
 	}

@@ -1,5 +1,6 @@
 #include "./checkExpr.h"
 
+#include "../util/arrUtil.h"
 #include "./checkCall.h"
 #include "./inferringType.h"
 #include "./typeFromAst.h"
@@ -236,7 +237,7 @@ namespace {
 			// TODO: type inference
 			todo<void>("checkFunAsLambda");
 
-		if (!fun->typeParams.isEmpty())
+		if (!isEmpty(fun->typeParams))
 			todo<void>("checkFunAsLambda");
 
 		const Type returnType = fun->returnType();
@@ -268,7 +269,7 @@ namespace {
 
 	const CheckedExpr checkIdentifier(ExprContext& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
 		const Str name = ast.name;
-		if (!ctx.lambdas.isEmpty()) {
+		if (!isEmpty(ctx.lambdas)) {
 			// Innermost lambda first
 			for (ssize_t i = ctx.lambdas.size() - 1; i >= 0; i--) {
 				LambdaInfo* lambda = ctx.lambdas[i];
@@ -329,7 +330,7 @@ namespace {
 
 	template <typename Cb>
 	auto checkWithLocal_worker(ExprContext& ctx, const Local* local, Cb cb) {
-		MutArr<const Local*>& locals = ctx.lambdas.isEmpty()
+		MutArr<const Local*>& locals = isEmpty(ctx.lambdas)
 			? ctx.messageOrFunctionLocals
 			: ctx.lambdas.peek().force()->locals;
 		locals.push(ctx.arena(), local);

@@ -1,5 +1,6 @@
 #include "./concretizeCtx.h"
 
+#include "../util/arrUtil.h"
 #include "./builtinInfo.h"
 #include "./concretizeBuiltin.h" // getBuiltinFunBody
 #include "./concretizeExpr.h"
@@ -7,17 +8,18 @@
 #include "./mangleName.h"
 
 namespace {
-	bool concreteTypeArrEq(const Arr<const ConcreteType> a, const Arr<const ConcreteType> b) {
-		return arrEq<const ConcreteType, concreteTypeEq>(a, b);
+	Comparison compareConcreteTypeArr(const Arr<const ConcreteType> a, const Arr<const ConcreteType> b) {
+		return compareArr<const ConcreteType, compareConcreteType>(a, b);
 	}
 
-	bool funDeclAndTypeArgsEq(const FunDeclAndTypeArgs a, const FunDeclAndTypeArgs b) {
-		return ptrEquals(a.decl, b.decl) && concreteTypeArrEq(a.typeArgs, b.typeArgs);
+	Comparison compareFunDeclAndTypeArgs(const FunDeclAndTypeArgs a, const FunDeclAndTypeArgs b) {
+		const Comparison res = comparePointer(a.decl, b.decl);
+		return res != Comparison::equal ? res : compareConcreteTypeArr(a.typeArgs, b.typeArgs);
 	}
 
-	bool funDeclAndTypeArgsAndSpecImplsEq(const FunDeclAndTypeArgsAndSpecImpls a, const FunDeclAndTypeArgsAndSpecImpls b) {
-		return funDeclAndTypeArgsEq(a.funDeclAndTypeArgs, b.funDeclAndTypeArgs) &&
-			arrEq<const FunDecl*, ptrEquals<const FunDecl>>(a.specImpls, b.specImpls);
+	Comparison compareFunDeclAndTypeArgsAndSpecImpls(const FunDeclAndTypeArgsAndSpecImpls a, const FunDeclAndTypeArgsAndSpecImpls b) {
+		const Comparison res = compareFunDeclAndTypeArgs(a.funDeclAndTypeArgs, b.funDeclAndTypeArgs);
+		return res != Comparison::equal ? res : compareArr<const FunDecl*, comparePointer<const FunDecl>>(a.specImpls, b.specImpls);
 	}
 
 	const Str getConcreteStructMangledName(Arena& arena, const Str declName, const Arr<const ConcreteType> typeArgs) {
@@ -29,7 +31,7 @@ namespace {
 	}
 
 	void writeSpecializeOnArgsForMangle(Writer& writer, const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs) {
-		for (const size_t i : Range{0, specializeOnArgs.size})
+		for (const size_t i : Range{specializeOnArgs.size})
 			specializeOnArgs[i].match(
 				[](const ConstantOrLambdaOrVariable::Variable) {},
 				[&](const Constant* c) {
@@ -126,7 +128,7 @@ namespace {
 		assert(params.size == specializeOnArgs.size);
 		// TODO: mapOpZip helper
 		ArrBuilder<const ConcreteParam> res {};
-		for (const size_t i : Range{0, params.size}) {
+		for (const size_t i : Range{params.size}) {
 			const Param p = params[i];
 			const Opt<const ConcreteType> t = getSpecializedParamType(specializeOnArgs[i], [&]() {
 				return getConcreteType(ctx, p.type, typeArgsScope);
@@ -252,7 +254,7 @@ namespace {
 	) {
 		ArrBuilder<const ConcreteParam> res {};
 		//TODO: 'zip' helper
-		for (const size_t i : Range{0, nonSpecializedParams.size}) {
+		for (const size_t i : Range{nonSpecializedParams.size}) {
 			const ConcreteParam p = nonSpecializedParams[i];
 			const Opt<const ConcreteType> t = getSpecializedParamType(specializeOnArgs[i], [&]() { return p.type; });
 			if (t.has())
@@ -304,13 +306,16 @@ namespace {
 
 }
 
-bool concreteStructKeyEq(const ConcreteStructKey a, const ConcreteStructKey b) {
-	return ptrEquals(a.decl, b.decl) && concreteTypeArrEq(a.typeArgs, b.typeArgs);
+Comparison compareConcreteStructKey(const ConcreteStructKey a, const ConcreteStructKey b) {
+	const Comparison res = comparePointer(a.decl, b.decl);
+	return res != Comparison::equal ? res : compareConcreteTypeArr(a.typeArgs, b.typeArgs);
 }
 
-bool concreteFunKeyEq(const ConcreteFunKey a, const ConcreteFunKey b) {
-	return funDeclAndTypeArgsAndSpecImplsEq(a.declAndTypeArgsAndSpecImpls, b.declAndTypeArgsAndSpecImpls)
-		&& arrEq<const ConstantOrLambdaOrVariable, constantOrLambdaOrVariableEq>(a.specializeOnArgs, b.specializeOnArgs);
+Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b) {
+	const Comparison res = compareFunDeclAndTypeArgsAndSpecImpls(a.declAndTypeArgsAndSpecImpls, b.declAndTypeArgsAndSpecImpls);
+	return res != Comparison::equal
+		? res
+		: compareArr<const ConstantOrLambdaOrVariable, compareConstantOrLambdaOrVariable>(a.specializeOnArgs, b.specializeOnArgs);
 }
 
 const ConcreteType ConcretizeCtx::voidPtrType() {
@@ -391,19 +396,11 @@ const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr
 	});
 }
 
-void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t) {
-	writer.writeStatic("__");
-	if (t.isPointer)
-		writer.writeStatic("ptr_");
-	writer.writeStr(t.strukt->mangledName);
-}
-
 bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl) {
 	return exists(ctx.callFuns, [&](const FunDecl* d) {
 		return ptrEquals(d, decl);
 	});
 }
-
 
 namespace {
 	const SpecializeOnArgs specializeOnAsMuchAsPossible(Arena& arena, const Arr<const ConstantOrExpr> args) {
@@ -462,7 +459,7 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 	const TypeArgsScope typeArgsScope
 ) {
 	ArrBuilder<const ConcreteField> res;
-	for (const size_t i : Range{0, closure.size}) {
+	for (const size_t i : Range{closure.size}) {
 		const ClosureField* c = closure[i];
 		const Opt<const ConcreteType> t = getSpecializedParamType(closureSpecialize[i], [&]() {
 			return getConcreteType(ctx, c->type, typeArgsScope);

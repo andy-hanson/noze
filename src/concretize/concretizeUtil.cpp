@@ -1,5 +1,7 @@
 #include "./concretizeUtil.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
 	const Arr<const Constant*> asAllConstant(Arena& arena, const Arr<const ConstantOrExpr> args) {
 		return map<const Constant*>{}(arena, args, [](const ConstantOrExpr ca) {
@@ -43,4 +45,11 @@ const Arr<const ConstantOrLambdaOrVariable> allVariable(Arena& arena, const size
 	return fillArr<const ConstantOrLambdaOrVariable>{}(arena, size, [](const size_t) {
 		return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
 	});
+}
+
+void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t) {
+	writer.writeStatic("__");
+	if (t.isPointer)
+		writer.writeStatic("ptr_");
+	writer.writeStr(t.strukt->mangledName);
 }

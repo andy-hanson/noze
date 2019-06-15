@@ -37,7 +37,7 @@ struct ConcreteStructKey {
 	const Arr<const ConcreteType> typeArgs;
 };
 
-bool concreteStructKeyEq(const ConcreteStructKey a, const ConcreteStructKey b);
+Comparison compareConcreteStructKey(const ConcreteStructKey a, const ConcreteStructKey b);
 
 struct FunDeclAndTypeArgs {
 	const FunDecl* decl;
@@ -87,7 +87,7 @@ struct ConcreteFunKey {
 	}
 };
 
-bool concreteFunKeyEq(const ConcreteFunKey a, const ConcreteFunKey b);
+Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b);
 
 struct ConcreteFunSource {
 	// NOTE: for a lambda, this is for the *outermost* fun (the one with type args and spec impls).
@@ -133,16 +133,16 @@ struct ConcretizeCtx {
 	const Arr<const FunDecl*> callFuns;
 	const CommonTypes& commonTypes;
 	AllConstants allConstants;
-	MutDict<const ConcreteStructKey, ConcreteStruct*, concreteStructKeyEq> allConcreteStructs {};
-	MutDict<const ConcreteFunKey, ConcreteFun*, concreteFunKeyEq> allConcreteFuns {};
+	MutDict<const ConcreteStructKey, ConcreteStruct*, compareConcreteStructKey> allConcreteStructs {};
+	MutDict<const ConcreteFunKey, ConcreteFun*, compareConcreteFunKey> allConcreteFuns {};
 
 	// Funs we still need to write the bodies for
 	MutArr<ConcreteFun*> concreteFunsQueue {};
 	// This will only have an entry while a ConcreteFun hasn't had it's body filled in yet.
-	MutDict<const ConcreteFun*, const ConcreteFunSource, ptrEquals<const ConcreteFun>> concreteFunToSource {};
+	MutDict<const ConcreteFun*, const ConcreteFunSource, comparePointer<const ConcreteFun>> concreteFunToSource {};
 	// This keeps the entry forever, because we don't know when we'll need to instantiate it again.
 	// (When we do that we copy this to the ConcreteFunSource)
-	MutDict<const KnownLambdaBody*, const LambdaInfo, ptrEquals<const KnownLambdaBody>> knownLambdaBodyToInfo {};
+	MutDict<const KnownLambdaBody*, const LambdaInfo, comparePointer<const KnownLambdaBody>> knownLambdaBodyToInfo {};
 	// TODO: do this eagerly
 	Late<const ConcreteType> _voidPtrType;
 
@@ -177,8 +177,6 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 // TODO: 't' may contain type params, must pass in current context
 const ConcreteType getConcreteType(ConcretizeCtx& ctx, const Type t, const TypeArgsScope typeArgsScope);
 const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope);
-
-void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t);
 
 bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl);
 

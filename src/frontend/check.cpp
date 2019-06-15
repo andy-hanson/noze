@@ -1,5 +1,8 @@
 #include "./check.h"
 
+#include "../util/arrUtil.h"
+#include "../util/dictUtil.h"
+#include "../util/resultUtil.h"
 #include "./checkCtx.h"
 #include "./checkExpr.h" // checkFunctionBody
 #include "./typeFromAst.h"
@@ -32,7 +35,7 @@ namespace {
 			return none<const StructInst*>();
 		else {
 			const StructOrAlias structOrAlias = opStructOrAlias.force();
-			assert(structOrAlias.typeParams().isEmpty());
+			assert(isEmpty(structOrAlias.typeParams()));
 			return some<const StructInst*>(structOrAlias.match(
 				[](const StructAlias* a) { return a->target(); },
 				[&](const StructDecl* s) {
@@ -130,8 +133,8 @@ namespace {
 		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(ctx.arena, asts, [&](const TypeParamAst& ast, const size_t i) {
 			return TypeParam{ast.range, ctx.copyStr(ast.name), i};
 		});
-		for (const size_t i : Range{0, typeParams.size})
-			for (const size_t prev_i : Range{0, i})
+		for (const size_t i : Range{typeParams.size})
+			for (const size_t prev_i : Range{i})
 				if (strEq(typeParams[prev_i].name, typeParams[i].name))
 					ctx.diag(typeParams[i].range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
 		return typeParams;
@@ -174,8 +177,8 @@ namespace {
 			const Type type = typeFromAst(ctx, ast.type, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 			return Param{ast.range, ctx.copyStr(ast.name), type, index};
 		});
-		for (const size_t i : Range{0, params.size})
-			for (const size_t prev_i : Range{0, i})
+		for (const size_t i : Range{params.size})
+			for (const size_t prev_i : Range{i})
 				if (strEq(params[prev_i].name, params[i].name))
 					ctx.diag(params[i].range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
 		return params;
@@ -189,7 +192,7 @@ namespace {
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		Opt<MutArr<StructInst*>&> delayStructInsts
 	) {
-		const Arr<const TypeParam> typeParams = explicitTypeParams.isEmpty()
+		const Arr<const TypeParam> typeParams = isEmpty(explicitTypeParams)
 			? collectTypeParams(ctx.arena, ast, outerTypeParams)
 			: checkTypeParams(ctx, explicitTypeParams);
 		const TypeParamsScope typeParamsScope = TypeParamsScope{typeParams, outerTypeParams};
@@ -207,7 +210,7 @@ namespace {
 	) {
 		const SigAndTypeParams st = checkSig(
 			ctx, emptyArr<const TypeParamAst>(), ast, outerTypeParams, structsAndAliasesMap, some<MutArr<StructInst*>&>(delayStructInsts));
-		if (!st.typeParams.isEmpty())
+		if (!isEmpty(st.typeParams))
 			ctx.diag(st.sig.range, Diag{Diag::ShouldNotHaveTypeParamsInIface{}});
 		return st.sig;
 	}
@@ -263,8 +266,8 @@ namespace {
 
 	template <typename T, typename CbEqual>
 	void checkNoEqual(const Arr<T> a, CbEqual eq) {
-		for (const size_t i : Range{0, a.size})
-			for (const size_t j : Range{0, i})
+		for (const size_t i : Range{a.size})
+			for (const size_t j : Range{i})
 				if (eq(a[i], a[j]))
 					todo<void>("checkNoEqual");
 	}
@@ -344,7 +347,7 @@ namespace {
 	}
 
 	const StructsAndAliasesMap buildStructsAndAliasesDict(CheckCtx& ctx, const Arr<StructDecl> structs, const Arr<StructAlias> aliases) {
-		DictBuilder<const Str, const StructOrAlias, strEq> d {};
+		DictBuilder<const Str, const StructOrAlias, compareStr> d {};
 		for (const StructDecl* decl : ptrsRange(structs))
 			d.add(ctx.arena, decl->name, StructOrAlias{decl});
 		for (const StructAlias* a : ptrsRange(aliases))
@@ -355,8 +358,8 @@ namespace {
 	}
 
 	template <typename T>
-	const Dict<const Str, T*, strEq> buildDeclsDict(CheckCtx& ctx, const Arr<T> ts, const Diag::DuplicateDeclaration::Kind kind) {
-		return buildDict<const Str, T*, strEq>{}(
+	const Dict<const Str, T*, compareStr> buildDeclsDict(CheckCtx& ctx, const Arr<T> ts, const Diag::DuplicateDeclaration::Kind kind) {
+		return buildDict<const Str, T*, compareStr>{}(
 			ctx.arena,
 			ts,
 			[](T& it) {
@@ -412,7 +415,7 @@ namespace {
 			return FunDecl{funAst.isPublic, flags, stp.sig, stp.typeParams, specUses};
 		});
 
-		const FunsMap funsMap = buildMultiDict<const Str, const FunDecl*, strEq>{}(
+		const FunsMap funsMap = buildMultiDict<const Str, const FunDecl*, compareStr>{}(
 			ctx.arena,
 			funs,
 			[](const FunDecl& it) {
@@ -432,7 +435,7 @@ namespace {
 				}));
 		});
 
-		return FunsAndMap{funs.asConst(), funsMap};
+		return FunsAndMap{asConst(funs), funsMap};
 	}
 
 	template <typename GetCommonTypes>
@@ -475,7 +478,7 @@ namespace {
 					const Module* mod = arena.nu<const Module>()(
 						path,
 						imports,
-						structs.asConst(),
+						asConst(structs),
 						specs,
 						funsAndMap.funs,
 						structsAndAliasesMap,

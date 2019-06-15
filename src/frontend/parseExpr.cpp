@@ -1,5 +1,6 @@
 #include "./parseExpr.h"
 
+#include "../util/arrUtil.h"
 #include "./parseType.h" // tryParseTypeArgs
 
 namespace {
@@ -205,7 +206,7 @@ namespace {
 			lexer.takeIndent();
 			const ExprAndDedent thenAndDedent = parseStatementsAndDedent(lexer);
 			if (thenAndDedent.dedents != 0)
-				return lexer.throwAtChar<const ExprAndMaybeDedent>(ParseDiag{ParseDiag::Kind::whenMustHaveElse});
+				return lexer.throwAtChar<const ExprAndMaybeDedent>(ParseDiag{ParseDiag::WhenMustHaveElse{}});
 			const ExprAndMaybeDedent elseAndDedent = parseWhenLoop(lexer, start);
 			const CondAst cond = CondAst{alloc(lexer, condition), alloc(lexer, thenAndDedent.expr), alloc(lexer, elseAndDedent.expr)};
 			return ExprAndMaybeDedent{
@@ -292,7 +293,7 @@ namespace {
 		auto getRange = [&]() { return lexer.range(start); };
 		auto checkBlockAllowed = [&]() {
 			if (!ctx.allowBlock)
-				lexer.throwAtChar<const ExprAndMaybeDedent>(ParseDiag{ParseDiag::Kind::matchWhenNewMayNotAppearInsideArg});
+				lexer.throwAtChar<const ExprAndMaybeDedent>(ParseDiag{ParseDiag::MatchWhenNewMayNotAppearInsideArg{}});
 		};
 
 		using Kind = ExpressionToken::Kind;
@@ -340,7 +341,7 @@ namespace {
 					const ArgsAndMaybeDedent ad = parseArgs(lexer, ctx);
 					const CallAst call = CallAst{name, typeArgs, ad.args};
 					return ExprAndMaybeDedent{ExprAst{getRange(), ExprAstKind{call}}, ad.dedent};
-				} else if (!typeArgs.isEmpty())
+				} else if (!isEmpty(typeArgs))
 					return noDedent(ExprAst{getRange(), ExprAstKind{CallAst{name, typeArgs, emptyArr<const ExprAst>()}}});
 				else {
 					const ExprAst expr = ExprAst{getRange(), ExprAstKind{IdentifierAst{name}}};

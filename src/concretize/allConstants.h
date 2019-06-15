@@ -2,16 +2,6 @@
 
 #include "../concreteModel.h"
 
-inline bool charEq(const char a, const char b) {
-	return a == b;
-}
-inline bool int64Eq(const Int64 a, const Int64 b) {
-	return a == b;
-}
-inline bool nat64Eq(const Nat64 a, const Nat64 b) {
-	return a == b;
-}
-
 struct ConstantsForRecord;
 struct ConstantsForUnion;
 
@@ -20,19 +10,19 @@ private:
 	// element type * args -> id
 	// When we're done, we'll invert this dict so they can be emitted.
 	size_t nextArrId;
-	MutDict<const ConstantArrKey, const Constant*, constantArrKeyEq> arrays;
+	MutDict<const ConstantArrKey, const Constant*, compareConstantArrKey> arrays;
 	// Dict from array to an array of each pointer inside it
-	MutDict<const Constant*, Arr<const Constant*>, ptrEquals<const Constant>> arrayToPtrs;
+	MutDict<const Constant*, Arr<const Constant*>, comparePointer<const Constant>> arrayToPtrs;
 	size_t nextPtrId;
 	const Constant* _false;
 	const Constant* _true;
-	MutDict<const char, const Constant*, charEq> chars;
-	MutDict<const Int64, const Constant*, int64Eq> int64s;
-	MutDict<const Nat64, const Constant*, nat64Eq> nat64s;
+	MutDict<const char, const Constant*, compareChar> chars;
+	MutDict<const Int64, const Constant*, compareInt64> int64s;
+	MutDict<const Nat64, const Constant*, compareNat64> nat64s;
 	size_t nextLambdaId;
 	// No dict for lambdas?
-	MutDict<const ConcreteType, ConstantsForRecord*, concreteTypeEq> records;
-	MutDict<const ConcreteStruct*, ConstantsForUnion*, ptrEquals<const ConcreteStruct>> unions;
+	MutDict<const ConcreteType, ConstantsForRecord*, compareConcreteType> records;
+	MutDict<const ConcreteStruct*, ConstantsForUnion*, comparePointer<const ConcreteStruct>> unions;
 	ArrBuilder<const Constant*> all;
 
 	const Constant* _nuConstant(Arena& arena, const ConstantKind kind, const size_t id);

@@ -25,7 +25,7 @@ namespace {
 		else if (lexer.tryTake("sendable"))
 			return PuritySpecifier::sendable;
 		else
-			return lexer.throwAtChar<const PuritySpecifier>(ParseDiag{ParseDiag::Kind::expectedPurityAfterSpace});
+			return lexer.throwAtChar<const PuritySpecifier>(ParseDiag{ParseDiag::ExpectedPurityAfterSpace{}});
 	}
 
 	const ImportAst parseSingleImport(Lexer& lexer) {
@@ -355,7 +355,7 @@ namespace {
 						case NonFunKeyword::_union:
 							return tookIndent
 								? Body{Body::Union{parseUnionMembers(lexer)}}
-								: lexer.throwAtChar<const Body>(ParseDiag{ParseDiag::Kind::unionCantBeEmpty});
+								: lexer.throwAtChar<const Body>(ParseDiag{ParseDiag::UnionCantBeEmpty{}});
 						case NonFunKeyword::iface:
 							if (!tookIndent)
 								todo<void>("iface can't be empty");

@@ -3,6 +3,8 @@
 #include "../diag.h" // ParseDiag
 #include "./parse.h" // ParseDiagnostic
 
+#include "../util/arrUtil.h" // copyStr
+
 struct Lexer {
 	Arena& arena;
 	Arena& pathArena;
@@ -50,7 +52,7 @@ public:
 
 	template <typename T>
 	inline T throwUnexpected() const {
-		return throwAtChar<T>(ParseDiag{ParseDiag::Kind::unexpectedCharacter, cur()});
+		return throwAtChar<T>(ParseDiag{ParseDiag::UnexpectedCharacter{cur()}});
 	}
 
 	inline bool tryTake(const char c) {
@@ -202,7 +204,7 @@ private:
 	void takeIndentAfterNewline() {
 		const size_t newIndent = takeTabs();
 		if (newIndent != indent + 1)
-			throwAtChar<void>(ParseDiag{ParseDiag::Kind::expectedIndent});
+			throwAtChar<void>(ParseDiag{ParseDiag::ExpectedIndent{}});
 		indent = newIndent;
 		skipBlankLines();
 	}
@@ -229,7 +231,7 @@ public:
 
 private:
 	const Str copyStr(const char* begin, const char* end) const {
-		return ::copyStr(arena, Str::ofRange(begin, end));
+		return ::copyStr(arena, arrOfRange(begin, end));
 	}
 
 	const Str takeNameRest(const char* begin);

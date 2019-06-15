@@ -1,5 +1,6 @@
 #include "./checkCall.h"
 
+#include "../util/arrUtil.h"
 #include "./checkExpr.h"
 
 namespace {
@@ -66,10 +67,10 @@ namespace {
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			const size_t nTypeParams = called.typeParams().size;
 			if (called.arity() == arity &&
-				(explicitTypeArgs.isEmpty() || nTypeParams == explicitTypeArgs.size)) {
+				(isEmpty(explicitTypeArgs) || nTypeParams == explicitTypeArgs.size)) {
 				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx.arena(), nTypeParams, [&](const size_t i) {
 					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
-					return SingleInferringType{explicitTypeArgs.isEmpty() ? none<const Type>() : some<const Type>(explicitTypeArgs[i])};
+					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(explicitTypeArgs[i])};
 				});
 				res.push(ctx.arena(), Candidate{called, inferringTypeArgs});
 			}
@@ -369,7 +370,7 @@ namespace {
 		Cell<const Opt<const CalledDecl>> match { none<const CalledDecl>() };
 		eachFunInScope(ctx, specSig.name, [&](const CalledDecl called) {
 			// TODO: support matching a aspec with a generic function
-			if (called.typeParams().isEmpty() && sigMatches(specSig, *called.sig(), typeArgs)) {
+			if (isEmpty(called.typeParams()) && sigMatches(specSig, *called.sig(), typeArgs)) {
 				if (match.get().has())
 					todo<void>("findSpecSigImplementation -- two sigs match");
 				match.set(some<const CalledDecl>(called));
@@ -465,7 +466,7 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 
 	bool someArgIsBogus = false;
 	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx.arena(), arity, [&](const size_t argIdx) {
-		if (candidates.isEmpty() && !mightBePropertyAccess)
+		if (isEmpty(candidates) && !mightBePropertyAccess)
 			// Already certainly failed.
 			return none<const Expr>();
 
@@ -499,14 +500,14 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 		// Might be a struct field access
 		const Opt<const Expr::StructFieldAccess> sfa = tryGetStructFieldAccess(ctx, ast.funName, only(args.force()));
 		if (sfa.has()) {
-			if (!candidatesArr.isEmpty())
+			if (!isEmpty(candidatesArr))
 				todo<void>("ambiguous call vs property access");
 			return expected.check(ctx, sfa.force().accessedFieldType(), Expr{range, sfa.force()});
 		}
 	}
 
 	if (!args.has() || candidatesArr.size != 1) {
-		if (candidatesArr.isEmpty())
+		if (isEmpty(candidatesArr))
 			ctx.diag(range, Diag{Diag::NoSuchFunction{ctx.checkCtx.copyStr(ast.funName)}});
 		else {
 			const Arr<const CalledDecl> calledDecls = map<const CalledDecl>{}(

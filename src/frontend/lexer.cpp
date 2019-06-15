@@ -146,7 +146,7 @@ const Str Lexer::takeStringLiteral() {
 	ptr++; // Skip past the closing '"'
 
 	assert(outI == res.size);
-	return res.freeze().asConst();
+	return res.freeze();
 }
 
 Lexer createLexer(Arena& astArena, Arena& pathArena, const NulTerminatedStr source) {
@@ -158,17 +158,17 @@ Lexer createLexer(Arena& astArena, Arena& pathArena, const NulTerminatedStr sour
 	else if (source[len - 2] != '\n')
 		throw ParseDiagnostic{
 			SourceRange{len - 2, len - 1},
-			ParseDiag{ParseDiag::Kind::mustEndInBlankLine}};
+			ParseDiag{ParseDiag::MustEndInBlankLine{}}};
 
 	for (const char* ptr = source.begin(); ptr != source.end(); ptr++) {
 		if (*ptr == '\n') {
 			const uint i = safeSizeTToUint(ptr - source.begin());
 			if (*(ptr + 1) == ' ')
-				throw ParseDiagnostic{SourceRange{i + 1, i + 2}, ParseDiag{ParseDiag::Kind::leadingSpace}};
+				throw ParseDiagnostic{SourceRange{i + 1, i + 2}, ParseDiag{ParseDiag::LeadingSpace{}}};
 			else if (ptr != source.begin()) {
 				const char prev = *(ptr - 1);
 				if (prev == ' ' || prev == '\t')
-					throw ParseDiagnostic{SourceRange{i - 1, i}, ParseDiag{ParseDiag::Kind::trailingSpace}};
+					throw ParseDiagnostic{SourceRange{i - 1, i}, ParseDiag{ParseDiag::TrailingSpace{}}};
 			}
 		}
 	}

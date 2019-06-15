@@ -7,7 +7,7 @@ void eachFunInScope(ExprContext& ctx, const Str funName, Cb cb) {
 	size_t specSigsTotalIndex = 0;
 	for (const SpecUse* specUse : ptrsRange(ctx.outermostFun->specs)) {
 		const Arr<const Sig> sigs = specUse->spec->sigs;
-		for (const size_t i : Range{0, sigs.size})
+		for (const size_t i : Range{sigs.size})
 			if (strEq(sigs[i].name, funName))
 				cb(CalledDecl{CalledDecl::SpecUseSig{specUse, sigs.getPtr(i), specSigsTotalIndex + i}});
 		specSigsTotalIndex += sigs.size;

@@ -3,6 +3,8 @@
 #include "../diag.h"
 #include "../model.h"
 
+#include "../util/arrUtil.h" // copyStr
+
 struct IncludeAndImportsIter {
 	const Opt<const Module*> include;
 	const Arr<const Module*> imports;
@@ -49,7 +51,7 @@ struct CheckCtx {
 	}
 
 	inline bool hasDiags() const {
-		return !diagsBuilder.isEmpty();
+		return !isEmpty(diagsBuilder);
 	}
 
 	inline const Arr<const Diagnostic> diags() {

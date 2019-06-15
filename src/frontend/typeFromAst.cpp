@@ -1,13 +1,15 @@
 #include "./typeFromAst.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
 	//TODO:MOVE
 	template<typename T, typename Cb>
 	const Opt<const T*> findInEither(const Arr<T> a, const Arr<T> b, Cb cb) {
-		for (const size_t i : Range{0, a.size})
+		for (const size_t i : Range{a.size})
 			if (cb(a[i]))
 				return some<const T*>(a.getPtr(i));
-		for (const size_t i : Range{0, b.size})
+		for (const size_t i : Range{b.size})
 			if (cb(b[i]))
 				return some<const T*>(b.getPtr(i));
 		return none<const T*>();
@@ -18,7 +20,7 @@ namespace {
 		CheckCtx& ctx,
 		const Str name,
 		const SourceRange range,
-		const Dict<const Str, TDecl, strEq> dict,
+		const Dict<const Str, TDecl, compareStr> dict,
 		Diag::NameNotFound::Kind kind,
 		GetTMap getTMap
 	) {

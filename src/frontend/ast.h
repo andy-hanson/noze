@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../Path.h"
-#include "../SourceRange.h"
 #include "../util.h"
+#include "../util/SourceRange.h"
 
 struct NameAndRange {
 	const SourceRange range;

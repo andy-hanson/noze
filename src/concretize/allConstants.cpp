@@ -1,21 +1,23 @@
 #include "./allConstants.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
-	bool arrConstantsEq(const Arr<const Constant*> a, const Arr<const Constant*> b) {
-		return arrEq<const Constant*, ptrEquals<const Constant>>(a, b);
+	Comparison compareArrConstants(const Arr<const Constant*> a, const Arr<const Constant*> b) {
+		return compareArr<const Constant*, comparePointer<const Constant>>(a, b);
 	}
 }
 
 struct ConstantsForRecord {
 	size_t nextId;
-	MutDict<const Arr<const Constant*>, const Constant*, arrConstantsEq> values;
+	MutDict<const Arr<const Constant*>, const Constant*, compareArrConstants> values;
 	ConstantsForRecord(const ConstantsForRecord&) = delete;
 };
 
 struct ConstantsForUnion {
 	size_t nextId;
 	// Maps a struct to that struct as a member of the union
-	MutDict<const Constant*, const Constant*, ptrEquals<const Constant>> values;
+	MutDict<const Constant*, const Constant*, comparePointer<const Constant>> values;
 	ConstantsForUnion(const ConstantsForUnion&) = delete;
 };
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../concreteModel.h"
+#include "./writer.h"
 
 // TODO: we actually just care if arguments have no side-effects.
 bool allConstant(const Arr<const ConstantOrExpr> args);
@@ -76,3 +77,6 @@ inline const ConcreteFunBody toConcreteFunBody(const ConstantOrExpr ce) {
 			return ConcreteFunBody{e};
 		});
 }
+
+// TODO: does this really belong here?
+void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t);

@@ -1,8 +1,9 @@
 #pragma once
 
 #include "./Path.h"
-#include "./SourceRange.h"
 #include "./util.h"
+#include "./util/lineAndColumnGetter.h"
+#include "./util/SourceRange.h"
 
 // A module came from the global imports directory or locally
 enum class StorageKind {
@@ -15,9 +16,12 @@ struct PathAndStorageKind {
 	const StorageKind storageKind;
 };
 
-inline bool pathAndStorageKindEq(const PathAndStorageKind a, const PathAndStorageKind b) {
-	return pathEq(a.path, b.path) && a.storageKind == b.storageKind;
+inline Comparison comparePathAndStorageKind(const PathAndStorageKind a, const PathAndStorageKind b) {
+	const Comparison res = comparePrimitive(a.storageKind, b.storageKind);
+	return res == Comparison::equal ? comparePath(a.path, b.path) : res;
 }
+
+using LineAndColumnGetters = Dict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;
 
 using Identifier = Str;
 
@@ -432,7 +436,7 @@ struct FunDecl {
 	}
 
 	inline bool isGeneric() const {
-		return !typeParams.isEmpty() || !specs.isEmpty();
+		return !isEmpty(typeParams) || !isEmpty(specs);
 	}
 
 	inline bool isSummon() const {
@@ -512,9 +516,9 @@ public:
 	}
 };
 
-using StructsAndAliasesMap = Dict<const Str, const StructOrAlias, strEq>;
-using SpecsMap = Dict<const Str, const SpecDecl*, strEq>;
-using FunsMap = MultiDict<Str, const FunDecl*, strEq>;
+using StructsAndAliasesMap = Dict<const Str, const StructOrAlias, compareStr>;
+using SpecsMap = Dict<const Str, const SpecDecl*, compareStr>;
+using FunsMap = MultiDict<Str, const FunDecl*, compareStr>;
 
 struct Module {
 	const PathAndStorageKind pathAndStorageKind;
@@ -568,6 +572,7 @@ struct Program {
 	// Includes 'include.nz"'
 	const Arr<const Module*> allModules;
 	const CommonTypes commonTypes;
+	const LineAndColumnGetters lineAndColumnGetters;
 };
 
 struct Local {

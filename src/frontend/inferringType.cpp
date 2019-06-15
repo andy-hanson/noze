@@ -1,5 +1,7 @@
 #include "./inferringType.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
 	const Opt<const Type> setTypeNoDiagnosticWorkerWorker(
 		Arena& arena,
@@ -33,7 +35,7 @@ namespace {
 		return ::tryGetTypeArg<SingleInferringType>(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
 	}
 	inline Opt<const SingleInferringType*> tryGetTypeArg(const InferringTypeArgs& inferringTypeArgs, const TypeParam* typeParam) {
-		return ::tryGetTypeArg<const SingleInferringType>(inferringTypeArgs.params, inferringTypeArgs.args.asConst(), typeParam);
+		return ::tryGetTypeArg<const SingleInferringType>(inferringTypeArgs.params, asConst(inferringTypeArgs.args), typeParam);
 	}
 
 	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena& arena, const Type t, const InferringTypeArgs& inferringTypeArgs) {
