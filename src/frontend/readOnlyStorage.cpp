@@ -17,6 +17,8 @@ namespace {
 
 		const NulTerminatedStr n = pathToNulTerminatedStr(arena, path);
 
+		printf("TRYING TO READ %s\n", n.begin());
+
 		const int fd = open(n.begin(), O_RDONLY);
 		if (fd == -1) {
 			if (errno == ENOENT)

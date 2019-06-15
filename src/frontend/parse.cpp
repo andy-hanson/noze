@@ -34,7 +34,7 @@ namespace {
 		while (lexer.tryTake('.'))
 			nDots++;
 
-		Path const* path = Path::root(lexer.pathArena, lexer.takeName());
+		Path const* path = rootPath(lexer.pathArena, lexer.takeName());
 		while (lexer.tryTake('.'))
 			path = childPath(lexer.pathArena, path, lexer.takeName());
 		path = addExt(lexer.pathArena, path, strLiteral(".nz"));

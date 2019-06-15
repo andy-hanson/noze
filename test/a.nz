@@ -1,0 +1,29 @@
+| 'real' main function
+main int64() trusted noctx summon
+	ctx-by-val = as<by-val<ctx>>: new zero, zero, as-non-const: zero
+	ctx-by-ptr = ctx-by-val ref-of-val
+	ctx-by-ptr call-with-ctx &other-main
+	zero
+
+| Main function normally seen by users
+other-main void() trusted summon
+	a = new-arr<nat64> one, one, one
+	| get 0th element
+	b = a.data deref
+	b.to-str print-sync
+	"Hello natively compiled world!" print-sync
+	print-range: 5, 8, \x
+		x.to-str print-sync
+
+print-range void(lo nat64, hi nat64, f fun1 void nat64)
+	when
+		lo < hi
+			f call lo
+			lo.incr print-range hi, f
+		else
+			pass
+
+my-big-struct record
+	a nat64
+	b nat64
+	c nat64

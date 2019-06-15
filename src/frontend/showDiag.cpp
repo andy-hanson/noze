@@ -5,7 +5,7 @@
 namespace {
 	struct Output {
 		Output& operator<<(const Str s) {
-			printf("%.*s\n", safeSizeTToInt(s.size), s.begin());
+			printf("%.*s", safeSizeTToInt(s.size), s.begin());
 			return *this;
 		}
 
@@ -63,8 +63,8 @@ namespace {
 		}
 	}
 
-	void operator<<(Output& out, const ParseDiag d) {
-		return d.match(
+	Output& operator<<(Output& out, const ParseDiag d) {
+		d.match(
 			[&](const ParseDiag::ExpectedCharacter) {
 				todo<void>("expectedcharacter");
 			},
@@ -100,6 +100,7 @@ namespace {
 			[&](const ParseDiag::WhenMustHaveElse) {
 				out << "'when' expression must end in 'else'";
 			});
+		return out;
 	}
 
 	Output& operator<<(Output& out, const Type type) {
@@ -124,8 +125,8 @@ namespace {
 		return out;
 	}
 
-	void operator<<(Output& out, const Diag d) {
-		return d.match(
+	Output& operator<<(Output& out, const Diag d) {
+		d.match(
 			[&](const Diag::CantCallNonNoCtx) {
 				out << "a 'noctx' fun can't call a non-'noctx' fun.";
 			},
@@ -215,29 +216,30 @@ namespace {
 			[&](const Diag::WrongNumberTypeArgsForStruct d) {
 				out << d.decl.name() << ": expected to get " << d.nExpectedTypeArgs << " type args, but got " << d.nActualTypeArgs;
 			});
+		return out;
 	}
 
 	void showDiagnostic(Output& out, const LineAndColumnGetter lc, const Diagnostic d) {
 		out << d.where.path << ' ';
 		showRange(out, lc, d.range);
-		out << ' ' << d.diag;
+		out << ' ' << d.diag << '\n';
 	}
 }
 
-void printDiagnostics(const Diagnostics diagnostics, const LineAndColumnGetters lineAndColumnGetters) {
+void printDiagnostics(const Diagnostics diagnostics) {
 	Output out {};
 	Arena tempArena {};
 	//TODO: sort diagnostics by file / range
-	const Arr<const Diagnostics> groups = sortAndGroup(tempArena, diagnostics, [&](const Diagnostic a, const Diagnostic b) {
+	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(tempArena, diagnostics.diagnostics, [&](const Diagnostic a, const Diagnostic b) {
 		return comparePathAndStorageKind(a.where, b.where);
 	});
 
-	for (const Diagnostics group : groups) {
+	for (const Arr<const Diagnostic> group : groups) {
 		if (group[0].diag.isFileDoesNotExist())
-			out << group[0].where.path << ": file does not exist";
+			out << group[0].where.path << ": file does not exist\n";
 		else {
 			for (const Diagnostic d : group)
-				showDiagnostic(out, lineAndColumnGetters.mustGet(d.where), d);
+				showDiagnostic(out, diagnostics.lineAndColumnGetters.mustGet(d.where), d);
 		}
 	}
 }

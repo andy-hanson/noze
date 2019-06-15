@@ -2,18 +2,25 @@
 
 #include "./util.h"
 
+inline bool isValidPathPartChar(const char c) {
+	return c != '\n' && c != '/' && c != '\0' && c != '\\';
+}
+
 struct Path {
 	const Opt<const Path*> parent;
 	const Str baseName;
 
-	Path(const Opt<const Path*> p, const Str bn) : parent{p}, baseName{bn} {}
-
-	static inline const Path* root(Arena& arena, const Str name) {
-		char* p = arena.newUninitialized<char>();
-		return new (p) Path{none<const Path*>(), name};
-		//return arena.nu<const Path>()(none<const Path*>(), name);
+	Path(const Opt<const Path*> _parent, const Str _baseName) : parent{_parent}, baseName{_baseName} {
+		assert(!isEmpty(baseName));
+		for (const char c : baseName) {
+			assert(isValidPathPartChar(c));
+		}
 	}
 };
+
+inline const Path* rootPath(Arena& arena, const Str name) {
+	return arena.nu<const Path>()(none<const Path*>(), name);
+}
 
 inline Comparison compareStr(const Str a, const Str b) {
 	if (isEmpty(a))
@@ -49,3 +56,6 @@ const Str pathToStr(Arena& arena, const Path* path);
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path);
 
 bool pathEq(const Path* a, const Path* b);
+
+// NOTE: this does *not* do a copy, original str must be kept alive!
+const Path* pathFromNulTerminatedStr(Arena& arena, const NulTerminatedStr str);

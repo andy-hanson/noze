@@ -48,7 +48,7 @@ namespace {
 		}
 	}
 
-	const Result<const CommonTypes, const Diagnostics> getCommonTypes(
+	const Result<const CommonTypes, const Arr<const Diagnostic>> getCommonTypes(
 		const PathAndStorageKind path,
 		CheckCtx& ctx,
 		const StructsAndAliasesMap& structsAndAliasesMap,
@@ -89,7 +89,7 @@ namespace {
 			byVal.has() && arr.has() && fut.has() &&
 			fun0.has() && fun1.has() && fun2.has() &&
 			remoteFun0.has() && remoteFun1.has() && remoteFun2.has())
-			return success<const CommonTypes, const Diagnostics>(
+			return success<const CommonTypes, const Arr<const Diagnostic>>(
 				CommonTypes{
 					_bool.force(),
 					_char.force(),
@@ -106,7 +106,7 @@ namespace {
 				});
 		else {
 			const Diagnostic diag = Diagnostic{path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
-			return failure<const CommonTypes, const Diagnostics>(arrLiteral<const Diagnostic>(ctx.arena, diag));
+			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx.arena, diag));
 		}
 	}
 
@@ -439,7 +439,7 @@ namespace {
 	}
 
 	template <typename GetCommonTypes>
-	const Result<const IncludeCheck, const Diagnostics> checkWorker(
+	const Result<const IncludeCheck, const Arr<const Diagnostic>> checkWorker(
 		Arena& arena,
 		const Opt<const Module*> include,
 		const Arr<const Module*> imports,
@@ -464,16 +464,16 @@ namespace {
 		const SpecsMap specsMap = buildDeclsDict<const SpecDecl>(ctx, specs, Diag::DuplicateDeclaration::Kind::spec);
 
 		if (ctx.hasDiags())
-			return failure<const IncludeCheck, const Diagnostics>(ctx.diags());
+			return failure<const IncludeCheck, const Arr<const Diagnostic>>(ctx.diags());
 		else {
-			const Result<const CommonTypes, const Diagnostics> commonTypes = getCommonTypes(ctx, structsAndAliasesMap, delayStructInsts);
-			return flatMapSuccess<const IncludeCheck, const Diagnostics>{}(commonTypes, [&](const CommonTypes commonTypes) {
+			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypes = getCommonTypes(ctx, structsAndAliasesMap, delayStructInsts);
+			return flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(commonTypes, [&](const CommonTypes commonTypes) {
 				checkStructBodies(ctx, commonTypes, structsAndAliasesMap, structs, ast.structs, delayStructInsts);
 				for (StructInst* i : delayStructInsts.freeze())
 					i->setBody(instantiateStructBody(arena, i->decl, i->typeArgs));
 				const FunsAndMap funsAndMap = checkFuns(ctx, commonTypes, specsMap, structsAndAliasesMap, ast.funs);
 				if (ctx.hasDiags())
-					return failure<const IncludeCheck, const Diagnostics>(ctx.diags());
+					return failure<const IncludeCheck, const Arr<const Diagnostic>>(ctx.diags());
 				else {
 					const Module* mod = arena.nu<const Module>()(
 						path,
@@ -484,14 +484,14 @@ namespace {
 						structsAndAliasesMap,
 						specsMap,
 						funsAndMap.funsMap);
-					return success<const IncludeCheck, const Diagnostics>(IncludeCheck{mod, commonTypes});
+					return success<const IncludeCheck, const Arr<const Diagnostic>>(IncludeCheck{mod, commonTypes});
 				}
 			});
 		}
 	}
 }
 
-const Result<const IncludeCheck, const Diagnostics> checkIncludeNz(
+const Result<const IncludeCheck, const Arr<const Diagnostic>> checkIncludeNz(
 	Arena& arena,
 	const FileAst ast,
 	const PathAndStorageKind path
@@ -507,21 +507,21 @@ const Result<const IncludeCheck, const Diagnostics> checkIncludeNz(
 		});
 }
 
-const Result<const Module*, const Diagnostics> check(
+const Result<const Module*, const Arr<const Diagnostic>> check(
 	Arena& arena,
 	const Arr<const Module*> imports,
 	const FileAst ast,
 	const PathAndStorageKind path,
 	const IncludeCheck includeCheck
 ) {
-	const Result<const IncludeCheck, const Diagnostics> res = checkWorker(
+	const Result<const IncludeCheck, const Arr<const Diagnostic>> res = checkWorker(
 		arena,
 		some<const Module*>(includeCheck.module),
 		imports,
 		ast,
 		path,
 		[&](CheckCtx&, const StructsAndAliasesMap&, const MutArr<StructInst*>&) {
-			return success<const CommonTypes, const Diagnostics>(includeCheck.commonTypes);
+			return success<const CommonTypes, const Arr<const Diagnostic>>(includeCheck.commonTypes);
 		});
 	return mapSuccess<const Module*>{}(res, [](const IncludeCheck ic) { return ic.module; });
 }

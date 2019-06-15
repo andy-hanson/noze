@@ -551,11 +551,15 @@ using NulTerminatedStr = Str;
 using MutStr = MutSlice<const char>;
 
 inline const char* end(const char* c) {
-	return c == '\0' ? c : end(c + 1);
+	return *c == '\0' ? c : end(c + 1);
 }
 
 inline const Str strLiteral(const char* c) {
 	return Str{c, static_cast<size_t>(end(c) - c)};
+}
+
+inline const NulTerminatedStr nulTerminatedStrLiteral(const char* c) {
+	return NulTerminatedStr{c, static_cast<size_t>(end(c) + 1 - c)};
 }
 
 bool strEq(const Str a, const Str b);

@@ -1,76 +1,97 @@
 #include <cstdio>
+#include <signal.h>
+#include <sys/resource.h> // rlimit
+#include <unistd.h> // getcwd
 
 #include "./frontend/ast.h"
+#include "./frontend/frontendCompile.h"
+#include "./frontend/readOnlyStorage.h"
+#include "./frontend/showDiag.h"
 #include "./util.h"
 #include "./util/arrUtil.h"
 #include "./concreteModel.h"
 
-int handle(TypeAst const& t) {
-	return t.match(
-		[](TypeAst::TypeParam _) {
-			unused(_);
-			return 1;
-		},
-		[](TypeAst::InstStruct _) {
-			unused(_);
-			return 2;
+namespace {
+	const NulTerminatedStr copyCharPtrToNulTerminatedStr(Arena& arena, const char* begin) {
+		return copyNulTerminatedStr(arena, nulTerminatedStrLiteral(begin));
+	}
+
+	const Path* getCwd(Arena& arena) {
+		char buff[256];
+		const char* b = getcwd(buff, 256);
+		if (b == nullptr) {
+			return todo<const Path*>("getcwd failed");
+		} else {
+			assert(b == buff);
+			const NulTerminatedStr str = copyCharPtrToNulTerminatedStr(arena, buff);
+			return pathFromNulTerminatedStr(arena, str);
 		}
-	);
-}
+	}
 
-void test() {
-	Arena arena;
+	void test() {
+		Arena tempArena {};
+		Arena modelArena {};
 
-	const SourceRange range = SourceRange{1, 2};
-	const Str name = strLiteral("abc");
-	const TypeAst t = TypeAst{TypeAst::TypeParam{range, name}};
-	const int i = handle(t);
-	printf("handled: %d\n", i);
+		// Get the current executable file path
+		const Path* cwd = getCwd(modelArena);
 
-	const Arr<int> a = arrLiteral<int>(arena, 1, 2);
-	const Arr<int> b = map<int>()(arena, a, [](int x) { return x + 1; });
+		const Path* include = childPath(modelArena, cwd, strLiteral("include"));
+		const Path* test = childPath(modelArena, cwd, strLiteral("test"));
 
-	for (const size_t i : Range{b.size}) {
-		printf("arr elem: %d\n", b[i]);
+		const ReadOnlyStorages storages = ReadOnlyStorages{ReadOnlyStorage{include}, ReadOnlyStorage{test}};
+
+		const Result<const Program, const Diagnostics> programResult = frontendCompile(
+			modelArena, storages, rootPath(modelArena, strLiteral("a.nz")));
+
+		printf("GOT HERE\n");
+
+		programResult.match(
+			[&](const Program program) {
+				unused(program);
+				todo<void>("!!!");
+			},
+			[](const Diagnostics diagnostics) {
+				printf("GOT HERE 3\n");
+				printDiagnostics(diagnostics);
+			});
+	}
+
+	rlimit getRlimit(const int resource) {
+		rlimit r;
+		getrlimit(resource, &r);
+		return r;
+	}
+
+	void setRlimit(const int resource, const rlimit r) {
+		const int err = setrlimit(resource, &r);
+		if (err == -1)
+			todo<void>("setrlimit failed");
+		assert(err == 0);
+	}
+
+	void reduceSoftLimit(const int resource, const rlim_t lim) {
+		rlimit cur = getRlimit(resource);
+		assert(lim < cur.rlim_max);
+		cur.rlim_cur = lim;
+		setRlimit(resource, cur);
+	}
+
+	void onSignal(int sig) {
+		if (sig == SIGXCPU)
+			perror("Hit CPU time limit -- probably an infinite loop somewhere\n");
+		exit(sig);
+	}
+
+
+	void setLimits() {
+		// Should take less than 1 second, should not consume more than 1 << 28 bytes (256MB).
+		reduceSoftLimit(RLIMIT_AS, 1 << 28);
+		signal(SIGXCPU, &onSignal);
 	}
 }
-
-///c->kind.match(
-//	[&](const Constant::Array a) {
-//		// static arr_nat64 _constantArr124 = arr_nat64(4, (cast(nat64[3]) [1, 2, 3]).ptr);
-//		// Strings are special:
-//		// static arr_char _constantArr123 = arr_char(5, (cast(char[5])"hello").ptr);
-//	})
-
-struct arr_char {
-	size_t size;
-	char* begin;
-};
-
-static arr_char _constantArr123 = arr_char{5, const_cast<char*>("hello")};
-
-using nat64 = Nat64;
-
-struct arr_nat64 {
-	size_t size;
-	nat64* begin;
-};
-
-static nat64 _constantArr124Backing[3] = {1, 2, 3};
-static arr_nat64 _constantArr124 = arr_nat64{3, _constantArr124Backing};
-
 
 int main(void) {
-	Arena arena;
-
-	const Path* p = Path::root(arena, strLiteral("hello"));
-	NulTerminatedStr s = pathToNulTerminatedStr(arena, p);
-
-	printf("Path is %s\n", s._begin);
-
-	for (const size_t i : Range{5, 10}) {
-		printf("i = %ld\n", i);
-	}
-
+	setLimits();
+	test();
 	return 0;
 }

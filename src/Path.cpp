@@ -72,3 +72,32 @@ const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
 bool pathEq(const Path* a, const Path* b) {
 	return strEq(a->baseName, b->baseName) && optEq<const Path*, pathEq>(a->parent, b->parent);
 }
+
+const Path* pathFromNulTerminatedStr(Arena& arena, const NulTerminatedStr str) {
+	const char* cur = str.begin();
+	if (*cur == '/')
+		// Ignore leading slash
+		cur++;
+
+	Path const* path = [&]() {
+		const char* beginA = cur;
+		while (*cur != '/' && *cur != '\0')
+			cur++;
+		assert(cur != beginA);
+		return rootPath(arena, arrOfRange(beginA, cur));
+	}();
+
+	if (*cur == '/')
+		cur++;
+
+	while (*cur != '\0') {
+		const char* begin = cur;
+		while (*cur != '/' && *cur != '\0')
+			cur++;
+		path = childPath(arena, path, arrOfRange(begin, cur));
+		if (*cur == '/')
+			cur++;
+	}
+
+	return path;
+}

@@ -274,8 +274,16 @@ bool every(const Arr<T> a, Cb cb) {
 }
 
 template <typename T>
-const Str copyStr(Arena& arena, const Arr<T> in) {
+const Arr<T> copyArr(Arena& arena, const Arr<T> in) {
 	return map<T>{}(arena, in, [](T x) { return x; });
+}
+
+inline const Str copyStr(Arena& arena, const Str in) {
+	return copyArr(arena, in);
+}
+
+inline const NulTerminatedStr copyNulTerminatedStr(Arena& arena, const NulTerminatedStr in) {
+	return copyArr(arena, in);
 }
 
 // Each of the returned arrays has elements considered equivalent by `cmp`
@@ -298,12 +306,21 @@ const Arr<const Arr<T>> sortAndGroup(Arena& arena, const Arr<T> a, Cmp cmp) {
 					break;
 			}
 		}
+		// Greater than everything in the list -- add it to the end
+		res.push(arena, MutArr<T>{arena, x});
 	};
 
 	for (const T x : a)
 		addSingle(x);
 
-	return map<const Arr<T>>{}(arena, res.freeze(), [&](MutArr<T>& m) {
+	const Arr<const Arr<T>> arrRes = map<const Arr<T>>{}(arena, res.freeze(), [&](MutArr<T>& m) {
 		return m.freeze();
 	});
+
+	// Check that result size == input size
+	size_t resultSize = 0;
+	for (const Arr<T> a : arrRes)
+		resultSize += a.size;
+	assert(resultSize == a.size);
+	return arrRes;
 }

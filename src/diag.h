@@ -360,4 +360,12 @@ struct Diagnostic {
 	const Diag diag;
 };
 
-using Diagnostics = const Arr<const Diagnostic>;
+struct Diagnostics {
+	const Arr<const Diagnostic> diagnostics;
+	const LineAndColumnGetters lineAndColumnGetters;
+
+	inline Diagnostics(const Arr<const Diagnostic> _diagnostics, const LineAndColumnGetters _lineAndColumnGetters)
+		: diagnostics{_diagnostics}, lineAndColumnGetters{_lineAndColumnGetters} {
+		assert(!isEmpty(diagnostics));
+	}
+};

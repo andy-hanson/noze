@@ -1,0 +1,452 @@
+region basic
+
+| Unrecoverable assertion failure
+hard-fail ?t(reason str) unsafe noctx builtin
+
+fail ?t(reason str)
+	todo
+
+todo ?t() trusted noctx
+	| TODO: soft-fail, remove 'trusted' above
+	hard-fail: "TODO"
+
+region system
+
+| This will be a large struct
+ctx record
+	a nat64
+	b nat64
+	c nat64
+
+by-val<?t> builtin
+
+| Unsafe because the ref will only be valid temporarily!
+ref-of-val ?t(b by-val ?t) unsafe noctx builtin
+
+| Since this fun is not marked 'noctx', it simply returns the ctx that already exists.
+get-ctx ctx() unsafe builtin
+
+void builtin
+byte builtin
+
+| NOTE: if ?t is a reference type, ptr<?t> is a pointer to a pointer to ?t
+ptr<?t> builtin
+deref ?t(p ptr ?t) unsafe noctx builtin
+set void(p ptr ?t, value ?t) unsafe noctx builtin
+
+any-ptr alias
+	ptr byte
+
+is-reference-type<?t> bool() unsafe noctx builtin
+size-of<?t> nat64() unsafe noctx builtin
+
+size-or-pointer-size<?t> nat64() unsafe noctx
+	when
+		is-reference-type<?t>
+			size-of<ptr<void>>
+		else
+			size-of<?t>
+
+ptr-cast ptr ?out(p ptr ?in) unsafe noctx builtin
+
++ ptr ?t(p ptr ?t, offset nat64) unsafe noctx builtin
+
+malloc any-ptr(size nat64) unsafe extern
+
+allocate-bytes any-ptr(size nat64) unsafe
+	| TODO: Allocate from ctx (Use 'get-ctx' builtin fun)
+	| Note: malloc always returns aligned memory (max_align_t)
+	malloc: size
+
+region comparison
+
+less record
+equal record
+greater record
+comparison union
+	less
+	equal
+	greater
+
+<=> comparison(a ?t, b ?t) noctx builtin
+
+== bool(a ?t, b ?t) noctx
+	match a <=> b
+		less
+			false
+		equal
+			true
+		greater
+			false
+
+| != bool(a ?t, b ?t)
+|	a == b not
+
+< bool(a ?t, b ?t) noctx
+	match a <=> b
+		less
+			true
+		equal
+			false
+		greater
+			false
+
+<= bool(a ?t, b ?t) noctx
+	b < a not
+
+> bool(a ?t, b ?t) noctx
+	a <= b not
+
+>= bool(a ?t, b ?t) noctx
+	a < b not
+
+min ?t(a ?t, b ?t) noctx
+	(a < b) if a, b
+
+max ?t(a ?t, b ?t) noctx
+	(a > b) if a, b
+
+region str
+
+char builtin
+str alias
+	arr char
+c-str alias
+	ptr char
+
+literal char(s str) noctx
+	s noctx-at zero
+
+region bool
+
+bool builtin
+false bool() noctx builtin
+true bool() noctx builtin
+not bool(a bool) noctx builtin
+| Note: this should be lazily evaluated
+and bool(a bool, b bool) noctx builtin
+or bool(a bool, b bool) noctx builtin
+nand bool(a bool, b bool) noctx builtin
+nor bool(a bool, b bool) noctx builtin
+| Only one of 'if-true' and 'if-false' arguments will be evaluated
+if ?t(cond bool, if-true ?t, if-false ?t) noctx builtin
+
+region Fun
+
+| Pointer to a function with no arguments (not even ctx)
+fun-ptr0<?r> builtin
+fun-ptr1<?r, ?p0> builtin
+fun-ptr2<?r, ?p0, ?p1> builtin
+fun-ptr3<?r, ?p0, ?p1, ?p2> builtin
+fun-ptr4<?r, ?p0, ?p1, ?p2, ?p3> builtin
+
+| A fun is two pointers -- one to the fun pointer, one to the closure.
+| TODO: point to the vtable, and have vtable also store layout information
+| A remote-fun is a fun plus a vat and actor id.
+fun0<?r> record mutable
+	fun-ptr fun-ptr2 ?r ctx any-ptr
+	closure any-ptr
+fun1<?r, ?p0> record mutable
+	fun-ptr fun-ptr3 ?r ctx any-ptr ?p0
+	closure any-ptr
+fun2<?r, ?p0, ?p1> record mutable
+	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
+	closure any-ptr
+
+| TODO: not builtin
+remote-fun0<?r> builtin mutable
+remote-fun1<?r, ?p0> builtin mutable
+remote-fun2<?r, ?p0, ?p1> builtin mutable
+
+call ?r(f fun-ptr0 ?r) noctx builtin
+call ?r(f fun-ptr1 ?r ?p0, p0 ?p0) noctx builtin
+call ?r(f fun-ptr2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx builtin
+call ?r(f fun-ptr3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) noctx builtin
+call ?r(f fun-ptr4 ?r ?p0 ?p1 ?p2 ?p3, p0 ?p0, p1 ?p1, p2 ?p2, p3 ?p3) noctx builtin
+
+| Note: this is the implementation for a dynamic call.
+| But the compiler may call the function dynamically instead
+call ?r(f fun0 ?r) trusted
+	get-ctx call-with-ctx f
+
+call-with-ctx ?r(c ctx, f fun0 ?r) noctx trusted
+	f.fun-ptr call c, f.closure
+
+call ?r(f fun1 ?r ?p0, p0 ?p0) trusted
+	get-ctx call-with-ctx f, p0
+
+call-with-ctx ?r(c ctx, f fun1 ?r ?p0, p0 ?p0) noctx trusted
+	f.fun-ptr call c, f.closure, p0
+
+call ?r(f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
+	get-ctx call-with-ctx f, p0, p1
+
+call-with-ctx ?r(c ctx, f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx trusted
+	f.fun-ptr call c, f.closure, p0, p1
+
+call fut ?r(f remote-fun0 ?r)
+	todo
+
+call fut ?r(f remote-fun1 ?r ?p0, p0 ?p0)
+	todo
+
+call fut ?r(f remote-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1)
+	todo
+
+region Arithmetic
+
+nat64 builtin
+int64 builtin
+float64 builtin
+
+to-nat64 nat64(i int64) noctx builtin
+to-int64 int64(n nat64) noctx builtin
+
+wrapping-add nat64(a nat64, b nat64) noctx builtin
+wrapping-sub nat64(a nat64, b nat64) noctx builtin
+wrapping-mul nat64(a nat64, b nat64) noctx builtin
+unsafe-div nat64(a nat64, b nat64) unsafe noctx builtin
+zero nat64() noctx builtin
+one nat64() noctx builtin
+two nat64() noctx
+	one incr
+three nat64() noctx
+	two incr
+four nat64() noctx
+	three incr
+five nat64() noctx
+	four incr
+six nat64() noctx
+	five incr
+seven nat64() noctx
+	six incr
+eight nat64() noctx
+	seven incr
+nine nat64() noctx
+	eight incr
+ten nat64() noctx
+	nine incr
+
+wrapping-add int64(a int64, b int64) noctx builtin
+wrapping-sub int64(a int64, b int64) noctx builtin
+wrapping-mul int64(a int64, b int64) noctx builtin
+unsafe-div int64(a int64, b int64) unsafe noctx builtin
+zero int64() noctx builtin
+one int64() noctx builtin
+two int64() noctx
+	one incr
+three int64() noctx
+	two incr
+four int64() noctx
+	three incr
+five int64() noctx
+	four incr
+six int64() noctx
+	five incr
+seven int64() noctx
+	six incr
+eight int64() noctx
+	seven incr
+nine int64() noctx
+	eight incr
+ten int64() noctx
+	nine incr
+
+incr nat64(n nat64) noctx
+	| TODO: assert: n != max-value
+	n wrapping-add one
+
+incr int64(i int64) noctx
+	| TODO: assert: i != max-value
+	i wrapping-add one
+
++ float64(a float64, b float64) noctx builtin
+- float64(a float64, b float64) noctx builtin
+* float64(a float64, b float64) noctx builtin
+unsafe-div float64(a float64, b float64) unsafe noctx builtin
+zero float64() noctx builtin
+one float64() noctx builtin
+
+char-to-nat64 nat64(c char) noctx
+	when
+		c == "0"
+			zero
+		c == "1"
+			one
+		c == "2"
+			two
+		c == "3"
+			three
+		c == "4"
+			four
+		c == "5"
+			five
+		c == "6"
+			six
+		c == "7"
+			seven
+		c == "8"
+			eight
+		c == "9"
+			nine
+		else
+			todo
+
+literal nat64(s str) noctx
+	l = s.size
+	when
+		l == one
+			char-to-nat64: s noctx-at zero
+		else
+			todo
+
+region Util
+
+pass void() noctx builtin
+pass fut void() noctx builtin
+drop void(t ?t)
+	pass
+
+hard-assert void(condition bool) unsafe noctx
+	when
+		condition
+			pass
+		else
+			"Assertion failed!" hard-fail
+
+assert void(condition bool)
+	when
+		condition
+			pass
+		else
+			"Assertion failed!" fail
+
+hard-assert-unreachable ?t() unsafe noctx
+	"should be unreachable" hard-fail
+
+assert-unreachable ?t()
+	"should be unreachable" fail
+
+some<?t> record
+	value ?t
+none record
+opt<?t> union
+	some<?t>
+	none
+
+empty? bool(a opt ?t) noctx
+	match a
+		some s
+			false
+		none n
+			true
+
+as ?t(value ?t) noctx builtin
+as-non-const ?t(value ?t) noctx builtin
+
+region fut
+
+fut<?t> builtin sendable
+resolved fut ?t(value ?t)
+	todo
+then fut ?out(a fut ?in, cb remote-fun1 ?out ?in)
+	todo
+join fut ?out(a fut ?in0, b fut ?in1, cb remote-fun2 ?out ?in0 ?in1)
+	todo
+
+region arr
+
+| NOTE: this is not a normal record, compiler treats it specially
+arr<?t> record
+	size nat64
+	data ptr ?t
+
+noctx-at ?t(a arr ?t, index nat64) trusted noctx
+	hard-assert: index < a.size
+	a.data + index deref
+
+at ?t(a arr ?t, index nat64) trusted
+	assert: index < a.size
+	a.data + index deref
+
+| NOTE: this is not a normal record, compiler treats it specially
+mut-arr<?t> record
+	frozen bool
+	size nat64
+	data ptr ?t
+
+uninitialized-mut-arr mut-arr ?t(size nat64) unsafe
+	bptr = allocate-bytes: size wrapping-mul size-of<?t>
+	new false, size, bptr ptr-cast<?t, byte>
+
+set-at void(a mut-arr ?t, index nat64, value ?t) trusted
+	assert: index < a.size
+	(a.data + index) set value
+
+freeze arr ?t(a mut-arr ?t) noctx
+	| TODO: a.frozen = true
+	new a.size, a.data
+
+at ?t(a mut-arr ?t, index nat64) trusted
+	when
+		index < a.size
+			a.data + index deref
+		else
+			fail: "bad mut-arr index"
+
+each-in-range void(lo nat64, hi nat64, f fun1 void nat64)
+	assert: lo <= hi
+	when
+		lo == hi
+			pass
+		else
+			f call lo
+			each-in-range: lo.incr, hi, f
+
+make-arr arr ?t(size nat64, f fun1 ?t nat64)
+	size make-mut-arr f freeze
+
+make-mut-arr mut-arr ?t(size nat64, f fun1 ?t nat64) trusted
+	res = uninitialized-mut-arr<?t>: size
+	each-in-range: zero, size, \i
+		res set-at: i, f call i
+	res
+
+to-mut-arr mut-arr ?t(a arr ?t)
+	a.size make-mut-arr<?t> \i
+		a at i
+
+| Currently only used to implement print-sync, so don't worry about varargs
+printf void(format c-str, sz nat64, data ptr char) summon unsafe extern
+
+print-sync void(s str) summon trusted noctx
+	printf: "%.*s\n\0".data, s.size, s.data
+
+| Used to make code run after the actor's next step. Equivalent to `sleep 0`.
+delay fut void() noctx
+	pass
+
+to-str str(n nat64)
+	when
+		n == 0
+			"0"
+		n == 1
+			"1"
+		n == 2
+			"2"
+		n == 3
+			"3"
+		n == 4
+			"4"
+		n == 5
+			"5"
+		n == 6
+			"6"
+		n == 7
+			"7"
+		n == 8
+			"8"
+		n == 9
+			"9"
+		else
+			todo
