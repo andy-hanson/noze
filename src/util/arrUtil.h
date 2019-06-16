@@ -49,7 +49,7 @@ const T& last(const MutArr<T>& a) {
 
 template <typename T>
 Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
-	MutSlice<T> res = newUninitializedMutSlice<T>(arena, a.size + b.size);
+	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size);
 	for (const size_t i : Range{a.size})
 		res.set(i, a[i]);
 	for (const size_t i : Range{b.size})
@@ -59,7 +59,7 @@ Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
 
 template <typename T>
 Arr<T> prepend(Arena& arena, const T a, const Arr<T> b) {
-	MutSlice<T> res = newUninitializedMutSlice<T>(arena, 1 + b.size);
+	MutArr<T> res = newUninitializedMutArr<T>(arena, 1 + b.size);
 	res.set(0, a);
 	for (const size_t i : Range{b.size})
 		res.set(1 + i, b[i]);
@@ -391,8 +391,8 @@ void filterUnordered(MutArr<T>& a, Pred pred) {
 }
 
 template <typename T>
-void copyFrom(MutSlice<T>& m, const size_t index, const Arr<T> arr) {
-	assert(index + arr.size <= m.size);
+void copyFrom(MutArr<T>& m, const size_t index, const Arr<T> arr) {
+	assert(index + arr.size <= m.size());
 	for (const size_t i : Range{arr.size})
 		m.set(index + i, arr[i]);
 }

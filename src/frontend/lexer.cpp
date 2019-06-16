@@ -115,7 +115,7 @@ const Str Lexer::takeStringLiteral() {
 	}
 
 	const size_t size = (ptr - begin) - nEscapes;
-	MutStr res = newUninitializedMutSlice<const char>(arena, size);
+	MutStr res = newUninitializedMutArr<const char>(arena, size);
 
 	size_t outI = 0;
 	ptr = begin;
@@ -147,7 +147,7 @@ const Str Lexer::takeStringLiteral() {
 
 	ptr++; // Skip past the closing '"'
 
-	assert(outI == res.size);
+	assert(outI == res.size());
 	return res.freeze();
 }
 

@@ -46,7 +46,7 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 		if (ptrEquals(p, s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{false, s});
 
-	for (const size_t i : Range{remoteFunTypes.size()})
+	for (const size_t i : Range{remoteFunTypes.size})
 		if (ptrEquals(remoteFunTypes[i], s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{true, funTypes[i]});
 

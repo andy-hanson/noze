@@ -157,28 +157,6 @@ void overwriteConst(const T& to, T from) {
 	initMemory(to, from);
 }
 
-template <size_t _size, typename T>
-struct FixArr {
-	T values[_size];
-
-	inline const T* begin() const {
-		return values;
-	}
-
-	inline const T* end() const {
-		return values + _size;
-	}
-
-	inline size_t size() const {
-		return _size;
-	}
-
-	inline const T& operator[](const size_t index) const {
-		assert(index < _size);
-		return values[index];
-	}
-};
-
 template <typename T>
 struct Arr {
 	T* const _begin;
@@ -286,60 +264,10 @@ inline bool exists(const Arr<T> arr, Cb cb) {
 	return false;
 }
 
-template <size_t size, typename T, typename Cb>
-inline bool exists(const FixArr<size, T> arr, Cb cb) {
-	for (T x : arr) {
-		const bool b = cb(x);
-		if (b)
-			return true;
-	}
-	return false;
-}
-
 template <typename T>
 inline T only(const Arr<T> a) {
 	assert(a.size == 1);
 	return a[0];
-}
-
-template <typename T>
-struct MutSlice {
-	bool isFrozen;
-	T* begin;
-	size_t size;
-
-	inline MutSlice(T* const b, const size_t s)
-		: isFrozen{false}, begin{b}, size{s} {}
-
-	inline T& operator[](const size_t index) {
-		assert(index < size);
-		return begin[index];
-	}
-
-	inline const T& operator[](const size_t index) const {
-		assert(index < size);
-		return begin[index];
-	}
-
-	inline void set(const size_t index, const T value) {
-		assert(index < size);
-		assert(!isFrozen);
-		overwriteConst(begin[index], value);
-	}
-
-	inline Arr<T> freeze() {
-		isFrozen = true;
-		return tempAsArr();
-	}
-
-	inline const Arr<T> tempAsArr() const {
-		return Arr<T>{begin, size};
-	}
-};
-
-template <typename T>
-inline MutSlice<T> newUninitializedMutSlice(Arena& arena, const size_t size) {
-	return MutSlice<T>{static_cast<T*>(arena.alloc(sizeof(T) * size)), size};
 }
 
 template <typename T>
@@ -356,39 +284,45 @@ inline Arr<T> slice(Arr<T> a, size_t lo) {
 
 template <typename T>
 struct MutArr {
-	MutSlice<T> slice;
+private:
+	bool isFrozen;
+	T* _begin;
+	size_t capacity;
 	size_t _size;
 
-	inline MutArr() : slice{nullptr, 0}, _size{0} {}
+public:
+	inline MutArr() : isFrozen{false}, _begin{nullptr}, capacity{0}, _size{0} {}
 	MutArr(const MutArr&) = delete;
 	MutArr(MutArr&&) = default;
-	MutArr(Arena& arena, T value) : slice{newUninitializedMutSlice<T>(arena, 1)}, _size{1} {
-		initMemory(slice[0], value);
-	}
+	inline MutArr(T* begin, const size_t len) : isFrozen{false}, _begin{begin}, capacity{len}, _size{len} {}
+	inline MutArr(Arena& arena, T value) : isFrozen{false}, _begin{arena.nu<T>()(value)}, capacity{1}, _size{1} {}
 
 	inline T& operator[](const size_t index) {
-		return slice[index];
+		assert(index < _size);
+		return _begin[index];
 	}
 
 	inline const T& operator[](const size_t index) const {
-		return slice[index];
+		assert(index < _size);
+		return _begin[index];
 	}
 
 	void set(const size_t index, const T value) {
+		assert(!isFrozen);
 		assert(index < _size);
-		slice.set(index, value);
+		overwriteConst(_begin[index], value);
 	}
 
 	void push(Arena& arena, const T value) {
-		if (_size == slice.size) {
-			MutSlice<T> oldSlice = slice;
-			slice = newUninitializedMutSlice<T>(arena, slice.size == 0 ? 4 : slice.size * 2);
-			for (const size_t i : Range{oldSlice.size})
-				initMemory(slice[i], oldSlice[i]);
+		if (_size == capacity) {
+			T* oldBegin = _begin;
+			capacity = _size == 0 ? 4 : _size * 2;
+			_begin = static_cast<T*>(arena.alloc(sizeof(T) * capacity));
+			for (const size_t i : Range{_size})
+				initMemory(_begin[i], oldBegin[i]);
 		}
-
-		assert(_size < slice.size);
-		initMemory(slice[_size], value);
+		assert(_size < capacity);
+		initMemory(_begin[_size], value);
 		_size++;
 	}
 
@@ -397,7 +331,7 @@ struct MutArr {
 			return none<T>();
 		else {
 			_size--;
-			return some<T>(slice[_size]);
+			return some<T>(_begin[_size]);
 		}
 	}
 
@@ -408,32 +342,42 @@ struct MutArr {
 	const Opt<T> peek() const {
 		return _size == 0
 			? none<T>()
-			: some<T>(slice[_size - 1]);
+			: some<T>(_begin[_size - 1]);
 	}
 
 	inline size_t size() const {
 		return _size;
 	}
 
-	inline Arr<T> freeze() {
-		return ::slice<T>(slice.freeze(), 0, _size);
+	const T* begin() const {
+		return _begin;
+	}
+
+	inline const Arr<T> freeze() {
+		isFrozen = true;
+		return tempAsArr();
 	}
 
 	inline const Arr<T> tempAsArr() const {
-		return ::slice<T>(slice.tempAsArr(), 0, _size);
+		return Arr<T>{_begin, _size};
 	}
 
 	void deleteAt(size_t index) {
 		assert(index < _size);
 		for (const size_t i : Range{index, _size - 1})
-			overwriteConst(slice[i], slice[i + 1]);
+			overwriteConst(_begin[i], _begin[i + 1]);
 		_size--;
 	}
 };
 
 template <typename T>
+inline MutArr<T> newUninitializedMutArr(Arena& arena, const size_t size) {
+	return MutArr<T>{static_cast<T*>(arena.alloc(sizeof(T) * size)), size};
+}
+
+template <typename T>
 bool isEmpty(const MutArr<T>& a) {
-	return a._size == 0;
+	return a.size() == 0;
 }
 
 template <typename T>
@@ -468,7 +412,7 @@ inline bool isEmpty(const ArrBuilder<T>& a) {
 
 using Str = const Arr<const char>;
 using NulTerminatedStr = Str;
-using MutStr = MutSlice<const char>;
+using MutStr = MutArr<const char>;
 
 inline const char* end(const char* c) {
 	return *c == '\0' ? c : end(c + 1);

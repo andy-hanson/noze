@@ -19,9 +19,9 @@ namespace {
 		return nulTerminated ? size + 1 : size;
 	}
 
-	MutStr pathToMutStr(Arena& arena, const Path* path, bool nulTerminated) {
+	Str pathToStrWorker(Arena& arena, const Path* path, const bool nulTerminated) {
 		const size_t size = pathToStrSize(path, nulTerminated);
-		MutStr res = newUninitializedMutSlice<const char>(arena, size);
+		MutStr res = newUninitializedMutArr<const char>(arena, size);
 		size_t i = size;
 		if (nulTerminated) {
 			i --;
@@ -34,7 +34,7 @@ namespace {
 			res.set(i, '/');
 		});
 		assert(i == 0);
-		return res;
+		return res.freeze();
 	}
 }
 
@@ -62,11 +62,11 @@ Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPa
 }
 
 const Str pathToStr(Arena& arena, const Path* path) {
-	return asConst(pathToMutStr(arena, path, false).freeze());
+	return pathToStrWorker(arena, path, /*nulTerminated*/ false);
 }
 
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
-	return asConst(pathToMutStr(arena, path, true).freeze());
+	return pathToStrWorker(arena, path, /*nulTerminated*/ true);
 }
 
 const Path* pathFromNulTerminatedStr(Arena& arena, const NulTerminatedStr str) {

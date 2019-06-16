@@ -96,14 +96,13 @@ namespace {
 					int64.force(),
 					str.force(),
 					_void.force(),
-					{opt.force(), some.force(), none.force()},
+					arrLiteral<const StructDecl*>(ctx.arena, opt.force(), some.force(), none.force()),
 					byVal.force(),
 					arr.force(),
 					mutArr.force(),
 					fut.force(),
-					{fun0.force(), fun1.force(), fun2.force()},
-					{remoteFun0.force(), remoteFun1.force(), remoteFun2.force()}
-				});
+					arrLiteral<const StructDecl*>(ctx.arena, fun0.force(), fun1.force(), fun2.force()),
+					arrLiteral<const StructDecl*>(ctx.arena, remoteFun0.force(), remoteFun1.force(), remoteFun2.force())});
 		else {
 			const Diagnostic diag = Diagnostic{path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
 			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx.arena, diag));

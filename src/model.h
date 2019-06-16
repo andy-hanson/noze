@@ -543,13 +543,13 @@ struct CommonTypes {
 	const StructInst* int64; // 'main' returns this
 	const StructInst* str; // Needed for str literals
 	const StructInst* _void;
-	const FixArr<3, const StructDecl*> optionSomeNone;
+	const Arr<const StructDecl*> optionSomeNone;
 	const StructDecl* byVal;
 	const StructDecl* arr;
 	const StructDecl* mutArr;
 	const StructDecl* fut;
-	const FixArr<N_FUN_TYPES, const StructDecl*> funTypes;
-	const FixArr<N_FUN_TYPES, const StructDecl*> remoteFunTypes;
+	const Arr<const StructDecl*> funTypes;
+	const Arr<const StructDecl*> remoteFunTypes;
 
 	struct LambdaInfo {
 		const bool isRemote;

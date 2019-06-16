@@ -43,8 +43,8 @@ namespace {
 
 		assert(off == 0);
 
-		MutStr res = newUninitializedMutSlice<const char>(arena, size + 1); // + 1 for the '\0'
-		const ssize_t nBytesRead = read(fd, const_cast<char*>(res.begin), size);
+		MutStr res = newUninitializedMutArr<const char>(arena, size + 1); // + 1 for the '\0'
+		const ssize_t nBytesRead = read(fd, const_cast<char*>(res.begin()), size);
 
 		if (nBytesRead == -1)
 			return todo<Ret>("read failed");
@@ -52,7 +52,7 @@ namespace {
 		if (nBytesRead != size)
 			return todo<Ret>("nBytesRead not right?");
 
-		res.set(res.size - 1, '\0');
+		res.set(res.size() - 1, '\0');
 
 		return some<const NulTerminatedStr>(res.freeze());
 	}

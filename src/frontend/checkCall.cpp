@@ -397,7 +397,7 @@ namespace {
 					return s;
 				}();
 
-				MutSlice<const CalledDecl> res = newUninitializedMutSlice<const CalledDecl>(ctx.arena(), size);
+				MutArr<const CalledDecl> res = newUninitializedMutArr<const CalledDecl>(ctx.arena(), size);
 				size_t outI = 0;
 				for (const SpecUse specUse : f->specs) {
 					const TypeArgsScope typeArgsScope = TypeArgsScope{
