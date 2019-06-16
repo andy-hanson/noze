@@ -12,24 +12,10 @@
 #include "./frontend/showDiag.h"
 #include "./util.h"
 #include "./util/arrUtil.h"
+#include "./util/io.h"
 #include "./concreteModel.h"
 
 namespace {
-	const NulTerminatedStr copyCharPtrToNulTerminatedStr(Arena& arena, const char* begin) {
-		return copyNulTerminatedStr(arena, nulTerminatedStrLiteral(begin));
-	}
-
-	const Path* getCwd(Arena& arena) {
-		char buff[256];
-		const char* b = getcwd(buff, 256);
-		if (b == nullptr) {
-			return todo<const Path*>("getcwd failed");
-		} else {
-			assert(b == buff);
-			const NulTerminatedStr str = copyCharPtrToNulTerminatedStr(arena, buff);
-			return pathFromNulTerminatedStr(arena, str);
-		}
-	}
 
 	const Path* climbUpToNoze(const Path* p) {
 		if (strEqLiteral(p->baseName, "noze"))
@@ -39,6 +25,7 @@ namespace {
 		else
 			return todo<const Path*>("no 'noze' directory in path");
 	}
+
 
 	void test() {
 		Arena modelArena {};
@@ -60,7 +47,8 @@ namespace {
 				const ConcreteProgram concreteProgram = concretize(concreteArena, program);
 				Arena writeArena {};
 				const Str emitted = writeToC(writeArena, concreteProgram);
-				unused(emitted);
+				const Path* path = childPath(modelArena, test, strLiteral("a.cpp"));
+				writeFileSync(path, emitted);
 				todo<void>("Yay, got a program!");
 			},
 			[](const Diagnostics diagnostics) {
@@ -94,7 +82,6 @@ namespace {
 		exit(sig);
 	}
 
-
 	void setLimits() {
 		// Should take less than 1 second, should not consume more than 1 << 28 bytes (256MB).
 		reduceSoftLimit(RLIMIT_AS, 1 << 28);
@@ -104,6 +91,7 @@ namespace {
 
 int main(void) {
 	setLimits();
+	unused(test);
 	test();
 	return 0;
 }

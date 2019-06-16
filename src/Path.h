@@ -2,8 +2,16 @@
 
 #include "./util.h"
 
-inline bool isValidPathPartChar(const char c) {
-	return c != '\n' && c != '/' && c != '\0' && c != '\\';
+inline const Bool isValidPathPartChar(const char c) {
+	switch (c) {
+		case '\n':
+		case '/':
+		case '\0':
+		case '\\':
+			return False;
+		default:
+			return True;
+	}
 }
 
 struct Path {

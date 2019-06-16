@@ -209,18 +209,19 @@ const Arr<const Type> typeArgsFromAsts(
 	return map<const Type>{}(ctx.arena, typeAsts, [&](const TypeAst it) { return typeFromAst(ctx, it, structsAndAliasesMap, typeParamsScope, delayStructInsts); });
 }
 
-bool typeIsPossiblySendable(const Type type) {
+const Bool typeIsPossiblySendable(const Type type) {
 	return type.match(
 		[](const Type::Bogus) {
-			return true;
+			return True;
 		},
 		[](const TypeParam*) {
 			// type param *might* have a sendable type arg. Issue errors when instantiating a generic iface, not declaring it.
-			return true;
+			return True;
 		},
 		[](const StructInst* i) {
-			return i->decl->purity != Purity::nonSendable &&
-				every(i->typeArgs, typeIsPossiblySendable);
+			return _and(
+				i->decl->purity != Purity::nonSendable,
+				every(i->typeArgs, typeIsPossiblySendable));
 		});
 }
 

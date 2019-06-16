@@ -10,7 +10,7 @@ namespace {
 			[&](const ConstantKind::Array) {
 				return todo<const Comparison>("compare arr");
 			},
-			[&](const bool) {
+			[&](const Bool) {
 				return todo<const Comparison>("compare bool");
 			},
 			[&](const char ca) {
@@ -85,7 +85,7 @@ namespace {
 		auto constantArg = [&](const size_t index) -> const Constant* {
 			return constArgs[index];
 		};
-		auto boolArg = [&](const size_t index) -> bool {
+		auto boolArg = [&](const size_t index) -> Bool {
 			return constantArg(index)->kind.asBool();
 		};
 		auto int64Arg = [&](const size_t index) -> Int64 {
@@ -102,7 +102,7 @@ namespace {
 		};
 		const Opt<const Constant*> no = none<const Constant*>();
 
-		auto constBool = [&](const bool value) -> const Opt<const Constant*> {
+		auto constBool = [&](const Bool value) -> const Opt<const Constant*> {
 			return yes(allConstants._bool(value));
 		};
 		auto constInt64 = [&](const Int64 value) -> const Opt<const Constant*> {
@@ -126,7 +126,7 @@ namespace {
 			}
 
 			case BuiltinFunKind::_and:
-				return constBool(boolArg(0) && boolArg(1));
+				return constBool(_and(boolArg(0), boolArg(1)));
 
 			case BuiltinFunKind::as:
 				return yes(constantArg(0));
@@ -164,7 +164,7 @@ namespace {
 				return yes(ptrArg(0).deref());
 
 			case BuiltinFunKind::_false:
-				return constBool(false);
+				return constBool(False);
 
 			case BuiltinFunKind::getCtx:
 				return no;
@@ -182,7 +182,7 @@ namespace {
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin mulfloats");
 
 			case BuiltinFunKind::_not:
-				return constBool(!boolArg(0));
+				return constBool(_not(boolArg(0)));
 
 			case BuiltinFunKind::oneInt64:
 				return constInt64(1);
@@ -191,7 +191,7 @@ namespace {
 				return constNat64(1);
 
 			case BuiltinFunKind::_or:
-				return constBool(boolArg(0) || boolArg(1));
+				return constBool(_or(boolArg(0), boolArg(1)));
 
 			case BuiltinFunKind::pass:
 				return constVoid;
@@ -216,14 +216,17 @@ namespace {
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin subfloats");
 
 			case BuiltinFunKind::_true:
-				return constBool(true);
+				return constBool(True);
 
 			case BuiltinFunKind::unsafeDivFloat64:
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin divfloats");
+
 			case BuiltinFunKind::unsafeDivInt64:
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin divints");
+
 			case BuiltinFunKind::unsafeDivNat64:
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin divnats");
+
 			case BuiltinFunKind::wrappingAddInt64: {
 				const Int64 i0 = int64Arg(0);
 				const Int64 i1 = int64Arg(1);

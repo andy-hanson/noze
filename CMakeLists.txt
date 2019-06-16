@@ -24,7 +24,6 @@ add_executable(noze
 	src/frontend/parse.cpp
 	src/frontend/parseExpr.cpp
 	src/frontend/parseType.cpp
-	src/frontend/readOnlyStorage.cpp
 	src/frontend/showDiag.cpp
 	src/frontend/typeFromAst.cpp
 	src/concreteModel.cpp
@@ -33,6 +32,7 @@ add_executable(noze
 	src/Path.cpp
 	src/util.cpp
 	src/util/arena.cpp
+	src/util/io.cpp
 	src/util/lineAndColumnGetter.cpp)
 target_compile_options(noze PRIVATE -Wall -Wextra -Werror -ansi -pedantic)
 

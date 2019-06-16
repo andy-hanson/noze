@@ -1,15 +1,15 @@
 #include "./lexer.h"
 
 namespace {
-	bool isLowerCaseLetter(char c) {
-		return 'a' <= c && c <= 'z';
+	const Bool isLowerCaseLetter(const char c) {
+		return _and('a' <= c, c <= 'z');
 	}
 
-	bool isDigit(char c) {
-		return '0' <= c && c <= '9';
+	const Bool isDigit(const char c) {
+		return _and('0' <= c, c <= '9');
 	}
 
-	bool isOperatorChar(char c) {
+	const Bool isOperatorChar(const char c) {
 		switch (c) {
 			case '+':
 			case '-':
@@ -18,15 +18,70 @@ namespace {
 			case '<':
 			case '>':
 			case '=':
-				return true;
+				return True;
 			default:
-				return false;
+				return False;
 		}
 	}
 
-	bool isNameContinue(char c) {
-		return isLowerCaseLetter(c) || c == '-' || isDigit(c);
+	const Bool isNameContinue(const char c) {
+		return _or3(isLowerCaseLetter(c), c == '-', isDigit(c));
 	}
+
+	uint takeTabs(Lexer& lexer) {
+		const char* begin = lexer.ptr;
+		while (*lexer.ptr == '\t')
+			lexer.ptr++;
+		return safeSizeTToUint(lexer.ptr - begin);
+	}
+
+	void takeIndentAfterNewline(Lexer& lexer) {
+		const size_t newIndent = takeTabs(lexer);
+		if (newIndent != lexer.indent + 1)
+			lexer.throwAtChar<void>(ParseDiag{ParseDiag::ExpectedIndent{}});
+		lexer.indent = newIndent;
+		lexer.skipBlankLines();
+	}
+}
+
+const Bool Lexer::tryTake(const char* c)  {
+	const char* ptr2 = ptr;
+	for (const char* cptr = c; *cptr != 0; cptr++) {
+		if (*ptr2 != *cptr)
+			return False;
+		ptr2++;
+	}
+	ptr = ptr2;
+	return True;
+}
+
+int Lexer::skipLinesAndGetIndentDelta() {
+	for (;;) {
+		if (*ptr == '|') {
+			ptr++;
+			while (*ptr != '\n')
+				ptr++;
+		}
+		else if (tryTake("region ")) {
+			while (*ptr != '\n') ptr++;
+		}
+		// If either of the above happened we will enter here
+		if (*ptr == '\n') {
+			takeNewline(); // skip all empty lines
+			const uint newIndent = takeTabs(*this);
+			if (newIndent != indent) {
+				int res = ((int) newIndent) - ((int) indent);
+				indent = newIndent;
+				return res;
+			}
+		} else
+			return 0;
+	}
+}
+
+void Lexer::takeExtraNewlines() {
+	while (*ptr == '\n')
+		ptr++;
 }
 
 const Str Lexer::takeNameRest(const char* begin)  {
@@ -43,6 +98,11 @@ const Str Lexer::takeOperatorRest(const char* begin)  {
 	return copyStr(begin, ptr);
 }
 
+const Lexer::ExpressionToken Lexer::takeOperator(const char* begin)  {
+	const Str name = takeOperatorRest(begin);
+	return ExpressionToken{NameAndRange{range(begin), name}};
+}
+
 const Str Lexer::takeName() {
 	const char* begin = ptr;
 	if (isOperatorChar(*ptr)) {
@@ -53,6 +113,12 @@ const Str Lexer::takeName() {
 		return takeNameRest(begin);
 	} else
 		return throwUnexpected<Str>();
+}
+
+const NameAndRange Lexer::takeNameAndRange()  {
+	const char* begin = ptr;
+	const Str name = takeName();
+	return NameAndRange{range(begin), name};
 }
 
 const Lexer::ExpressionToken Lexer::takeNumber(const char* begin)  {
@@ -149,6 +215,85 @@ const Str Lexer::takeStringLiteral() {
 
 	assert(outI == res.size());
 	return res.freeze();
+}
+
+void Lexer::skipBlankLines()  {
+	const int i = skipLinesAndGetIndentDelta();
+	if (i != 0)
+		throwUnexpected<void>();
+}
+
+Lexer::NewlineOrIndent Lexer::takeNewlineOrIndent() {
+	takeNewline();
+	return takeNewlineOrIndentAfterNl();
+}
+
+Lexer::NewlineOrIndent Lexer::takeNewlineOrIndentAfterNl() {
+	const size_t newIndent = takeTabs(*this);
+	const NewlineOrIndent res =
+		newIndent == indent ? NewlineOrIndent::newline
+		: newIndent != indent + 1 ? throwUnexpected<NewlineOrIndent>()
+		: [&]() {
+			indent = newIndent;
+			return NewlineOrIndent::indent;
+		}();
+	skipBlankLines();
+	return res;
+}
+
+void Lexer::takeIndent() {
+	takeNewline();
+	takeIndentAfterNewline(*this);
+}
+
+void Lexer::takeDedent()  {
+	assert(indent == 1);
+	takeNewline();
+	const size_t newIndent = takeTabs(*this);
+	if (newIndent != 0)
+		todo<void>("takeDedent");
+	indent = 0;
+}
+
+const Bool Lexer::tryTakeIndent()  {
+	const Bool res = eq(*ptr, '\n');
+	if (res)
+		takeIndent();
+	return res;
+}
+
+const Bool Lexer::tryTakeIndentAfterNewline() {
+	takeExtraNewlines();
+	const size_t newIndent = takeTabs(*this);
+	if (newIndent != indent && newIndent != indent + 1)
+		todo<void>("expected 0 or 1 indent");
+	const Bool res = eq(newIndent, indent + 1);
+	indent = newIndent;
+	return res;
+}
+
+size_t Lexer::takeNewlineOrDedentAmount() {
+	const int i = skipLinesAndGetIndentDelta();
+	if (i > 0)
+		todo<void>("takeNewlineOrDedentAmoutn -- actually it indented");
+	return -i;
+}
+
+Lexer::NewlineOrDedent Lexer::takeNewlineOrSingleDedent() {
+	assert(indent == 1);
+	const size_t amnt = takeNewlineOrDedentAmount();
+	switch (amnt) {
+		case 0: return NewlineOrDedent::newline;
+		case 1: return NewlineOrDedent::dedent;
+		default: return unreachable<NewlineOrDedent>();
+	}
+}
+
+const Bool tryTakeElseIndent(Lexer& lexer)  {
+	const Bool res = lexer.tryTake("else\n");
+	if (res)
+		takeIndentAfterNewline(lexer);
+	return res;
 }
 
 Lexer createLexer(Arena& astArena, Arena& pathArena, const NulTerminatedStr source) {

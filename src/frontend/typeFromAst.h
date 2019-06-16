@@ -75,12 +75,12 @@ const Arr<const Type> typeArgsFromAsts(
 
 template <typename T>
 inline Opt<T*> tryGetTypeArg(const Arr<const TypeParam> typeParams, Arr<T> typeArgs, const TypeParam* typeParam) {
-	const bool hasTypeParam = typeParams.begin() + typeParam->index == typeParam;
+	const Bool hasTypeParam = ptrEquals(typeParams.begin() + typeParam->index, typeParam);
 	return hasTypeParam
 		? some<T*>(typeArgs.getPtr(typeParam->index))
 		: none<T*>();
 }
 
-bool typeIsPossiblySendable(const Type type);
+const Bool typeIsPossiblySendable(const Type type);
 
 const Type makeFutType(Arena& arena, const CommonTypes& commonTypes, const Type type);

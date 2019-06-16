@@ -1,16 +1,16 @@
 #include "./parseType.h"
 
 namespace {
-	const TypeAst parseTypeWorker(Lexer& lexer, const bool isInner);
+	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner);
 
-	const Arr<const TypeAst> tryParseTypeArgsWorker(Lexer& lexer, const bool isInner) {
+	const Arr<const TypeAst> tryParseTypeArgsWorker(Lexer& lexer, const Bool isInner) {
 		ArrBuilder<const TypeAst> res {};
 		// Require '<>' if parsing type args inside of type args.
 		if (!isInner || lexer.tryTake('<')) {
-			while (true) {
+			for (;;) {
 				if (!isInner && !lexer.tryTake(' '))
 					break;
-				res.add(lexer.arena, parseTypeWorker(lexer, /*isInner*/ true));
+				res.add(lexer.arena, parseTypeWorker(lexer, /*isInner*/ True));
 				if (isInner && !lexer.tryTake(", "))
 					break;
 			}
@@ -20,9 +20,9 @@ namespace {
 		return res.finish();
 	}
 
-	const TypeAst parseTypeWorker(Lexer& lexer, const bool isInner) {
+	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner) {
 		const Pos start = lexer.at();
-		const bool isTypeParam = lexer.tryTake('?');
+		const Bool isTypeParam = lexer.tryTake('?');
 		const Str name = lexer.takeName();
 		const Arr<const TypeAst> typeArgs = tryParseTypeArgsWorker(lexer, isInner);
 		if (isTypeParam && !isEmpty(typeArgs))
@@ -35,12 +35,12 @@ namespace {
 }
 
 const Arr<const TypeAst> tryParseTypeArgs(Lexer& lexer) {
-	return tryParseTypeArgsWorker(lexer, /*isInner*/ true);
+	return tryParseTypeArgsWorker(lexer, /*isInner*/ True);
 }
 
 const Opt<const TypeAst> tryParseTypeArg(Lexer& lexer) {
 	if (lexer.tryTake('<')) {
-		const TypeAst res = parseTypeWorker(lexer, /*isInner*/ true);
+		const TypeAst res = parseTypeWorker(lexer, /*isInner*/ True);
 		lexer.take('>');
 		return some<const TypeAst>(res);
 	} else
@@ -59,5 +59,5 @@ const TypeAst::InstStruct parseStructType(Lexer& lexer) {
 }
 
 const TypeAst parseType(Lexer& lexer) {
-	return parseTypeWorker(lexer, /*isInner*/ false);
+	return parseTypeWorker(lexer, /*isInner*/ False);
 }

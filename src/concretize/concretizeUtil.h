@@ -4,8 +4,8 @@
 #include "./writer.h"
 
 // TODO: we actually just care if arguments have no side-effects.
-bool allConstant(const Arr<const ConstantOrExpr> args);
-bool allConstant(const Arr<const ConstantOrLambdaOrVariable> args);
+const Bool allConstant(const Arr<const ConstantOrExpr> args);
+const Bool allConstant(const Arr<const ConstantOrLambdaOrVariable> args);
 
 const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena& arena, const Arr<const ConstantOrExpr> args);
 const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena& arena, const Arr<const ConstantOrLambdaOrVariable> args);

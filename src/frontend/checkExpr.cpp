@@ -71,7 +71,7 @@ namespace {
 	}
 
 	struct ArrExpectedType {
-		const bool isFromExpected;
+		const Bool isFromExpected;
 		const StructInst* arrType;
 		const Type elementType;
 	};
@@ -81,7 +81,7 @@ namespace {
 			if (ast.elementType.has()) {
 				const Type ta = typeFromAst(ctx, ast.elementType.force());
 				const StructInst* arrType = instantiateStructNeverDelay(ctx.arena(), ctx.commonTypes.arr, arrLiteral<const Type>(ctx.arena(), ta));
-				return ArrExpectedType{false, arrType, ta};
+				return ArrExpectedType{False, arrType, ta};
 			} else {
 				const Opt<const Type> opT = expected.tryGetDeeplyInstantiatedType(ctx.arena());
 				if (opT.has()) {
@@ -89,7 +89,7 @@ namespace {
 					if (t.isStructInst()) {
 						const StructInst* si = t.asStructInst();
 						if (ptrEquals(si->decl, ctx.commonTypes.arr))
-							return ArrExpectedType{true, si, only<const Type>(si->typeArgs)};
+							return ArrExpectedType{True, si, only<const Type>(si->typeArgs)};
 					}
 				}
 				return todo<const ArrExpectedType>("can't get expected element type for new-arr");
@@ -106,12 +106,12 @@ namespace {
 	}
 
 	const CheckedExpr checkCreateRecord(ExprContext& ctx, const SourceRange range, const CreateRecordAst ast, Expected& expected) {
-		bool typeIsFromExpected = false;
+		Cell<const Bool> typeIsFromExpected { False };
 		const Type t = [&]() {
 			if (ast.type.has())
 				return typeFromAst(ctx, ast.type.force());
 			else {
-				typeIsFromExpected = true;
+				typeIsFromExpected.set(True);
 				const Opt<const Type> opT = expected.tryGetDeeplyInstantiatedType(ctx.arena());
 				if (!opT.has())
 					todo<void>("checkCreateRecord -- no expected type");
@@ -155,7 +155,7 @@ namespace {
 			const Arr<const StructField> fields = opFields.force().fields;
 			if (ast.args.size != fields.size) {
 				ctx.diag(range, Diag{Diag::WrongNumberNewStructArgs{decl, fields.size, ast.args.size}});
-				return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
+				return typeIsFromExpected.get() ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
 			} else {
 				//TODO: mapzip
 				const Arr<const Expr> args = fillArr<const Expr>{}(ctx.arena(), fields.size, [&](const size_t i) {
@@ -163,16 +163,16 @@ namespace {
 					return checkAndExpect(ctx, ast.args[i], expectedType);
 				});
 				const Expr expr = Expr{range, Expr::CreateRecord{si, args}};
-				return typeIsFromExpected ? CheckedExpr{expr} : expected.check(ctx, Type(si), expr);
+				return typeIsFromExpected.get() ? CheckedExpr{expr} : expected.check(ctx, Type(si), expr);
 			}
 		} else
-			return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
+			return typeIsFromExpected.get() ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
 	}
 
 	struct ExpectedLambdaType {
 		const StructDecl* funStruct;
 		const StructDecl* nonRemoteFunStruct;
-		const bool isRemoteFun;
+		const Bool isRemoteFun;
 		const Arr<const Type> paramTypes;
 		const Type nonInstantiatedPossiblyFutReturnType;
 	};

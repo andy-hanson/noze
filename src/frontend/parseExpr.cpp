@@ -12,9 +12,9 @@ namespace {
 
 	struct ArgCtx {
 		// Allow things like 'match', 'when', '\' that continue into an indented block.
-		const bool allowBlock;
+		const Bool allowBlock;
 		// In `a b: c d e`, we parse `a b (c d e) and not `(a b c) d e`, since `: turns on `allowCall`.
-		const bool allowCall;
+		const Bool allowCall;
 	};
 
 	struct ExprAndDedent {
@@ -58,7 +58,7 @@ namespace {
 		}
 	}
 
-	const ExprAndDedent parseLetOrThen(Lexer& lexer, const Pos start, const NameAndRange name, const bool isArrow) {
+	const ExprAndDedent parseLetOrThen(Lexer& lexer, const Pos start, const NameAndRange name, const Bool isArrow) {
 		const ExprAndDedent initAndDedent = parseExprNoLet(lexer);
 		if (initAndDedent.dedents != 0)
 			todo<void>("Diagnostic: block can't end in `x = ...`, something must come after");
@@ -72,7 +72,7 @@ namespace {
 		return ExprAndDedent{ExprAst{lexer.range(start), exprKind}, thenAndDedent.dedents + 1};
 	}
 
-	const ExprAndMaybeDedent parseCallOrMessage(Lexer& lexer, const ExprAst target, const bool allowBlock) {
+	const ExprAndMaybeDedent parseCallOrMessage(Lexer& lexer, const ExprAst target, const Bool allowBlock) {
 		const Pos start = lexer.at();
 		if (lexer.tryTake('.')) {
 			const Str funName = lexer.takeName();
@@ -80,9 +80,9 @@ namespace {
 			const CallAst call = CallAst{funName, typeArgs, arrLiteral<const ExprAst>(lexer.arena, target)};
 			return noDedent(ExprAst{lexer.range(start), ExprAstKind{call}});
 		} else {
-			const bool isMessage = lexer.tryTake('!');
+			const Bool isMessage = lexer.tryTake('!');
 			const Str funName = lexer.takeName();
-			const bool colon = lexer.tryTake(':');
+			const Bool colon = lexer.tryTake(':');
 			const Arr<const TypeAst> typeArgs = isMessage ? emptyArr<const TypeAst>() : tryParseTypeArgs(lexer);
 			const ArgsAndMaybeDedent args = parseArgs(lexer, ArgCtx{allowBlock, /*allowcall*/ colon});
 			const ExprAstKind exprKind = isMessage
@@ -92,14 +92,14 @@ namespace {
 		}
 	}
 
-	const ExprAndMaybeDedent parseCalls(Lexer& lexer, const ExprAndMaybeDedent ed, const bool allowBlock) {
+	const ExprAndMaybeDedent parseCalls(Lexer& lexer, const ExprAndMaybeDedent ed, const Bool allowBlock) {
 		return !ed.dedents.has() && lexer.tryTake(' ')
 			? parseCalls(lexer, parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock)
 			: ed;
 	}
 
 	template <typename Cb>
-	bool someInOwnBody(const ExprAst body, Cb cb) {
+	const Bool someInOwnBody(const ExprAst body, Cb cb) {
 		auto r = [&](const ExprAst sub) {
 			return someInOwnBody<Cb>(sub, cb);
 		};
@@ -109,7 +109,7 @@ namespace {
 				return exists(e.args, r);
 			},
 			[](const CondAst) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			},
 			[&](const CreateArrAst e) {
 				return exists(e.args, r);
@@ -118,38 +118,38 @@ namespace {
 				return exists(e.args, r);
 			},
 			[](const FunAsLambdaAst) {
-				return false;
+				return False;
 			},
 			[](const IdentifierAst) {
-				return false;
+				return False;
 			},
 			[](const LambdaAst) {
-				return false;
+				return False;
 			},
 			[](const LetAst) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			},
 			[](const LiteralAst) {
-				return false;
+				return False;
 			},
 			[](const MatchAst) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			},
 			[&](const MessageSendAst e) {
-				return r(*e.target) || exists(e.args, r);
+				return _or(r(*e.target), exists(e.args, r));
 			},
 			[](const NewActorAst) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			},
 			[](const SeqAst) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			},
 			[](const ThenAst) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			});
 	}
 
-	bool bodyUsesIt(const ExprAst body) {
+	const Bool bodyUsesIt(const ExprAst body) {
 		return someInOwnBody(body, [](const ExprAst it) {
 			return it.kind.isIdentifier() && strEqLiteral(it.kind.asIdentifier().name, "it");
 		});
@@ -173,7 +173,7 @@ namespace {
 
 		ArrBuilder<const MatchAst::CaseAst> cases {};
 		const size_t matchDedents = [&]() {
-			while (true) {
+			for (;;) {
 				const Str structName = lexer.takeName();
 				const Opt<const Str> localName = lexer.tryTakeIndent()
 					? none<const Str>()
@@ -196,7 +196,7 @@ namespace {
 	}
 
 	const ExprAndMaybeDedent parseWhenLoop(Lexer& lexer, const Pos start) {
-		if (lexer.tryTakeElseIndent()) {
+		if (tryTakeElseIndent(lexer)) {
 			const ExprAndDedent elseAndDedent = parseStatementsAndDedent(lexer);
 			if (elseAndDedent.dedents == 0)
 				todo<void>("can't have any case after 'else'");
@@ -242,7 +242,7 @@ namespace {
 		lexer.takeIndent();
 		ArrBuilder<const NewActorAst::MessageImpl> messages {};
 		const size_t extraDedents = [&]() {
-			while (true) {
+			for (;;) {
 				const Str messageName = lexer.takeName();
 				lexer.take('(');
 				const Arr<const NameAndRange> paramNames = [&]() {
@@ -273,10 +273,10 @@ namespace {
 
 	const ExprAndMaybeDedent parseLambda(Lexer& lexer, const Pos start) {
 		ArrBuilder<const LambdaAst::Param> parameters {};
-		bool isFirst = true;
+		Cell<const Bool> isFirst { True };
 		while (!lexer.tryTakeIndent()) {
-			if (isFirst)
-				isFirst = false;
+			if (isFirst.get())
+				isFirst.set(False);
 			else
 				lexer.take(' ');
 			const NameAndRange nr = lexer.takeNameAndRange();
@@ -335,7 +335,7 @@ namespace {
 			case Kind::nameAndRange: {
 				const Str name = et.asNameAndRange().name;
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-				const bool tookColon = lexer.tryTake(':');
+				const Bool tookColon = lexer.tryTake(':');
 				if (tookColon) {
 					// Prefix call `foo: bar, baz`
 					const ArgsAndMaybeDedent ad = parseArgs(lexer, ctx);
@@ -373,7 +373,7 @@ namespace {
 	const ExprAst parseExprNoBlock(Lexer& lexer) {
 		const Pos start = lexer.at();
 		const ExpressionToken et = lexer.takeExpressionToken();
-		const ExprAndMaybeDedent ed = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ false, /*allowCall*/ true});
+		const ExprAndMaybeDedent ed = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ False, /*allowCall*/ True});
 		assert(!ed.dedents.has());
 		return ed.expr;
 	}
@@ -385,7 +385,7 @@ namespace {
 	}
 
 	const ExprAndDedent parseExprNoLet(Lexer& lexer, const Pos start, const ExpressionToken et) {
-		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ true, /*allowCall*/ true});
+		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ True, /*allowCall*/ True});
 		return ExprAndDedent{e.expr, e.dedents.has() ? e.dedents.force() : lexer.takeNewlineOrDedentAmount()};
 	}
 
@@ -400,10 +400,10 @@ namespace {
 		const ExpressionToken et = lexer.takeExpressionToken();
 		if (et.isNameAndRange()) {
 			const NameAndRange nr = et.asNameAndRange();
-			const Opt<const bool> isThen =
-				lexer.tryTake(" = ") ? some<const bool>(false)
-				: lexer.tryTake(" <- ") ? some<const bool>(true)
-				: none<const bool>();
+			const Opt<const Bool> isThen =
+				lexer.tryTake(" = ") ? some<const Bool>(False)
+				: lexer.tryTake(" <- ") ? some<const Bool>(True)
+				: none<const Bool>();
 			if (isThen.has())
 				return parseLetOrThen(lexer, start, nr, isThen.force());
 		}

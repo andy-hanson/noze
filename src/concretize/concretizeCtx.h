@@ -178,7 +178,7 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 const ConcreteType getConcreteType(ConcretizeCtx& ctx, const Type t, const TypeArgsScope typeArgsScope);
 const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope);
 
-bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl);
+const Bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl);
 
 
 //TODO:MOVE?
@@ -187,7 +187,7 @@ struct SpecializeOnArgs {
 	const Arr<const ConstantOrExpr> notSpecializedArgs;
 };
 const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(Arena& arena, const Arr<const ConstantOrExpr> args);
-const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const bool isSummon);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const Bool isSummon);
 const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx& ctx, const FunDecl* f, const Arr<const ConstantOrExpr> args);
 
 const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(

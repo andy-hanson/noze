@@ -5,7 +5,7 @@
 namespace {
 	template <typename Cb>
 	static void walkPathBackwards(const Path* p, Cb cb) {
-		while (true) {
+		for (;;) {
 			cb(p->baseName);
 			if (!p->parent.has())
 				break;
@@ -13,13 +13,13 @@ namespace {
 		}
 	}
 
-	size_t pathToStrSize(const Path* path, const bool nulTerminated) {
+	size_t pathToStrSize(const Path* path, const Bool nulTerminated) {
 		size_t size = 0;
 		walkPathBackwards(path, [&](const Str part) { size += part.size + 1; });
 		return nulTerminated ? size + 1 : size;
 	}
 
-	Str pathToStrWorker(Arena& arena, const Path* path, const bool nulTerminated) {
+	Str pathToStrWorker(Arena& arena, const Path* path, const Bool nulTerminated) {
 		const size_t size = pathToStrSize(path, nulTerminated);
 		MutStr res = newUninitializedMutArr<const char>(arena, size);
 		size_t i = size;
@@ -62,11 +62,11 @@ Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPa
 }
 
 const Str pathToStr(Arena& arena, const Path* path) {
-	return pathToStrWorker(arena, path, /*nulTerminated*/ false);
+	return pathToStrWorker(arena, path, /*nulTerminated*/ False);
 }
 
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
-	return pathToStrWorker(arena, path, /*nulTerminated*/ true);
+	return pathToStrWorker(arena, path, /*nulTerminated*/ True);
 }
 
 const Path* pathFromNulTerminatedStr(Arena& arena, const NulTerminatedStr str) {

@@ -2,10 +2,14 @@
 
 #include "../model.h" // StorageKind
 
+#include "../util/io.h"
+
 struct ReadOnlyStorage {
 	const Path* root;
 
-	const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const Path* path) const;
+	inline const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const Path* path) const {
+		return ::tryReadFile(arena, addManyChildren(arena, root, path));
+	}
 };
 
 struct ReadOnlyStorages {

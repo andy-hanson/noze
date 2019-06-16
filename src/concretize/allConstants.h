@@ -37,7 +37,7 @@ public:
 
 	const Constant* ptr(Arena& arena, const Constant* array, const size_t index);
 
-	inline const Constant* _bool(const bool value) {
+	inline const Constant* _bool(const Bool value) {
 		return value ? _true : _false;
 	}
 

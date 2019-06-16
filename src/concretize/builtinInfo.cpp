@@ -1,52 +1,53 @@
 #include "./builtinInfo.h"
 
 namespace {
-	bool isNamed(const Type t, const char* name) {
-		return t.isStructInst() && strEqLiteral(t.asStructInst()->decl->name, name);
+	const Bool isNamed(const Type t, const char* name) {
+		return _and(t.isStructInst(), strEqLiteral(t.asStructInst()->decl->name, name));
 	}
 
-	bool isFloat64(const Type t) {
+	const Bool isFloat64(const Type t) {
 		return isNamed(t, "float64");
 	}
 
-	bool isInt64(const Type t) {
+	const Bool isInt64(const Type t) {
 		return isNamed(t, "int64");
 	}
 
-	bool isNat64(const Type t) {
+	const Bool isNat64(const Type t) {
 		return isNamed(t, "nat64");
 	}
 
-	bool isPtr(const Type t) {
+	const Bool isPtr(const Type t) {
 		return isNamed(t, "ptr");
 	}
 
-	bool isVoid(const Type t) {
+	const Bool isVoid(const Type t) {
 		return isNamed(t, "void");
 	}
 
-	bool isSomeFunPtr(const Type t) {
-		return isNamed(t, "fun-ptr0")
-			|| isNamed(t, "fun-ptr1")
-			|| isNamed(t, "fun-ptr2")
-			|| isNamed(t, "fun-ptr3")
-			|| isNamed(t, "fun-ptr4");
+	const Bool isSomeFunPtr(const Type t) {
+		if (!t.isStructInst())
+			return False;
+		else {
+			const Str name = t.asStructInst()->decl->name;
+			return _and(name.size == 8, strEqLiteral(slice(name, 0, 7), "fun-ptr"));
+		}
 	}
 
 	const Opt<const BuiltinFunInfo> generate(const BuiltinFunKind kind) {
-		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::generate, kind, false});
+		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::generate, kind, False});
 	}
 
 	const Opt<const BuiltinFunInfo> special(const BuiltinFunKind kind) {
-		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::special, kind, false});
+		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::special, kind, False});
 	}
 
-	const Opt<const BuiltinFunInfo> _operator(const BuiltinFunKind kind, bool isNonSpecializable = false) {
+	const Opt<const BuiltinFunInfo> _operator(const BuiltinFunKind kind, const Bool isNonSpecializable = False) {
 		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::_operator, kind, isNonSpecializable});
 	}
 
 	const Opt<const BuiltinFunInfo> constant(const BuiltinFunKind kind) {
-		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::constant, kind, false});
+		return some<const BuiltinFunInfo>(BuiltinFunInfo{BuiltinFunEmit::constant, kind, False});
 	}
 
 	const Opt<const BuiltinFunInfo> tryGetBuiltinFunInfo(const Sig sig) {
@@ -73,7 +74,7 @@ namespace {
 			case 'a':
 				return strEqLiteral(name, "and") ? _operator(BuiltinFunKind::_and)
 					: strEqLiteral(name, "as") ? _operator(BuiltinFunKind::as)
-					: strEqLiteral(name, "as-non-const") ? _operator(BuiltinFunKind::asNonConst, true)
+					: strEqLiteral(name, "as-non-const") ? _operator(BuiltinFunKind::asNonConst, True)
 					: no;
 			case 'c':
 				return strEqLiteral(name, "call") && isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr) : no;
@@ -158,7 +159,7 @@ const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 
 const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {
 	const Str name = s->name;
-	return strEqLiteral(name, "bool") ? BuiltinStructInfo{BuiltinStructKind::_bool, sizeof(bool)}
+	return strEqLiteral(name, "bool") ? BuiltinStructInfo{BuiltinStructKind::_bool, sizeof(Bool)}
 		: strEqLiteral(name, "byte") ? BuiltinStructInfo{BuiltinStructKind::byte, sizeof(byte)}
 		: strEqLiteral(name, "char") ? BuiltinStructInfo{BuiltinStructKind::_char, sizeof(char)}
 		: strEqLiteral(name, "float64") ? BuiltinStructInfo{BuiltinStructKind::float64, sizeof(Float64)}

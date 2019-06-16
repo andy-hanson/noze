@@ -1,12 +1,12 @@
 #include "./model.h"
 
-bool Type::containsUnresolvedTypeParams() const {
+const Bool Type::containsUnresolvedTypeParams() const {
 	return match(
 		[](const Type::Bogus) {
-			return true;
+			return True;
 		},
 		[](const TypeParam*) {
-			return true;
+			return True;
 		},
 		[](const StructInst* i) {
 			return exists(i->typeArgs, [](const Type t) {
@@ -15,16 +15,16 @@ bool Type::containsUnresolvedTypeParams() const {
 		});
 }
 
-bool Type::typeEquals(const Type other) const {
+const Bool Type::typeEquals(const Type other) const {
 	return match(
 		[&](const Type::Bogus) {
 			return other.isBogus();
 		},
 		[&](const TypeParam* p) {
-			return other.isTypeParam() && ptrEquals(p, other.asTypeParam());
+			return _and(other.isTypeParam(), ptrEquals(p, other.asTypeParam()));
 		},
 		[&](const StructInst* s) {
-			return other.isStructInst() && ptrEquals(s, other.asStructInst());
+			return _and(other.isStructInst(), ptrEquals(s, other.asStructInst()));
 		});
 }
 
@@ -44,19 +44,19 @@ Purity Type::purity() const {
 const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const StructDecl* s) const {
 	for (const StructDecl* p : funTypes)
 		if (ptrEquals(p, s))
-			return some<const CommonTypes::LambdaInfo>(LambdaInfo{false, s});
+			return some<const CommonTypes::LambdaInfo>(LambdaInfo{False, s});
 
 	for (const size_t i : Range{remoteFunTypes.size})
 		if (ptrEquals(remoteFunTypes[i], s))
-			return some<const CommonTypes::LambdaInfo>(LambdaInfo{true, funTypes[i]});
+			return some<const CommonTypes::LambdaInfo>(LambdaInfo{True, funTypes[i]});
 
 	return none<const CommonTypes::LambdaInfo>();
 }
 
-bool Expr::typeIsBogus(Arena& arena) const {
+const Bool Expr::typeIsBogus(Arena& arena) const {
 	return match(
 		[](const Expr::Bogus) {
-			return true;
+			return True;
 		},
 		[](const Expr::Call e) {
 			return e.concreteReturnType.isBogus();
@@ -65,25 +65,25 @@ bool Expr::typeIsBogus(Arena& arena) const {
 			return e.field->type.isBogus();
 		},
 		[](const Expr::Cond) {
-			return todo<bool>("typeIsBogus cond");
+			return todo<const Bool>("typeIsBogus cond");
 		},
 		[](const Expr::CreateArr) {
-			return false;
+			return False;
 		},
 		[](const Expr::CreateRecord) {
-			return false;
+			return False;
 		},
 		[](const Expr::FunAsLambda) {
-			return false;
+			return False;
 		},
 		[](const Expr::IfaceImplFieldRef) {
-			return todo<bool>("typeIsBogus ifaceimplfieldref");
+			return todo<const Bool>("typeIsBogus ifaceimplfieldref");
 		},
 		[](const Expr::ImplicitConvertToUnion) {
-			return todo<bool>("typeIsBogus implicitConvertToUnion");
+			return todo<const Bool>("typeIsBogus implicitConvertToUnion");
 		},
 		[](const Expr::Lambda) {
-			return false;
+			return False;
 		},
 		[&](const Expr::Let e) {
 			return e.then->typeIsBogus(arena);
@@ -92,13 +92,13 @@ bool Expr::typeIsBogus(Arena& arena) const {
 			return e.local->type.isBogus();
 		},
 		[](const Expr::Match) {
-			return todo<bool>("typeIsBogus match");
+			return todo<const Bool>("typeIsBogus match");
 		},
 		[](const Expr::MessageSend) {
-			return todo<bool>("typeIsBogus messageSend");
+			return todo<const Bool>("typeIsBogus messageSend");
 		},
 		[](const Expr::NewIfaceImpl) {
-			return todo<bool>("typeIsBogus newIfaceImpl");
+			return todo<const Bool>("typeIsBogus newIfaceImpl");
 		},
 		[](const Expr::ParamRef e) {
 			return e.param->type.isBogus();
@@ -107,7 +107,7 @@ bool Expr::typeIsBogus(Arena& arena) const {
 			return e.then->typeIsBogus(arena);
 		},
 		[](const Expr::StringLiteral) {
-			return false;
+			return False;
 		},
 		[](const Expr::StructFieldAccess e) {
 			return e.accessedFieldType().isBogus();

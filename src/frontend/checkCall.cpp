@@ -18,27 +18,27 @@ namespace {
 
 	// If we call `foo \x ...` where `foo` is a function that doesn't exist,
 	// don't continue checking the lambda it in the hopes that it might have a property.
-	bool exprMightHaveProperties(const ExprAst ast) {
+	const Bool exprMightHaveProperties(const ExprAst ast) {
 		return ast.kind.match(
-			[](const CallAst) { return true; },
+			[](const CallAst) { return True; },
 			[](const CondAst e) {
-				return exprMightHaveProperties(*e.then) && exprMightHaveProperties(*e.elze);
+				return _and(exprMightHaveProperties(*e.then), exprMightHaveProperties(*e.elze));
 			},
-			[](const CreateArrAst) { return true; },
-			[](const CreateRecordAst) { return true; },
-			[](const FunAsLambdaAst) { return false; },
-			[](const IdentifierAst) { return true; },
-			[](const LambdaAst) { return false; },
+			[](const CreateArrAst) { return True; },
+			[](const CreateRecordAst) { return True; },
+			[](const FunAsLambdaAst) { return False; },
+			[](const IdentifierAst) { return True; },
+			[](const LambdaAst) { return False; },
 			[](const LetAst e) { return exprMightHaveProperties(*e.then); },
-			[](const LiteralAst) { return true; },
+			[](const LiteralAst) { return True; },
 			// TODO: check all branches
-			[](const MatchAst) { return true; },
+			[](const MatchAst) { return True; },
 			// Always returns fut
-			[](const MessageSendAst) { return false; },
-			[](const NewActorAst) { return false; },
+			[](const MessageSendAst) { return False; },
+			[](const NewActorAst) { return False; },
 			[](const SeqAst e) { return exprMightHaveProperties(*e.then); },
 			// Always returns fut
-			[](const ThenAst) { return false; });
+			[](const ThenAst) { return False; });
 	}
 
 	const Type instantiateSpecUse(const Type declaredCandidateType, const CalledDecl called) {
@@ -81,11 +81,11 @@ namespace {
 	//TODO: share more code with matchActualAndCandidateTypeForReturn?
 	//Though that handles implicit cast to union and this should not.
 	// TODO: share code with matchTypesNoDiagnostic?
-	bool matchActualAndCandidateTypeInner(Arena& arena, const Type fromExternal, const Type declaredCandidateType, Candidate& candidate) {
+	const Bool matchActualAndCandidateTypeInner(Arena& arena, const Type fromExternal, const Type declaredCandidateType, Candidate& candidate) {
 		const Type fromCandidate = instantiateSpecUse(declaredCandidateType, candidate.called);
 		return fromExternal.match(
 			[](const Type::Bogus) {
-				return todo<bool>("bogus");
+				return todo<const Bool>("bogus");
 			},
 			[&](const TypeParam*) {
 				// Case A: expected return type is a type parameter. So the function we're calling must be generic too.
@@ -101,44 +101,45 @@ namespace {
 			[&](const StructInst* structInstFromExternal) {
 				return fromCandidate.match(
 					[](const Type::Bogus) {
-						return false;
+						return False;
 					},
 					[&](const TypeParam* p) {
 						return getTypeArg(candidate.inferringTypeArgs(), p)->setTypeNoDiagnostic(arena, fromExternal);
 					},
 					[&](const StructInst* structInstFromCandidate) {
-						return ptrEquals(structInstFromExternal->decl, structInstFromCandidate->decl)
-							&& eachCorresponds(
+						return _and(
+							ptrEquals(structInstFromExternal->decl, structInstFromCandidate->decl),
+							eachCorresponds(
 								structInstFromExternal->typeArgs,
 								structInstFromCandidate->typeArgs,
-								[&](const Type a, const Type b) { return matchActualAndCandidateTypeInner(arena, a, b, candidate); });
+								[&](const Type a, const Type b) { return matchActualAndCandidateTypeInner(arena, a, b, candidate); }));
 					});
 			});
 	}
 
-	bool typeArgsMatch(Arena& arena, const Arr<const Type> expected, const Arr<const Type> actual, Candidate& candidate) {
+	const Bool typeArgsMatch(Arena& arena, const Arr<const Type> expected, const Arr<const Type> actual, Candidate& candidate) {
 		return eachCorresponds(expected, actual, [&](const Type expectedTypeArg, const Type declaredTypeArg) {
 			return matchActualAndCandidateTypeInner(arena, expectedTypeArg, declaredTypeArg, candidate);
 		});
 	}
 
-	bool matchActualAndCandidateTypeForReturn(Arena& arena, const Type expectedReturnType, const Type declaredReturnType, Candidate& candidate) {
+	const Bool matchActualAndCandidateTypeForReturn(Arena& arena, const Type expectedReturnType, const Type declaredReturnType, Candidate& candidate) {
 		auto handleTypeParam = [&](const TypeParam* p) {
 			// Function returns a type parameter, and we get expect it to return <bogus> or a particular struct inst.
 			const Opt<SingleInferringType*> t = tryGetTypeArg(candidate.inferringTypeArgs(), p);
 			if (t.has())
 				return t.force()->setTypeNoDiagnostic(arena, expectedReturnType);
 			else
-				return todo<bool>("matchActualAndCandidateTypeForReturn type param");
+				return todo<const Bool>("matchActualAndCandidateTypeForReturn type param");
 		};
 
 		const Type instantiatedReturnType = instantiateSpecUse(declaredReturnType, candidate.called);
 		return expectedReturnType.match(
 			[&](const Type::Bogus) {
 				return instantiatedReturnType.match(
-					[](const Type::Bogus) { return true; },
+					[](const Type::Bogus) { return True; },
 					handleTypeParam,
-					[](const StructInst*) { return true; });
+					[](const StructInst*) { return True; });
 			},
 			[&](const TypeParam*) {
 				// We expect to return a type param.
@@ -149,12 +150,12 @@ namespace {
 						? typeArg.force()->setTypeNoDiagnostic(arena, expectedReturnType)
 						: expectedReturnType.typeEquals(instantiatedReturnType);
 				} else
-					return false;
+					return False;
 			},
 			[&](const StructInst* expectedStructInst) {
 				return instantiatedReturnType.match(
 					[](const Type::Bogus) {
-						return todo<bool>("matchActualAndCandidateTypeForReturn bogus");
+						return todo<const Bool>("matchActualAndCandidateTypeForReturn bogus");
 					},
 					handleTypeParam,
 					[&](const StructInst* actualStructInst) {
@@ -167,13 +168,15 @@ namespace {
 								const Opt<const StructInst*> member = find(body.asUnion().members, [&](const StructInst* i) {
 									return ptrEquals(i->decl, actualStructInst->decl);
 								});
-								return member.has() && typeArgsMatch(
-									arena,
-									instantiateStructInst(arena, member.force(), expectedStructInst)->typeArgs,
-									actualStructInst->typeArgs,
-									candidate);
+								return _and(
+									member.has(),
+									typeArgsMatch(
+										arena,
+										instantiateStructInst(arena, member.force(), expectedStructInst)->typeArgs,
+										actualStructInst->typeArgs,
+										candidate));
 							} else
-								return false;
+								return False;
 						}
 					});
 			});
@@ -225,17 +228,17 @@ namespace {
 
 	struct CommonOverloadExpected {
 		Expected expected;
-		const bool isExpectedFromCandidate;
+		const Bool isExpectedFromCandidate;
 	};
 
 	CommonOverloadExpected getCommonOverloadParamExpected(Arena& arena, const Arr<Candidate> candidates, const size_t argIdx) {
 		switch (candidates.size) {
 			case 0:
-				return CommonOverloadExpected{Expected::infer(), false};
+				return CommonOverloadExpected{Expected::infer(), False};
 			case 1: {
 				const Candidate& candidate = only(candidates);
 				const Type t = getCandidateExpectedParameterType(arena, candidate, argIdx);
-				return CommonOverloadExpected{Expected{some<const Type>(t), candidate.inferringTypeArgs()}, true};
+				return CommonOverloadExpected{Expected{some<const Type>(t), candidate.inferringTypeArgs()}, True};
 			}
 			default:
 				// For multiple candidates, only have an expected type if they have exactly the same param type
@@ -246,13 +249,13 @@ namespace {
 					if (expected.get().has()) {
 						if (!typeEquals(paramType, expected.get().force()))
 							// Only get an expected type if all candidates expect it.
-							return CommonOverloadExpected{Expected::infer(), false};
+							return CommonOverloadExpected{Expected::infer(), False};
 					} else
 						expected.set(some<const Type>(paramType));
 				}
 				// Can't be inferring type arguments for candidates if there's more than one.
 				// (Handle that *after* getting the arg type.)
-				return CommonOverloadExpected{Expected{expected.get()}, false};
+				return CommonOverloadExpected{Expected{expected.get()}, False};
 		}
 	}
 
@@ -292,21 +295,23 @@ namespace {
 	}
 
 	template <typename TypeArgsEqual>
-	bool structInstsEqual(const StructInst* a, const StructInst* b, TypeArgsEqual typeArgsEqual) {
-		return ptrEquals(a->decl, b-> decl) && eachCorresponds(a->typeArgs, b->typeArgs, typeArgsEqual);
+	const Bool structInstsEqual(const StructInst* a, const StructInst* b, TypeArgsEqual typeArgsEqual) {
+		return _and(
+			ptrEquals(a->decl, b-> decl),
+			eachCorresponds(a->typeArgs, b->typeArgs, typeArgsEqual));
 	}
 
-	bool sigTypesEqualNoSub(const Type specType, const Type actual) {
+	const Bool sigTypesEqualNoSub(const Type specType, const Type actual) {
 		return specType.match(
 			[](const Type::Bogus) {
-				return todo<bool>("sigTypesEqualNoSub bogus");
+				return todo<const Bool>("sigTypesEqualNoSub bogus");
 			},
 			[](const TypeParam*) {
-				return unreachable<bool>();
+				return unreachable<const Bool>();
 			},
 			[&](const StructInst* i) {
 				// Type args should be fully substituted now, so just use ptrEquals
-				return actual.isStructInst() && ptrEquals(i, actual.asStructInst());
+				return _and(actual.isStructInst(), ptrEquals(i, actual.asStructInst()));
 			});
 	}
 
@@ -323,18 +328,20 @@ namespace {
 
 	// substitutedFromSpec will be the type arg to the SpecUse.
 	// This may further need to be substituted by a type arg from the candidate.
-	bool sigTypesEqualOneSub(const Type substitutedFromSpec, const Type actual, const TypeParamsAndArgs candidateTypeArgs) {
+	const Bool sigTypesEqualOneSub(const Type substitutedFromSpec, const Type actual, const TypeParamsAndArgs candidateTypeArgs) {
 		return substitutedFromSpec.match(
-			[&](const Type::Bogus) {
-				return todo<bool>("sigtypesequalonesub bogus");
+			[](const Type::Bogus) {
+				return todo<const Bool>("sigtypesequalonesub bogus");
 			},
 			[&](const TypeParam* p) {
 				return sigTypesEqualNoSub(candidateTypeArgs.substitute(p), actual);
 			},
 			[&](const StructInst* i) {
-				return actual.isStructInst() && structInstsEqual(i, actual.asStructInst(), [&](const Type specType, const Type actualType) {
-					return sigTypesEqualOneSub(specType, actualType, candidateTypeArgs);
-				});
+				return _and(
+					actual.isStructInst(),
+					structInstsEqual(i, actual.asStructInst(), [&](const Type specType, const Type actualType) {
+						return sigTypesEqualOneSub(specType, actualType, candidateTypeArgs);
+					}));
 			});
 	}
 
@@ -343,26 +350,29 @@ namespace {
 		const TypeParamsAndArgs candidateTypeArgs;
 	};
 
-	bool sigTypesEqual(const Type typeFromSpec, const Type actual, const TypeArgsScope typeArgs) {
+	const Bool sigTypesEqual(const Type typeFromSpec, const Type actual, const TypeArgsScope typeArgs) {
 		return typeFromSpec.match(
 			[](const Type::Bogus) {
-				return todo<bool>("sigtypesequal bogus");
+				return todo<const Bool>("sigtypesequal bogus");
 			},
 			[&](const TypeParam* p) {
 				return sigTypesEqualOneSub(typeArgs.specUseTypeArgs.substitute(p), actual, typeArgs.candidateTypeArgs);
 			},
 			[&](const StructInst* i) {
-				return actual.isStructInst() && structInstsEqual(i, actual.asStructInst(), [&](const Type specType, const Type actualType) {
-					return sigTypesEqual(specType, actualType, typeArgs);
-				});
+				return _and(
+					actual.isStructInst(),
+					structInstsEqual(i, actual.asStructInst(), [&](const Type specType, const Type actualType) {
+						return sigTypesEqual(specType, actualType, typeArgs);
+					}));
 			});
 	}
 
-	bool sigMatches(const Sig specSig, const Sig actual, const TypeArgsScope typeArgs) {
-		return sigTypesEqual(specSig.returnType, actual.returnType, typeArgs) &&
+	const Bool sigMatches(const Sig specSig, const Sig actual, const TypeArgsScope typeArgs) {
+		return _and(
+			sigTypesEqual(specSig.returnType, actual.returnType, typeArgs),
 			eachCorresponds(specSig.params, actual.params, [&](const Param a, const Param b) {
 				return sigTypesEqual(a.type, b.type, typeArgs);
-			});
+			}));
 	}
 
 	const CalledDecl findSpecSigImplementation(ExprContext& ctx, const SourceRange range, const Sig specSig, const TypeArgsScope typeArgs) {
@@ -451,7 +461,7 @@ namespace {
 const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const CallAst ast, Expected& expected) {
 	const size_t arity = ast.args.size;
 
-	const bool mightBePropertyAccess = arity == 1 && exprMightHaveProperties(only(ast.args));
+	const Bool mightBePropertyAccess = _and(arity == 1, exprMightHaveProperties(only(ast.args)));
 
 	const Arr<const Type> explicitTypeArgs = typeArgsFromAsts(ctx, ast.typeArgs);
 	MutArr<Candidate> candidates = getInitialCandidates(ctx, ast.funName, explicitTypeArgs, arity);
@@ -463,7 +473,7 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 			return matchActualAndCandidateTypeForReturn(ctx.arena(), expectedReturnType.force(), candidate.called.returnType(), candidate);
 		});
 
-	bool someArgIsBogus = false;
+	Cell<const Bool> someArgIsBogus { False };
 	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx.arena(), arity, [&](const size_t argIdx) {
 		if (isEmpty(candidates) && !mightBePropertyAccess)
 			// Already certainly failed.
@@ -474,7 +484,7 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 
 		// If it failed to check, don't continue, just stop there.
 		if (arg.typeIsBogus(ctx.arena())) {
-			someArgIsBogus = true;
+			someArgIsBogus.set(True);
 			return none<const Expr>();
 		}
 
@@ -492,7 +502,7 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 
 	const Arr<Candidate> candidatesArr = candidates.freeze();
 
-	if (someArgIsBogus)
+	if (someArgIsBogus.get())
 		return expected.bogus(range);
 
 	if (mightBePropertyAccess && arity == 1 && args.has()) {

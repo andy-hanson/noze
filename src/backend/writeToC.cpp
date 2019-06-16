@@ -39,7 +39,7 @@ namespace {
 	}
 
 	template <typename T, typename Cb>
-	void writeWithCommas(Writer& w, const Arr<T> a, const bool leadingComma, Cb cb) {
+	void writeWithCommas(Writer& w, const Arr<T> a, const Bool leadingComma, Cb cb) {
 		for (const size_t i : Range{a.size}) {
 			if (leadingComma || i != 0)
 				w.writeStatic(", ");
@@ -63,12 +63,13 @@ namespace {
 		writer.writeStr(p.mangledName);
 	}
 
-	void writeJustParams(Writer& writer, bool wroteFirst, const Arr<const ConcreteParam> params) {
+	void writeJustParams(Writer& writer, const Bool wroteFirst, const Arr<const ConcreteParam> params) {
+		Cell<const Bool> didWriteFirst { wroteFirst };
 		for (const ConcreteParam p : params) {
-			if (wroteFirst)
+			if (didWriteFirst.get())
 				writer.writeStatic(", ");
 			else
-				wroteFirst = true;
+				didWriteFirst.set(True);
 			doWriteParam(writer, p);
 		}
 		writer.writeChar(')');
@@ -81,29 +82,16 @@ namespace {
 		}
 	}
 
-	void writeStructDeclaration(Writer& writer, const ConcreteStruct* strukt) {
-		writer.writeStatic("struct ");
-		writer.writeStr(strukt->mangledName);
-		writer.writeStatic(";\n");
-	}
-
-	void writeStructHead(Writer& writer, const Str mangledName) {
-		writer.writeStatic("struct ");
-		writer.writeStr(mangledName);
-		writer.writeStatic(" {");
-	}
-
-	void writeStructEnd(Writer& writer) {
-		writer.writeStatic("\n};\n");
-	}
-
 	void writeBuiltinAliasForStruct(Writer& writer, const Str name, const BuiltinStructKind kind, const Arr<const ConcreteType> typeArgs) {
-		// "bool", "byte", and "char" share the same name as in C, so no need for an alias.
-		if (kind != BuiltinStructKind::_bool && kind != BuiltinStructKind::byte && kind != BuiltinStructKind::_char) {
+		// "bool" and "char" share the same name as in C, so no need for an alias.
+		if (kind != BuiltinStructKind::_bool && kind != BuiltinStructKind::_char) {
 			writer.writeStatic("using ");
 			writer.writeStr(name);
 			writer.writeStatic(" = ");
 			switch (kind) {
+				case BuiltinStructKind::byte:
+					writer.writeStatic("uint8_t");
+					break;
 				case BuiltinStructKind::float64:
 					writer.writeStatic("double");
 					break;
@@ -121,17 +109,16 @@ namespace {
 					writer.writeChar(')');
 					break;
 				case BuiltinStructKind::nat64:
-					writer.writeStatic("ulong");
+					writer.writeStatic("uint64_t");
 					break;
 				case BuiltinStructKind::ptr:
 					writeType(writer, typeArgs[0]);
 					writer.writeChar('*');
 					break;
 				case BuiltinStructKind::_void:
-					writer.writeStatic("byte");
+					writer.writeStatic("uint8_t");
 					break;
 				case BuiltinStructKind::_bool:
-				case BuiltinStructKind::byte:
 				case BuiltinStructKind::_char:
 					unreachable<void>();
 				default:
@@ -140,6 +127,16 @@ namespace {
 
 			writer.writeStatic(";\n");
 		}
+	}
+
+	void writeStructHead(Writer& writer, const Str mangledName) {
+		writer.writeStatic("struct ");
+		writer.writeStr(mangledName);
+		writer.writeStatic(" {");
+	}
+
+	void writeStructEnd(Writer& writer) {
+		writer.writeStatic("\n};\n");
 	}
 
 	void writeFieldsStruct(Writer& writer, const Str mangledName, const Arr<const ConcreteField> fields) {
@@ -171,7 +168,7 @@ namespace {
 			writeMemberName(member);
 			writer.writeChar(',');
 		}
-		writer.writeStatic("\n\t}");
+		writer.writeStatic("\n\t};");
 		writer.writeStatic("\n\tKind kind;");
 		writer.writeStatic("\n\tunion {");
 		for (const ConcreteType member : members) {
@@ -181,7 +178,7 @@ namespace {
 			writeMemberName(member);
 			writer.writeChar(';');
 		}
-		writer.writeStatic("\n\t}");
+		writer.writeStatic("\n\t};");
 
 		for (const ConcreteType member : members) {
 			writer.writeStatic("\n\t");
@@ -241,27 +238,120 @@ namespace {
 		writeStructEnd(writer);
 	}
 
-	void writeStructDefinition(Writer& writer, const ConcreteStruct* strukt) {
-		strukt->body().match(
-			[&](const ConcreteStructBody::Builtin b) {
-				writeBuiltinAliasForStruct(writer, strukt->mangledName, b.info.kind, b.typeArgs);
-			},
-			[&](const ConcreteStructBody::Fields f) {
-				writeFieldsStruct(writer, strukt->mangledName, f.fields);
-			},
-			[&](const ConcreteStructBody::Union u) {
-				writeUnionStruct(writer, strukt->mangledName, u.members);
-			},
-			[&](const ConcreteStructBody::Iface i) {
-				writeIfaceStruct(writer, strukt->mangledName, i.messages);
-			});
-		writer.writeStatic("static_assert(sizeof(");
-		writer.writeStr(strukt->mangledName);
-		writer.writeStatic(") == ");
-		writer.writeUint(strukt->sizeBytes());
-		writer.writeStatic(");\n");
+	enum class StructState {
+		declared,
+		defined
+	};
+
+	using StructStates = MutDict<const ConcreteStruct*, const StructState, comparePointer<const ConcreteStruct>>;
+
+	const Bool canReferenceType(const ConcreteType t, const StructStates& structStates) {
+		const Opt<const StructState> state = structStates.get(t.strukt);
+		if (state.has())
+			switch (state.force()) {
+				case StructState::declared:
+					return t.isPointer;
+				case StructState::defined:
+					return True;
+				default:
+					assert(0);
+			}
+		else
+			return False;
 	}
 
+	const Bool sigCanReferenceTypes(const ConcreteSig s, const StructStates& structStates) {
+		return _and(
+			canReferenceType(s.returnType, structStates),
+			every(s.params, [&](const ConcreteParam p) {
+				return canReferenceType(p.type, structStates);
+			}));
+	}
+
+	void declareStruct(Writer& writer, const ConcreteStruct* strukt) {
+		writer.writeStatic("struct ");
+		writer.writeStr(strukt->mangledName);
+		writer.writeStatic(";\n");
+	}
+
+	// Returns any new work it did -- if we declared or defined the struct
+	const Opt<const StructState> writeStructDeclarationOrDefinition(Writer& writer, const ConcreteStruct* strukt, const StructStates& structStates) {
+		auto declare = [&]() -> const Opt<const StructState> {
+			if (!structStates.has(strukt)) {
+				declareStruct(writer, strukt);
+				return some<const StructState>(StructState::declared);
+			} else
+				return none<const StructState>();
+		};
+		const Opt<const StructState> defined = some<const StructState>(StructState::defined);
+
+		return strukt->body().match(
+			[&](const ConcreteStructBody::Builtin b) {
+				if (every(b.typeArgs, [&](const ConcreteType t) { return canReferenceType(t, structStates); })) {
+					writeBuiltinAliasForStruct(writer, strukt->mangledName, b.info.kind, b.typeArgs);
+					return defined;
+				} else
+					return none<const StructState>();
+			},
+			[&](const ConcreteStructBody::Fields f) {
+				if (every(f.fields, [&](const ConcreteField f) { return canReferenceType(f.type, structStates); })) {
+					writeFieldsStruct(writer, strukt->mangledName, f.fields);
+					return defined;
+				} else
+					return declare();
+			},
+			[&](const ConcreteStructBody::Union u) {
+				if (every(u.members, [&](const ConcreteType t) { return canReferenceType(t, structStates); })) {
+					writeUnionStruct(writer, strukt->mangledName, u.members);
+					return defined;
+				} else
+					return declare();
+			},
+			[&](const ConcreteStructBody::Iface i) {
+				if (every(i.messages, [&](const ConcreteSig s) { return sigCanReferenceTypes(s, structStates); })) {
+					writeIfaceStruct(writer, strukt->mangledName, i.messages);
+					return defined;
+				} else
+					return declare();
+			});
+	}
+
+	void writeStructs(Writer& writer, const Arr<const ConcreteStruct*> allStructs) {
+		Arena tempArena {};
+		StructStates structStates {};
+		for (;;) {
+			Cell<const Bool> madeProgress { False };
+			Cell<const Bool> someIncomplete { False };
+			for (const ConcreteStruct* strukt : allStructs) {
+				const Opt<const StructState> curState = structStates.get(strukt);
+				if (!curState.has() || curState.force() != StructState::defined) {
+					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, structStates);
+					if (didWork.has()) {
+						structStates.set(tempArena, strukt, didWork.force());
+						madeProgress.set(True);
+					} else
+						someIncomplete.set(True);
+				}
+			}
+			if (someIncomplete.get())
+				assert(madeProgress.get());
+			else
+				break;
+		}
+
+		writer.writeStatic("\n");
+		for (const ConcreteStruct* strukt : allStructs) {
+			writer.writeStatic("static_assert(sizeof(");
+			writer.writeStr(strukt->mangledName);
+			writer.writeStatic(") == ");
+			writer.writeUint(strukt->sizeBytes());
+			writer.writeStatic(", \"\");\n");
+		}
+		writer.writeStatic("\n");
+	}
+}
+
+namespace {
 	void writeConstantRecordName(Writer& writer, const Constant* c, const ConcreteType t) {
 		writer.writeStatic("_constant__");
 		writeConcreteTypeForMangle(writer, t);
@@ -287,7 +377,7 @@ namespace {
 			[&](const ConstantKind::Array) {
 				writeRef("Arr");
 			},
-			[&](const bool b) {
+			[&](const Bool b) {
 				writer.writeStatic(b ? "true" : "false");
 			},
 			[&](const char c) {
@@ -312,7 +402,7 @@ namespace {
 				writer.writeUint(n);
 			},
 			[&](const ConstantKind::Null) {
-				writer.writeStatic("null");
+				writer.writeStatic("nullptr");
 			},
 			[&](const ConstantKind::Ptr p) {
 				writer.writeChar('&');
@@ -336,7 +426,7 @@ namespace {
 	}
 
 	void writeConstantReferencesWithCommas(Writer& writer, const Arr<const Constant*> constants) {
-		writeWithCommas(writer, constants, /*leadingComma*/ false, [&](const Constant* c) {
+		writeWithCommas(writer, constants, /*leadingComma*/ False, [&](const Constant* c) {
 			writeConstantReference(writer, c);
 		});
 	}
@@ -351,7 +441,7 @@ namespace {
 				// static arr_char _constantArr123 = arr_char{5, const_cast<char*>("hello")};
 
 				const size_t size = a.size();
-				const bool isStr = a.elements()[0]->kind.isChar();
+				const Bool isStr = a.elements()[0]->kind.isChar();
 				const size_t id = c->id;
 				if (size != 0 && !isStr) {
 					writer.writeStatic("static ");
@@ -384,7 +474,7 @@ namespace {
 				}
 				writer.writeStatic("};\n");
 			},
-			[](const bool) {},
+			[](const Bool) {},
 			[](const char) {},
 			[](const ConstantKind::FunPtr) {},
 			[](const Int64) {},
@@ -462,14 +552,14 @@ namespace {
 		}
 	};
 
-	void writeConcreteExprAsStatement(WriteExprCtx& ctx, const ConcreteExpr ex, const bool isReturn);
+	void writeConcreteExprAsStatement(WriteExprCtx& ctx, const ConcreteExpr ex, const Bool isReturn);
 	void writeConcreteExprAsExpr(WriteExprCtx& ctx, const ConcreteExpr ex);
 
-	void writeConstantOrExprAsStatement(WriteExprCtx& ctx, const ConstantOrExpr ce, const bool isReturn) {
+	void writeConstantOrExprAsStatement(WriteExprCtx& ctx, const ConstantOrExpr ce, const Bool isReturn) {
 		return ce.match(
 			[&](const Constant* c) {
 				if (isReturn) {
-					ctx.write("return");
+					ctx.write("return ");
 					writeConstantReference(ctx.writer, c);
 					ctx.write(";");
 				}
@@ -496,17 +586,15 @@ namespace {
 		writer.writeStatic(" = ");
 	}
 
-	void writeMatchAsStatement(WriteExprCtx& ctx, const ConcreteExpr::Match e, const bool isReturn) {
+	void writeMatchAsStatement(WriteExprCtx& ctx, const ConcreteExpr::Match e, const Bool isReturn) {
 		writeValueType(ctx.writer, e.matchedUnion);
 		ctx.write(" matched = ");
 		writeConcreteExprAsExpr(ctx, *e.matched);
 		ctx.write(";");
 		ctx.newline();
-		ctx.write("final switch (matched.kind) {");
-		// cases are responsible for writing the newline preceding them -- this is because the last case needs a double-dedent.
-		ctx.incrIndent();
+		ctx.write("switch (matched.kind) {");
+		ctx.indent();
 		zip(e.matchedUnionMembers(), e.cases, [&](const ConcreteType member, const ConcreteExpr::Match::Case kase) {
-			ctx.newline();
 			const Str memberName = member.strukt->mangledName;
 			ctx.write("case ");
 			ctx.writeStr(e.matchedUnion->mangledName);
@@ -522,13 +610,14 @@ namespace {
 				ctx.newline();
 			}
 			writeConstantOrExprAsStatement(ctx, kase.then, isReturn);
-			ctx.decrIndent();
+			ctx.dedent();
 		});
+		ctx.write("default: assert(0);");
 		ctx.dedent();
 		ctx.write("}");
 	}
 
-	void writeConcreteExprAsStatement(WriteExprCtx& ctx, const ConcreteExpr ex, const bool isReturn) {
+	void writeConcreteExprAsStatement(WriteExprCtx& ctx, const ConcreteExpr ex, const Bool isReturn) {
 		auto expr = [&]() -> void {
 			if (isReturn)
 				ctx.write("return ");
@@ -550,7 +639,7 @@ namespace {
 				writeConstantOrExprAsStatement(ctx, e.then, isReturn);
 				ctx.dedent();
 				// To be pretty, use 'else if' for nested cond
-				const bool elseIf = e.elze.isConcreteExpr() && e.elze.asConcreteExpr()->isCond();
+				const Bool elseIf = _and(e.elze.isConcreteExpr(), e.elze.asConcreteExpr()->isCond());
 				if (elseIf)
 					ctx.write("} else ");
 				else {
@@ -601,7 +690,7 @@ namespace {
 				expr();
 			},
 			[&](const ConcreteExpr::Seq e) {
-				writeConcreteExprAsStatement(ctx, *e.first, /*isReturn*/ false);
+				writeConcreteExprAsStatement(ctx, *e.first, /*isReturn*/ False);
 				ctx.newline();
 				writeConstantOrExprAsStatement(ctx, e.then, isReturn);
 			},
@@ -744,13 +833,14 @@ namespace {
 
 	void writeArgsWithCtx(WriteExprCtx& ctx, const Arr<const ConstantOrExpr> args) {
 		ctx.write("(ctx");
-		writeWithCommas(ctx.writer, args, /*leadingComma*/ true, [&](const ConstantOrExpr e) {
+		writeWithCommas(ctx.writer, args, /*leadingComma*/ True, [&](const ConstantOrExpr e) {
 			writeConstantOrExprAsExpr(ctx, e);
 		});
+		ctx.write(")");
 	}
 
 	void writeArgsNoCtxNoParens(WriteExprCtx& ctx, const Arr<const ConstantOrExpr> args) {
-		writeWithCommas(ctx.writer, args, /*leadingComma*/ false, [&](const ConstantOrExpr e) {
+		writeWithCommas(ctx.writer, args, /*leadingComma*/ False, [&](const ConstantOrExpr e) {
 			writeConstantOrExprAsExpr(ctx, e);
 		});
 	}
@@ -761,7 +851,7 @@ namespace {
 		ctx.write(")");
 	}
 
-	void writeArgsWithOptionalCtx(WriteExprCtx& ctx, const bool needsCtx, const Arr<const ConstantOrExpr> args) {
+	void writeArgsWithOptionalCtx(WriteExprCtx& ctx, const Bool needsCtx, const Arr<const ConstantOrExpr> args) {
 		if (needsCtx)
 			writeArgsWithCtx(ctx, args);
 		else
@@ -804,7 +894,7 @@ namespace {
 		auto iife = [&]() -> void {
 			ctx.write("[&]() {");
 			ctx.indent();
-			writeConcreteExprAsStatement(ctx, ce, /*isReturn*/ true);
+			writeConcreteExprAsStatement(ctx, ce, /*isReturn*/ True);
 			ctx.dedent();
 			ctx.write("}()");
 		};
@@ -848,7 +938,9 @@ namespace {
 					ctx.write("), ");
 				}
 				writeValueType(ctx.writer, e.type.strukt);
-				writeArgsNoCtx(ctx, e.args);
+				ctx.write("{");
+				writeArgsNoCtxNoParens(ctx, e.args);
+				ctx.write("}");
 				if (e.type.isPointer)
 					ctx.write(")");
 			},
@@ -917,10 +1009,10 @@ namespace {
 
 	void writeConstantOrExpr(Writer& writer, const ConstantOrExpr ce) {
 		WriteExprCtx ctx { writer };
-		writeConstantOrExprAsStatement(ctx, ce, /*isReturn*/ true);
+		writeConstantOrExprAsStatement(ctx, ce, /*isReturn*/ True);
 	}
 
-	void writeSigParams(Writer& writer, const bool needsCtx, const Opt<const ConcreteType> closure, const Arr<const ConcreteParam> params) {
+	void writeSigParams(Writer& writer, const Bool needsCtx, const Opt<const ConcreteType> closure, const Arr<const ConcreteParam> params) {
 		writer.writeChar('(');
 		if (needsCtx)
 			writer.writeStatic("ctx* ctx");
@@ -930,7 +1022,7 @@ namespace {
 			writeType(writer, closure.force());
 			writer.writeStatic(" _closure");
 		}
-		writeJustParams(writer, needsCtx || closure.has(), params);
+		writeJustParams(writer, _or(needsCtx, closure.has()), params);
 	}
 
 	void writeFunReturnTypeNameAndParams(Writer& writer, const ConcreteFun* fun) {
@@ -982,6 +1074,7 @@ namespace {
 						writeFunWithBodyWorker(writer, fun, [&]() {
 							writer.writeStatic("assert(0);");
 						});
+						break;
 					default:
 						assert(0);
 				}
@@ -1000,22 +1093,28 @@ namespace {
 const Str writeToC(Arena& arena, const ConcreteProgram program) {
 	Writer writer { arena };
 
+	writer.writeStatic("#include <cassert>\n");
+	writer.writeStatic("#include <cstdint>\n");
+
+	// Problem: pointer and function pointer types are declared using 'using' and can't be predeclared.
+	// But those may refer to other types. So may not be able to write them yet.
+	writeStructs(writer, program.allStructs);
+
+	for (const Constant* c : program.allConstants)
+		writeConstantDecl(writer, c);
+
 	writer.writeStatic("template <typename T>");
 	writer.writeStatic("\nT* _alloc(byte* out, T value) {");
 	writer.writeStatic("\n\tT* res = static_cast<T*>(out);");
 	writer.writeStatic("\n\t*res = value;");
 	writer.writeStatic("\n}\n\n");
 
-	for (const ConcreteStruct* strukt : program.allStructs)
-		writeStructDeclaration(writer, strukt);
-	for (const ConcreteStruct* strukt : program.allStructs)
-		writeStructDefinition(writer, strukt);
-	for (const Constant* c : program.allConstants)
-		writeConstantDecl(writer, c);
 	for (const ConcreteExpr::NewIfaceImpl impl : program.allNewIfaceImpls)
 		writeNewIfaceImpl(writer, impl);
+
 	for (const ConcreteFun* fun : program.allFuns)
 		writeConcreteFunDeclaration(writer, fun);
+
 	for (const ConcreteFun* fun : program.allFuns)
 		writeConcreteFunDefinition(writer, fun);
 

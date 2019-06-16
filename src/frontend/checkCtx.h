@@ -19,8 +19,8 @@ struct IncludeAndImportsIter {
 		index++;
 	}
 
-	inline bool operator!=(const IncludeAndImportsIter other) const {
-		return index != other.index;
+	inline const Bool operator!=(const IncludeAndImportsIter other) const {
+		return neq(index, other.index);
 	}
 };
 
@@ -50,8 +50,8 @@ struct CheckCtx {
 		diagsBuilder.add(arena, Diagnostic{path, range, diag});
 	}
 
-	inline bool hasDiags() const {
-		return !isEmpty(diagsBuilder);
+	inline const Bool hasDiags() const {
+		return _not(isEmpty(diagsBuilder));
 	}
 
 	inline const Arr<const Diagnostic> diags() {

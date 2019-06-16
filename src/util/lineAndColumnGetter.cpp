@@ -28,8 +28,8 @@ namespace {
 		return LineAndColumn{line, column};
 	}
 
-	bool lineAndColumnEq(const LineAndColumn a, const LineAndColumn b) {
-		return a.line == b.line && a.column == b.column;
+	const Bool lineAndColumnEq(const LineAndColumn a, const LineAndColumn b) {
+		return _and(a.line == b.line, a.column == b.column);
 	}
 }
 

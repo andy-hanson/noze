@@ -140,8 +140,8 @@ namespace {
 		return res.finish();
 	}
 
-	bool isNonSpecializableBuiltin(const FunDecl* f) {
-		return f->body().isBuiltin() && getBuiltinFunInfo(f->sig).isNonSpecializable;
+	const Bool isNonSpecializableBuiltin(const FunDecl* f) {
+		return _and(f->body().isBuiltin(), getBuiltinFunInfo(f->sig).isNonSpecializable);
 	}
 
 	void initializeConcreteStruct(
@@ -194,7 +194,7 @@ namespace {
 			: getConcreteFunMangledName(ctx.arena, decl->name(), returnType, params, key.specImpls(), key.specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
 		// no closure for fun from decl
-		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(!decl->noCtx(), none<const ConcreteType>(), sig, isCallFun(ctx, decl));
+		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(_not(decl->noCtx()), none<const ConcreteType>(), sig, isCallFun(ctx, decl));
 
 		if (isNonSpecializableBuiltin(decl))
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs)
@@ -236,7 +236,7 @@ namespace {
 		Arena& arena,
 		const Str knownLambdaBodyMangledName,
 		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs,
-		const bool isForDynamic
+		const Bool isForDynamic
 	) {
 		Writer writer { arena };
 		writer.writeStr(knownLambdaBodyMangledName);
@@ -268,9 +268,9 @@ namespace {
 		ConcretizeCtx& ctx,
 		const KnownLambdaBody* klb,
 		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs,
-		// If true, this is used by a dynamic call.
-		// If false, this is called directly.
-		const bool isForDynamic
+		// If True, this is used by a dynamic call.
+		// If False, this is called directly.
+		const Bool isForDynamic
 	) {
 		const Str mangledName = getLambdaInstanceMangledName(ctx.arena, klb->mangledName, specializeOnArgs, isForDynamic);
 		const LambdaInfo info = ctx.knownLambdaBodyToInfo.mustGet(klb);
@@ -281,10 +281,10 @@ namespace {
 			? some<const ConcreteType>(ctx.voidPtrType())
 			: klb->closureType;
 		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(
-			/*needsCtx*/ true, // TODO:PERF for some non-dynamic calls it does not need ctx
+			/*needsCtx*/ True, // TODO:PERF for some non-dynamic calls it does not need ctx
 			closure,
 			sig,
-			/*isCallFun*/ false);
+			/*isCallFun*/ False);
 
 		const ConcreteFunSource source = ConcreteFunSource{
 			info.containingFunDeclAndTypeArgsAndSpecImpls,
@@ -341,7 +341,7 @@ const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx& ctx, const Conc
 
 const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(ConcretizeCtx& ctx, const KnownLambdaBody* klb, const Arr<const ConstantOrLambdaOrVariable> args) {
 	return klb->directCallInstances.getOrAdd(ctx.arena, args, [&]() {
-		return getConcreteFunFromKnownLambdaBodyAndFill(ctx, klb, args, /*isForDynamic*/ false);
+		return getConcreteFunFromKnownLambdaBodyAndFill(ctx, klb, args, /*isForDynamic*/ False);
 	});
 }
 
@@ -350,7 +350,7 @@ const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx& ctx, cons
 	// - Do no specialization
 	// - Add a dummy closure type, even if it won't be used.
 	return lazilySet(klb->dynamicInstance, [&]() {
-		return getConcreteFunFromKnownLambdaBodyAndFill(ctx, klb, allVariable(ctx.arena, klb->nonSpecializedSig.params.size), /*isForDynamic*/ true);
+		return getConcreteFunFromKnownLambdaBodyAndFill(ctx, klb, allVariable(ctx.arena, klb->nonSpecializedSig.params.size), /*isForDynamic*/ True);
 	});
 }
 
@@ -360,15 +360,15 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 		return getConcreteType(ctx, only(i->typeArgs), typeArgsScope).byVal();
 	else {
 		const ConcreteStructKey key = ConcreteStructKey{i->decl, typeArgs};
-		bool didAdd = false;
+		Cell<const Bool> didAdd { False };
 		// Note: we can't do anything in this callback that would call getOrAddConcreteStruct again.
 		ConcreteStruct* res = ctx.allConcreteStructs.getOrAdd(ctx.arena, key, [&]() {
-			didAdd = true;
+			didAdd.set(True);
 			return ctx.arena.nu<ConcreteStruct>()(
 				getConcreteStructMangledName(ctx.arena, i->decl->name, key.typeArgs),
 				getSpecialStructKind(i, ctx.commonTypes));
 		});
-		if (didAdd)
+		if (didAdd.get())
 			initializeConcreteStruct(ctx, typeArgs, i, res, typeArgsScope);
 		return ConcreteType::fromStruct(res);
 	}
@@ -396,7 +396,7 @@ const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr
 	});
 }
 
-bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl) {
+const Bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl) {
 	return exists(ctx.callFuns, [&](const FunDecl* d) {
 		return ptrEquals(d, decl);
 	});
@@ -424,19 +424,19 @@ const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(Arena& arena, const A
 	return specializeOnAsMuchAsPossible(arena, args);
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const bool isSummon) {
-	bool allConstant = true;
-	bool someFun = false;
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const Bool isSummon) {
+	Cell<const Bool> allConstant { True };
+	Cell<const Bool> someFun { False };
 	for (const ConstantOrExpr c : args) {
 		if (getKnownLambdaBodyFromConstantOrExpr(c).has())
-			someFun = true;
+			someFun.set(True);
 		if (!c.isConstant())
-			allConstant = false;
+			allConstant.set(False);
 	}
 
 	// Specialize on funs with all-constant parameters that are non-'summon' as these will likely evaluate to constants.
 	// Always specialize on a fun, even if fun is summon
-	return (allConstant && !isSummon) || someFun
+	return (allConstant.get() && !isSummon) || someFun.get()
 		? specializeOnAsMuchAsPossible(arena, args)
 		: SpecializeOnArgs{allVariable(arena, args.size), args};
 }

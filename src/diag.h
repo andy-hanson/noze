@@ -256,8 +256,8 @@ public:
 	inline Diag(const WrongNumberTypeArgsForSpec d) : kind{Kind::wrongNumberTypeArgsForSpec}, wrongNumberTypeArgsForSpec{d} {}
 	inline Diag(const WrongNumberTypeArgsForStruct d) : kind{Kind::wrongNumberTypeArgsForStruct}, wrongNumberTypeArgsForStruct{d} {}
 
-	inline bool isFileDoesNotExist() const {
-		return kind == Kind::fileDoesNotExist;
+	inline const Bool isFileDoesNotExist() const {
+		return enumEq(kind, Kind::fileDoesNotExist);
 	}
 
 	template <

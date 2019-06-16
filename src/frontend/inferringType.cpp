@@ -90,14 +90,14 @@ namespace {
 	}
 }
 
-bool SingleInferringType::setTypeNoDiagnostic(Arena& arena, const Type setType) {
+const Bool SingleInferringType::setTypeNoDiagnostic(Arena& arena, const Type setType) {
 	InferringTypeArgs ita = InferringTypeArgs::none();
 	const Opt<const Type> typeToSet = setTypeNoDiagnosticWorkerWorker(arena, type.get(), setType, ita);
 	if (typeToSet.has()) {
 		type.set(typeToSet);
-		return true;
+		return True;
 	} else
-		return false;
+		return False;
 }
 
 const Opt<const Type> SingleInferringType::setTypeNoDiagnosticWorker(Arena& arena, const Type setType) {
@@ -149,13 +149,13 @@ const CheckedExpr Expected::check(ExprContext& ctx, const Type exprType, const E
 	}
 }
 
-bool Expected::setTypeNoDiagnostic(Arena& arena, const Type setType) {
+const Bool Expected::setTypeNoDiagnostic(Arena& arena, const Type setType) {
 	const Opt<const Type> typeToSet = setTypeNoDiagnosticWorkerWorker(arena, type.get(), setType, inferringTypeArgs);
 	if (typeToSet.has()) {
 		type.set(typeToSet);
-		return true;
+		return True;
 	} else
-		return false;
+		return False;
 }
 
 const Opt<const Type> Expected::setTypeNoDiagnosticWorker(Arena& arena, const Type setType) {
@@ -178,6 +178,6 @@ const Opt<const Type> Expected::tryGetDeeplyInstantiatedTypeFor(Arena& arena, co
 	return tryGetDeeplyInstantiatedTypeWorker(arena, t, inferringTypeArgs);
 }
 
-bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs) {
+const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs) {
 	return setTypeNoDiagnosticWorkerWorker(arena, some<const Type>(expectedType), setType, inferringTypeArgs).has();
 }

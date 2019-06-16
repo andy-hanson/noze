@@ -9,7 +9,6 @@ struct Lexer {
 	Arena& arena;
 	Arena& pathArena;
 
-private:
 	// Need to remember the beginning to get index
 	const char* sourceBegin;
 	const char* ptr;
@@ -23,12 +22,14 @@ public:
 		return *ptr;
 	}
 
+private:
 	inline char next() {
 		const char res = *ptr;
 		ptr++;
 		return res;
 	}
 
+public:
 	inline Pos at() const {
 		return safeSizeTToUint(ptr - sourceBegin);
 	}
@@ -55,24 +56,15 @@ public:
 		return throwAtChar<T>(ParseDiag{ParseDiag::UnexpectedCharacter{cur()}});
 	}
 
-	inline bool tryTake(const char c) {
+	inline const Bool tryTake(const char c) {
 		if (*ptr == c) {
 			ptr++;
-			return true;
+			return True;
 		} else
-			return false;
+			return False;
 	}
 
-	inline bool tryTake(const char* c) {
-		const char* ptr2 = ptr;
-		for (const char* cptr = c; *cptr != 0; cptr++) {
-			if (*ptr2 != *cptr)
-				return false;
-			ptr2++;
-		}
-		ptr = ptr2;
-		return true;
-	}
+	const Bool tryTake(const char* c);
 
 	inline void take(const char c) {
 		if (!tryTake(c))
@@ -89,145 +81,43 @@ public:
 		return SourceRange{begin, at()};
 	}
 
+private:
 	inline const SourceRange range(const char* begin) {
 		assert(begin >= sourceBegin);
 		return range(safeSizeTToUint(begin - sourceBegin));
 	}
 
-private:
-	uint takeTabs() {
-		const char* begin = ptr;
-		while (*ptr == '\t')
-			ptr++;
-		return safeSizeTToUint(ptr - begin);
-	}
-
 	// Returns the change in indent (and updates the indent)
-	int skipLinesAndGetIndentDelta() {
-		while (true) {
-			if (*ptr == '|') {
-				ptr++;
-				while (*ptr != '\n')
-					ptr++;
-			}
-			else if (tryTake("region ")) {
-				while (*ptr != '\n') ptr++;
-			}
-			// If either of the above happened we will enter here
-			if (*ptr == '\n') {
-				takeNewline(); // skip all empty lines
-				const uint newIndent = takeTabs();
-				if (newIndent != indent) {
-					int res = ((int) newIndent) - ((int) indent);
-					indent = newIndent;
-					return res;
-				}
-			} else
-				return 0;
-		}
-	}
+	int skipLinesAndGetIndentDelta();
 
 	void takeNewline() {
 		take("\n");
 		takeExtraNewlines();
 	}
 
-	void takeExtraNewlines() {
-		while (*ptr == '\n')
-			ptr++;
-	}
-
-	bool tryTakeNewline() {
-		const bool res = *ptr == '\n';
-		if (res)
-			takeNewline();
-		return res;
-	}
+	void takeExtraNewlines();
 
 public:
-	void skipBlankLines() {
-		const int i = skipLinesAndGetIndentDelta();
-		if (i != 0)
-			throwUnexpected<void>();
-	}
+	void skipBlankLines();
 
 	enum class NewlineOrIndent { newline, indent };
-	NewlineOrIndent takeNewlineOrIndent() {
-		takeNewline();
-		return takeNewlineOrIndentAfterNl();
-	}
+	NewlineOrIndent takeNewlineOrIndent();
+	NewlineOrIndent takeNewlineOrIndentAfterNl();
 
-	NewlineOrIndent takeNewlineOrIndentAfterNl() {
-		const size_t newIndent = takeTabs();
-		const NewlineOrIndent res =
-			newIndent == indent ? NewlineOrIndent::newline
-			: newIndent != indent + 1 ? throwUnexpected<NewlineOrIndent>()
-			: [&]() {
-				indent = newIndent;
-				return NewlineOrIndent::indent;
-			}();
-		skipBlankLines();
-		return res;
-	}
+	void takeIndent();
 
-	void takeIndent() {
-		takeNewline();
-		takeIndentAfterNewline();
-	}
+	void takeDedent();
 
-	void takeDedent() {
-		assert(indent == 1);
-		takeNewline();
-		const size_t newIndent = takeTabs();
-		if (newIndent != 0)
-			todo<void>("takeDedent");
-		indent = 0;
-	}
+	const Bool tryTakeIndent();
 
-	bool tryTakeIndent() {
-		const bool res = tryTakeNewline();
-		if (res) takeIndentAfterNewline();
-		return res;
-	}
-
-	bool tryTakeIndentAfterNewline() {
-		takeExtraNewlines();
-		const size_t newIndent = takeTabs();
-		if (newIndent != indent && newIndent != indent + 1)
-			todo<void>("expected 0 or 1 indent");
-		const bool res = newIndent == indent + 1;
-		indent = newIndent;
-		return res;
-	}
-
-private:
-	void takeIndentAfterNewline() {
-		const size_t newIndent = takeTabs();
-		if (newIndent != indent + 1)
-			throwAtChar<void>(ParseDiag{ParseDiag::ExpectedIndent{}});
-		indent = newIndent;
-		skipBlankLines();
-	}
+	const Bool tryTakeIndentAfterNewline();
 
 public:
 	// Returns # of dedents. (TODO:RENAME)
-	size_t takeNewlineOrDedentAmount() {
-		const int i = skipLinesAndGetIndentDelta();
-		if (i > 0)
-			todo<void>("takeNewlineOrDedentAmoutn -- actually it indented");
-		return -i;
-	}
+	size_t takeNewlineOrDedentAmount();
 
 	enum class NewlineOrDedent { newline, dedent };
-	NewlineOrDedent takeNewlineOrSingleDedent() {
-		assert(indent == 1);
-		const size_t amnt = takeNewlineOrDedentAmount();
-		switch (amnt) {
-			case 0: return NewlineOrDedent::newline;
-			case 1: return NewlineOrDedent::dedent;
-			default: return unreachable<NewlineOrDedent>();
-		}
-	}
+	NewlineOrDedent takeNewlineOrSingleDedent();
 
 private:
 	const Str copyStr(const char* begin, const char* end) const {
@@ -239,11 +129,7 @@ private:
 public:
 	const Str takeName();
 
-	const NameAndRange takeNameAndRange() {
-		const char* begin = ptr;
-		const Str name = takeName();
-		return NameAndRange{range(begin), name};
-	}
+	const NameAndRange takeNameAndRange();
 
 	struct ExpressionToken {
 		enum class Kind {
@@ -276,8 +162,8 @@ public:
 			assert(kind == Kind::literal);
 			return literal;
 		}
-		inline bool isNameAndRange() const {
-			return kind == Kind::nameAndRange;
+		inline const Bool isNameAndRange() const {
+			return enumEq(kind, Kind::nameAndRange);
 		}
 		inline NameAndRange asNameAndRange() const {
 			assert(isNameAndRange());
@@ -289,23 +175,11 @@ public:
 
 private:
 	const Str takeOperatorRest(const char* begin);
-
-	const ExpressionToken takeOperator(const char* begin) {
-		const Str name = takeOperatorRest(begin);
-		return ExpressionToken{NameAndRange{range(begin), name}};
-	}
-
+	const ExpressionToken takeOperator(const char* begin);
 	const ExpressionToken takeNumber(const char* begin);
-
 	const Str takeStringLiteral();
-
-public:
-	bool tryTakeElseIndent() {
-		const bool res = tryTake("else\n");
-		if (res)
-			takeIndentAfterNewline();
-		return res;
-	}
 };
+
+const Bool tryTakeElseIndent(Lexer& lexer);
 
 Lexer createLexer(Arena& astArena, Arena& pathArena, const NulTerminatedStr source);

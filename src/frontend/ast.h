@@ -201,8 +201,8 @@ public:
 	inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
 	inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
 
-	inline bool isIdentifier() const {
-		return kind == Kind::identifier;
+	inline const Bool isIdentifier() const {
+		return enumEq(kind, Kind::identifier);
 	}
 
 	inline const IdentifierAst asIdentifier() const {
@@ -315,7 +315,7 @@ enum class PuritySpecifier {
 
 struct StructAliasAst {
 	const SourceRange range;
-	const bool isPublic;
+	const Bool isPublic;
 	const Str name;
 	const Arr<const TypeParamAst> typeParams;
 	const TypeAst::InstStruct target;
@@ -359,14 +359,14 @@ struct StructDeclAst {
 		inline Body(const Union _union) : kind{Kind::_union}, _union{_union} {}
 		inline Body(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
-		inline bool isFields() const {
-			return kind == Kind::fields;
+		inline const Bool isFields() const {
+			return enumEq(kind, Kind::fields);
 		}
-		inline bool isUnion() const {
-			return kind == Kind::_union;
+		inline const Bool isUnion() const {
+			return enumEq(kind, Kind::_union);
 		}
-		inline bool isIface() const {
-			return kind == Kind::iface;
+		inline const Bool isIface() const {
+			return enumEq(kind, Kind::iface);
 		}
 
 		template <typename CbBuiltin, typename CbFields, typename CbUnion, typename CbIface>
@@ -387,7 +387,7 @@ struct StructDeclAst {
 	};
 
 	const SourceRange range;
-	const bool isPublic;
+	const Bool isPublic;
 	const Str name;
 	const Arr<const TypeParamAst> typeParams;
 	const Opt<const PuritySpecifier> purity;
@@ -396,7 +396,7 @@ struct StructDeclAst {
 
 struct SpecDeclAst {
 	const SourceRange range;
-	const bool isPublic;
+	const Bool isPublic;
 	const Str name;
 	const Arr<const TypeParamAst> typeParams;
 	const Arr<const SigAst> sigs;
@@ -438,15 +438,15 @@ public:
 };
 
 struct FunDeclAst {
-	const bool isPublic;
+	const Bool isPublic;
 	// Note: this may be omitted and the function may still be generic
 	const Arr<const TypeParamAst> typeParams;
 	const SigAst sig;
 	const Arr<const SpecUseAst> specUses;
-	const bool noCtx;
-	const bool summon;
-	const bool unsafe;
-	const bool trusted;
+	const Bool noCtx;
+	const Bool summon;
+	const Bool unsafe;
+	const Bool trusted;
 	const FunBodyAst body;
 };
 

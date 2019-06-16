@@ -2,7 +2,7 @@
 
 #include "./util/arrUtil.h"
 
-bool strEq(const Str a, const Str b) {
+const Bool strEq(const Str a, const Str b) {
 	return arrEq<const char, charEq>(a, b);
 }
 

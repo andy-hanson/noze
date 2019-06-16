@@ -22,8 +22,8 @@ struct ConstantsForUnion {
 };
 
 AllConstants::AllConstants(Arena& arena) {
-	_false = _nuConstant(arena, ConstantKind{false}, 0);
-	_true = _nuConstant(arena, ConstantKind{true}, 1);
+	_false = _nuConstant(arena, ConstantKind{False}, 0);
+	_true = _nuConstant(arena, ConstantKind{True}, 1);
 	_void = _nuConstant(arena, ConstantKind{ConstantKind::Void{}}, 0);
 	_null = _nuConstant(arena, ConstantKind{ConstantKind::Null{}}, 0);
 }
@@ -72,12 +72,12 @@ const Constant* AllConstants::nat64(Arena& arena, const Nat64 value) {
 }
 
 const Constant* AllConstants::funPtr(Arena& arena, const ConcreteFun* fun) {
-	todo<void>("TODO: don't create multiple constants");
-	return _nuConstant(arena, ConstantKind{fun}, nextLambdaId++);
+	//TODO: cache this!
+	return _nuConstant(arena, ConstantKind{ConstantKind::FunPtr{fun}}, nextLambdaId++);
 }
 
 const Constant* AllConstants::lambda(Arena& arena, const KnownLambdaBody* klb) {
-	return _nuConstant(arena, ConstantKind{klb}, nextLambdaId++);
+	return _nuConstant(arena, ConstantKind{ConstantKind::Lambda{klb}}, nextLambdaId++);
 }
 
 const Constant* AllConstants::record(Arena& arena, const ConcreteType type, const Arr<const Constant*> args) {

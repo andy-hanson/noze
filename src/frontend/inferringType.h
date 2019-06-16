@@ -69,7 +69,7 @@ public:
 	}
 
 	// Note: this may infer type parameters.
-	bool setTypeNoDiagnostic(Arena& arena, const Type setType);
+	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);
 	const Opt<const Type> setTypeNoDiagnosticWorker(Arena& arena, const Type setType);
 };
 
@@ -91,7 +91,7 @@ inline const CheckedExpr bogusWithoutAffectingExpected(const SourceRange range) 
 	return CheckedExpr{Expr{range, Expr::Bogus{}}};
 }
 
-bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setTYpe, InferringTypeArgs inferringTypeArgs);
+const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setTYpe, InferringTypeArgs inferringTypeArgs);
 
 struct Expected {
 private:
@@ -105,8 +105,8 @@ public:
 		: type{init}, inferringTypeArgs{ita} {}
 
 	// TODO: if we have a bogus expected type we should probably not be doing any more checking at all?
-	inline bool isBogus() const {
-		return type.get().has() && type.get().force().isBogus();
+	inline const Bool isBogus() const {
+		return _and(type.get().has(), type.get().force().isBogus());
 	}
 
 	static inline Expected infer() {
@@ -123,7 +123,7 @@ public:
 	}
 	const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena& arena, const Type t) const;
 
-	inline bool hasExpected() const {
+	inline const Bool hasExpected() const {
 		return type.get().has();
 	}
 
@@ -140,13 +140,13 @@ public:
 		return type.get();
 	}
 
-	inline bool isExpectingString(const StructInst* stringType) const {
-		return type.get().has() && typeEquals(type.get().force(), Type{stringType});
+	inline const Bool isExpectingString(const StructInst* stringType) const {
+		return _and(type.get().has(), typeEquals(type.get().force(), Type{stringType}));
 	}
 
 	const CheckedExpr check(ExprContext& ctx, const Type exprType, const Expr expr);
 
 	// Note: this may infer type parameters
-	bool setTypeNoDiagnostic(Arena& arena, const Type setType);
+	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);
 	const Opt<const Type> setTypeNoDiagnosticWorker(Arena& arena, const Type setType);
 };

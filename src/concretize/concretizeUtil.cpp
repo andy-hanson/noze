@@ -16,13 +16,13 @@ namespace {
 	}
 }
 
-bool allConstant(const Arr<const ConstantOrExpr> args) {
+const Bool allConstant(const Arr<const ConstantOrExpr> args) {
 	return every(args, [](const ConstantOrExpr c) {
 		return c.isConstant();
 	});
 }
 
-bool allConstant(const Arr<const ConstantOrLambdaOrVariable> args) {
+const Bool allConstant(const Arr<const ConstantOrLambdaOrVariable> args) {
 	return every(args, [](const ConstantOrLambdaOrVariable c) {
 		return c.isConstant();
 	});

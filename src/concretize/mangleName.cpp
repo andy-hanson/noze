@@ -1,8 +1,11 @@
 #include "./mangleName.h"
 
 namespace {
-	bool needsEscape(const Str name) {
-		return strEqLiteral(name, "float") || strEqLiteral(name, "int") || strEqLiteral(name, "void");
+	const Bool needsEscape(const Str name) {
+		return _or3(
+			strEqLiteral(name, "float"),
+			strEqLiteral(name, "int"),
+			strEqLiteral(name, "void"));
 	}
 }
 

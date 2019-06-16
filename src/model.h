@@ -31,14 +31,14 @@ enum class Purity {
 	nonSendable,
 };
 
-inline bool isPurityWorse(const Purity a, const Purity b) {
+inline const Bool isPurityWorse(const Purity a, const Purity b) {
 	switch (a) {
 		case Purity::data:
-			return false;
+			return False;
 		case Purity::sendable:
-			return b == Purity::data;
+			return enumEq(b, Purity::data);
 		case Purity::nonSendable:
-			return true;
+			return True;
 		default:
 			assert(0);
 	}
@@ -97,40 +97,40 @@ public:
 		}
 	}
 
-	inline bool isBogus() const {
-		return kind == Kind::bogus;
+	inline const Bool isBogus() const {
+		return enumEq(kind, Kind::bogus);
 	}
-	inline bool isTypeParam() const {
-		return kind == Kind::typeParam;
+	inline const Bool isTypeParam() const {
+		return enumEq(kind, Kind::typeParam);
 	}
 	inline const TypeParam* asTypeParam() const {
 		assert(isTypeParam());
 		return typeParam;
 	}
-	inline bool isStructInst() const {
-		return kind == Kind::structInst;
+	inline const Bool isStructInst() const {
+		return enumEq(kind, Kind::structInst);
 	}
 	inline const StructInst* asStructInst() const {
 		assert(isStructInst());
 		return structInst;
 	}
 
-	bool containsUnresolvedTypeParams() const;
-	bool typeEquals(const Type other) const;
+	const Bool containsUnresolvedTypeParams() const;
+	const Bool typeEquals(const Type other) const;
 	Purity purity() const;
 };
 
 //TODO:MOVE?
-inline bool typeEquals(const Type a, const Type b) {
+inline const Bool typeEquals(const Type a, const Type b) {
 	return a.match(
 		[&](const Type::Bogus) {
 			return b.isBogus();
 		},
 		[&](const TypeParam* p) {
-			return b.isTypeParam() && ptrEquals(p, b.asTypeParam());
+			return _and(b.isTypeParam(), ptrEquals(p, b.asTypeParam()));
 		},
 		[&](const StructInst* s) {
-			return b.isStructInst() && ptrEquals(s, b.asStructInst());
+			return _and(b.isStructInst(), ptrEquals(s, b.asStructInst()));
 		});
 }
 
@@ -200,25 +200,25 @@ public:
 	inline StructBody(const Iface _iface)
 		: kind{Kind::iface}, iface{_iface} {}
 
-	inline bool isBuiltin() const {
-		return kind == Kind::builtin;
+	inline const Bool isBuiltin() const {
+		return enumEq(kind, Kind::builtin);
 	}
-	inline bool isFields() const {
-		return kind == Kind::fields;
+	inline const Bool isFields() const {
+		return enumEq(kind, Kind::fields);
 	}
 	inline const Fields asFields() const {
 		assert(isFields());
 		return fields;
 	}
-	inline bool isUnion() const {
-		return kind == Kind::_union;
+	inline const Bool isUnion() const {
+		return enumEq(kind, Kind::_union);
 	}
 	inline const Union asUnion() const {
 		assert(isUnion());
 		return _union;
 	}
-	inline bool isIface() const {
-		return kind == Kind::iface;
+	inline const Bool isIface() const {
+		return enumEq(kind, Kind::iface);
 	}
 	inline const Iface asIface() const {
 		assert(isIface());
@@ -254,13 +254,13 @@ public:
 
 struct StructAlias {
 	const SourceRange range;
-	const bool isPublic;
+	const Bool isPublic;
 	const Identifier name;
 	const Arr<const TypeParam> typeParams;
 private:
 	Late<const StructInst*> _target;
 public:
-	StructAlias(const SourceRange _range, const bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams)
+	StructAlias(const SourceRange _range, const Bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams)
 		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams} {}
 
 	inline const StructInst* target() const {
@@ -273,7 +273,7 @@ public:
 
 struct StructDecl {
 	const SourceRange range;
-	const bool isPublic;
+	const Bool isPublic;
 	const Identifier name;
 	const Arr<const TypeParam> typeParams;
 	// Note: purity on the decl does not take type args into account
@@ -282,7 +282,7 @@ struct StructDecl {
 private:
 	Late<const StructBody> _body {};
 public:
-	inline bool bodyIsSet() const {
+	inline const Bool bodyIsSet() const {
 		return _body.isSet();
 	}
 	inline StructBody body() const {
@@ -294,8 +294,8 @@ public:
 		_body.set(value);
 	}
 
-	inline StructDecl(const SourceRange r, const bool isp, const Identifier n, const Arr<const TypeParam> tps, const Purity p)
-		: range{r}, isPublic{isp}, name{n}, typeParams{tps}, purity{p} {}
+	inline StructDecl(const SourceRange _range, const Bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams, const Purity _purity)
+		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams}, purity{_purity} {}
 };
 
 struct StructInst {
@@ -319,7 +319,7 @@ public:
 
 struct SpecDecl {
 	const SourceRange range;
-	const bool isPublic;
+	const Bool isPublic;
 	const Identifier name;
 	const Arr<const TypeParam> typeParams;
 	const Arr<const Sig> sigs;
@@ -350,14 +350,14 @@ public:
 	inline FunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
 	inline FunBody(const Expr* _expr) : kind{Kind::expr}, expr{_expr} {}
 
-	inline bool isBuiltin() const {
-		return kind == Kind::builtin;
+	inline const Bool isBuiltin() const {
+		return enumEq(kind, Kind::builtin);
 	}
-	inline bool isExtern() const {
-		return kind == Kind::_extern;
+	inline const Bool isExtern() const {
+		return enumEq(kind, Kind::_extern);
 	}
-	inline bool isExpr() const {
-		return kind == Kind::expr;
+	inline const Bool isExpr() const {
+		return enumEq(kind, Kind::expr);
 	}
 
 	template <typename CbBuiltin, typename CbExtern, typename CbExpr>
@@ -376,13 +376,13 @@ public:
 };
 
 struct FunFlags {
-	const bool noCtx;
-	const bool summon;
-	const bool unsafe;
-	const bool trusted;
+	const Bool noCtx;
+	const Bool summon;
+	const Bool unsafe;
+	const Bool trusted;
 
 	static inline FunFlags none() {
-		return FunFlags{false, false, false, false};
+		return FunFlags{False, False, False, False};
 	}
 };
 
@@ -393,7 +393,7 @@ struct SpecUse {
 };
 
 struct FunDecl {
-	const bool isPublic;
+	const Bool isPublic;
 	const FunFlags flags;
 	const Sig sig;
 	const Arr<const TypeParam> typeParams;
@@ -407,15 +407,15 @@ struct FunDecl {
 		_body.set(body);
 	}
 
-	inline bool isBuiltin() const {
+	inline const Bool isBuiltin() const {
 		return body().isBuiltin();
 	}
 
-	inline bool isExtern() const {
+	inline const Bool isExtern() const {
 		return body().isExtern();
 	}
 
-	inline bool noCtx() const {
+	inline const Bool noCtx() const {
 		return flags.noCtx;
 	}
 
@@ -431,15 +431,15 @@ struct FunDecl {
 		return sig.params;
 	}
 
-	inline bool arity() const {
+	inline size_t arity() const {
 		return sig.arity();
 	}
 
-	inline bool isGeneric() const {
-		return !isEmpty(typeParams) || !isEmpty(specs);
+	inline const Bool isGeneric() const {
+		return _or(!isEmpty(typeParams), !isEmpty(specs));
 	}
 
-	inline bool isSummon() const {
+	inline const Bool isSummon() const {
 		return flags.summon;
 	}
 };
@@ -460,11 +460,11 @@ public:
 	inline StructOrAlias(const StructAlias* _alias) : kind{Kind::alias}, alias{_alias} {}
 	inline StructOrAlias(const StructDecl* _decl) : kind{Kind::decl}, decl{_decl} {}
 
-	inline bool isAlias() const {
-		return kind == Kind::alias;
+	inline const Bool isAlias() const {
+		return enumEq(kind, Kind::alias);
 	}
-	inline bool isDecl() const {
-		return kind == Kind::decl;
+	inline const Bool isDecl() const {
+		return enumEq(kind, Kind::decl);
 	}
 	inline const StructAlias* asAlias() const {
 		assert(isAlias());
@@ -501,7 +501,7 @@ public:
 		);
 	}
 
-	inline bool isPublic() const {
+	inline const Bool isPublic() const {
 		return match(
 			[](const StructAlias* a) { return a->isPublic; },
 			[](const StructDecl* d) { return d->isPublic; }
@@ -552,15 +552,15 @@ struct CommonTypes {
 	const Arr<const StructDecl*> remoteFunTypes;
 
 	struct LambdaInfo {
-		const bool isRemote;
+		const Bool isRemote;
 		const StructDecl* nonRemote;
 	};
 
-	inline bool isNonRemoteFunType(const StructDecl* s) const {
+	inline const Bool isNonRemoteFunType(const StructDecl* s) const {
 		for (const StructDecl* p : funTypes)
 			if (ptrEquals(p, s))
-				return true;
-		return false;
+				return True;
+		return False;
 	}
 
 	const Opt<const LambdaInfo> getFunStructInfo(const StructDecl* s) const;
@@ -614,11 +614,11 @@ public:
 	inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
 	inline CalledDecl(const SpecUseSig _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
 
-	inline bool isFunDecl() const {
-		return kind == Kind::funDecl;
+	inline const Bool isFunDecl() const {
+		return enumEq(kind, Kind::funDecl);
 	}
-	inline bool isSpecUseSig() const {
-		return kind == Kind::specUseSig;
+	inline const Bool isSpecUseSig() const {
+		return enumEq(kind, Kind::specUseSig);
 	}
 	inline const FunDecl* asFunDecl() const {
 		assert(isFunDecl());
@@ -732,10 +732,10 @@ struct Expr {
 	struct FunAsLambda {
 		const FunDecl* fun;
 		const StructInst* type;
-		const bool isRemoteFun;
+		const Bool isRemoteFun;
 
 		inline FunAsLambda(
-			const FunDecl* _fun, const StructInst* _type, const bool _isRemoteFun)
+			const FunDecl* _fun, const StructInst* _type, const Bool _isRemoteFun)
 			: fun{_fun}, type{_type}, isRemoteFun{_isRemoteFun} {
 			assert(!fun->isGeneric());
 		}
@@ -754,7 +754,7 @@ struct Expr {
 		const Arr<const ClosureField*> closure;
 		const StructInst* type;
 		const StructDecl* nonRemoteType;
-		const bool isRemoteFun;
+		const Bool isRemoteFun;
 		// For RemoteFun this includes 'fut'
 		const Type returnType;
 
@@ -1039,6 +1039,6 @@ public:
 		}
 	}
 
-	bool typeIsBogus(Arena& arena) const;
+	const Bool typeIsBogus(Arena& arena) const;
 	const Type getType(Arena& arena, const CommonTypes& commonTypes) const;
 };

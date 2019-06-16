@@ -81,7 +81,7 @@ namespace {
 		toParse.push(tempArena, firstPathAndStorageKind);
 		seenSet.add(tempArena, firstPathAndStorageKind);
 
-		while (true) {
+		for (;;) {
 			const Opt<const PathAndStorageKind> opPath = toParse.pop();
 			if (!opPath.has())
 				break;

@@ -1,6 +1,14 @@
 #include "./getReferencedOnly.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
+	template <typename T>
+	void pushIfNotContained(Arena& arena, MutArr<const T*>& all, const T* t) {
+		if (!contains<const T*, ptrEquals<const T>>(all.tempAsArr(), t))
+			all.push(arena, t);
+	}
+
 	struct SetReferencedCtx {
 		Arena& arena;
 
@@ -23,24 +31,15 @@ namespace {
 		SetReferencedCtx(const SetReferencedCtx&) = delete;
 
 		void addStruct(const ConcreteStruct* s) {
-			if (!s->isStructReferenced) {
-				s->isStructReferenced = true;
-				allReferencedStructs.push(arena, s);
-			}
+			pushIfNotContained(arena, allReferencedStructs, s);
 		}
 
 		void addConstant(const Constant* c) {
-			if (!c->isConstantReferenced) {
-				c->isConstantReferenced = true;
-				allReferencedConstants.push(arena, c);
-			}
+			pushIfNotContained(arena, allReferencedConstants, c);
 		}
 
 		void addFun(const ConcreteFun* f) {
-			if (!f->isFunReferenced) {
-				f->isFunReferenced = true;
-				allReferencedFuns.push(arena, f);
-			}
+			pushIfNotContained(arena, allReferencedFuns, f);
 		}
 
 		void addNewIfaceImpl(ConcreteExpr::NewIfaceImpl impl) {
@@ -60,7 +59,6 @@ namespace {
 	}
 
 	void setReferencedInStruct(SetReferencedCtx& ctx, const ConcreteStruct* s) {
-		assert(s->isStructReferenced);
 		return s->body().match(
 			[&](const ConcreteStructBody::Builtin b) {
 				for (const ConcreteType s : b.typeArgs)
@@ -164,7 +162,6 @@ namespace {
 	}
 
 	void setReferencedInFun(SetReferencedCtx& ctx, const ConcreteFun* f) {
-		assert(f->isFunReferenced);
 		setReferencedInSig(ctx, f->sig);
 		f->body().match(
 			[](const ConcreteFunBody::Builtin) {},
@@ -188,14 +185,13 @@ namespace {
 	}
 
 	void setReferencedInConstant(SetReferencedCtx& ctx, const Constant* c) {
-		assert(c->isConstantReferenced);
 		c->kind.match(
 			[&](const ConstantKind::Array a) {
 				ctx.addStruct(a.arrayType);
 				for (const Constant* element : a.elements())
 					ctx.addConstant(element);
 			},
-			[](const bool) {},
+			[](const Bool) {},
 			[](const char) {},
 			[&](const ConstantKind::FunPtr f) {
 				ctx.addFun(f.fun);
@@ -222,7 +218,7 @@ namespace {
 const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun) {
 	SetReferencedCtx ctx { arena };
 	ctx.addFun(mainFun);
-	while (true) {
+	for (;;) {
 		if (ctx.nextStructIndexToScan < ctx.allReferencedStructs.size())
 			setReferencedInStruct(ctx, ctx.allReferencedStructs[ctx.nextStructIndexToScan++]);
 		else if (ctx.nextConstantIndexToScan < ctx.allReferencedConstants.size())

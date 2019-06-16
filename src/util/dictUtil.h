@@ -7,14 +7,14 @@ struct buildDict {
 		MutArr<KeyValuePair<K, V>> res;
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);
-			bool wasConflict = false;
+			Cell<const Bool> wasConflict { False };
 			for (const size_t i : Range{res.size()})
 				if (cmp(res[i].key, pair.key) == Comparison::equal) {
 					onConflict(pair.key, res[i].value, pair.value);
-					wasConflict = true;
+					wasConflict.set(True);
 					break;
 				}
-			if (!wasConflict)
+			if (!wasConflict.get())
 				res.push(arena, pair);
 		}
 		return Dict<K, V, cmp>{res.freeze()};
@@ -28,14 +28,14 @@ struct buildMultiDict {
 		MutArr<KeyValuePair<K, MutArr<V>>> res {};
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);
-			bool didAdd = false;
+			Cell<const Bool> didAdd { False };
 			for (const size_t i : Range{res.size()})
 				if (cmp(res[i].key, pair.key) == Comparison::equal) {
 					res[i].value.push(arena, pair.value);
-					didAdd = true;
+					didAdd.set(True);
 					break;
 				}
-			if (!didAdd)
+			if (!didAdd.get())
 				res.push(arena, KeyValuePair<K, MutArr<V>>{pair.key, MutArr<V>{arena, pair.value}});
 		}
 		const Arr<KeyValuePair<K, MutArr<V>>> arr = res.freeze();

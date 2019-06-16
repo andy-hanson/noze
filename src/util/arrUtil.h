@@ -297,29 +297,29 @@ void zip(Arr<T> a, Arr<U> b, Cb cb) {
 }
 
 template <typename T, typename U, typename Cb>
-bool eachCorresponds(const Arr<T> a, const Arr<U> b, Cb cb) {
+const Bool eachCorresponds(const Arr<T> a, const Arr<U> b, Cb cb) {
 	assert(a.size == b.size);
 	for (const size_t i : Range{a.size}) {
-		const bool thisCorresponds = cb(a[i], b[i]);
+		const Bool thisCorresponds = cb(a[i], b[i]);
 		if (!thisCorresponds)
-			return false;
+			return False;
 	}
-	return true;
+	return True;
 }
 
 template <typename T, Eq<T> eq>
-bool arrEq(const Arr<T> a, const Arr<T> b) {
-	return a.size == b.size && eachCorresponds(a, b, eq);
+const Bool arrEq(const Arr<T> a, const Arr<T> b) {
+	return _and(a.size == b.size, eachCorresponds(a, b, eq));
 }
 
 template <typename T, typename Cb>
-bool every(const Arr<T> a, Cb cb) {
+const Bool every(const Arr<T> a, Cb cb) {
 	for (const T& t : a) {
-		const bool b = cb(t);
+		const Bool b = cb(t);
 		if (!b)
-			return false;
+			return False;
 	}
-	return true;
+	return True;
 }
 
 template <typename T>
@@ -378,7 +378,7 @@ template <typename T, typename Pred>
 void filterUnordered(MutArr<T>& a, Pred pred) {
 	size_t i = 0;
 	while (i < a.size()) {
-		const bool b = pred(a[i]);
+		const Bool b = pred(a[i]);
 		if (b)
 			i++;
 		else if (i == a.size() - 1)
@@ -395,4 +395,47 @@ void copyFrom(MutArr<T>& m, const size_t index, const Arr<T> arr) {
 	assert(index + arr.size <= m.size());
 	for (const size_t i : Range{arr.size})
 		m.set(index + i, arr[i]);
+}
+
+template <typename T>
+struct reverse_iter {
+	const T* ptr;
+
+	inline const T& operator*() const {
+		return *ptr;
+	}
+
+	inline void operator++() {
+		ptr--;
+	}
+
+	inline const Bool operator!=(const reverse_iter<T> other) {
+		return ptr != other.ptr;
+	}
+};
+
+template <typename T>
+struct Reverse {
+	const Arr<T> a;
+
+	inline reverse_iter<T> begin() const {
+		return reverse_iter<T>{a.end() - 1};
+	}
+
+	inline reverse_iter<T> end() const {
+		return reverse_iter<T>{a.begin() - 1};
+	}
+};
+
+// Used to enable type inference
+template <typename T>
+inline Reverse<T> reverse(const Arr<T> a) {
+	return Reverse<T>{a};
+}
+
+template <typename T, Eq<T> eq>
+inline const Bool contains(const Arr<T>& arr, const T t) {
+	return exists(arr, [&](const T value) {
+		return eq(value, t);
+	});
 }

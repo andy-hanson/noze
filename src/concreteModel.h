@@ -69,7 +69,7 @@ enum class BuiltinFunEmit {
 struct BuiltinFunInfo {
 	const BuiltinFunEmit emit;
 	const BuiltinFunKind kind;
-	const bool isNonSpecializable;
+	const Bool isNonSpecializable;
 };
 
 struct ConcreteField;
@@ -115,17 +115,17 @@ public:
 	inline ConcreteStructBody(const Union __union) : kind{Kind::_union}, _union{__union} {}
 	inline ConcreteStructBody(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
-	inline bool isBuiltin() const {
-		return kind == Kind::builtin;
+	inline const Bool isBuiltin() const {
+		return enumEq(kind, Kind::builtin);
 	}
-	inline bool isFields() const {
-		return kind == Kind::fields;
+	inline const Bool isFields() const {
+		return enumEq(kind, Kind::fields);
 	}
-	inline bool isUnion() const {
-		return kind == Kind::_union;
+	inline const Bool isUnion() const {
+		return enumEq(kind, Kind::_union);
 	}
-	inline bool isIface() const {
-		return kind == Kind::iface;
+	inline const Bool isIface() const {
+		return enumEq(kind, Kind::iface);
 	}
 	inline const Builtin asBuiltin() const {
 		assert(isBuiltin());
@@ -179,7 +179,6 @@ enum class SpecialStructKind {
 struct ConcreteStruct {
 	const Str mangledName;
 	const Opt<const SpecialStructKind> special;
-	mutable bool isStructReferenced = false;
 	Late<const ConcreteStructBody> _body;
 	Late<const size_t> _sizeBytes;
 
@@ -200,24 +199,24 @@ struct ConcreteStruct {
 		return _sizeBytes.get();
 	}
 
-	inline bool defaultIsPointer() const {
-		return sizeBytes() > sizeof(void*) * 2;
+	inline const Bool defaultIsPointer() const {
+		return gt(sizeBytes(), sizeof(void*) * 2);
 	}
 
-	inline bool isRecord() const {
+	inline const Bool isRecord() const {
 		return body().isFields();
 	}
 
-	inline bool isUnion() const {
+	inline const Bool isUnion() const {
 		return body().isUnion();
 	}
 };
 
 struct ConcreteType {
-	const bool isPointer;
+	const Bool isPointer;
 	const ConcreteStruct* strukt;
 
-	inline ConcreteType(const bool isp, const ConcreteStruct* s) : isPointer{isp}, strukt{s} {
+	inline ConcreteType(const Bool _isPointer, const ConcreteStruct* _strukt) : isPointer{_isPointer}, strukt{_strukt} {
 		const ConcreteStructBody body = strukt->body();
 		if (!body.isFields() && !(body.isBuiltin() && body.asBuiltin().info.kind == BuiltinStructKind::_void)) {
 			// union/iface are never pointers
@@ -229,8 +228,8 @@ struct ConcreteType {
 		return ConcreteType{s->defaultIsPointer(), s};
 	}
 
-	inline bool eq(const ConcreteType other) const {
-		return isPointer == other.isPointer && ptrEquals(strukt, other.strukt);
+	inline const Bool eq(const ConcreteType other) const {
+		return _and(isPointer == other.isPointer, ptrEquals(strukt, other.strukt));
 	}
 
 	inline size_t sizeOrPointerSize() const {
@@ -244,11 +243,11 @@ struct ConcreteType {
 	}
 
 	inline const ConcreteType byRef() const {
-		return ConcreteType{true, strukt};
+		return ConcreteType{True, strukt};
 	}
 
 	inline const ConcreteType byVal() const {
-		return ConcreteType{false, strukt};
+		return ConcreteType{False, strukt};
 	}
 };
 
@@ -365,7 +364,7 @@ private:
 	const Kind kind;
 	union {
 		const Array array;
-		const bool _bool;
+		const Bool _bool;
 		const char _char;
 		const FunPtr funPtr;
 		const Int64 int64;
@@ -380,7 +379,7 @@ private:
 
 public:
 	inline ConstantKind(const Array a) : kind{Kind::array}, array{a} {}
-	inline ConstantKind(const bool a) : kind{Kind::_bool}, _bool{a} {}
+	inline ConstantKind(const Bool a) : kind{Kind::_bool}, _bool{a} {}
 	inline ConstantKind(const char a) : kind{Kind::_char}, _char{a} {}
 	inline ConstantKind(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
 	inline ConstantKind(const Int64 a) : kind{Kind::int64}, int64{a} {}
@@ -392,48 +391,48 @@ public:
 	inline ConstantKind(const Union a) : kind{Kind::_union}, _union{a} {}
 	inline ConstantKind(const Void a) : kind{Kind::_void}, _void{a} {}
 
-	inline bool isArray() const {
-		return kind == Kind::array;
+	inline const Bool isArray() const {
+		return enumEq(kind, Kind::array);
 	}
-	inline bool isBool() const {
-		return kind == Kind::_bool;
+	inline const Bool isBool() const {
+		return enumEq(kind, Kind::_bool);
 	}
-	inline bool isChar() const {
-		return kind == Kind::_char;
+	inline const Bool isChar() const {
+		return enumEq(kind, Kind::_char);
 	}
-	inline bool isFunPtr() const {
-		return kind == Kind::funPtr;
+	inline const Bool isFunPtr() const {
+		return enumEq(kind, Kind::funPtr);
 	}
-	inline bool isInt64() const {
-		return kind == Kind::int64;
+	inline const Bool isInt64() const {
+		return enumEq(kind, Kind::int64);
 	}
-	inline bool isLambda() const {
-		return kind == Kind::lambda;
+	inline const Bool isLambda() const {
+		return enumEq(kind, Kind::lambda);
 	}
-	inline bool isNat64() const {
-		return kind == Kind::nat64;
+	inline const Bool isNat64() const {
+		return enumEq(kind, Kind::nat64);
 	}
-	inline bool isNull() const {
-		return kind == Kind::_null;
+	inline const Bool isNull() const {
+		return enumEq(kind, Kind::_null);
 	}
-	inline bool isPtr() const {
-		return kind == Kind::ptr;
+	inline const Bool isPtr() const {
+		return enumEq(kind, Kind::ptr);
 	}
-	inline bool isRecord() const {
-		return kind == Kind::record;
+	inline const Bool isRecord() const {
+		return enumEq(kind, Kind::record);
 	}
-	inline bool isUnion() const {
-		return kind == Kind::_union;
+	inline const Bool isUnion() const {
+		return enumEq(kind, Kind::_union);
 	}
-	inline bool isVoid() const {
-		return kind == Kind::_void;
+	inline const Bool isVoid() const {
+		return enumEq(kind, Kind::_void);
 	}
 
 	inline Array asArray() const {
 		assert(isArray());
 		return array;
 	}
-	inline bool asBool() const {
+	inline const Bool asBool() const {
 		assert(isBool());
 		return _bool;
 	}
@@ -540,9 +539,8 @@ public:
 struct Constant {
 	const ConstantKind kind;
 	const size_t id;
-	mutable bool isConstantReferenced;
 	inline Constant(const ConstantKind _kind, const size_t _id)
-		: kind{_kind}, id{_id}, isConstantReferenced{false} {}
+		: kind{_kind}, id{_id} {}
 };
 
 // NOTE: a Constant can still have a KnownLambdaBody of course!
@@ -569,14 +567,14 @@ public:
 	inline ConstantOrLambdaOrVariable(const KnownLambdaBody* _knownLambdaBody)
 		: kind{Kind::knownLambdaBody}, knownLambdaBody{_knownLambdaBody} {}
 
-	inline bool isVariable() const {
-		return kind == Kind::variable;
+	inline const Bool isVariable() const {
+		return enumEq(kind, Kind::variable);
 	}
-	inline bool isConstant() const {
-		return kind == Kind::constant;
+	inline const Bool isConstant() const {
+		return enumEq(kind, Kind::constant);
 	}
-	inline bool isKnownLambdaBody() const {
-		return kind == Kind::knownLambdaBody;
+	inline const Bool isKnownLambdaBody() const {
+		return enumEq(kind, Kind::knownLambdaBody);
 	}
 
 	inline const Constant* asConstant() const {
@@ -649,11 +647,11 @@ public:
 	inline ConstantOrExpr(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
 	inline ConstantOrExpr(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
 
-	inline bool isConstant() const {
-		return kind == Kind::constant;
+	inline const Bool isConstant() const {
+		return enumEq(kind, Kind::constant);
 	}
-	inline bool isConcreteExpr() const {
-		return kind == Kind::concreteExpr;
+	inline const Bool isConcreteExpr() const {
+		return enumEq(kind, Kind::concreteExpr);
 	}
 	inline const Constant* asConstant() const {
 		assert(isConstant());
@@ -709,17 +707,17 @@ public:
 	inline ConcreteFunBody(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
 	inline ConcreteFunBody(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
 
-	inline bool isBuiltin() const {
-		return kind == Kind::builtin;
+	inline const Bool isBuiltin() const {
+		return enumEq(kind, Kind::builtin);
 	}
-	inline bool isExtern() const {
-		return kind == Kind::_extern;
+	inline const Bool isExtern() const {
+		return enumEq(kind, Kind::_extern);
 	}
-	inline bool isConstant() const {
-		return kind == Kind::constant;
+	inline const Bool isConstant() const {
+		return enumEq(kind, Kind::constant);
 	}
-	inline bool isConcreteExpr() const {
-		return kind == Kind::concreteExpr;
+	inline const Bool isConcreteExpr() const {
+		return enumEq(kind, Kind::concreteExpr);
 	}
 	inline Builtin asBuiltin() const {
 		assert(isBuiltin());
@@ -766,21 +764,17 @@ public:
 //   (since these may be specialized at each callsite)
 // TODO: and for iface impls
 struct ConcreteFun {
-	const bool needsCtx;
+	const Bool needsCtx;
 	const Opt<const ConcreteType> closureType;
 	// Note: This does not include the ctx or closure params.
 	const ConcreteSig sig;
-	const bool isCallFun; // `call` is not a builtin, but we treat it specially
+	const Bool isCallFun; // `call` is not a builtin, but we treat it specially
 
 	Late<const ConcreteFunBody> _body = {};
 	size_t nextNewIfaceImplIndex = 0;
 	size_t nextLambdaIndex = 0;
 
-	// We create ConcreteFun lazily, but still possible that we'll create it,
-	// then discover that it can always be evaluated as a constant and doesn't need to be in the compiled program.
-	mutable bool isFunReferenced = false;
-
-	inline ConcreteFun(const bool _needsCtx, const Opt<const ConcreteType> _closureType, const ConcreteSig _sig, const bool _isCallFun)
+	inline ConcreteFun(const Bool _needsCtx, const Opt<const ConcreteType> _closureType, const ConcreteSig _sig, const Bool _isCallFun)
 		: needsCtx{_needsCtx}, closureType{_closureType}, sig{_sig}, isCallFun{_isCallFun} {}
 
 	inline const ConcreteFunBody body() const {
@@ -851,7 +845,7 @@ struct KnownLambdaBody {
 		assert(!closureType.has() || closureType.force().sizeOrPointerSize() == sizeof(void*));
 	}
 
-	inline bool hasClosure() const {
+	inline const Bool hasClosure() const {
 		return closureType.has();
 	}
 
@@ -1123,8 +1117,8 @@ public:
 	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const StructFieldAccess a)
 		: _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldAccess}, structFieldAccess{a} {}
 
-	inline bool isCond() const {
-		return kind == Kind::cond;
+	inline const Bool isCond() const {
+		return enumEq(kind, Kind::cond);
 	}
 
 	inline const SourceRange range() const {

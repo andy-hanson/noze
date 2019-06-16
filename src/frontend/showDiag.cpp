@@ -117,10 +117,10 @@ namespace {
 			[&](const StructInst* s) {
 				out << s->decl->name;
 				if (!isEmpty(s->typeArgs)) {
-					bool first = true;
+					Cell<const Bool> first { True };
 					for (const Type t : s->typeArgs) {
-						out << (first ? '<' : ' ') << t;
-						first = false;
+						out << (first.get() ? '<' : ' ') << t;
+						first.set(False);
 					}
 					out << '>';
 				}
