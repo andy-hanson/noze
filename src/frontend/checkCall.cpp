@@ -96,7 +96,6 @@ namespace {
 				//    id2 ?U(v ?U)
 				//        id v
 				// In the call to `id`, we expect '?U', and the call will actually return '?U' (by inferring `id<?U>`).
-				todo<void>("do inference here?"); // see matchActualAndCandidateTypeForReturn
 				return fromCandidate.isTypeParam();
 			},
 			[&](const StructInst* structInstFromExternal) {

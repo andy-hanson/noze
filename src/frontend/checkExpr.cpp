@@ -262,9 +262,25 @@ namespace {
 		const Arr<LambdaInfo*> passedLambdas,
 		Expected& expected
 	) {
-		unused(ctx, expr, range);
-		unused(name, type, passedLambdas, expected);
-		return todo<CheckedExpr>("checkRef");
+		const Expr* exprPtr = ctx.alloc(expr);
+		if (isEmpty(passedLambdas))
+			return expected.check(ctx, type, expr);
+		else {
+			// Each lambda we passed out of to reach this reference needs a closure field for it.
+			for (LambdaInfo* l : passedLambdas) {
+				assert(!exists(l->closureFields.tempAsArr(), [&](const ClosureField* it) {
+					return strEq(it->name, name);
+				}));
+				const ClosureField* field = ctx.arena().nu<const ClosureField>()(
+					ctx.copyStr(name),
+					type,
+					exprPtr,
+					l->closureFields.size());
+				l->closureFields.push(ctx.arena(), field);
+			}
+			// The return the innermost closure field.
+			return expected.check(ctx, type, Expr{range, Expr::ClosureFieldRef{last(last(passedLambdas)->closureFields)}});
+		}
 	}
 
 	const CheckedExpr checkIdentifier(ExprContext& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
@@ -346,6 +362,20 @@ namespace {
 		});
 	}
 
+	const Arr<const Param> checkFunOrRemoteFunParamsForLambda(
+		Arena& arena,
+		const Arr<const LambdaAst::Param> paramAsts,
+		const Arr<const Type> expectedParamTypes
+	) {
+		return mapZipWithIndex<const Param>{}(
+			arena,
+			paramAsts,
+			expectedParamTypes,
+			[&](const LambdaAst::Param ast, const Type expectedParamType, const size_t index) {
+				return Param{ast.range, copyStr(arena, ast.name), expectedParamType, index};
+			});
+	}
+
 	const CheckedExpr checkLambdaWorker(
 		ExprContext& ctx,
 		const SourceRange range,
@@ -353,8 +383,51 @@ namespace {
 		const ExprAst bodyAst,
 		Expected& expected
 	) {
-		unused(ctx, range, paramAsts, bodyAst, expected);
-		return todo<const CheckedExpr>("checkLambdaWOrker");
+		Arena& arena = ctx.arena();
+		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
+		if (!opEt.has())
+			return expected.bogus(range);
+
+		const ExpectedLambdaType et = opEt.force();
+
+		if (paramAsts.size != et.paramTypes.size)
+			todo<void>("checkLambdaWorker");
+
+		const Arr<const Param> params = checkFunOrRemoteFunParamsForLambda(arena, paramAsts, et.paramTypes);
+		LambdaInfo info = LambdaInfo{params};
+		Expected returnTypeInferrer = expected.copyWithNewExpectedType(et.nonInstantiatedPossiblyFutReturnType);
+
+		const Expr* body = withLambda(ctx, &info, [&]() {
+			// Note: checking the body of the lambda may fill in candidate type args if the expected return type contains candidate's type params
+			return ctx.alloc(checkExpr(ctx, bodyAst, returnTypeInferrer));
+		});
+
+		const Type actualPossiblyFutReturnType = returnTypeInferrer.inferred();
+		const Type actualNonFutReturnType = [&]() {
+			if (et.isRemoteFun) {
+				if (!actualPossiblyFutReturnType.isStructInst())
+					todo<void>("checkLambdaWorker actualReturnType");
+				const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
+				if (!ptrEquals(ap->decl, ctx.commonTypes.fut))
+					todo<void>("checkLambdaWorker actualReturnType");
+				return only(ap->typeArgs);
+			} else
+				return actualPossiblyFutReturnType;
+		}();
+
+		const StructInst* instFunStruct = instantiateStructNeverDelay(
+			arena, et.funStruct, prepend<const Type>(arena, actualNonFutReturnType, et.paramTypes));
+
+		const Expr::Lambda lambda = Expr::Lambda{
+			params,
+			body,
+			info.closureFields.freeze(),
+			instFunStruct,
+			et.nonRemoteFunStruct,
+			et.isRemoteFun,
+			actualPossiblyFutReturnType};
+
+		return CheckedExpr{Expr{range, lambda}};
 	}
 
 	const CheckedExpr checkLambda(ExprContext& ctx, const SourceRange range, const LambdaAst ast, Expected& expected) {

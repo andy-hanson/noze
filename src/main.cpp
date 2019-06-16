@@ -1,8 +1,11 @@
 #include <cstdio>
+#include <cstdlib> // exit
 #include <signal.h>
 #include <sys/resource.h> // rlimit
 #include <unistd.h> // getcwd
 
+#include "./backend/writeToC.h"
+#include "./concretize/concretize.h"
 #include "./frontend/ast.h"
 #include "./frontend/frontendCompile.h"
 #include "./frontend/readOnlyStorage.h"
@@ -28,30 +31,39 @@ namespace {
 		}
 	}
 
+	const Path* climbUpToNoze(const Path* p) {
+		if (strEqLiteral(p->baseName, "noze"))
+			return p;
+		else if (p->parent.has())
+			return climbUpToNoze(p->parent.force());
+		else
+			return todo<const Path*>("no 'noze' directory in path");
+	}
+
 	void test() {
-		Arena tempArena {};
 		Arena modelArena {};
 
 		// Get the current executable file path
-		const Path* cwd = getCwd(modelArena);
+		const Path* nozeDir = climbUpToNoze(getCwd(modelArena));
 
-		const Path* include = childPath(modelArena, cwd, strLiteral("include"));
-		const Path* test = childPath(modelArena, cwd, strLiteral("test"));
+		const Path* include = childPath(modelArena, nozeDir, strLiteral("include"));
+		const Path* test = childPath(modelArena, nozeDir, strLiteral("test"));
 
 		const ReadOnlyStorages storages = ReadOnlyStorages{ReadOnlyStorage{include}, ReadOnlyStorage{test}};
 
 		const Result<const Program, const Diagnostics> programResult = frontendCompile(
 			modelArena, storages, rootPath(modelArena, strLiteral("a.nz")));
 
-		printf("GOT HERE\n");
-
 		programResult.match(
 			[&](const Program program) {
-				unused(program);
-				todo<void>("!!!");
+				Arena concreteArena {};
+				const ConcreteProgram concreteProgram = concretize(concreteArena, program);
+				Arena writeArena {};
+				const Str emitted = writeToC(writeArena, concreteProgram);
+				unused(emitted);
+				todo<void>("Yay, got a program!");
 			},
 			[](const Diagnostics diagnostics) {
-				printf("GOT HERE 3\n");
 				printDiagnostics(diagnostics);
 			});
 	}

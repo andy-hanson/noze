@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.9)
-project(test2)
+project(noze)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(test2
+add_executable(noze
 	src/backend/writeToC.cpp
 	src/concretize/allConstants.cpp
 	src/concretize/builtinInfo.cpp
 	src/concretize/concretizeBuiltin.cpp
+	src/concretize/concretize.cpp
 	src/concretize/concretizeCtx.cpp
 	src/concretize/concretizeExpr.cpp
 	src/concretize/concretizeUtil.cpp
@@ -31,6 +32,7 @@ add_executable(test2
 	src/model.cpp
 	src/Path.cpp
 	src/util.cpp
+	src/util/arena.cpp
 	src/util/lineAndColumnGetter.cpp)
-target_compile_options(test2 PRIVATE -Wall -Wextra -Werror -ansi -pedantic)
+target_compile_options(noze PRIVATE -Wall -Wextra -Werror -ansi -pedantic)
 

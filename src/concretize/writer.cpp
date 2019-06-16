@@ -1,5 +1,7 @@
 #include "./writer.h"
 
+#include "../util/arrUtil.h"
+
 void Writer::writeStr(const Str s) {
 	if (!isEmpty(s)) {
 		writeChar(s[0]);

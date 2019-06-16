@@ -14,6 +14,7 @@ namespace {
 				const Str name = lexer.takeName();
 				res.add(lexer.arena, TypeParamAst{lexer.range(start), name});
 			} while(lexer.tryTake(", "));
+			lexer.take('>');
 			return res.finish();
 		} else
 			return emptyArr<const TypeParamAst>();
@@ -384,7 +385,7 @@ namespace {
 		bool isPublic = true;
 		while (true) {
 			lexer.skipBlankLines();
-			if (lexer.tryTake('0'))
+			if (lexer.tryTake('\0'))
 				break;
 			if (lexer.tryTake("private\n")) {
 				if (!isPublic)

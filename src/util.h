@@ -1,17 +1,16 @@
  #pragma once
 
 #include <cassert>
-#include <cstdint>
-#include <cstdlib> // malloc
-#include <new> // Support placement new
 #include <cstdio> // printf
-#include <type_traits> // remove_const
+#include <cstdint>
+
+#include "./util/arena.h"
 
 using _void = uint8_t;
-using byte = uint8_t;
 using Int64 = int64_t;
 using Nat64 = uint64_t;
 using Float64 = double;
+using uint = uint32_t;
 
 #define CHAR_BIT 8
 static_assert(sizeof(byte) * CHAR_BIT == 8, "byte");
@@ -61,43 +60,6 @@ struct Range {
 
 	inline RangeIter end() const {
 		return RangeIter{hi};
-	}
-};
-
-struct Arena {
-	Arena() {
-		begin = nullptr;
-		cur = nullptr;
-		end = nullptr;
-	}
-
-	Arena(const Arena& other) = delete;
-
-	byte* begin;
-	byte* cur;
-	byte* end;
-
-	void* alloc(const size_t n_bytes);
-
-	template <typename T>
-	struct Nu {
-		Arena* arena;
-
-		template <typename... Args>
-		inline T* operator()(Args... args) {
-			typename std::remove_const<T>::type* res = arena->newUninitialized<typename std::remove_const<T>::type>();
-			return new (res) T{args...};
-		}
-	};
-
-	template <typename T>
-	inline Nu<T> nu() {
-		return Nu<T>{this};
-	}
-
-	template <typename T>
-	inline T* newUninitialized() {
-		return static_cast<T*>(alloc(sizeof(T)));
 	}
 };
 
@@ -154,13 +116,6 @@ inline Comparison compareNat64(const Nat64 a, const Nat64 b) {
 }
 inline bool charEq(const char a, const char b) {
 	return a == b;
-}
-
-template <typename T, Eq<T> eqValues>
-bool optEq(const Opt<T> a, const Opt<T> b) {
-	return a.has()
-		? (b.has() && eqValues(a.force(), b.force()))
-		: !b.has();
 }
 
 template <typename T, Cmp<T> cmpValues>
@@ -281,29 +236,6 @@ inline bool isEmpty(const Arr<T> a) {
 }
 
 template <typename T>
-inline const Arr<const T> asConst(const Arr<T> a) {
-	return Arr<const T>{a._begin, a.size};
-}
-
-template <typename T>
-inline const T& first(const Arr<T> a) {
-	assert(!isEmpty(a));
-	return a[0];
-}
-
-template <typename T>
-inline const Arr<T> tail(const Arr<T> a) {
-	assert(!isEmpty(a));
-	return Arr<T>{a._begin + 1, a.size - 1};
-}
-
-template <typename T>
-const T& last(const Arr<T> a) {
-	assert(!isEmpty(a));
-	return a[a.size - 1];
-}
-
-template <typename T>
 struct PtrsIter {
 	const T* ptr;
 
@@ -345,7 +277,17 @@ inline Arr<T> emptyArr() {
 }
 
 template <typename T, typename Cb>
-inline bool exists(Arr<T> arr, Cb cb) {
+inline bool exists(const Arr<T> arr, Cb cb) {
+	for (T x : arr) {
+		const bool b = cb(x);
+		if (b)
+			return true;
+	}
+	return false;
+}
+
+template <size_t size, typename T, typename Cb>
+inline bool exists(const FixArr<size, T> arr, Cb cb) {
 	for (T x : arr) {
 		const bool b = cb(x);
 		if (b)
@@ -355,7 +297,7 @@ inline bool exists(Arr<T> arr, Cb cb) {
 }
 
 template <typename T>
-inline T only(Arr<T> a) {
+inline T only(const Arr<T> a) {
 	assert(a.size == 1);
 	return a[0];
 }
@@ -383,12 +325,6 @@ struct MutSlice {
 		assert(index < size);
 		assert(!isFrozen);
 		overwriteConst(begin[index], value);
-	}
-
-	void copyFrom(const size_t index, const Arr<const T> arr) {
-		assert(index + arr.size <= size);
-		for (const size_t i : Range{arr.size})
-			set(index + i, arr[i]);
 	}
 
 	inline Arr<T> freeze() {
@@ -500,22 +436,6 @@ bool isEmpty(const MutArr<T>& a) {
 	return a._size == 0;
 }
 
-template <typename T, typename Pred>
-void filterUnordered(MutArr<T>& a, Pred pred) {
-	size_t i = 0;
-	while (i < a.size()) {
-		const bool b = pred(a[i]);
-		if (b)
-			i++;
-		else if (i == a.size() - 1)
-			a.mustPop();
-		else {
-			T t = a.mustPop();
-			a.set(i, t);
-		}
-	}
-}
-
 template <typename T>
 struct ArrBuilder {
 	MutArr<T> inner;
@@ -562,7 +482,11 @@ inline const NulTerminatedStr nulTerminatedStrLiteral(const char* c) {
 	return NulTerminatedStr{c, static_cast<size_t>(end(c) + 1 - c)};
 }
 
+const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s);
+
 bool strEq(const Str a, const Str b);
+
+Comparison compareStr(const Str a, const Str b);
 
 inline bool strEqLiteral(const Str s, const char* b) {
 	return strEq(s, strLiteral(b));
@@ -572,14 +496,6 @@ template <typename T>
 inline void unused(T&) {}
 template <typename T, typename U>
 inline void unused(T&, U&) {}
-template <typename T, typename U, typename V>
-inline void unused(T&, U&, V&) {}
-template <typename T, typename U, typename V, typename W>
-inline void unused(T&, U&, V&, W&) {}
-template <typename T, typename U, typename V, typename W, typename X>
-inline void unused(T&, U&, V&, W&, X&) {}
-template <typename T, typename U, typename V, typename W, typename X, typename Y>
-inline void unused(T&, U&, V&, W&, X&, Y&) {}
 
 template <typename Success, typename Failure>
 struct Result {
@@ -734,10 +650,8 @@ public:
 
 template <typename K, typename V, Cmp<K> cmp>
 struct MutDict {
-private:
 	MutArr<KeyValuePair<K, V>> pairs;
 
-public:
 	inline bool has(const K key) const {
 		return get(key).has();
 	}
@@ -784,6 +698,11 @@ public:
 	}
 };
 
+template <typename K, typename V, Cmp<K> cmp>
+inline bool isEmpty(const MutDict<K, V, cmp>& d) {
+	return isEmpty(d.pairs);
+}
+
 template <typename T>
 struct Late {
 private:
@@ -794,8 +713,8 @@ private:
 public:
 	Late(const Late&) = delete;
 	inline Late(Late&&) = default;
-	inline Late() {}
-	inline Late(const T _value) : value{_value} {}
+	inline Late() : _isSet{false} {}
+	inline Late(const T _value) : _isSet{true}, value{_value} {}
 
 	inline bool isSet() const {
 		return _isSet;

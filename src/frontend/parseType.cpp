@@ -59,5 +59,5 @@ const TypeAst::InstStruct parseStructType(Lexer& lexer) {
 }
 
 const TypeAst parseType(Lexer& lexer) {
-	return parseTypeWorker(lexer, true);
+	return parseTypeWorker(lexer, /*isInner*/ false);
 }

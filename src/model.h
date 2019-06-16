@@ -18,7 +18,7 @@ struct PathAndStorageKind {
 
 inline Comparison comparePathAndStorageKind(const PathAndStorageKind a, const PathAndStorageKind b) {
 	const Comparison res = comparePrimitive(a.storageKind, b.storageKind);
-	return res == Comparison::equal ? comparePath(a.path, b.path) : res;
+	return res != Comparison::equal ? res : comparePath(a.path, b.path);
 }
 
 using LineAndColumnGetters = Dict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;

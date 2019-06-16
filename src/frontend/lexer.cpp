@@ -30,8 +30,10 @@ namespace {
 }
 
 const Str Lexer::takeNameRest(const char* begin)  {
-	while (isNameContinue(*ptr)) ptr++;
-	if (*ptr == '?') ptr++;
+	while (isNameContinue(*ptr))
+		ptr++;
+	if (*ptr == '?')
+		ptr++;
 	return copyStr(begin, ptr);
 }
 

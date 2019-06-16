@@ -19,6 +19,35 @@ const Opt<T*> findPtr(Arr<T> a, Cb cb) {
 }
 
 template <typename T>
+inline const Arr<const T> asConst(const Arr<T> a) {
+	return Arr<const T>{a._begin, a.size};
+}
+
+template <typename T>
+inline const T& first(const Arr<T> a) {
+	assert(!isEmpty(a));
+	return a[0];
+}
+
+template <typename T>
+inline const Arr<T> tail(const Arr<T> a) {
+	assert(!isEmpty(a));
+	return Arr<T>{a._begin + 1, a.size - 1};
+}
+
+template <typename T>
+const T& last(const Arr<T> a) {
+	assert(!isEmpty(a));
+	return a[a.size - 1];
+}
+
+template <typename T>
+const T& last(const MutArr<T>& a) {
+	assert(!isEmpty(a));
+	return a[a.size() - 1];
+}
+
+template <typename T>
 Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
 	MutSlice<T> res = newUninitializedMutSlice<T>(arena, a.size + b.size);
 	for (const size_t i : Range{a.size})
@@ -214,6 +243,13 @@ struct mapOpWithIndex {
 	}
 };
 
+template <typename T, typename Cb>
+const Arr<T> filter(Arena& arena, const Arr<T> a, Cb cb) {
+	return mapOpWithIndex<T>{}(arena, a, [&](const T t, const size_t) {
+		return cb(t) ? some<T>(t) : none<T>();
+	});
+}
+
 template <typename Out>
 struct mapZip {
 	template <typename In0, typename In1, typename Cb>
@@ -223,6 +259,19 @@ struct mapZip {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
 		for (const size_t i : Range{size})
 			initMemory(out[i], cb(in0[i], in1[i]));
+		return Arr<Out>{out, size};
+	}
+};
+
+template <typename Out>
+struct mapZipWithIndex {
+	template <typename In0, typename In1, typename Cb>
+	Arr<Out> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+		const size_t size = in0.size;
+		assert(in1.size == size);
+		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		for (const size_t i : Range{size})
+			initMemory(out[i], cb(in0[i], in1[i], i));
 		return Arr<Out>{out, size};
 	}
 };
@@ -260,7 +309,7 @@ bool eachCorresponds(const Arr<T> a, const Arr<U> b, Cb cb) {
 
 template <typename T, Eq<T> eq>
 bool arrEq(const Arr<T> a, const Arr<T> b) {
-	return eachCorresponds(a, b, eq);
+	return a.size == b.size && eachCorresponds(a, b, eq);
 }
 
 template <typename T, typename Cb>
@@ -323,4 +372,27 @@ const Arr<const Arr<T>> sortAndGroup(Arena& arena, const Arr<T> a, Cmp cmp) {
 		resultSize += a.size;
 	assert(resultSize == a.size);
 	return arrRes;
+}
+
+template <typename T, typename Pred>
+void filterUnordered(MutArr<T>& a, Pred pred) {
+	size_t i = 0;
+	while (i < a.size()) {
+		const bool b = pred(a[i]);
+		if (b)
+			i++;
+		else if (i == a.size() - 1)
+			a.mustPop();
+		else {
+			T t = a.mustPop();
+			a.set(i, t);
+		}
+	}
+}
+
+template <typename T>
+void copyFrom(MutSlice<T>& m, const size_t index, const Arr<T> arr) {
+	assert(index + arr.size <= m.size);
+	for (const size_t i : Range{arr.size})
+		m.set(index + i, arr[i]);
 }

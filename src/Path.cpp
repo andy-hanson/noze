@@ -29,7 +29,7 @@ namespace {
 		}
 		walkPathBackwards(path, [&](const Str part) {
 			i -= part.size;
-			res.copyFrom(i, part);
+			copyFrom(res, i, part);
 			i--;
 			res.set(i, '/');
 		});
@@ -67,10 +67,6 @@ const Str pathToStr(Arena& arena, const Path* path) {
 
 const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
 	return asConst(pathToMutStr(arena, path, true).freeze());
-}
-
-bool pathEq(const Path* a, const Path* b) {
-	return strEq(a->baseName, b->baseName) && optEq<const Path*, pathEq>(a->parent, b->parent);
 }
 
 const Path* pathFromNulTerminatedStr(Arena& arena, const NulTerminatedStr str) {

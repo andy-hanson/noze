@@ -51,6 +51,9 @@ namespace {
 
 	void showChar(Output& out, char c) {
 		switch (c) {
+			case '\0':
+				out << "\\0";
+				break;
 			case '\n':
 				out << "\\n";
 				break;
@@ -238,8 +241,10 @@ void printDiagnostics(const Diagnostics diagnostics) {
 		if (group[0].diag.isFileDoesNotExist())
 			out << group[0].where.path << ": file does not exist\n";
 		else {
-			for (const Diagnostic d : group)
-				showDiagnostic(out, diagnostics.lineAndColumnGetters.mustGet(d.where), d);
+			for (const Diagnostic d : group) {
+				const LineAndColumnGetter lc = diagnostics.lineAndColumnGetters.mustGet(d.where);
+				showDiagnostic(out, lc, d);
+			}
 		}
 	}
 }
