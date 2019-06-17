@@ -54,7 +54,12 @@ struct ExprContext {
 };
 
 inline const Type typeFromAst(ExprContext& ctx, const TypeAst typeAst) {
-	return typeFromAst(ctx.checkCtx, typeAst, ctx.structsAndAliasesMap, TypeParamsScope{ctx.outermostFun->typeParams}, none<MutArr<StructInst*>&>());
+	return typeFromAst(
+		ctx.checkCtx,
+		typeAst,
+		ctx.structsAndAliasesMap,
+		TypeParamsScope{ctx.outermostFun->typeParams},
+		none<MutArr<StructInst*>*>());
 }
 
 struct SingleInferringType {

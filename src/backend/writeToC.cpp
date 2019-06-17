@@ -367,7 +367,7 @@ namespace {
 	}
 
 	void writeConstantReference(Writer& writer, const Constant* c) {
-		auto writeRef = [&](const char* s) {
+		auto writeRef = [&](const CStr s) {
 			writer.writeStatic("_constant");
 			writer.writeStatic(s);
 			writer.writeUint(c->id);
@@ -511,7 +511,7 @@ namespace {
 
 	void writeNewIfaceImpl(Writer& writer, const ConcreteExpr::NewIfaceImpl impl) {
 		unused(writer, impl);
-		todo<void>("!!!");
+		todo<void>("writeNewIfaceImpl");
 	}
 
 	struct WriteExprCtx {
@@ -543,7 +543,7 @@ namespace {
 			newline();
 		}
 
-		void write(const char* text) {
+		void write(const CStr text) {
 			writer.writeStatic(text);
 		}
 
@@ -716,7 +716,7 @@ namespace {
 			writeArg(1);
 		};
 
-		auto binaryOperator = [&](const char* s) -> void {
+		auto binaryOperator = [&](const CStr s) -> void {
 			binaryOperatorWorker(strLiteral(s));
 		};
 
@@ -728,7 +728,7 @@ namespace {
 			ctx.write(")");
 		};
 
-		auto unaryOperator = [&](const char* s) -> void {
+		auto unaryOperator = [&](const CStr s) -> void {
 			unaryOperatorWorker(strLiteral(s));
 		};
 

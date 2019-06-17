@@ -1,6 +1,14 @@
+!
+	Ensure path given to command must have '.nz' extension
 
-TODO
-	move things from lexer.h to lexer.cpp
+!
+	move 'slice' to arrutil
+
+!
+	check path components must be valid in path constructor
+
+!
+	break up util.h
 
 See // (TODO:RENAME)
 

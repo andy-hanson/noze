@@ -40,39 +40,39 @@ namespace {
 	}
 
 	uint takeTabs(Lexer& lexer) {
-		const char* begin = lexer.ptr;
+		const CStr begin = lexer.ptr;
 		while (*lexer.ptr == '\t')
 			lexer.ptr++;
 		return safeSizeTToUint(lexer.ptr - begin);
 	}
 
-	const SourceRange range(Lexer& lexer, const char* begin) {
+	const SourceRange range(Lexer& lexer, const CStr begin) {
 		assert(begin >= lexer.sourceBegin);
 		return range(lexer, safeSizeTToUint(begin - lexer.sourceBegin));
 	}
 
-	const Str copyStr(Lexer& lexer, const char* begin, const char* end) {
+	const Str copyStr(Lexer& lexer, const CStr begin, const CStr end) {
 		return ::copyStr(lexer.arena, arrOfRange(begin, end));
 	}
 
-	const ExpressionToken takeNumber(Lexer& lexer, const char* begin)  {
+	const ExpressionToken takeNumber(Lexer& lexer, const CStr begin)  {
 		while (isDigit(*lexer.ptr) || *lexer.ptr == '.') lexer.ptr++;
 		return ExpressionToken{copyStr(lexer, begin, lexer.ptr)};
 	}
 
-	const Str takeOperatorRest(Lexer& lexer, const char* begin)  {
+	const Str takeOperatorRest(Lexer& lexer, const CStr begin)  {
 		while (isOperatorChar(*lexer.ptr))
 			lexer.ptr++;
 		return copyStr(lexer, begin, lexer.ptr);
 	}
 
-	const ExpressionToken takeOperator(Lexer& lexer, const char* begin)  {
+	const ExpressionToken takeOperator(Lexer& lexer, const CStr begin)  {
 		const Str name = takeOperatorRest(lexer, begin);
 		return ExpressionToken{NameAndRange{range(lexer, begin), name}};
 	}
 
 	const Str takeStringLiteral(Lexer& lexer) {
-		const char* begin = lexer.ptr;
+		const CStr begin = lexer.ptr;
 		size_t nEscapes = 0;
 		lexer.ptr++;
 		// First get the max size
@@ -130,7 +130,7 @@ namespace {
 		skipBlankLines(lexer);
 	}
 
-	const Str takeNameRest(Lexer& lexer, const char* begin) {
+	const Str takeNameRest(Lexer& lexer, const CStr begin) {
 		while (isNameContinue(*lexer.ptr))
 			lexer.ptr++;
 		if (*lexer.ptr == '?')
@@ -183,9 +183,9 @@ const Bool tryTake(Lexer& lexer, const char c) {
 		return False;
 }
 
-const Bool tryTake(Lexer& lexer, const char* c)  {
-	const char* ptr2 = lexer.ptr;
-	for (const char* cptr = c; *cptr != 0; cptr++) {
+const Bool tryTake(Lexer& lexer, const CStr c)  {
+	CStr ptr2 = lexer.ptr;
+	for (CStr cptr = c; *cptr != 0; cptr++) {
 		if (*ptr2 != *cptr)
 			return False;
 		ptr2++;
@@ -199,13 +199,13 @@ void take(Lexer& lexer, const char c) {
 		throwUnexpected<void>(lexer);
 }
 
-void take(Lexer& lexer, const char* c) {
+void take(Lexer& lexer, const CStr c) {
 	if (!tryTake(lexer, c))
 		throwUnexpected<void>(lexer);
 }
 
 const Str takeName(Lexer& lexer) {
-	const char* begin = lexer.ptr;
+	const CStr begin = lexer.ptr;
 	if (isOperatorChar(*lexer.ptr)) {
 		lexer.ptr++;
 		return takeOperatorRest(lexer, begin);
@@ -217,13 +217,13 @@ const Str takeName(Lexer& lexer) {
 }
 
 const NameAndRange takeNameAndRange(Lexer& lexer)  {
-	const char* begin = lexer.ptr;
+	const CStr begin = lexer.ptr;
 	const Str name = takeName(lexer);
 	return NameAndRange{range(lexer, begin), name};
 }
 
 const ExpressionToken takeExpressionToken(Lexer& lexer)  {
-	const char* begin = lexer.ptr;
+	const CStr begin = lexer.ptr;
 	const char c = next(lexer);
 	switch (c) {
 		case '(':
@@ -344,27 +344,29 @@ const Bool tryTakeElseIndent(Lexer& lexer)  {
 }
 
 Lexer createLexer(Arena& arena, const NulTerminatedStr source) {
-	const uint len = safeSizeTToUint(source.size);
-	assert(len != 0);
+	// Note: We *are* relying on the nul terminator to stop the lexer.
+	const Str str = stripNulTerminator(source);
+	const uint len = safeSizeTToUint(str.size);
 	assert(len < 9999);
-	if (len == 1)
+
+	if (len == 0)
 		todo<void>("empty file"); // TODO: allow this, but check that that's safe
-	else if (source[len - 2] != '\n')
+	else if (str[len - 1] != '\n')
 		throw ParseDiagnostic{
-			SourceRange{len - 2, len - 1},
+			SourceRange{len - 1, len},
 			ParseDiag{ParseDiag::MustEndInBlankLine{}}};
 
-	for (const char* ptr = source.begin(); ptr != source.end(); ptr++)
+	for (CStr ptr = str.begin(); ptr != str.end(); ptr++)
 		if (*ptr == '\n') {
-			const uint i = safeSizeTToUint(ptr - source.begin());
+			const uint i = safeSizeTToUint(ptr - str.begin());
 			if (*(ptr + 1) == ' ')
 				throw ParseDiagnostic{SourceRange{i + 1, i + 2}, ParseDiag{ParseDiag::LeadingSpace{}}};
-			else if (ptr != source.begin()) {
+			else if (ptr != str.begin()) {
 				const char prev = *(ptr - 1);
 				if (prev == ' ' || prev == '\t')
 					throw ParseDiagnostic{SourceRange{i - 1, i}, ParseDiag{ParseDiag::TrailingSpace{}}};
 			}
 		}
 
-	return Lexer{arena, /*sourceBegin*/ source.begin(), /*ptr*/ source.begin(), /*indent*/ 0};
+	return Lexer{arena, /*sourceBegin*/ str.begin(), /*ptr*/ str.begin(), /*indent*/ 0};
 }

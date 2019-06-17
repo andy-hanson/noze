@@ -108,7 +108,7 @@ const StructInst* instantiateStruct(
 		res->setBody(instantiateStructBody(arena, decl, typeArgs));
 	else
 		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
-		delayStructInsts.force().push(arena, res);
+		delayStructInsts.force()->push(arena, res);
 	decl->insts.push(arena, res);
 	return res;
 }

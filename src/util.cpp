@@ -19,5 +19,5 @@ Comparison compareStr(const Str a, const Str b) {
 }
 
 const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s) {
-	return cat(arena, s, Str{"\0", 1});
+	return NulTerminatedStr{cat(arena, s, Str{"\0", 1})};
 }

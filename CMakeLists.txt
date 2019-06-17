@@ -1,3 +1,9 @@
+# To use this:
+# mkdir build
+# cd build
+# cmake .. -DCMAKE_CXX_COMPILER=clang++-6.0 -DCMAKE_BUILD_TYPE=Debug
+# make
+
 cmake_minimum_required(VERSION 3.9)
 project(noze)
 
@@ -27,12 +33,13 @@ add_executable(noze
 	src/frontend/showDiag.cpp
 	src/frontend/typeFromAst.cpp
 	src/concreteModel.cpp
+	src/compiler.cpp
 	src/main.cpp
 	src/model.cpp
-	src/Path.cpp
 	src/util.cpp
 	src/util/arena.cpp
 	src/util/io.cpp
-	src/util/lineAndColumnGetter.cpp)
+	src/util/lineAndColumnGetter.cpp
+	src/util/path.cpp)
 target_compile_options(noze PRIVATE -Wall -Wextra -Werror -ansi -pedantic)
 

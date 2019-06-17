@@ -1,7 +1,7 @@
 #pragma once
 
 #include "./util.h"
-#include "./util/SourceRange.h"
+#include "./util/sourceRange.h"
 
 enum class BuiltinStructKind {
 	_bool,
@@ -110,10 +110,10 @@ private:
 	};
 
 public:
-	inline ConcreteStructBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-	inline ConcreteStructBody(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
-	inline ConcreteStructBody(const Union __union) : kind{Kind::_union}, _union{__union} {}
-	inline ConcreteStructBody(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
+	explicit inline ConcreteStructBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	explicit inline ConcreteStructBody(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
+	explicit inline ConcreteStructBody(const Union __union) : kind{Kind::_union}, _union{__union} {}
+	explicit inline ConcreteStructBody(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
@@ -378,18 +378,18 @@ private:
 	};
 
 public:
-	inline ConstantKind(const Array a) : kind{Kind::array}, array{a} {}
-	inline ConstantKind(const Bool a) : kind{Kind::_bool}, _bool{a} {}
-	inline ConstantKind(const char a) : kind{Kind::_char}, _char{a} {}
-	inline ConstantKind(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
-	inline ConstantKind(const Int64 a) : kind{Kind::int64}, int64{a} {}
-	inline ConstantKind(const Lambda a) : kind{Kind::lambda}, lambda{a} {}
-	inline ConstantKind(const Nat64 a) : kind{Kind::nat64}, nat64{a} {}
-	inline ConstantKind(const Null a) : kind{Kind::_null}, _null{a} {}
-	inline ConstantKind(const Ptr a) : kind{Kind::ptr}, ptr{a} {}
-	inline ConstantKind(const Record a) : kind{Kind::record}, record{a} {}
-	inline ConstantKind(const Union a) : kind{Kind::_union}, _union{a} {}
-	inline ConstantKind(const Void a) : kind{Kind::_void}, _void{a} {}
+	explicit inline ConstantKind(const Array a) : kind{Kind::array}, array{a} {}
+	explicit inline ConstantKind(const Bool a) : kind{Kind::_bool}, _bool{a} {}
+	explicit inline ConstantKind(const char a) : kind{Kind::_char}, _char{a} {}
+	explicit inline ConstantKind(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
+	explicit inline ConstantKind(const Int64 a) : kind{Kind::int64}, int64{a} {}
+	explicit inline ConstantKind(const Lambda a) : kind{Kind::lambda}, lambda{a} {}
+	explicit inline ConstantKind(const Nat64 a) : kind{Kind::nat64}, nat64{a} {}
+	explicit inline ConstantKind(const Null a) : kind{Kind::_null}, _null{a} {}
+	explicit inline ConstantKind(const Ptr a) : kind{Kind::ptr}, ptr{a} {}
+	explicit inline ConstantKind(const Record a) : kind{Kind::record}, record{a} {}
+	explicit inline ConstantKind(const Union a) : kind{Kind::_union}, _union{a} {}
+	explicit inline ConstantKind(const Void a) : kind{Kind::_void}, _void{a} {}
 
 	inline const Bool isArray() const {
 		return enumEq(kind, Kind::array);
@@ -561,10 +561,10 @@ private:
 	};
 
 public:
-	inline ConstantOrLambdaOrVariable(const Variable _variable) : kind{Kind::variable}, variable{_variable} {}
-	inline ConstantOrLambdaOrVariable(const Constant* _constant)
+	explicit inline ConstantOrLambdaOrVariable(const Variable _variable) : kind{Kind::variable}, variable{_variable} {}
+	explicit inline ConstantOrLambdaOrVariable(const Constant* _constant)
 		: kind{Kind::constant}, constant{_constant} {}
-	inline ConstantOrLambdaOrVariable(const KnownLambdaBody* _knownLambdaBody)
+	explicit inline ConstantOrLambdaOrVariable(const KnownLambdaBody* _knownLambdaBody)
 		: kind{Kind::knownLambdaBody}, knownLambdaBody{_knownLambdaBody} {}
 
 	inline const Bool isVariable() const {
@@ -644,8 +644,8 @@ private:
 		const ConcreteExpr* concreteExpr;
 	};
 public:
-	inline ConstantOrExpr(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
-	inline ConstantOrExpr(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
+	explicit inline ConstantOrExpr(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
+	explicit inline ConstantOrExpr(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
 
 	inline const Bool isConstant() const {
 		return enumEq(kind, Kind::constant);
@@ -702,10 +702,10 @@ private:
 		const ConcreteExpr* concreteExpr;
 	};
 public:
-	inline ConcreteFunBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-	inline ConcreteFunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
-	inline ConcreteFunBody(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
-	inline ConcreteFunBody(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
+	explicit inline ConcreteFunBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	explicit inline ConcreteFunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
+	explicit inline ConcreteFunBody(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
+	explicit inline ConcreteFunBody(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
 
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);

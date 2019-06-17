@@ -30,9 +30,10 @@ namespace {
 		// File content must go in astsArena because we refer to strings without copying
 		const Opt<const NulTerminatedStr> opFileContent = getFile(astsArena, where, storages);
 		if (opFileContent.has()) {
-			lineAndColumnGetters.add(modelArena, where, lineAndColumnGetterForText(modelArena, opFileContent.force()));
+			const NulTerminatedStr text = opFileContent.force();
+			lineAndColumnGetters.add(modelArena, where, lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
 			return mapFailure<const Arr<const Diagnostic>>{}(
-				parseFile(astsArena, opFileContent.force()),
+				parseFile(astsArena, text),
 				[&](const ParseDiagnostic p) { return parseDiagnostics(modelArena, where, p); });
 		}
 		else

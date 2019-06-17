@@ -43,7 +43,7 @@ namespace {
 						arena,
 						s,
 						emptyArr<const Type>(),
-						some<MutArr<StructInst*>&>(delayedStructInsts));
+						some<MutArr<StructInst*>*>(&delayedStructInsts));
 				}));
 		}
 	}
@@ -55,7 +55,7 @@ namespace {
 		MutArr<StructInst*>& delayedStructInsts
 	) {
 		// non-generic types
-		auto ng = [&](const char* s) -> const Opt<const StructInst*> {
+		auto ng = [&](const CStr s) -> const Opt<const StructInst*> {
 			return getCommonNonGenericType(ctx.arena, structsAndAliasesMap, strLiteral(s), delayedStructInsts);
 		};
 		const Opt<const StructInst*>
@@ -66,7 +66,7 @@ namespace {
 			_void = ng("void");
 
 		// generic types
-		auto com = [&](const char* name, const size_t nTypeParameters) -> const Opt<const StructDecl*> {
+		auto com = [&](const CStr name, const size_t nTypeParameters) -> const Opt<const StructDecl*> {
 			return getCommonGenericType(structsAndAliasesMap, strLiteral(name), nTypeParameters);
 		};
 		const Opt<const StructDecl*>
@@ -189,7 +189,7 @@ namespace {
 		const SigAst ast,
 		const Arr<const TypeParam> outerTypeParams,
 		const StructsAndAliasesMap& structsAndAliasesMap,
-		Opt<MutArr<StructInst*>&> delayStructInsts
+		DelayStructInsts delayStructInsts
 	) {
 		const Arr<const TypeParam> typeParams = isEmpty(explicitTypeParams)
 			? collectTypeParams(ctx.arena, ast, outerTypeParams)
@@ -208,7 +208,12 @@ namespace {
 		MutArr<StructInst*>& delayStructInsts
 	) {
 		const SigAndTypeParams st = checkSig(
-			ctx, emptyArr<const TypeParamAst>(), ast, outerTypeParams, structsAndAliasesMap, some<MutArr<StructInst*>&>(delayStructInsts));
+			ctx,
+			emptyArr<const TypeParamAst>(),
+			ast,
+			outerTypeParams,
+			structsAndAliasesMap,
+			some<MutArr<StructInst*>*>(&delayStructInsts));
 		if (!isEmpty(st.typeParams))
 			ctx.diag(st.sig.range, Diag{Diag::ShouldNotHaveTypeParamsInIface{}});
 		return st.sig;
@@ -250,8 +255,11 @@ namespace {
 	) {
 		zip(aliases, asts, [&](StructAlias& structAlias, const StructAliasAst& ast) {
 			const Opt<const StructInst*> inst = instStructFromAst(
-				ctx, ast.target, structsAndAliasesMap, TypeParamsScope{structAlias.typeParams},
-				some<MutArr<StructInst*>&>(delayStructInsts));
+				ctx,
+				ast.target,
+				structsAndAliasesMap,
+				TypeParamsScope{structAlias.typeParams},
+				some<MutArr<StructInst*>*>(&delayStructInsts));
 			if (!inst.has())
 				todo<void>("handle invalid alias");
 			structAlias.setTarget(inst.force());
@@ -279,7 +287,7 @@ namespace {
 		const Arr<const StructDeclAst> asts,
 		MutArr<StructInst*>& delayStructInsts
 	) {
-		DelayStructInsts delay = some<MutArr<StructInst*>&>(delayStructInsts);
+		DelayStructInsts delay = some<MutArr<StructInst*>*>(&delayStructInsts);
 		zip(structs, asts, [&](StructDecl& strukt, const StructDeclAst& ast) {
 			const StructBody body = ast.body.match(
 				[](const StructDeclAst::Body::Builtin) {
@@ -385,7 +393,12 @@ namespace {
 			Opt<const SpecDecl*> opSpec = tryFindSpec(ctx, ast.spec, ast.range, specsMap);
 			if (opSpec.has()) {
 				const SpecDecl* spec = opSpec.force();
-				const Arr<const Type> args = typeArgsFromAsts(ctx, ast.typeArgs, structsAndAliasesMap, typeParamsScope, none<MutArr<StructInst*>&>());
+				const Arr<const Type> args = typeArgsFromAsts(
+					ctx,
+					ast.typeArgs,
+					structsAndAliasesMap,
+					typeParamsScope,
+					none<MutArr<StructInst*>*>());
 				if (args.size != spec->typeParams.size) {
 					ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, args.size}});
 					return none<const SpecUse>();
@@ -407,7 +420,12 @@ namespace {
 	) {
 		const Arr<FunDecl> funs = map<FunDecl>{}(ctx.arena, asts, [&](const FunDeclAst funAst) {
 			const SigAndTypeParams stp = checkSig(
-				ctx, funAst.typeParams, funAst.sig, emptyArr<const TypeParam>(), structsAndAliasesMap, none<MutArr<StructInst*>&>());
+				ctx,
+				funAst.typeParams,
+				funAst.sig,
+				emptyArr<const TypeParam>(),
+				structsAndAliasesMap,
+				none<MutArr<StructInst*>*>());
 			const TypeParamsScope typeParamsScope = TypeParamsScope{stp.typeParams};
 			const Arr<const SpecUse> specUses = checkSpecUses(ctx, funAst.specUses, structsAndAliasesMap, specsMap, typeParamsScope);
 			const FunFlags flags = FunFlags{funAst.noCtx, funAst.summon, funAst.unsafe, funAst.trusted};

@@ -13,7 +13,7 @@ public:
 	inline void writeChar(const char c) {
 		res.add(arena, c);
 	}
-	inline void writeStatic(const char* text) {
+	inline void writeStatic(const CStr text) {
 		writeStr(strLiteral(text));
 	}
 	void writeStr(const Str s);

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "./Path.h"
 #include "./util.h"
 #include "./util/lineAndColumnGetter.h"
-#include "./util/SourceRange.h"
+#include "./util/path.h"
+#include "./util/sourceRange.h"
 
 // A module came from the global imports directory or locally
 enum class StorageKind {
@@ -71,9 +71,9 @@ private:
 		const StructInst* structInst;
 	};
 public:
-	inline Type(const Bogus _bogus) : kind{Kind::bogus}, bogus{_bogus} {}
-	inline Type(const TypeParam* _typeParam) : kind{Kind::typeParam}, typeParam{_typeParam} {}
-	inline Type(const StructInst* _structInst) : kind{Kind::structInst}, structInst{_structInst} {}
+	explicit inline Type(const Bogus _bogus) : kind{Kind::bogus}, bogus{_bogus} {}
+	explicit inline Type(const TypeParam* _typeParam) : kind{Kind::typeParam}, typeParam{_typeParam} {}
+	explicit inline Type(const StructInst* _structInst) : kind{Kind::structInst}, structInst{_structInst} {}
 
 	template <
 		typename CbBogus,
@@ -191,13 +191,13 @@ private:
 	};
 
 public:
-	inline StructBody(const Builtin _builtin)
+	explicit inline StructBody(const Builtin _builtin)
 		: kind{Kind::builtin}, builtin{_builtin} {}
-	inline StructBody(const Fields _fields)
+	explicit inline StructBody(const Fields _fields)
 		: kind{Kind::fields}, fields{_fields} {}
-	inline StructBody(const Union __union)
+	explicit inline StructBody(const Union __union)
 		: kind{Kind::_union}, _union{__union} {}
-	inline StructBody(const Iface _iface)
+	explicit inline StructBody(const Iface _iface)
 		: kind{Kind::iface}, iface{_iface} {}
 
 	inline const Bool isBuiltin() const {
@@ -342,13 +342,10 @@ private:
 		const Extern _extern;
 		const Expr* expr;
 	};
-	inline FunBody(const Kind _kind) : kind{_kind} {
-		assert(kind == Kind::builtin || kind == Kind::_extern);
-	}
 public:
-	inline FunBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-	inline FunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
-	inline FunBody(const Expr* _expr) : kind{Kind::expr}, expr{_expr} {}
+	explicit inline FunBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	explicit inline FunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
+	explicit inline FunBody(const Expr* _expr) : kind{Kind::expr}, expr{_expr} {}
 
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
@@ -457,8 +454,8 @@ private:
 	};
 
 public:
-	inline StructOrAlias(const StructAlias* _alias) : kind{Kind::alias}, alias{_alias} {}
-	inline StructOrAlias(const StructDecl* _decl) : kind{Kind::decl}, decl{_decl} {}
+	explicit inline StructOrAlias(const StructAlias* _alias) : kind{Kind::alias}, alias{_alias} {}
+	explicit inline StructOrAlias(const StructDecl* _decl) : kind{Kind::decl}, decl{_decl} {}
 
 	inline const Bool isAlias() const {
 		return enumEq(kind, Kind::alias);
@@ -611,8 +608,8 @@ private:
 	};
 
 public:
-	inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
-	inline CalledDecl(const SpecUseSig _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
+	explicit inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
+	explicit inline CalledDecl(const SpecUseSig _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
 
 	inline const Bool isFunDecl() const {
 		return enumEq(kind, Kind::funDecl);

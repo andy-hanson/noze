@@ -10,7 +10,7 @@ struct TypeParamsScope {
 	const Arr<const TypeParam> outer = emptyArr<const TypeParam>();
 };
 
-using DelayStructInsts = const Opt<MutArr<StructInst*>&>;
+using DelayStructInsts = const Opt<MutArr<StructInst*>*>;
 
 const Type instantiateType(Arena& arena, const Type type, const Arr<const TypeParam> typeParams, const Arr<const Type> typeArgs);
 
@@ -32,7 +32,7 @@ inline const StructInst* instantiateStructInst(Arena& arena, const StructInst* s
 }
 
 inline const StructInst* instantiateStructNeverDelay(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
-	return instantiateStruct(arena, decl, typeArgs, none<MutArr<StructInst*>&>());
+	return instantiateStruct(arena, decl, typeArgs, none<MutArr<StructInst*>*>());
 }
 
 const Opt<const StructInst*> instStructFromAst(
@@ -48,7 +48,7 @@ inline const Opt<const StructInst*> instStructFromAstNeverDelay(
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope
 ) {
-	return instStructFromAst(ctx, ast, structsAndAliasesMap, typeParamsScope, none<MutArr<StructInst*>&>());
+	return instStructFromAst(ctx, ast, structsAndAliasesMap, typeParamsScope, none<MutArr<StructInst*>*>());
 }
 
 const Type typeFromAst(

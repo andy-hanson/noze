@@ -339,7 +339,7 @@ namespace {
 			const CallAst call = CallAst{
 				strLiteral("literal"),
 				emptyArr<const TypeAst>(),
-				arrLiteral<const ExprAst>(ctx.arena(), ExprAst{range, ast})};
+				arrLiteral<const ExprAst>(ctx.arena(), ExprAst{range, ExprAstKind{ast}})};
 			return checkCall(ctx, range, call, expected);
 		}
 	}
@@ -556,7 +556,7 @@ namespace {
 	}
 
 	const CheckedExpr checkThen(ExprContext& ctx, const SourceRange range, const ThenAst ast, Expected& expected) {
-		const ExprAst lambda = ExprAst{range, LambdaAst{arrLiteral<const LambdaAst::Param>(ctx.arena(), ast.left), ast.then}};
+		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx.arena(), ast.left), ast.then}}};
 		const CallAst call = CallAst{
 			strLiteral("then"),
 			emptyArr<const TypeAst>(),

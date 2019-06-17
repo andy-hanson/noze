@@ -46,7 +46,7 @@ const Constant* AllConstants::ptr(Arena& arena, const Constant* array, const siz
 	assert(index < a.size());
 	const Arr<const Constant*> ptrs = arrayToPtrs.getOrAdd(arena, array, [&]() {
 		return fillArr<const Constant*>{}(arena, a.size(), [&](const size_t idx) {
-			return _nuConstant(arena, ConstantKind::Ptr{array, idx}, nextPtrId++);
+			return _nuConstant(arena, ConstantKind{ConstantKind::Ptr{array, idx}}, nextPtrId++);
 		});
 	});
 	return ptrs[index];

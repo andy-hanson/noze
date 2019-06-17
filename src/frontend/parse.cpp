@@ -38,7 +38,7 @@ namespace {
 		Path const* path = rootPath(lexer.arena, takeName(lexer));
 		while (tryTake(lexer, '.'))
 			path = childPath(lexer.arena, path, takeName(lexer));
-		path = addExt(lexer.arena, path, strLiteral(".nz"));
+		path = addExtension(lexer.arena, path, strLiteral(".nz"));
 		return ImportAst{range(lexer, start), nDots, path};
 	}
 
@@ -118,7 +118,7 @@ namespace {
 		const SpaceOrNewlineOrIndent after;
 	};
 
-	const Opt<const NonFunKeywordAndIndent> tryTake(Lexer& lexer, const char* kwSpace, const char* kwNl, const NonFunKeyword keyword) {
+	const Opt<const NonFunKeywordAndIndent> tryTake(Lexer& lexer, const CStr kwSpace, const CStr kwNl, const NonFunKeyword keyword) {
 		if (tryTake(lexer, kwSpace))
 			return some<const NonFunKeywordAndIndent>(NonFunKeywordAndIndent{keyword, SpaceOrNewlineOrIndent::space});
 		else if (tryTake(lexer, kwNl)) {

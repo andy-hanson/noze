@@ -18,10 +18,41 @@ static_assert(sizeof(Int64) * CHAR_BIT == 64, "int64");
 static_assert(sizeof(Nat64) * CHAR_BIT == 64, "nat64");
 static_assert(sizeof(Float64) * CHAR_BIT == 64, "float64");
 
+using CStr = const char*;
+
+template <typename T>
+inline T todo(const CStr message) {
+	printf("%s\n", message);
+	throw message;
+}
+
+inline size_t safeIntToSizeT(const int i) {
+	assert(i >= 0);
+	return static_cast<size_t>(i);
+}
+
+inline ssize_t safeSizeTToSSizeT(const size_t s) {
+	assert(s <= 9999);
+	return static_cast<ssize_t>(s);
+}
+
+inline int safeSizeTToInt(const size_t s) {
+	assert(s <= 9999);
+	return s;
+}
+
+inline uint safeSizeTToUint(const size_t s) {
+	assert(s <= 9999);
+	return s;
+}
+
 struct Bool {
 	bool b;
 
 	inline explicit Bool(bool _b) : b{_b} {}
+	// This is necessary to use Bool in 'if' statements.
+	// Unfortunately, this makes it implicitly convert to int too!
+	// (and size_t, and float, and basically everything...)
 	inline operator bool() const {
 		return b;
 	}
@@ -87,6 +118,35 @@ struct Range {
 	}
 };
 
+struct RangeDownIter {
+	ssize_t cur;
+
+	inline size_t operator*() const {
+		assert(cur >= 0);
+		return static_cast<size_t>(cur);
+	}
+
+	inline void operator++() {
+		cur--;
+	}
+
+	inline const Bool operator!=(const RangeDownIter other) const {
+		return neq(cur, other.cur);
+	}
+};
+
+struct RangeDown {
+	const size_t n;
+
+	inline RangeDownIter begin() const {
+		return RangeDownIter{safeSizeTToSSizeT(n - 1)};
+	}
+
+	inline RangeDownIter end() const {
+		return RangeDownIter{-1};
+	}
+};
+
 template <typename T>
 void initMemory(const T& to, const T& from) {
 	// T may contain const members, so do initialization by blitting
@@ -138,6 +198,14 @@ public:
 		return value;
 	}
 };
+
+template <typename T>
+inline T forceOrTodo(const Opt<T> opt) {
+	if (opt.has())
+		return opt.force();
+	else
+		return todo<T>("forceOrTodo");
+}
 
 enum class Comparison {
 	less,
@@ -337,15 +405,21 @@ inline T only(const Arr<T> a) {
 }
 
 template <typename T>
-inline Arr<T> slice(Arr<T> a, size_t lo, size_t size) {
+inline const Arr<T> slice(const Arr<T> a, const size_t lo, const size_t size) {
 	assert(lo + size <= a.size);
 	return Arr<T>{a._begin + lo, size};
 }
 
 template <typename T>
-inline Arr<T> slice(Arr<T> a, size_t lo) {
+inline const Arr<T> slice(const Arr<T> a, const size_t lo) {
 	assert(lo <= a.size);
 	return slice(a, lo, a.size - lo);
+}
+
+template <typename T>
+inline const Arr<T> sliceFromTo(const Arr<T> a, const size_t lo, const size_t hi) {
+	assert(lo <= hi);
+	return slice(a, lo, hi - lo);
 }
 
 template <typename T>
@@ -480,19 +554,29 @@ inline const Bool isEmpty(const ArrBuilder<T>& a) {
 }
 
 using Str = const Arr<const char>;
-using NulTerminatedStr = Str;
+struct NulTerminatedStr {
+	const Str str;
+	explicit inline NulTerminatedStr(const Str _str) : str{_str} {
+		assert(str[str.size - 1] == '\0');
+	}
+
+	inline CStr asCStr() const {
+		return str.begin();
+	}
+};
+
 using MutStr = MutArr<const char>;
 
-inline const char* end(const char* c) {
+inline CStr end(const CStr c) {
 	return *c == '\0' ? c : end(c + 1);
 }
 
-inline const Str strLiteral(const char* c) {
+inline const Str strLiteral(const CStr c) {
 	return Str{c, static_cast<size_t>(end(c) - c)};
 }
 
-inline const NulTerminatedStr nulTerminatedStrLiteral(const char* c) {
-	return NulTerminatedStr{c, static_cast<size_t>(end(c) + 1 - c)};
+inline const NulTerminatedStr nulTerminatedStrLiteral(const CStr c) {
+	return NulTerminatedStr{Str{c, static_cast<size_t>(end(c) + 1 - c)}};
 }
 
 const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s);
@@ -501,7 +585,7 @@ const Bool strEq(const Str a, const Str b);
 
 Comparison compareStr(const Str a, const Str b);
 
-inline const Bool strEqLiteral(const Str s, const char* b) {
+inline const Bool strEqLiteral(const Str s, const CStr b) {
 	return strEq(s, strLiteral(b));
 }
 
@@ -557,12 +641,6 @@ inline const Bool ptrEquals(const T* a, const T* b) {
 template <typename T>
 inline Comparison comparePointer(const T* a, const T* b) {
 	return a < b ? Comparison::less : a >  b ? Comparison::greater : Comparison::equal;
-}
-
-template <typename T>
-inline T todo(const char* message) {
-	printf("%s\n", message);
-	throw message;
 }
 
 template <typename K, typename V>
@@ -779,19 +857,4 @@ inline const T lazilySet(Late<T>& late, Cb cb) {
 template <typename T>
 inline T unreachable() {
 	assert(0);
-}
-
-inline ssize_t safeSizeTToSSizeT(const size_t s) {
-	assert(s <= 9999);
-	return static_cast<ssize_t>(s);
-}
-
-inline int safeSizeTToInt(const size_t s) {
-	assert(s <= 9999);
-	return s;
-}
-
-inline uint safeSizeTToUint(const size_t s) {
-	assert(s <= 9999);
-	return s;
 }

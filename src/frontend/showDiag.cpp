@@ -18,7 +18,7 @@ namespace {
 			return *this << static_cast<size_t>(u);
 		}
 
-		Output& operator<<(const char* c) {
+		Output& operator<<(const CStr c) {
 			printf("%s", c);
 			return *this;
 		}
@@ -173,7 +173,7 @@ namespace {
 				}
 			},
 			[&](const Diag::NameNotFound d) {
-				const char* kind = [&]() {
+				const CStr kind = [&]() {
 					switch (d.kind) {
 						case Diag::NameNotFound::Kind::strukt:
 							return "struct";

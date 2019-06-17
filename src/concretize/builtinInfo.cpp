@@ -1,7 +1,7 @@
 #include "./builtinInfo.h"
 
 namespace {
-	const Bool isNamed(const Type t, const char* name) {
+	const Bool isNamed(const Type t, const CStr name) {
 		return _and(t.isStructInst(), strEqLiteral(t.asStructInst()->decl->name, name));
 	}
 

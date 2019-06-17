@@ -1,5 +1,6 @@
 #pragma once
 
+#include <initializer_list>
 #include "./resultUtil.h"
 
 template <typename T, typename Cb>
@@ -32,7 +33,13 @@ inline const T& first(const Arr<T> a) {
 template <typename T>
 inline const Arr<T> tail(const Arr<T> a) {
 	assert(!isEmpty(a));
-	return Arr<T>{a._begin + 1, a.size - 1};
+	return slice(a, 1, a.size - 1);
+}
+
+template <typename T>
+inline const Arr<T> rtail(const Arr<T> a) {
+	assert(!isEmpty(a));
+	return slice(a, 0, a.size - 1);
 }
 
 template <typename T>
@@ -50,10 +57,27 @@ const T& last(const MutArr<T>& a) {
 template <typename T>
 Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size);
-	for (const size_t i : Range{a.size})
-		res.set(i, a[i]);
-	for (const size_t i : Range{b.size})
-		res.set(a.size + i, b[i]);
+	copyFrom(res, 0, a);
+	copyFrom(res, a.size, b);
+	return res.freeze();
+}
+
+template <typename T>
+Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b, const Arr<T> c) {
+	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size + c.size);
+	copyFrom(res, 0, a);
+	copyFrom(res, a.size, b);
+	copyFrom(res, a.size + b.size, c);
+	return res.freeze();
+}
+
+template <typename T>
+Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b, const Arr<T> c, const Arr<T> d) {
+	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size + c.size);
+	copyFrom(res, 0, a);
+	copyFrom(res, a.size, b);
+	copyFrom(res, a.size + b.size, c);
+	copyFrom(res, a.size + b.size + c.size, d);
 	return res.freeze();
 }
 
@@ -88,6 +112,17 @@ inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c) {
 	initMemory(out[1], b);
 	initMemory(out[2], c);
 	return Arr<T>{out, 3};
+}
+
+template <typename T>
+inline Arr<T> arrLiteral(Arena& arena, std::initializer_list<T> list) {
+	const size_t size = list.size();
+	T* out = static_cast<T*>(arena.alloc(sizeof(T) * size));
+	T* lBegin = list.begin();
+	assert(lBegin + size == list.end());
+	for (const size_t i : Range{size})
+		initMemory(out[i], lBegin[i]);
+	return Arr<T>{out, size};
 }
 
 template <typename Out>
@@ -332,7 +367,7 @@ inline const Str copyStr(Arena& arena, const Str in) {
 }
 
 inline const NulTerminatedStr copyNulTerminatedStr(Arena& arena, const NulTerminatedStr in) {
-	return copyArr(arena, in);
+	return NulTerminatedStr{copyArr(arena, in.str)};
 }
 
 // Each of the returned arrays has elements considered equivalent by `cmp`
@@ -438,4 +473,8 @@ inline const Bool contains(const Arr<T>& arr, const T t) {
 	return exists(arr, [&](const T value) {
 		return eq(value, t);
 	});
+}
+
+inline const Str stripNulTerminator(const NulTerminatedStr n) {
+	return rtail(n.str);
 }

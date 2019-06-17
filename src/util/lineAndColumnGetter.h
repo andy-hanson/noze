@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../util.h"
-#include "./SourceRange.h"
+#include "./sourceRange.h"
 
 struct LineAndColumn {
 	const uint line;

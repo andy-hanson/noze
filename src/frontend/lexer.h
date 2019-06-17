@@ -7,8 +7,8 @@
 
 struct Lexer {
 	Arena& arena;
-	const char* const sourceBegin;
-	const char* ptr;
+	const CStr sourceBegin;
+	CStr ptr;
 	size_t indent = 0;
 };
 
@@ -38,9 +38,9 @@ T throwAtChar(Lexer& lexer, const ParseDiag diag) {
 }
 
 const Bool tryTake(Lexer& lexer, const char c);
-const Bool tryTake(Lexer& lexer, const char* c);
+const Bool tryTake(Lexer& lexer, const CStr c);
 void take(Lexer& lexer, const char c);
-void take(Lexer& lexer, const char* c) ;
+void take(Lexer& lexer, const CStr c) ;
 
 void skipBlankLines(Lexer& lexer);
 

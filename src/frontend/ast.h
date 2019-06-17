@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../Path.h"
 #include "../util.h"
-#include "../util/SourceRange.h"
+#include "../util/path.h"
+#include "../util/sourceRange.h"
 
 struct NameAndRange {
 	const SourceRange range;
@@ -33,8 +33,8 @@ private:
 	};
 
 public:
-	inline TypeAst(const TypeAst::TypeParam t) : kind{Kind::typeParam}, typeParam{t} {}
-	inline TypeAst(const TypeAst::InstStruct i) : kind{Kind::instStruct}, instStruct{i} {}
+	explicit inline TypeAst(const TypeAst::TypeParam t) : kind{Kind::typeParam}, typeParam{t} {}
+	explicit inline TypeAst(const TypeAst::InstStruct i) : kind{Kind::instStruct}, instStruct{i} {}
 
 	template <typename CbTypeParam, typename CbInstStruct>
 	inline auto match(CbTypeParam cbTypeParam, CbInstStruct cbInstStruct) const {
@@ -186,20 +186,20 @@ private:
 	};
 
 public:
-	inline ExprAstKind(const CallAst a) : kind{Kind::call}, call{a} {}
-	inline ExprAstKind(const CondAst a) : kind{Kind::cond}, cond{a} {}
-	inline ExprAstKind(const CreateArrAst a) : kind{Kind::createArr}, createArr{a} {}
-	inline ExprAstKind(const CreateRecordAst a) : kind{Kind::createRecord}, createRecord{a} {}
-	inline ExprAstKind(const FunAsLambdaAst a) : kind{Kind::funAsLambda}, funAsLambda{a} {}
-	inline ExprAstKind(const IdentifierAst a) : kind{Kind::identifier}, identifier{a} {}
-	inline ExprAstKind(const LambdaAst a) : kind{Kind::lambda}, lambda{a} {}
-	inline ExprAstKind(const LetAst a) : kind{Kind::let}, let{a} {}
-	inline ExprAstKind(const LiteralAst a) : kind{Kind::literal}, literal{a} {}
-	inline ExprAstKind(const MatchAst a) : kind{Kind::match}, _match{a} {}
-	inline ExprAstKind(const MessageSendAst a) : kind{Kind::messageSend}, messageSend{a} {}
-	inline ExprAstKind(const NewActorAst a) : kind{Kind::newActor}, newActor{a} {}
-	inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
-	inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
+	explicit inline ExprAstKind(const CallAst a) : kind{Kind::call}, call{a} {}
+	explicit inline ExprAstKind(const CondAst a) : kind{Kind::cond}, cond{a} {}
+	explicit inline ExprAstKind(const CreateArrAst a) : kind{Kind::createArr}, createArr{a} {}
+	explicit inline ExprAstKind(const CreateRecordAst a) : kind{Kind::createRecord}, createRecord{a} {}
+	explicit inline ExprAstKind(const FunAsLambdaAst a) : kind{Kind::funAsLambda}, funAsLambda{a} {}
+	explicit inline ExprAstKind(const IdentifierAst a) : kind{Kind::identifier}, identifier{a} {}
+	explicit inline ExprAstKind(const LambdaAst a) : kind{Kind::lambda}, lambda{a} {}
+	explicit inline ExprAstKind(const LetAst a) : kind{Kind::let}, let{a} {}
+	explicit inline ExprAstKind(const LiteralAst a) : kind{Kind::literal}, literal{a} {}
+	explicit inline ExprAstKind(const MatchAst a) : kind{Kind::match}, _match{a} {}
+	explicit inline ExprAstKind(const MessageSendAst a) : kind{Kind::messageSend}, messageSend{a} {}
+	explicit inline ExprAstKind(const NewActorAst a) : kind{Kind::newActor}, newActor{a} {}
+	explicit inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
+	explicit inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
 
 	inline const Bool isIdentifier() const {
 		return enumEq(kind, Kind::identifier);
@@ -354,10 +354,10 @@ struct StructDeclAst {
 		};
 
 	public:
-		inline Body(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-		inline Body(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
-		inline Body(const Union _union) : kind{Kind::_union}, _union{_union} {}
-		inline Body(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
+		explicit inline Body(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+		explicit inline Body(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
+		explicit inline Body(const Union _union) : kind{Kind::_union}, _union{_union} {}
+		explicit inline Body(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
 		inline const Bool isFields() const {
 			return enumEq(kind, Kind::fields);
@@ -418,9 +418,9 @@ private:
 		const ExprAst exprAst;
 	};
 public:
-	inline FunBodyAst(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-	inline FunBodyAst(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
-	inline FunBodyAst(const ExprAst _exprAst) : kind{Kind::exprAst}, exprAst{_exprAst} {}
+	explicit inline FunBodyAst(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	explicit inline FunBodyAst(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
+	explicit inline FunBodyAst(const ExprAst _exprAst) : kind{Kind::exprAst}, exprAst{_exprAst} {}
 
 	template <typename CbBuiltin, typename CbExtern, typename CbExprAst>
 	inline auto match(CbBuiltin cbBuiltin, CbExtern cbExtern, CbExprAst cbExprAst) const {
