@@ -7,179 +7,107 @@
 
 struct Lexer {
 	Arena& arena;
-	Arena& pathArena;
-
-	// Need to remember the beginning to get index
-	const char* sourceBegin;
+	const char* const sourceBegin;
 	const char* ptr;
 	size_t indent = 0;
-
-public:
-	inline Lexer(Arena& astArena, Arena& _pathArena, const NulTerminatedStr p)
-		: arena{astArena}, pathArena{_pathArena}, sourceBegin{p._begin}, ptr{p._begin} {}
-
-	inline char cur() const {
-		return *ptr;
-	}
-
-private:
-	inline char next() {
-		const char res = *ptr;
-		ptr++;
-		return res;
-	}
-
-public:
-	inline Pos at() const {
-		return safeSizeTToUint(ptr - sourceBegin);
-	}
-
-	template <typename T>
-	inline T throwDiag(const ParseDiagnostic pd) const {
-		throw pd;
-	}
-
-	template <typename T>
-	inline T throwDiag(const SourceRange range, const ParseDiag diag) const {
-		return throwDiag<T>(ParseDiagnostic{range, diag});
-	}
-
-	template <typename T>
-	inline T throwAtChar(const ParseDiag diag) const {
-		const Pos a = at();
-		const SourceRange range = SourceRange{a, cur() == '\0' ? a : a + 1};
-		return throwDiag<T>(range, diag);
-	}
-
-	template <typename T>
-	inline T throwUnexpected() const {
-		return throwAtChar<T>(ParseDiag{ParseDiag::UnexpectedCharacter{cur()}});
-	}
-
-	inline const Bool tryTake(const char c) {
-		if (*ptr == c) {
-			ptr++;
-			return True;
-		} else
-			return False;
-	}
-
-	const Bool tryTake(const char* c);
-
-	inline void take(const char c) {
-		if (!tryTake(c))
-			throwUnexpected<void>();
-	}
-
-	inline void take(const char* c) {
-		if (!tryTake(c))
-			throwUnexpected<void>();
-	}
-
-	inline const SourceRange range(const Pos begin) const {
-		assert(begin < at());
-		return SourceRange{begin, at()};
-	}
-
-private:
-	inline const SourceRange range(const char* begin) {
-		assert(begin >= sourceBegin);
-		return range(safeSizeTToUint(begin - sourceBegin));
-	}
-
-	// Returns the change in indent (and updates the indent)
-	int skipLinesAndGetIndentDelta();
-
-	void takeNewline() {
-		take("\n");
-		takeExtraNewlines();
-	}
-
-	void takeExtraNewlines();
-
-public:
-	void skipBlankLines();
-
-	enum class NewlineOrIndent { newline, indent };
-	NewlineOrIndent takeNewlineOrIndent();
-	NewlineOrIndent takeNewlineOrIndentAfterNl();
-
-	void takeIndent();
-
-	void takeDedent();
-
-	const Bool tryTakeIndent();
-
-	const Bool tryTakeIndentAfterNewline();
-
-public:
-	// Returns # of dedents. (TODO:RENAME)
-	size_t takeNewlineOrDedentAmount();
-
-	enum class NewlineOrDedent { newline, dedent };
-	NewlineOrDedent takeNewlineOrSingleDedent();
-
-private:
-	const Str copyStr(const char* begin, const char* end) const {
-		return ::copyStr(arena, arrOfRange(begin, end));
-	}
-
-	const Str takeNameRest(const char* begin);
-
-public:
-	const Str takeName();
-
-	const NameAndRange takeNameAndRange();
-
-	struct ExpressionToken {
-		enum class Kind {
-			actor,
-			ampersand,
-			lambda,
-			lbrace,
-			literal,
-			lparen,
-			match,
-			nameAndRange,
-			_new,
-			newArr,
-			when
-		};
-		const Kind kind;
-		union {
-			const Str literal;
-			const NameAndRange nameAndRange;
-		};
-		inline ExpressionToken(Kind _kind) : kind{_kind} {
-			assert(kind != Kind::literal && kind != Kind::nameAndRange);
-		}
-		inline ExpressionToken(const Str _literal)
-			: kind{Kind::literal}, literal{_literal} {}
-		inline ExpressionToken(const NameAndRange _nameAndRange)
-			: kind{Kind::nameAndRange}, nameAndRange{_nameAndRange} {}
-
-		inline Str asLiteral() const {
-			assert(kind == Kind::literal);
-			return literal;
-		}
-		inline const Bool isNameAndRange() const {
-			return enumEq(kind, Kind::nameAndRange);
-		}
-		inline NameAndRange asNameAndRange() const {
-			assert(isNameAndRange());
-			return nameAndRange;
-		}
-	};
-
-	const ExpressionToken takeExpressionToken();
-
-private:
-	const Str takeOperatorRest(const char* begin);
-	const ExpressionToken takeOperator(const char* begin);
-	const ExpressionToken takeNumber(const char* begin);
-	const Str takeStringLiteral();
 };
+
+inline char curChar(Lexer& lexer) {
+	return *lexer.ptr;
+}
+
+inline Pos curPos(const Lexer& lexer) {
+	return safeSizeTToUint(lexer.ptr - lexer.sourceBegin);
+}
+
+template <typename T>
+T throwDiag(const ParseDiagnostic pd) {
+	throw pd;
+}
+
+template <typename T>
+T throwDiag(const SourceRange range, const ParseDiag diag) {
+	return throwDiag<T>(ParseDiagnostic{range, diag});
+}
+
+template <typename T>
+T throwAtChar(Lexer& lexer, const ParseDiag diag) {
+	const Pos a = curPos(lexer);
+	const SourceRange range = SourceRange{a, curChar(lexer) == '\0' ? a : a + 1};
+	return throwDiag<T>(range, diag);
+}
+
+const Bool tryTake(Lexer& lexer, const char c);
+const Bool tryTake(Lexer& lexer, const char* c);
+void take(Lexer& lexer, const char c);
+void take(Lexer& lexer, const char* c) ;
+
+void skipBlankLines(Lexer& lexer);
+
+enum class NewlineOrIndent { newline, indent };
+NewlineOrIndent takeNewlineOrIndent(Lexer& lexer);
+NewlineOrIndent takeNewlineOrIndentAfterNl(Lexer& lexer);
+
+void takeIndent(Lexer& lexer);
+void takeDedent(Lexer& lexer);
+const Bool tryTakeIndent(Lexer& lexer);
+const Bool tryTakeIndentAfterNewline(Lexer& lexer);
+
+// Returns # of dedents. (TODO:RENAME)
+size_t takeNewlineOrDedentAmount(Lexer& lexer);
+
+enum class NewlineOrDedent { newline, dedent };
+NewlineOrDedent takeNewlineOrSingleDedent(Lexer& lexer);
+
+inline const SourceRange range(Lexer& lexer, const Pos begin) {
+	assert(begin < curPos(lexer));
+	return SourceRange{begin, curPos(lexer)};
+}
+
+const Str takeName(Lexer& lexer);
+const NameAndRange takeNameAndRange(Lexer& lexer);
+
+struct ExpressionToken {
+	enum class Kind {
+		actor,
+		ampersand,
+		lambda,
+		lbrace,
+		literal,
+		lparen,
+		match,
+		nameAndRange,
+		_new,
+		newArr,
+		when
+	};
+	const Kind kind;
+	union {
+		const Str literal;
+		const NameAndRange nameAndRange;
+	};
+	inline ExpressionToken(Kind _kind) : kind{_kind} {
+		assert(kind != Kind::literal && kind != Kind::nameAndRange);
+	}
+	inline ExpressionToken(const Str _literal)
+		: kind{Kind::literal}, literal{_literal} {}
+	inline ExpressionToken(const NameAndRange _nameAndRange)
+		: kind{Kind::nameAndRange}, nameAndRange{_nameAndRange} {}
+
+	inline Str asLiteral() const {
+		assert(kind == Kind::literal);
+		return literal;
+	}
+	inline const Bool isNameAndRange() const {
+		return enumEq(kind, Kind::nameAndRange);
+	}
+	inline NameAndRange asNameAndRange() const {
+		assert(isNameAndRange());
+		return nameAndRange;
+	}
+};
+const ExpressionToken takeExpressionToken(Lexer& lexer);
 
 const Bool tryTakeElseIndent(Lexer& lexer);
 
-Lexer createLexer(Arena& astArena, Arena& pathArena, const NulTerminatedStr source);
+Lexer createLexer(Arena& astArena, const NulTerminatedStr source);

@@ -55,3 +55,5 @@ inline Comparison comparePath(const Path* a, const Path* b) {
 	const Comparison result = res != Comparison::equal ? res : compareOpt<const Path*, comparePath>(a->parent, b->parent);
 	return result;
 }
+
+const Path* copyPath(Arena& arena, const Path* path);

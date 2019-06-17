@@ -11,7 +11,4 @@ struct ParseDiagnostic {
 	const ParseDiag diag;
 };
 
-const Result<const FileAst, const ParseDiagnostic> parseFile(
-	Arena& astArena,
-	Arena& pathArena,
-	const NulTerminatedStr source);
+const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, const NulTerminatedStr source);

@@ -4,8 +4,6 @@
 #include "./parseType.h" // tryParseTypeArgs
 
 namespace {
-	using ExpressionToken = Lexer::ExpressionToken;
-
 	const ExprAst* alloc(Lexer& lexer, const ExprAst e) {
 		return lexer.arena.nu<const ExprAst>()(e);
 	}
@@ -44,7 +42,7 @@ namespace {
 	const ExprAndDedent parseStatementsAndDedent(Lexer& lexer);
 
 	ArgsAndMaybeDedent parseArgs(Lexer& lexer, const ArgCtx ctx) {
-		if (!lexer.tryTake(' '))
+		if (!tryTake(lexer, ' '))
 			return ArgsAndMaybeDedent{emptyArr<const ExprAst>(), none<const size_t>()};
 		else {
 			auto dedents = Cell<const Opt<const size_t>>{none<const size_t>()};
@@ -53,7 +51,7 @@ namespace {
 				const ExprAndMaybeDedent ad = parseExprArg(lexer, ctx);
 				args.add(lexer.arena, ad.expr);
 				dedents.set(ad.dedents);
-			} while (!dedents.get().has() && lexer.tryTake(", "));
+			} while (!dedents.get().has() && tryTake(lexer, ", "));
 			return ArgsAndMaybeDedent{args.finish(), dedents.get()};
 		}
 	}
@@ -69,31 +67,31 @@ namespace {
 			? ExprAstKind{ThenAst{LambdaAst::Param{name.range, name.name}, init, then}}
 			: ExprAstKind{LetAst{name.name, init, then}};
 		// Since we don't always expect a dedent here, the dedent isn't *extra*, so increment to get the correct number of dedents.
-		return ExprAndDedent{ExprAst{lexer.range(start), exprKind}, thenAndDedent.dedents + 1};
+		return ExprAndDedent{ExprAst{range(lexer, start), exprKind}, thenAndDedent.dedents + 1};
 	}
 
 	const ExprAndMaybeDedent parseCallOrMessage(Lexer& lexer, const ExprAst target, const Bool allowBlock) {
-		const Pos start = lexer.at();
-		if (lexer.tryTake('.')) {
-			const Str funName = lexer.takeName();
+		const Pos start = curPos(lexer);
+		if (tryTake(lexer, '.')) {
+			const Str funName = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 			const CallAst call = CallAst{funName, typeArgs, arrLiteral<const ExprAst>(lexer.arena, target)};
-			return noDedent(ExprAst{lexer.range(start), ExprAstKind{call}});
+			return noDedent(ExprAst{range(lexer, start), ExprAstKind{call}});
 		} else {
-			const Bool isMessage = lexer.tryTake('!');
-			const Str funName = lexer.takeName();
-			const Bool colon = lexer.tryTake(':');
+			const Bool isMessage = tryTake(lexer, '!');
+			const Str funName = takeName(lexer);
+			const Bool colon = tryTake(lexer, ':');
 			const Arr<const TypeAst> typeArgs = isMessage ? emptyArr<const TypeAst>() : tryParseTypeArgs(lexer);
 			const ArgsAndMaybeDedent args = parseArgs(lexer, ArgCtx{allowBlock, /*allowcall*/ colon});
 			const ExprAstKind exprKind = isMessage
 				? ExprAstKind{MessageSendAst{alloc(lexer, target), funName, args.args}}
 				: ExprAstKind{CallAst{funName, typeArgs, prepend<const ExprAst>(lexer.arena, target, args.args)}};
-			return ExprAndMaybeDedent{ExprAst{lexer.range(start), exprKind}, args.dedent};
+			return ExprAndMaybeDedent{ExprAst{range(lexer, start), exprKind}, args.dedent};
 		}
 	}
 
 	const ExprAndMaybeDedent parseCalls(Lexer& lexer, const ExprAndMaybeDedent ed, const Bool allowBlock) {
-		return !ed.dedents.has() && lexer.tryTake(' ')
+		return !ed.dedents.has() && tryTake(lexer, ' ')
 			? parseCalls(lexer, parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock)
 			: ed;
 	}
@@ -156,31 +154,31 @@ namespace {
 	}
 
 	const ExprAst tryParseDots(Lexer& lexer, const ExprAst initial) {
-		const Pos start = lexer.at();
-		if (lexer.tryTake('.')) {
-			const Str name = lexer.takeName();
+		const Pos start = curPos(lexer);
+		if (tryTake(lexer, '.')) {
+			const Str name = takeName(lexer);
 			const CallAst call = CallAst{name, emptyArr<const TypeAst>(), arrLiteral<const ExprAst>(lexer.arena, initial)};
-			const ExprAst expr = ExprAst{lexer.range(start), ExprAstKind{call}};
+			const ExprAst expr = ExprAst{range(lexer, start), ExprAstKind{call}};
 			return tryParseDots(lexer, expr);
 		} else
 			return initial;
 	}
 
 	const ExprAndMaybeDedent parseMatch(Lexer& lexer, const Pos start) {
-		lexer.take(' ');
+		take(lexer, ' ');
 		const ExprAst* matched = alloc(lexer, parseExprNoBlock(lexer));
-		lexer.takeIndent();
+		takeIndent(lexer);
 
 		ArrBuilder<const MatchAst::CaseAst> cases {};
 		const size_t matchDedents = [&]() {
 			for (;;) {
-				const Str structName = lexer.takeName();
-				const Opt<const Str> localName = lexer.tryTakeIndent()
+				const Str structName = takeName(lexer);
+				const Opt<const Str> localName = tryTakeIndent(lexer)
 					? none<const Str>()
 					: [&]() {
-						lexer.take(' ');
-						const Str localName = lexer.takeName();
-						lexer.takeIndent();
+						take(lexer, ' ');
+						const Str localName = takeName(lexer);
+						takeIndent(lexer);
 						return some<const Str>(localName);
 					}();
 				const ExprAndDedent ed = parseStatementsAndDedent(lexer);
@@ -191,7 +189,7 @@ namespace {
 		}();
 		const MatchAst match = MatchAst{matched, cases.finish()};
 		return ExprAndMaybeDedent{
-			ExprAst{lexer.range(start), ExprAstKind{match}},
+			ExprAst{range(lexer, start), ExprAstKind{match}},
 			some<const size_t>(matchDedents)};
 	}
 
@@ -203,61 +201,61 @@ namespace {
 			return ExprAndMaybeDedent{elseAndDedent.expr, some<const size_t>(elseAndDedent.dedents - 1)};
 		} else {
 			const ExprAst condition = parseExprNoBlock(lexer);
-			lexer.takeIndent();
+			takeIndent(lexer);
 			const ExprAndDedent thenAndDedent = parseStatementsAndDedent(lexer);
 			if (thenAndDedent.dedents != 0)
-				return lexer.throwAtChar<const ExprAndMaybeDedent>(ParseDiag{ParseDiag::WhenMustHaveElse{}});
+				return throwAtChar<const ExprAndMaybeDedent>(lexer, ParseDiag{ParseDiag::WhenMustHaveElse{}});
 			const ExprAndMaybeDedent elseAndDedent = parseWhenLoop(lexer, start);
 			const CondAst cond = CondAst{alloc(lexer, condition), alloc(lexer, thenAndDedent.expr), alloc(lexer, elseAndDedent.expr)};
 			return ExprAndMaybeDedent{
-				ExprAst{lexer.range(start), ExprAstKind{cond}},
+				ExprAst{range(lexer, start), ExprAstKind{cond}},
 				elseAndDedent.dedents};
 		}
 	}
 
 	const ExprAndMaybeDedent parseWhen(Lexer& lexer, const Pos start) {
-		lexer.takeIndent();
+		takeIndent(lexer);
 		return parseWhenLoop(lexer, start);
 	}
 
 	const ExprAndMaybeDedent parseActor(Lexer& lexer, const Pos start) {
 		const Arr<const NewActorAst::Field> fields = [&]() {
-			lexer.take('(');
-			if (lexer.tryTake(')'))
+			take(lexer, '(');
+			if (tryTake(lexer, ')'))
 				return emptyArr<const NewActorAst::Field>();
 			else {
 				ArrBuilder<const NewActorAst::Field> res {};
 				do {
-					const Str name = lexer.takeName();
-					if (!lexer.tryTake(" = "))
+					const Str name = takeName(lexer);
+					if (!tryTake(lexer, " = "))
 						todo<void>("parseNew");
 					const ExprAst init = parseExprNoBlock(lexer);
 					res.add(lexer.arena, NewActorAst::Field{name, alloc(lexer, init)});
-				} while (lexer.tryTake(", "));
-				lexer.take(')');
+				} while (tryTake(lexer, ", "));
+				take(lexer, ')');
 				return res.finish();
 			}
 		}();
 
-		lexer.takeIndent();
+		takeIndent(lexer);
 		ArrBuilder<const NewActorAst::MessageImpl> messages {};
 		const size_t extraDedents = [&]() {
 			for (;;) {
-				const Str messageName = lexer.takeName();
-				lexer.take('(');
+				const Str messageName = takeName(lexer);
+				take(lexer, '(');
 				const Arr<const NameAndRange> paramNames = [&]() {
-					if (lexer.tryTake(')'))
+					if (tryTake(lexer, ')'))
 						return emptyArr<const NameAndRange>();
 					else {
 						ArrBuilder<const NameAndRange> res {};
-						res.add(lexer.arena, lexer.takeNameAndRange());
-						while (lexer.tryTake(", "))
-							res.add(lexer.arena, lexer.takeNameAndRange());
-						lexer.take(')');
+						res.add(lexer.arena, takeNameAndRange(lexer));
+						while (tryTake(lexer, ", "))
+							res.add(lexer.arena, takeNameAndRange(lexer));
+						take(lexer, ')');
 						return res.finish();
 					}
 				}();
-				lexer.takeIndent();
+				takeIndent(lexer);
 				const ExprAndDedent bodyAndDedent = parseStatementsAndDedent(lexer);
 				messages.add(lexer.arena, NewActorAst::MessageImpl{messageName, paramNames, alloc(lexer, bodyAndDedent.expr)});
 				if (bodyAndDedent.dedents != 0)
@@ -267,33 +265,33 @@ namespace {
 
 		const NewActorAst newActor = NewActorAst{fields, messages.finish()};
 		return ExprAndMaybeDedent{
-			ExprAst{lexer.range(start), ExprAstKind{newActor}},
+			ExprAst{range(lexer, start), ExprAstKind{newActor}},
 			some<const size_t>(extraDedents)};
 	}
 
 	const ExprAndMaybeDedent parseLambda(Lexer& lexer, const Pos start) {
 		ArrBuilder<const LambdaAst::Param> parameters {};
 		Cell<const Bool> isFirst { True };
-		while (!lexer.tryTakeIndent()) {
+		while (!tryTakeIndent(lexer)) {
 			if (isFirst.get())
 				isFirst.set(False);
 			else
-				lexer.take(' ');
-			const NameAndRange nr = lexer.takeNameAndRange();
+				take(lexer, ' ');
+			const NameAndRange nr = takeNameAndRange(lexer);
 			parameters.add(lexer.arena, LambdaAst::Param{nr.range, nr.name});
 		}
 		const ExprAndDedent bodyAndDedent = parseStatementsAndDedent(lexer);
 		const LambdaAst lambda = LambdaAst{parameters.finish(), alloc(lexer, bodyAndDedent.expr)};
 		return ExprAndMaybeDedent{
-			ExprAst{lexer.range(start), ExprAstKind{lambda}},
+			ExprAst{range(lexer, start), ExprAstKind{lambda}},
 			some<const size_t>(bodyAndDedent.dedents)};
 	}
 
 	const ExprAndMaybeDedent parseExprBeforeCall(Lexer& lexer, const Pos start, const ExpressionToken et, const ArgCtx ctx) {
-		auto getRange = [&]() { return lexer.range(start); };
+		auto getRange = [&]() { return range(lexer, start); };
 		auto checkBlockAllowed = [&]() {
 			if (!ctx.allowBlock)
-				lexer.throwAtChar<const ExprAndMaybeDedent>(ParseDiag{ParseDiag::MatchWhenNewMayNotAppearInsideArg{}});
+				throwAtChar<const ExprAndMaybeDedent>(lexer, ParseDiag{ParseDiag::MatchWhenNewMayNotAppearInsideArg{}});
 		};
 
 		using Kind = ExpressionToken::Kind;
@@ -302,7 +300,7 @@ namespace {
 				checkBlockAllowed();
 				return parseActor(lexer, start);
 			case Kind::ampersand: {
-				const Str funName = lexer.takeName();
+				const Str funName = takeName(lexer);
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 				return noDedent(ExprAst{getRange(), ExprAstKind{FunAsLambdaAst{funName, typeArgs}}});
 			}
@@ -311,7 +309,7 @@ namespace {
 				return parseLambda(lexer, start);
 			case Kind::lbrace: {
 				const ExprAst* body = alloc(lexer, parseExprNoBlock(lexer));
-				lexer.take(')');
+				take(lexer, ')');
 				const SourceRange range = getRange();
 				const Arr<const LambdaAst::Param> params = bodyUsesIt(*body)
 					? arrLiteral<const LambdaAst::Param>(lexer.arena, LambdaAst::Param{range, strLiteral("it")})
@@ -326,7 +324,7 @@ namespace {
 			}
 			case Kind::lparen: {
 				const ExprAst expr = parseExprNoBlock(lexer);
-				lexer.take(')');
+				take(lexer, ')');
 				return noDedent(tryParseDots(lexer, expr));
 			}
 			case Kind::match:
@@ -335,7 +333,7 @@ namespace {
 			case Kind::nameAndRange: {
 				const Str name = et.asNameAndRange().name;
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-				const Bool tookColon = lexer.tryTake(':');
+				const Bool tookColon = tryTake(lexer, ':');
 				if (tookColon) {
 					// Prefix call `foo: bar, baz`
 					const ArgsAndMaybeDedent ad = parseArgs(lexer, ctx);
@@ -371,38 +369,38 @@ namespace {
 	}
 
 	const ExprAst parseExprNoBlock(Lexer& lexer) {
-		const Pos start = lexer.at();
-		const ExpressionToken et = lexer.takeExpressionToken();
+		const Pos start = curPos(lexer);
+		const ExpressionToken et = takeExpressionToken(lexer);
 		const ExprAndMaybeDedent ed = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ False, /*allowCall*/ True});
 		assert(!ed.dedents.has());
 		return ed.expr;
 	}
 
 	const ExprAndMaybeDedent parseExprArg(Lexer& lexer, const ArgCtx ctx) {
-		const Pos start = lexer.at();
-		const ExpressionToken et = lexer.takeExpressionToken();
+		const Pos start = curPos(lexer);
+		const ExpressionToken et = takeExpressionToken(lexer);
 		return parseExprWorker(lexer, start, et, ctx);
 	}
 
 	const ExprAndDedent parseExprNoLet(Lexer& lexer, const Pos start, const ExpressionToken et) {
 		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ True, /*allowCall*/ True});
-		return ExprAndDedent{e.expr, e.dedents.has() ? e.dedents.force() : lexer.takeNewlineOrDedentAmount()};
+		const size_t dedents = e.dedents.has() ? e.dedents.force() : takeNewlineOrDedentAmount(lexer);
+		return ExprAndDedent{e.expr, dedents};
 	}
 
 	const ExprAndDedent parseExprNoLet(Lexer& lexer) {
-		const Pos start = lexer.at();
-		const ExpressionToken et = lexer.takeExpressionToken();
-		return parseExprNoLet(lexer, start, et);
+		const Pos start = curPos(lexer);
+		return parseExprNoLet(lexer, start, takeExpressionToken(lexer));
 	}
 
 	const ExprAndDedent parseSingleStatementLine(Lexer& lexer) {
-		const Pos start = lexer.at();
-		const ExpressionToken et = lexer.takeExpressionToken();
+		const Pos start = curPos(lexer);
+		const ExpressionToken et = takeExpressionToken(lexer);
 		if (et.isNameAndRange()) {
 			const NameAndRange nr = et.asNameAndRange();
 			const Opt<const Bool> isThen =
-				lexer.tryTake(" = ") ? some<const Bool>(False)
-				: lexer.tryTake(" <- ") ? some<const Bool>(True)
+				tryTake(lexer, " = ") ? some<const Bool>(False)
+				: tryTake(lexer, " <- ") ? some<const Bool>(True)
 				: none<const Bool>();
 			if (isThen.has())
 				return parseLetOrThen(lexer, start, nr, isThen.force());
@@ -412,14 +410,14 @@ namespace {
 
 	// Return value is number of dedents - 1; the number of *extra* dedents
 	const ExprAndDedent parseStatementsAndDedent(Lexer& lexer) {
-		const Pos start = lexer.at();
+		const Pos start = curPos(lexer);
 		const ExprAndDedent ed = parseSingleStatementLine(lexer);
 		auto expr = Cell<const ExprAst>(ed.expr);
 		auto dedents = Cell<const size_t>(ed.dedents);
 		while (dedents.get() == 0) {
 			const ExprAndDedent ed2 = parseSingleStatementLine(lexer);
 			const SeqAst seq = SeqAst{alloc(lexer, expr.get()), alloc(lexer, ed2.expr)};
-			expr.set(ExprAst{lexer.range(start), ExprAstKind{seq}});
+			expr.set(ExprAst{range(lexer, start), ExprAstKind{seq}});
 			dedents.set(ed2.dedents);
 		}
 		return ExprAndDedent{expr.get(), dedents.get() - 1};
@@ -427,10 +425,8 @@ namespace {
 }
 
 const ExprAst parseFunExprBody(Lexer& lexer) {
-	lexer.takeIndent();
+	takeIndent(lexer);
 	const ExprAndDedent ed = parseStatementsAndDedent(lexer);
 	assert(ed.dedents == 0);
 	return ed.expr;
 }
-
-

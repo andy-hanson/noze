@@ -97,3 +97,9 @@ const Path* pathFromNulTerminatedStr(Arena& arena, const NulTerminatedStr str) {
 
 	return path;
 }
+
+const Path* copyPath(Arena& arena, const Path* path) {
+	return arena.nu<const Path>()(
+		path->parent.has() ? some<const Path*>(copyPath(arena, path->parent.force())) : none<const Path*>(),
+		copyStr(arena, path->baseName));
+}

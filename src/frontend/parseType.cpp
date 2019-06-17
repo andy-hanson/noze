@@ -6,31 +6,31 @@ namespace {
 	const Arr<const TypeAst> tryParseTypeArgsWorker(Lexer& lexer, const Bool isInner) {
 		ArrBuilder<const TypeAst> res {};
 		// Require '<>' if parsing type args inside of type args.
-		if (!isInner || lexer.tryTake('<')) {
+		if (!isInner || tryTake(lexer, '<')) {
 			for (;;) {
-				if (!isInner && !lexer.tryTake(' '))
+				if (!isInner && !tryTake(lexer, ' '))
 					break;
 				res.add(lexer.arena, parseTypeWorker(lexer, /*isInner*/ True));
-				if (isInner && !lexer.tryTake(", "))
+				if (isInner && !tryTake(lexer, ", "))
 					break;
 			}
 			if (isInner)
-				lexer.take('>');
+				take(lexer, '>');
 		}
 		return res.finish();
 	}
 
 	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner) {
-		const Pos start = lexer.at();
-		const Bool isTypeParam = lexer.tryTake('?');
-		const Str name = lexer.takeName();
+		const Pos start = curPos(lexer);
+		const Bool isTypeParam = tryTake(lexer, '?');
+		const Str name = takeName(lexer);
 		const Arr<const TypeAst> typeArgs = tryParseTypeArgsWorker(lexer, isInner);
 		if (isTypeParam && !isEmpty(typeArgs))
-			return lexer.throwAtChar<const TypeAst>(ParseDiag{ParseDiag::TypeParamCantHaveTypeArgs{}});
-		const SourceRange range = lexer.range(start);
+			return throwAtChar<const TypeAst>(lexer, ParseDiag{ParseDiag::TypeParamCantHaveTypeArgs{}});
+		const SourceRange rng = range(lexer, start);
 		return isTypeParam
-			? TypeAst{TypeAst::TypeParam{range, name}}
-			: TypeAst{TypeAst::InstStruct{range, name, typeArgs}};
+			? TypeAst{TypeAst::TypeParam{rng, name}}
+			: TypeAst{TypeAst::InstStruct{rng, name, typeArgs}};
 	}
 }
 
@@ -39,9 +39,9 @@ const Arr<const TypeAst> tryParseTypeArgs(Lexer& lexer) {
 }
 
 const Opt<const TypeAst> tryParseTypeArg(Lexer& lexer) {
-	if (lexer.tryTake('<')) {
+	if (tryTake(lexer, '<')) {
 		const TypeAst res = parseTypeWorker(lexer, /*isInner*/ True);
-		lexer.take('>');
+		take(lexer, '>');
 		return some<const TypeAst>(res);
 	} else
 		return none<const TypeAst>();

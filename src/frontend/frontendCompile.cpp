@@ -32,7 +32,7 @@ namespace {
 		if (opFileContent.has()) {
 			lineAndColumnGetters.add(modelArena, where, lineAndColumnGetterForText(modelArena, opFileContent.force()));
 			return mapFailure<const Arr<const Diagnostic>>{}(
-				parseFile(astsArena, modelArena, opFileContent.force()),
+				parseFile(astsArena, opFileContent.force()),
 				[&](const ParseDiagnostic p) { return parseDiagnostics(modelArena, where, p); });
 		}
 		else
@@ -52,11 +52,11 @@ namespace {
 
 	// NOTE: does not ensure that the file exists. Only returns none for a relative import that tries climbing past the root.
 	const Opt<const PathAndStorageKind> resolveImport(Arena& modelArena, const PathAndStorageKind from, const ImportAst ast) {
-		// Note: paths were allocated into pathArena, not ast arena. Paths should have '.nz' already added from parser.
+		const Path* path = copyPath(modelArena, ast.path);
 		if (ast.nDots == 0)
-			return some<const PathAndStorageKind>(PathAndStorageKind{ast.path, StorageKind::global});
+			return some<const PathAndStorageKind>(PathAndStorageKind{path, StorageKind::global});
 		else {
-			const Opt<const Path*> rel = resolvePath(modelArena, from.path, RelPath{ast.nDots - 1, ast.path});
+			const Opt<const Path*> rel = resolvePath(modelArena, from.path, RelPath{ast.nDots - 1, path});
 			return rel.has()
 				? some<const PathAndStorageKind>(PathAndStorageKind{rel.force(), from.storageKind})
 				: none<const PathAndStorageKind>();

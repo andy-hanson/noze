@@ -55,18 +55,18 @@ static_assert(sizeof(less) == 1, "");
 static_assert(sizeof(greater) == 1, "");
 static_assert(sizeof(equal) == 1, "");
 
-static arr__char _constantArr5787325478559772418 = arr__char{1, const_cast<char*>("1")};
-static arr__char _constantArr5787325478559772420 = arr__char{30, const_cast<char*>("Hello natively compiled world!")};
-static arr__char _constantArr5787325478559772419 = arr__char{6, const_cast<char*>("%.*s\n\0")};
-static arr__char _constantArr5787325478559772417 = arr__char{1, const_cast<char*>("0")};
-static arr__char _constantArr5787325478559772422 = arr__char{1, const_cast<char*>("2")};
-static arr__char _constantArr5787325478559772423 = arr__char{1, const_cast<char*>("3")};
-static arr__char _constantArr5787325478559772424 = arr__char{1, const_cast<char*>("4")};
-static arr__char _constantArr5787325478559772421 = arr__char{1, const_cast<char*>("5")};
-static arr__char _constantArr5787325478559772426 = arr__char{1, const_cast<char*>("6")};
-static arr__char _constantArr5787325478559772427 = arr__char{1, const_cast<char*>("7")};
-static arr__char _constantArr5787325478559772425 = arr__char{1, const_cast<char*>("8")};
-static arr__char _constantArr5787325478559772428 = arr__char{1, const_cast<char*>("9")};
+static arr__char _constantArr16396839757411042818 = arr__char{1, const_cast<char*>("1")};
+static arr__char _constantArr16396839757411042820 = arr__char{30, const_cast<char*>("Hello natively compiled world!")};
+static arr__char _constantArr16396839757411042819 = arr__char{6, const_cast<char*>("%.*s\n\0")};
+static arr__char _constantArr16396839757411042817 = arr__char{1, const_cast<char*>("0")};
+static arr__char _constantArr16396839757411042822 = arr__char{1, const_cast<char*>("2")};
+static arr__char _constantArr16396839757411042823 = arr__char{1, const_cast<char*>("3")};
+static arr__char _constantArr16396839757411042824 = arr__char{1, const_cast<char*>("4")};
+static arr__char _constantArr16396839757411042821 = arr__char{1, const_cast<char*>("5")};
+static arr__char _constantArr16396839757411042826 = arr__char{1, const_cast<char*>("6")};
+static arr__char _constantArr16396839757411042827 = arr__char{1, const_cast<char*>("7")};
+static arr__char _constantArr16396839757411042825 = arr__char{1, const_cast<char*>("8")};
+static arr__char _constantArr16396839757411042828 = arr__char{1, const_cast<char*>("9")};
 template <typename T>
 T* _alloc(byte* out, T value) {
 	T* res = static_cast<T*>(out);
@@ -91,7 +91,7 @@ _void print_range___void_arg0_is_7_arg1_is_8_arg2_is_3(ctx* ctx);
 bool equalequal__bool__nat64__nat64(nat64 a, nat64 b);
 arr__char todo__arr__char();
 comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b);
-arr__char hard_fail__arr__char_arg0_is_5787325478559772429();
+arr__char hard_fail__arr__char_arg0_is_16396839757411042829();
 int64 main__int64() {
 	ctx ctx_by_val = ctx{0, 0, 0};
 	ctx* ctx_by_ptr = &(ctx_by_val);
@@ -105,12 +105,12 @@ _void other_main___void__asLambda__dynamic(ctx* ctx, _void* _closure) {
 	return other_main___void(ctx);
 }
 _void other_main___void(ctx* ctx) {
-	print_sync___void__arr__char(_constantArr5787325478559772418);
-	print_sync___void__arr__char(_constantArr5787325478559772420);
+	print_sync___void__arr__char(_constantArr16396839757411042818);
+	print_sync___void__arr__char(_constantArr16396839757411042820);
 	return print_range___void_arg0_is_5_arg1_is_8_arg2_is_3(ctx);
 }
 _void print_sync___void__arr__char(arr__char s) {
-	return printf(&_constantArr5787325478559772419.data[0], s.size, s.data);
+	return printf(&_constantArr16396839757411042819.data[0], s.size, s.data);
 }
 _void print_range___void_arg0_is_5_arg1_is_8_arg2_is_3(ctx* ctx) {
 	other_main___void__lambda0(ctx, 5);
@@ -125,25 +125,25 @@ _void print_range___void_arg0_is_6_arg1_is_8_arg2_is_3(ctx* ctx) {
 }
 arr__char to_str__arr__char__nat64(ctx* ctx, nat64 n) {
 	if (equalequal__bool__nat64__nat64(n, 0)) {
-		return _constantArr5787325478559772417;
+		return _constantArr16396839757411042817;
 	} else if (equalequal__bool__nat64__nat64(n, 1)) {
-		return _constantArr5787325478559772418;
+		return _constantArr16396839757411042818;
 	} else if (equalequal__bool__nat64__nat64(n, 2)) {
-		return _constantArr5787325478559772422;
+		return _constantArr16396839757411042822;
 	} else if (equalequal__bool__nat64__nat64(n, 3)) {
-		return _constantArr5787325478559772423;
+		return _constantArr16396839757411042823;
 	} else if (equalequal__bool__nat64__nat64(n, 4)) {
-		return _constantArr5787325478559772424;
+		return _constantArr16396839757411042824;
 	} else if (equalequal__bool__nat64__nat64(n, 5)) {
-		return _constantArr5787325478559772421;
+		return _constantArr16396839757411042821;
 	} else if (equalequal__bool__nat64__nat64(n, 6)) {
-		return _constantArr5787325478559772426;
+		return _constantArr16396839757411042826;
 	} else if (equalequal__bool__nat64__nat64(n, 7)) {
-		return _constantArr5787325478559772427;
+		return _constantArr16396839757411042827;
 	} else if (equalequal__bool__nat64__nat64(n, 8)) {
-		return _constantArr5787325478559772425;
+		return _constantArr16396839757411042825;
 	} else if (equalequal__bool__nat64__nat64(n, 9)) {
-		return _constantArr5787325478559772428;
+		return _constantArr16396839757411042828;
 	} else {
 		return todo__arr__char();
 	}
@@ -165,7 +165,7 @@ bool equalequal__bool__nat64__nat64(nat64 a, nat64 b) {
 	}
 }
 arr__char todo__arr__char() {
-	return hard_fail__arr__char_arg0_is_5787325478559772429();
+	return hard_fail__arr__char_arg0_is_16396839757411042829();
 }
 comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b) {
 	if ((a < b)) {
@@ -176,7 +176,7 @@ comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b) {
 		return comparison(equal{});
 	}
 }
-arr__char hard_fail__arr__char_arg0_is_5787325478559772429() {
+arr__char hard_fail__arr__char_arg0_is_16396839757411042829() {
 	assert(0);
 }
 
