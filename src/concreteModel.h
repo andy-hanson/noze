@@ -386,7 +386,7 @@ struct ConstantKind {
 
 	struct Void {};
 
-//TODO: private:
+private:
 	enum class Kind {
 		array,
 		_bool,

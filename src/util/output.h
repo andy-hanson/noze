@@ -20,13 +20,20 @@ struct Output {
 	Output& operator<<(const Bool b);
 };
 
-template <typename T>
-void writeWithCommas(Output& out, const Arr<T> a) {
+template <typename T, typename Cb>
+void writeWithCommas(Output& out, const Arr<T> a, Cb cb) {
 	for (const size_t i : Range{a.size}) {
 		if (i != 0)
 			out << ", ";
-		out << a[i];
+		cb(a[i]);
 	}
+}
+
+template <typename T>
+void writeWithCommas(Output& out, const Arr<T> a) {
+	writeWithCommas(out, a, [&](const T t) {
+		out << t;
+	});
 }
 
 void writeEscapedChar(Output& out, const char c);

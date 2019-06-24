@@ -145,7 +145,14 @@ struct Diag {
 	struct ExpectedTypeIsNotALambda {
 		const Opt<const Type> expectedType;
 	};
+	struct FieldPurityWorseThanStructPurity {
+		const Purity fieldPurity;
+		const Purity structPurity;
+	};
 	struct FileDoesNotExist {};
+	struct MatchCaseStructNamesDoNotMatch {
+		const Arr<const StructInst*> unionMembers;
+	};
 	struct MatchOnNonUnion {
 		const Type type;
 	};
@@ -206,7 +213,9 @@ private:
 		commonTypesMissing,
 		duplicateDeclaration,
 		expectedTypeIsNotALambda,
+		fieldPurityWorseThanStructPurity,
 		fileDoesNotExist,
+		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
 		multipleFunctionCandidates,
 		nameNotFound,
@@ -231,7 +240,9 @@ private:
 		const CommonTypesMissing commonTypesMissing;
 		const DuplicateDeclaration duplicateDeclaration;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
+		const FieldPurityWorseThanStructPurity fieldPurityWorseThanStructPurity;
 		const FileDoesNotExist fileDoesNotExist;
+		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
 		const MultipleFunctionCandidates multipleFunctionCandidates;
 		const NameNotFound nameNotFound;
@@ -256,7 +267,9 @@ public:
 	explicit inline Diag(const CommonTypesMissing d) : kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
 	explicit inline Diag(const DuplicateDeclaration d) : kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
 	explicit inline Diag(const ExpectedTypeIsNotALambda d) : kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
+	explicit inline Diag(const FieldPurityWorseThanStructPurity d) : kind{Kind::fieldPurityWorseThanStructPurity}, fieldPurityWorseThanStructPurity{d} {}
 	explicit inline Diag(const FileDoesNotExist d) : kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
+	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d) : kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
 	explicit inline Diag(const MatchOnNonUnion d) : kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
 	explicit inline Diag(const MultipleFunctionCandidates d) : kind{Kind::multipleFunctionCandidates}, multipleFunctionCandidates{d} {}
 	explicit inline Diag(const NameNotFound d) : kind{Kind::nameNotFound}, nameNotFound{d} {}
@@ -284,7 +297,9 @@ public:
 		typename CbCommonTypesMissing,
 		typename CbDuplicateDeclaration,
 		typename CbExpectedTypeIsNotALambda,
+		typename CbFieldPurityWorseThanStructPurity,
 		typename CbFileDoesNotExist,
+		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
 		typename CbMultipleFunctionCandidates,
 		typename CbNameNotFound,
@@ -307,7 +322,9 @@ public:
 		CbCommonTypesMissing cbCommonTypesMissing,
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
+		CbFieldPurityWorseThanStructPurity cbFieldPurityWorseThanStructPurity,
 		CbFileDoesNotExist cbFileDoesNotExist,
+		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
 		CbMultipleFunctionCandidates cbMultipleFunctionCandidates,
 		CbNameNotFound cbNameNotFound,
@@ -340,8 +357,12 @@ public:
 				return cbDuplicateDeclaration(duplicateDeclaration);
 			case Kind::expectedTypeIsNotALambda:
 				return cbExpectedTypeIsNotALambda(expectedTypeIsNotALambda);
+			case Kind::fieldPurityWorseThanStructPurity:
+				return cbFieldPurityWorseThanStructPurity(fieldPurityWorseThanStructPurity);
 			case Kind::fileDoesNotExist:
 				return cbFileDoesNotExist(fileDoesNotExist);
+			case Kind::matchCaseStructNamesDoNotMatch:
+				return cbMatchCaseStructNamesDoNotMatch(matchCaseStructNamesDoNotMatch);
 			case Kind::matchOnNonUnion:
 				return cbMatchOnNonUnion(matchOnNonUnion);
 			case Kind::multipleFunctionCandidates:

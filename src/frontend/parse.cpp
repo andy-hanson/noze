@@ -118,13 +118,22 @@ namespace {
 		const SpaceOrNewlineOrIndent after;
 	};
 
+	SpaceOrNewlineOrIndent spaceOrNewlineOrIndentFromNewlineOrIndent(const NewlineOrIndent ni) {
+		switch (ni) {
+			case NewlineOrIndent::newline:
+				return SpaceOrNewlineOrIndent::newline;
+			case NewlineOrIndent::indent:
+				return SpaceOrNewlineOrIndent::indent;
+			default:
+				assert(0);
+		}
+	}
+
 	const Opt<const NonFunKeywordAndIndent> tryTake(Lexer& lexer, const CStr kwSpace, const CStr kwNl, const NonFunKeyword keyword) {
 		if (tryTake(lexer, kwSpace))
 			return some<const NonFunKeywordAndIndent>(NonFunKeywordAndIndent{keyword, SpaceOrNewlineOrIndent::space});
 		else if (tryTake(lexer, kwNl)) {
-			const SpaceOrNewlineOrIndent sni = tryTakeIndentAfterNewline(lexer)
-				? SpaceOrNewlineOrIndent::indent
-				: SpaceOrNewlineOrIndent::newline;
+			const SpaceOrNewlineOrIndent sni = spaceOrNewlineOrIndentFromNewlineOrIndent(tryTakeIndentAfterNewline(lexer));
 			return some<const NonFunKeywordAndIndent>(NonFunKeywordAndIndent{keyword, sni});
 		} else
 			return none<const NonFunKeywordAndIndent>();
@@ -150,11 +159,12 @@ namespace {
 	const Arr<const StructDeclAst::Body::Fields::Field> parseFields(Lexer& lexer) {
 		ArrBuilder<const StructDeclAst::Body::Fields::Field> res {};
 		do {
-			const Bool isMutable = tryTake(lexer, "mut ");
+			const Pos start = curPos(lexer);
 			const Str name = takeName(lexer);
 			take(lexer, ' ');
+			const Bool isMutable = tryTake(lexer, "mut ");
 			const TypeAst type = parseType(lexer);
-			res.add(lexer.arena, StructDeclAst::Body::Fields::Field{isMutable, name, type});
+			res.add(lexer.arena, StructDeclAst::Body::Fields::Field{range(lexer, start), isMutable, name, type});
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
 		return res.finish();
 	}

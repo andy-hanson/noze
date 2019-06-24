@@ -283,6 +283,26 @@ namespace {
 					todo<void>("checkNoEqual");
 	}
 
+	const StructBody checkFields(
+		CheckCtx& ctx,
+		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructDecl& strukt,
+		const StructDeclAst::Body::Fields f,
+		MutArr<StructInst*>& delayStructInsts
+	) {
+		const Arr<const StructField> fields = mapWithIndex<const StructField>{}(
+			ctx.arena,
+			f.fields,
+			[&](const StructDeclAst::Body::Fields::Field field, const size_t index) {
+				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt.typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
+				if (isPurityWorse(fieldType.purity(), strukt.purity))
+					ctx.diag(field.range, Diag{Diag::FieldPurityWorseThanStructPurity{fieldType.purity(), strukt.purity}});
+				return StructField{field.isMutable, ctx.copyStr(field.name), fieldType, index};
+			});
+		checkNoEqual(fields, [](const StructField a, const StructField b) { return strEq(a.name, b.name); });
+		return StructBody{StructBody::Fields{fields}};
+	}
+
 	void checkStructBodies(
 		CheckCtx& ctx,
 		const CommonTypes& commonTypes,
@@ -298,17 +318,7 @@ namespace {
 					return StructBody{StructBody::Builtin{}};
 				},
 				[&](const StructDeclAst::Body::Fields f) {
-					const Arr<const StructField> fields = mapWithIndex<const StructField>{}(
-						ctx.arena,
-						f.fields,
-						[&](const StructDeclAst::Body::Fields::Field it, const size_t index) {
-							const Type fieldType = typeFromAst(ctx, it.type, structsAndAliasesMap, TypeParamsScope{strukt.typeParams}, delay);
-							if (isPurityWorse(fieldType.purity(), strukt.purity))
-								todo<void>("field purity is worse than struct purity");
-							return StructField{it.isMutable, ctx.copyStr(it.name), fieldType, index};
-						});
-					checkNoEqual(fields, [](const StructField a, const StructField b) { return strEq(a.name, b.name); });
-					return StructBody{StructBody::Fields{fields}};
+					return checkFields(ctx, structsAndAliasesMap, strukt, f, delayStructInsts);
 				},
 				[&](const StructDeclAst::Body::Union un) {
 					const Arr<const StructInst*> members = map<const StructInst*>{}(ctx.arena, un.members, [&](const TypeAst::InstStruct it) {

@@ -362,15 +362,15 @@ some<?t> record
 	value ?t
 none record
 opt<?t> union
-	some<?t>
 	none
+	some<?t>
 
 empty? bool(a opt ?t) noctx
 	match a
-		some s
-			false
 		none n
 			true
+		some s
+			false
 
 has? bool(a opt ?t) noctx
 	a.empty? not
@@ -409,12 +409,12 @@ at ?t(a arr ?t, index nat64) trusted
 
 | NOTE: this is not a normal record, compiler treats it specially
 mut-arr<?t> record
-	mut frozen bool
+	frozen mut bool
 	| Number of *initialized* elements.
 	| But 'uninitialized-mut-arr' sets 'size' and doesn't initialize!
-	mut size nat64
-	mut capacity nat64
-	mut data ptr ?t
+	size mut nat64
+	capacity mut nat64
+	data mut ptr ?t
 
 uninitialized-data ptr ?t(size nat64) unsafe
 	bptr = allocate-bytes: size wrapping-mul size-of<?t>
@@ -468,21 +468,36 @@ add void(a mut-arr ?t, value ?t) trusted
 	(a.data + a.size) set value
 	a.size := a.size incr
 
-each-in-range void(lo nat64, hi nat64, f fun1 void nat64)
-	assert: lo <= hi
+range-nat64 record
+	| lo inclusive, hi exclusive
+	lo nat64
+	hi nat64
+
+to range-nat64(lo nat64, hi nat64)
+	lo <= hi assert
+	new lo, hi
+
+empty? bool(r range-nat64)
+	r.lo == r.hi
+
+tail range-nat64(r range-nat64)
+	r.empty? forbid
+	r.lo.incr to r.hi
+
+each void(r range-nat64, f fun1 void nat64)
 	when
-		lo == hi
+		r empty?
 			pass
 		else
-			f call lo
-			each-in-range: lo.incr, hi, f
+			f call r.lo
+			r.tail each f
 
 make-arr arr ?t(size nat64, f fun1 ?t nat64)
 	size make-mut-arr f freeze
 
 make-mut-arr mut-arr ?t(size nat64, f fun1 ?t nat64) trusted
 	res = uninitialized-mut-arr<?t>: size
-	each-in-range: zero, size, \i
+	zero to size each \i
 		res set-at: i, f call i
 	res
 
@@ -573,10 +588,11 @@ get opt ?v(d mut-dict ?k ?v, key ?k) trusted
 
 at ?v(d dict ?k ?v, key ?k)
 	match d get key
-		some s
-			s.value
 		none
 			todo
+		some s
+			s.value
+
 
 at ?v(d mut-dict ?k ?v, key ?k) trusted
 	d.unsafe-as-dict at key
@@ -594,7 +610,7 @@ add void(m mut-dict ?k ?v, key ?k, value ?v)
 
 map arr ?out(a arr ?in, mapper fun1 ?out ?in) trusted
 	out = uninitialized-mut-arr<?out>: a.size
-	each-in-range: zero, a.size, \i
+	zero to a.size each \i
 		out set-at: i, mapper call: a at i
 	out freeze
 

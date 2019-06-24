@@ -122,14 +122,6 @@ namespace {
 		return res.freeze();
 	}
 
-	void takeIndentAfterNewline(Lexer& lexer) {
-		const size_t newIndent = takeTabs(lexer);
-		if (newIndent != lexer.indent + 1)
-			throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedIndent{}});
-		lexer.indent = newIndent;
-		skipBlankLines(lexer);
-	}
-
 	const Str takeNameRest(Lexer& lexer, const CStr begin) {
 		while (isNameContinue(*lexer.ptr))
 			lexer.ptr++;
@@ -138,40 +130,37 @@ namespace {
 		return copyStr(lexer, begin, lexer.ptr);
 	}
 
-	void takeExtraNewlines(Lexer& lexer) {
-		while (*lexer.ptr == '\n')
+	void skipRestOfLine(Lexer& lexer) {
+		while (*lexer.ptr != '\n')
 			lexer.ptr++;
-	}
-
-	void takeNewline(Lexer& lexer) {
-		take(lexer, "\n");
-		takeExtraNewlines(lexer);
+		lexer.ptr++;
 	}
 
 	// Returns the change in indent (and updates the indent)
+	// Note: does nothing if not looking at a newline!
 	int skipLinesAndGetIndentDelta(Lexer& lexer) {
-		for (;;) {
-			if (*lexer.ptr == '|') {
-				lexer.ptr++;
-				while (*lexer.ptr != '\n')
-					lexer.ptr++;
-			}
-			else if (tryTake(lexer, "region ")) {
-				while (*lexer.ptr != '\n')
-					lexer.ptr++;
-			}
-			// If either of the above happened we will enter here
-			if (*lexer.ptr == '\n') {
-				takeNewline(lexer); // skip all empty lines
-				const uint newIndent = takeTabs(lexer);
-				if (newIndent != lexer.indent) {
-					int res = static_cast<int>(newIndent) - static_cast<int>(lexer.indent);
-					lexer.indent = newIndent;
-					return res;
-				}
-			} else
-				return 0;
+		// comment / region counts as a blank line no matter its indent level.
+		const uint newIndent = takeTabs(lexer);
+		if (tryTake(lexer, '\n'))
+			return skipLinesAndGetIndentDelta(lexer);
+		if (tryTake(lexer, '|')) {
+			skipRestOfLine(lexer);
+			return skipLinesAndGetIndentDelta(lexer);
+		} else if (tryTake(lexer, "region ")) {
+			skipRestOfLine(lexer);
+			return skipLinesAndGetIndentDelta(lexer);
+		} else {
+			// If we got here, we're looking at a non-empty line (or EOF)
+			int res = static_cast<int>(newIndent) - static_cast<int>(lexer.indent);
+			lexer.indent = newIndent;
+			return res;
 		}
+	}
+
+	void takeIndentAfterNewline(Lexer& lexer) {
+		const int delta = skipLinesAndGetIndentDelta(lexer);
+		if (delta != 1)
+			throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedIndent{}});
 	}
 }
 
@@ -271,52 +260,46 @@ void skipBlankLines(Lexer& lexer)  {
 }
 
 NewlineOrIndent takeNewlineOrIndent(Lexer& lexer) {
-	takeNewline(lexer);
-	return takeNewlineOrIndentAfterNl(lexer);
-}
-
-NewlineOrIndent takeNewlineOrIndentAfterNl(Lexer& lexer) {
-	const size_t newIndent = takeTabs(lexer);
-	const NewlineOrIndent res =
-		newIndent == lexer.indent ? NewlineOrIndent::newline
-		: newIndent != lexer.indent + 1 ? throwUnexpected<const NewlineOrIndent>(lexer)
-		: [&]() {
-			lexer.indent = newIndent;
+	take(lexer, '\n');
+	const int delta = skipLinesAndGetIndentDelta(lexer);
+	switch (delta) {
+		case 0:
+			return NewlineOrIndent::newline;
+		case 1:
 			return NewlineOrIndent::indent;
-		}();
-	skipBlankLines(lexer);
-	return res;
+		default:
+			return todo<const NewlineOrIndent>("diagnostic: took unexpected dedent, or too many indents");
+	}
 }
 
 void takeIndent(Lexer& lexer) {
-	takeNewline(lexer);
+	take(lexer, '\n');
 	takeIndentAfterNewline(lexer);
 }
 
 void takeDedent(Lexer& lexer)  {
-	assert(lexer.indent == 1);
-	takeNewline(lexer);
-	const size_t newIndent = takeTabs(lexer);
-	if (newIndent != 0)
-		todo<void>("takeDedent");
-	lexer.indent = 0;
+	const int delta = skipLinesAndGetIndentDelta(lexer);
+	if (delta != -1)
+		todo<void>("diagnostic: expected to take a dedent");
 }
 
 const Bool tryTakeIndent(Lexer& lexer)  {
-	const Bool res = eq(*lexer.ptr, '\n');
+	const Bool res = charEq(curChar(lexer), '\n');
 	if (res)
 		takeIndent(lexer);
 	return res;
 }
 
-const Bool tryTakeIndentAfterNewline(Lexer& lexer) {
-	takeExtraNewlines(lexer);
-	const size_t newIndent = takeTabs(lexer);
-	if (newIndent != lexer.indent && newIndent != lexer.indent + 1)
-		todo<void>("expected 0 or 1 indent");
-	const Bool res = eq(newIndent, lexer.indent + 1);
-	lexer.indent = newIndent;
-	return res;
+NewlineOrIndent tryTakeIndentAfterNewline(Lexer& lexer) {
+	const int delta = skipLinesAndGetIndentDelta(lexer);
+	switch (delta) {
+		case 0:
+			return NewlineOrIndent::newline;
+		case 1:
+			return NewlineOrIndent::indent;
+		default:
+			return todo<const NewlineOrIndent>("diagnostic");
+	}
 }
 
 size_t takeNewlineOrDedentAmount(Lexer& lexer) {

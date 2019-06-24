@@ -196,6 +196,7 @@ namespace {
 		ArrBuilder<const MatchAst::CaseAst> cases {};
 		const size_t matchDedents = [&]() {
 			for (;;) {
+				const Pos startCase = curPos(lexer);
 				const Str structName = takeName(lexer);
 				const Opt<const Str> localName = tryTakeIndent(lexer)
 					? none<const Str>()
@@ -206,7 +207,7 @@ namespace {
 						return some<const Str>(localName);
 					}();
 				const ExprAndDedent ed = parseStatementsAndDedent(lexer);
-				cases.add(lexer.arena, MatchAst::CaseAst{structName, localName, alloc(lexer, ed.expr)});
+				cases.add(lexer.arena, MatchAst::CaseAst{range(lexer, startCase), structName, localName, alloc(lexer, ed.expr)});
 				if (ed.dedents != 0)
 					return ed.dedents - 1;
 			}

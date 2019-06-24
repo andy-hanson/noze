@@ -247,6 +247,16 @@ struct mapOrFailReverse {
 	}
 };
 
+template <typename In0, typename In1, typename Cb>
+const Bool zipSome(const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+	const size_t size = in0.size;
+	assert(in1.size == size);
+	for (const size_t i : Range{size})
+		if (!cb(in0[i], in1[i]))
+			return False;
+	return True;
+}
+
 template <typename Out>
 struct zipOrFail {
 	template <typename In0, typename In1, typename Cb>

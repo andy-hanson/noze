@@ -107,6 +107,7 @@ struct LiteralAst {
 
 struct MatchAst {
 	struct CaseAst {
+		const SourceRange range;
 		const Str structName;
 		const Opt<const Str> localName;
 		const ExprAst* then;
@@ -350,6 +351,7 @@ struct StructDeclAst {
 		struct Builtin {};
 		struct Fields {
 			struct Field {
+				const SourceRange range;
 				const Bool isMutable;
 				const Str name;
 				const TypeAst type;

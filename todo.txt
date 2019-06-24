@@ -1,3 +1,15 @@
+!
+	ctx.diag -> ctx.addDiag
+
+!
+	"mut" should be second, after name but before type
+
+!
+	kill takenewlineorindentafternl
+
+!
+	bool_to_int helper
+
 TODO
 	Rename '_type' to '_typeWithoutKnownLambdaBody'
 
@@ -5,14 +17,6 @@ TODO
 TODO
 	too many functions called 'getallocfun'
 
-
-TODO
-syntax highlighting for `{it}` is bad
-
-
-
-!
-	//TODO: private:
 
 !
 	KnownLambdaBody(
@@ -34,11 +38,6 @@ syntax highlighting for `{it}` is bad
 
 
 	Assertion was in wrong place
-
-
-!
-	closure struct should never be by-ref??
-	(If it's dynamic, we should take the thing that's by-value and allocate it)
 
 
 TODO

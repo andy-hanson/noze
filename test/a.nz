@@ -26,6 +26,47 @@ other-main void() trusted summon
 	print-sync: d3 at 2 to-str
 	print-sync: d4 at 2 to-str
 
+	| Find the sum of all the multiples of 3 or 5 below 1000.
+
+iterator<?t> record mut
+	next fun0 opt<?t>
+
+cell<?t> record mut
+	value mut ?t
+
+get-and-incr nat64(c cell nat64)
+	res = c value
+	c.value := c.value incr
+	res
+
+iter iterator nat64(r range-nat64)
+	n = new<cell<nat64>> r.lo
+	new \
+		when
+			n.value == r.hi
+				new<none>
+			else
+				new<some<nat64>> n get-and-incr
+
+
+filter-helper opt nat64(i iterator nat64, pred fun1 bool nat64)
+	x = i.next call
+	match x
+		none
+			new<none>
+		some s
+			v = s.value
+			when
+				pred call v
+					new<some<nat64>> v
+				else
+					i filter-helper pred
+
+
+| TODO: more generic
+filter iterator nat64(i iterator nat64, pred fun1 bool nat64)
+	new {i filter-helper pred}
+
 
 test void() trusted summon
 	a = new-arr<nat64> one, one, one

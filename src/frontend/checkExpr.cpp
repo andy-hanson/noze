@@ -462,28 +462,33 @@ namespace {
 			todo<void>("not a union");
 		const Arr<const StructInst*> members = body.asUnion().members;
 
-		if (members.size != ast.cases.size)
-			todo<void>("members not same # as cases");
-
-		const Arr<const Expr::Match::Case> cases = mapZip<const Expr::Match::Case>{}(
-			ctx.arena(),
-			members,
-			ast.cases,
-			[&](const StructInst* member, const MatchAst::CaseAst caseAst) {
-				if (!strEq(member->decl->name, caseAst.structName))
-					todo<void>("case struct name does not match");
-				const Opt<const Local*> local = caseAst.localName.has()
-					? some<const Local*>(
-						ctx.arena().nu<Local>()(
-							ctx.copyStr(caseAst.localName.force()),
-							Type{instantiateStructInst(ctx.arena(), member, strukt->typeParams, matchedUnion->typeArgs)}))
-					: none<const Local*>();
-				const Expr then = expected.isBogus()
-					? expected.bogus(range).expr
-					: checkWithOptLocal(ctx, local, *caseAst.then, expected);
-				return Expr::Match::Case{local, ctx.alloc(then)};
-			});
-		return CheckedExpr{Expr{range, Expr::Match{ctx.alloc(matchedAndType.expr), matchedUnion, cases, expected.inferred()}}};
+		const Bool badCases = _or(
+			members.size != ast.cases.size,
+			zipSome(members, ast.cases, [&](const StructInst* member, const MatchAst::CaseAst caseAst) {
+				return !strEq(member->decl->name, caseAst.structName);
+			}));
+		if (badCases) {
+			ctx.diag(range, Diag{Diag::MatchCaseStructNamesDoNotMatch{members}});
+			return expected.bogus(range);
+		} else {
+			const Arr<const Expr::Match::Case> cases = mapZip<const Expr::Match::Case>{}(
+				ctx.arena(),
+				members,
+				ast.cases,
+				[&](const StructInst* member, const MatchAst::CaseAst caseAst) {
+					const Opt<const Local*> local = caseAst.localName.has()
+						? some<const Local*>(
+							ctx.arena().nu<Local>()(
+								ctx.copyStr(caseAst.localName.force()),
+								Type{instantiateStructInst(ctx.arena(), member, strukt->typeParams, matchedUnion->typeArgs)}))
+						: none<const Local*>();
+					const Expr then = expected.isBogus()
+						? expected.bogus(range).expr
+						: checkWithOptLocal(ctx, local, *caseAst.then, expected);
+					return Expr::Match::Case{local, ctx.alloc(then)};
+				});
+			return CheckedExpr{Expr{range, Expr::Match{ctx.alloc(matchedAndType.expr), matchedUnion, cases, expected.inferred()}}};
+		}
 	}
 
 	const Arr<const Message> getMessages(const StructInst* ifaceInst) {

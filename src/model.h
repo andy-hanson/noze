@@ -34,16 +34,7 @@ enum class Purity {
 };
 
 inline const Bool isPurityWorse(const Purity a, const Purity b) {
-	switch (a) {
-		case Purity::data:
-			return False;
-		case Purity::sendable:
-			return enumEq(b, Purity::data);
-		case Purity::nonSendable:
-			return True;
-		default:
-			assert(0);
-	}
+	return gt(static_cast<size_t>(a), static_cast<size_t>(b));
 }
 
 inline Purity worsePurity(const Purity a, const Purity b) {

@@ -46,12 +46,11 @@ void skipBlankLines(Lexer& lexer);
 
 enum class NewlineOrIndent { newline, indent };
 NewlineOrIndent takeNewlineOrIndent(Lexer& lexer);
-NewlineOrIndent takeNewlineOrIndentAfterNl(Lexer& lexer);
 
 void takeIndent(Lexer& lexer);
 void takeDedent(Lexer& lexer);
 const Bool tryTakeIndent(Lexer& lexer);
-const Bool tryTakeIndentAfterNewline(Lexer& lexer);
+NewlineOrIndent tryTakeIndentAfterNewline(Lexer& lexer);
 
 // Returns # of dedents. (TODO:RENAME)
 size_t takeNewlineOrDedentAmount(Lexer& lexer);

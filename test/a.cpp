@@ -23,10 +23,14 @@ struct other_main___void__lambda2___closure {
 };
 struct arr__char;
 struct opt__nat64;
+struct none {};
 struct some__nat64 {
 	nat64 value;
 };
-struct none {};
+struct range_nat64 {
+	nat64 lo;
+	nat64 hi;
+};
 struct map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure;
 struct comparison;
 struct less {};
@@ -56,16 +60,16 @@ using fun_ptr3__nat64__ptr_ctx__ptr__byte__nat64 = nat64 (*)(ctx*, ptr__byte, na
 using ptr__char = char*;
 struct opt__nat64 {
 	enum class Kind {
-		some__nat64,
 		none,
+		some__nat64,
 	};
 	Kind kind;
 	union {
-		some__nat64 as_some__nat64;
 		none as_none;
+		some__nat64 as_some__nat64;
 	};
-	opt__nat64(some__nat64 value) : kind{Kind::some__nat64}, as_some__nat64{value} {}
 	opt__nat64(none value) : kind{Kind::none}, as_none{value} {}
+	opt__nat64(some__nat64 value) : kind{Kind::some__nat64}, as_some__nat64{value} {}
 };
 struct comparison {
 	enum class Kind {
@@ -119,25 +123,26 @@ static_assert(sizeof(arr__char) == 16, "");
 static_assert(sizeof(ptr__char) == 8, "");
 static_assert(sizeof(char) == 1, "");
 static_assert(sizeof(opt__nat64) == 16, "");
-static_assert(sizeof(some__nat64) == 8, "");
 static_assert(sizeof(none) == 1, "");
+static_assert(sizeof(some__nat64) == 8, "");
+static_assert(sizeof(range_nat64) == 16, "");
 static_assert(sizeof(map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure) == 40, "");
 static_assert(sizeof(comparison) == 8, "");
 static_assert(sizeof(less) == 1, "");
 static_assert(sizeof(greater) == 1, "");
 static_assert(sizeof(equal) == 1, "");
 
-static arr__char _constantArr4658099 = arr__char{6, const_cast<char*>("%.*s\n\0")};
-static arr__char _constantArr4658087 = arr__char{1, const_cast<char*>("0")};
-static arr__char _constantArr4658088 = arr__char{1, const_cast<char*>("1")};
-static arr__char _constantArr4658092 = arr__char{1, const_cast<char*>("2")};
-static arr__char _constantArr4658093 = arr__char{1, const_cast<char*>("3")};
-static arr__char _constantArr4658091 = arr__char{1, const_cast<char*>("4")};
-static arr__char _constantArr4658094 = arr__char{1, const_cast<char*>("5")};
-static arr__char _constantArr4658095 = arr__char{1, const_cast<char*>("6")};
-static arr__char _constantArr4658096 = arr__char{1, const_cast<char*>("7")};
-static arr__char _constantArr4658097 = arr__char{1, const_cast<char*>("8")};
-static arr__char _constantArr4658098 = arr__char{1, const_cast<char*>("9")};
+static arr__char _constantArr4659043 = arr__char{6, const_cast<char*>("%.*s\n\0")};
+static arr__char _constantArr4659031 = arr__char{1, const_cast<char*>("0")};
+static arr__char _constantArr4659032 = arr__char{1, const_cast<char*>("1")};
+static arr__char _constantArr4659036 = arr__char{1, const_cast<char*>("2")};
+static arr__char _constantArr4659037 = arr__char{1, const_cast<char*>("3")};
+static arr__char _constantArr4659035 = arr__char{1, const_cast<char*>("4")};
+static arr__char _constantArr4659038 = arr__char{1, const_cast<char*>("5")};
+static arr__char _constantArr4659039 = arr__char{1, const_cast<char*>("6")};
+static arr__char _constantArr4659040 = arr__char{1, const_cast<char*>("7")};
+static arr__char _constantArr4659041 = arr__char{1, const_cast<char*>("8")};
+static arr__char _constantArr4659042 = arr__char{1, const_cast<char*>("9")};
 static none _constant____none__0 = none();
 template <typename T>
 T* _alloc(byte* out, T value) {
@@ -150,7 +155,7 @@ int64 main__int64();
 ctx as__ctx__ctx(ctx value);
 nat64 as_non_const__nat64__nat64(nat64 value);
 ctx* ref_of_val__ptr_ctx__ctx(ctx b);
-_void call_with_ctx___void__ptr_ctx_arg1_is_140724684736257(ctx* c);
+_void call_with_ctx___void__ptr_ctx_arg1_is_140720922906881(ctx* c);
 _void call___void__fun_ptr2___void__ptr_ctx__ptr__byte__ptr_ctx__ptr__byte(fun_ptr2___void__ptr_ctx__ptr__byte f, ctx* p0, ptr__byte p1);
 _void other_main___void__asLambda__dynamic(ctx* ctx, ptr__byte );
 _void other_main___void(ctx* ctx);
@@ -195,21 +200,24 @@ ptr__nat64 plus__ptr__nat64__ptr__nat64__nat64(ptr__nat64 p, nat64 offset);
 nat64 incr__nat64__nat64(nat64 n);
 arr__nat64 unsafe_as_arr__arr__nat64__ptr_mut_arr__nat64(mut_arr__nat64* a);
 mut_arr__nat64* uninitialized_mut_arr__ptr_mut_arr__nat64__nat64(ctx* ctx, nat64 size);
-_void each_in_range___void__nat64__nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb2_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx* ctx, nat64 lo, nat64 hi, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure f);
+_void each___void__range_nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb1_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx* ctx, range_nat64 r, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure f);
+range_nat64 to__range_nat64__nat64__nat64(ctx* ctx, nat64 lo, nat64 hi);
 comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b);
-arr__char hard_fail__arr__char_arg0_is_4658090();
+arr__char hard_fail__arr__char_arg0_is_4659034();
 opt__nat64 get_recursive__opt__nat64__arr__nat64__arr__nat64__nat64__nat64(ctx* ctx, arr__nat64 keys, arr__nat64 values, nat64 idx, nat64 key);
-nat64 hard_fail__nat64_arg0_is_4658090();
+nat64 hard_fail__nat64_arg0_is_4659034();
 ptr__nat64 uninitialized_data__ptr__nat64_arg0_is_0(ctx* ctx);
-_void fail___void_arg0_is_4658089(ctx* ctx);
+_void fail___void_arg0_is_4659033(ctx* ctx);
 bool has__q__bool__opt__nat64(opt__nat64 a);
 nat64 wrapping_mul__nat64__nat64__nat64(nat64 a, nat64 b);
 ptr__nat64 ptr_cast__ptr__nat64__ptr__byte(ptr__byte p);
 nat64 deref__nat64__ptr__nat64(ptr__nat64 p);
 ptr__nat64 incr__ptr__nat64__ptr__nat64(ptr__nat64 p);
 nat64 decr__nat64__nat64(ctx* ctx, nat64 n);
-bool lessequal__bool__nat64__nat64(nat64 a, nat64 b);
+bool empty__q__bool__range_nat64(ctx* ctx, range_nat64 r);
 _void map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx* ctx, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure _closure, nat64 i);
+range_nat64 tail__range_nat64__range_nat64(ctx* ctx, range_nat64 r);
+bool lessequal__bool__nat64__nat64(nat64 a, nat64 b);
 nat64 at__nat64__arr__nat64__nat64(ctx* ctx, arr__nat64 a, nat64 index);
 ptr__byte allocate_bytes__ptr__byte_arg0_is_0(ctx* ctx);
 _void todo___void();
@@ -217,7 +225,7 @@ bool empty__q__bool__opt__nat64(opt__nat64 a);
 nat64 ___nat64__nat64__nat64(ctx* ctx, nat64 a, nat64 b);
 _void set_at___void__ptr_mut_arr__nat64__nat64__nat64(ctx* ctx, mut_arr__nat64* a, nat64 index, nat64 value);
 nat64 call__nat64__fun1__nat64__nat64__nat64(ctx* ctx, fun1__nat64__nat64 f, nat64 p0);
-_void hard_fail___void_arg0_is_4658090();
+_void hard_fail___void_arg0_is_4659034();
 bool greater__bool__nat64__nat64(nat64 a, nat64 b);
 nat64 wrapping_sub__nat64__nat64__nat64(nat64 a, nat64 b);
 nat64 call_with_ctx__nat64__ptr_ctx__fun1__nat64__nat64__nat64(ctx* c, fun1__nat64__nat64 f, nat64 p0);
@@ -226,10 +234,10 @@ nat64 call__nat64__fun_ptr3__nat64__ptr_ctx__ptr__byte__nat64__ptr_ctx__ptr__byt
 int64 main__int64() {
 	ctx ctx_by_val = ctx{0, 0, 0};
 	ctx* ctx_by_ptr = &(ctx_by_val);
-	call_with_ctx___void__ptr_ctx_arg1_is_140724684736257(ctx_by_ptr);
+	call_with_ctx___void__ptr_ctx_arg1_is_140720922906881(ctx_by_ptr);
 	return 0;
 }
-_void call_with_ctx___void__ptr_ctx_arg1_is_140724684736257(ctx* c) {
+_void call_with_ctx___void__ptr_ctx_arg1_is_140720922906881(ctx* c) {
 	return (&other_main___void__asLambda__dynamic)(c, 0);
 }
 _void other_main___void__asLambda__dynamic(ctx* ctx, ptr__byte ) {
@@ -287,29 +295,29 @@ dict__nat64__nat64* map_values__ptr_dict__nat64__nat64__ptr_dict__nat64__nat64__
 	return _alloc<dict__nat64__nat64>(allocate_bytes__ptr__byte__nat64(ctx, 32), dict__nat64__nat64{d->keys, new_values});
 }
 _void print_sync___void__arr__char(arr__char s) {
-	return printf(&_constantArr4658099.data[0], s.size, s.data);
+	return printf(&_constantArr4659043.data[0], s.size, s.data);
 }
 arr__char to_str__arr__char__nat64(ctx* ctx, nat64 n) {
 	if (equalequal__bool__nat64__nat64(n, 0)) {
-		return _constantArr4658087;
+		return _constantArr4659031;
 	} else if (equalequal__bool__nat64__nat64(n, 1)) {
-		return _constantArr4658088;
+		return _constantArr4659032;
 	} else if (equalequal__bool__nat64__nat64(n, 2)) {
-		return _constantArr4658092;
+		return _constantArr4659036;
 	} else if (equalequal__bool__nat64__nat64(n, 3)) {
-		return _constantArr4658093;
+		return _constantArr4659037;
 	} else if (equalequal__bool__nat64__nat64(n, 4)) {
-		return _constantArr4658091;
+		return _constantArr4659035;
 	} else if (equalequal__bool__nat64__nat64(n, 5)) {
-		return _constantArr4658094;
+		return _constantArr4659038;
 	} else if (equalequal__bool__nat64__nat64(n, 6)) {
-		return _constantArr4658095;
+		return _constantArr4659039;
 	} else if (equalequal__bool__nat64__nat64(n, 7)) {
-		return _constantArr4658096;
+		return _constantArr4659040;
 	} else if (equalequal__bool__nat64__nat64(n, 8)) {
-		return _constantArr4658097;
+		return _constantArr4659041;
 	} else if (equalequal__bool__nat64__nat64(n, 9)) {
-		return _constantArr4658098;
+		return _constantArr4659042;
 	} else {
 		return todo__arr__char();
 	}
@@ -317,12 +325,12 @@ arr__char to_str__arr__char__nat64(ctx* ctx, nat64 n) {
 nat64 at__nat64__ptr_dict__nat64__nat64__nat64(ctx* ctx, dict__nat64__nat64* d, nat64 key) {
 	opt__nat64 matched = get__opt__nat64__ptr_dict__nat64__nat64__nat64(ctx, d, key);
 	switch (matched.kind) {
+		case opt__nat64::Kind::none: {
+			return todo__nat64();
+		}
 		case opt__nat64::Kind::some__nat64: {
 			some__nat64 s = matched.as_some__nat64;
 			return s.value;
-		}
-		case opt__nat64::Kind::none: {
-			return todo__nat64();
 		}
 		default: assert(0);
 	}
@@ -356,7 +364,7 @@ arr__nat64 freeze__arr__nat64__ptr_mut_arr__nat64(mut_arr__nat64* a) {
 }
 arr__nat64 map__arr__nat64__arr__nat64__fun1__nat64__nat64(ctx* ctx, arr__nat64 a, fun1__nat64__nat64 mapper) {
 	mut_arr__nat64* out = uninitialized_mut_arr__ptr_mut_arr__nat64__nat64(ctx, a.size);
-	each_in_range___void__nat64__nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb2_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx, 0, a.size, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure{out, mapper, a});
+	each___void__range_nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb1_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx, to__range_nat64__nat64__nat64(ctx, 0, a.size), map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure{out, mapper, a});
 	return freeze__arr__nat64__ptr_mut_arr__nat64(out);
 }
 bool equalequal__bool__nat64__nat64(nat64 a, nat64 b) {
@@ -375,13 +383,13 @@ bool equalequal__bool__nat64__nat64(nat64 a, nat64 b) {
 	}
 }
 arr__char todo__arr__char() {
-	return hard_fail__arr__char_arg0_is_4658090();
+	return hard_fail__arr__char_arg0_is_4659034();
 }
 opt__nat64 get__opt__nat64__ptr_dict__nat64__nat64__nat64(ctx* ctx, dict__nat64__nat64* d, nat64 key) {
 	return get_recursive__opt__nat64__arr__nat64__arr__nat64__nat64__nat64(ctx, d->keys, d->values, 0, key);
 }
 nat64 todo__nat64() {
-	return hard_fail__nat64_arg0_is_4658090();
+	return hard_fail__nat64_arg0_is_4659034();
 }
 mut_arr__nat64* uninitialized_mut_arr__ptr_mut_arr__nat64_arg0_is_0(ctx* ctx) {
 	return _alloc<mut_arr__nat64>(allocate_bytes__ptr__byte__nat64(ctx, 32), mut_arr__nat64{false, 0, 0, uninitialized_data__ptr__nat64_arg0_is_0(ctx)});
@@ -390,7 +398,7 @@ _void assert___void__bool(ctx* ctx, bool condition) {
 	if (condition) {
 		return 0;
 	} else {
-		return fail___void_arg0_is_4658089(ctx);
+		return fail___void_arg0_is_4659033(ctx);
 	}
 }
 bool has__q__bool__ptr_dict__nat64__nat64__nat64(ctx* ctx, dict__nat64__nat64* d, nat64 key) {
@@ -438,14 +446,17 @@ arr__nat64 unsafe_as_arr__arr__nat64__ptr_mut_arr__nat64(mut_arr__nat64* a) {
 mut_arr__nat64* uninitialized_mut_arr__ptr_mut_arr__nat64__nat64(ctx* ctx, nat64 size) {
 	return _alloc<mut_arr__nat64>(allocate_bytes__ptr__byte__nat64(ctx, 32), mut_arr__nat64{false, size, size, uninitialized_data__ptr__nat64__nat64(ctx, size)});
 }
-_void each_in_range___void__nat64__nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb2_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx* ctx, nat64 lo, nat64 hi, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure f) {
-	assert___void__bool(ctx, lessequal__bool__nat64__nat64(lo, hi));
-	if (equalequal__bool__nat64__nat64(lo, hi)) {
+_void each___void__range_nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb1_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx* ctx, range_nat64 r, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure f) {
+	if (empty__q__bool__range_nat64(ctx, r)) {
 		return 0;
 	} else {
-		map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx, f, lo);
-		return each_in_range___void__nat64__nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb2_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx, incr__nat64__nat64(lo), hi, f);
+		map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx, f, r.lo);
+		return each___void__range_nat64__map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure_klb1_is_map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx, tail__range_nat64__range_nat64(ctx, r), f);
 	}
+}
+range_nat64 to__range_nat64__nat64__nat64(ctx* ctx, nat64 lo, nat64 hi) {
+	assert___void__bool(ctx, lessequal__bool__nat64__nat64(lo, hi));
+	return range_nat64{lo, hi};
 }
 comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b) {
 	if ((a < b)) {
@@ -456,7 +467,7 @@ comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b) {
 		return comparison(equal{});
 	}
 }
-arr__char hard_fail__arr__char_arg0_is_4658090() {
+arr__char hard_fail__arr__char_arg0_is_4659034() {
 	assert(0);
 }
 opt__nat64 get_recursive__opt__nat64__arr__nat64__arr__nat64__nat64__nat64(ctx* ctx, arr__nat64 keys, arr__nat64 values, nat64 idx, nat64 key) {
@@ -468,14 +479,14 @@ opt__nat64 get_recursive__opt__nat64__arr__nat64__arr__nat64__nat64__nat64(ctx* 
 		return get_recursive__opt__nat64__arr__nat64__arr__nat64__nat64__nat64(ctx, keys, values, incr__nat64__nat64(idx), key);
 	}
 }
-nat64 hard_fail__nat64_arg0_is_4658090() {
+nat64 hard_fail__nat64_arg0_is_4659034() {
 	assert(0);
 }
 ptr__nat64 uninitialized_data__ptr__nat64_arg0_is_0(ctx* ctx) {
 	ptr__byte bptr = allocate_bytes__ptr__byte_arg0_is_0(ctx);
 	return reinterpret_cast<nat64*>(bptr);
 }
-_void fail___void_arg0_is_4658089(ctx* ctx) {
+_void fail___void_arg0_is_4659033(ctx* ctx) {
 	return todo___void();
 }
 bool has__q__bool__opt__nat64(opt__nat64 a) {
@@ -487,11 +498,18 @@ ptr__nat64 incr__ptr__nat64__ptr__nat64(ptr__nat64 p) {
 nat64 decr__nat64__nat64(ctx* ctx, nat64 n) {
 	return ___nat64__nat64__nat64(ctx, n, 1);
 }
-bool lessequal__bool__nat64__nat64(nat64 a, nat64 b) {
-	return !(less__bool__nat64__nat64(b, a));
+bool empty__q__bool__range_nat64(ctx* ctx, range_nat64 r) {
+	return equalequal__bool__nat64__nat64(r.lo, r.hi);
 }
 _void map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0(ctx* ctx, map__arr__nat64__arr__nat64__fun1__nat64__nat64__lambda0___closure _closure, nat64 i) {
 	return set_at___void__ptr_mut_arr__nat64__nat64__nat64(ctx, _closure.out, i, call__nat64__fun1__nat64__nat64__nat64(ctx, _closure.mapper, at__nat64__arr__nat64__nat64(ctx, _closure.a, i)));
+}
+range_nat64 tail__range_nat64__range_nat64(ctx* ctx, range_nat64 r) {
+	forbid___void__bool(ctx, empty__q__bool__range_nat64(ctx, r));
+	return to__range_nat64__nat64__nat64(ctx, incr__nat64__nat64(r.lo), r.hi);
+}
+bool lessequal__bool__nat64__nat64(nat64 a, nat64 b) {
+	return !(less__bool__nat64__nat64(b, a));
 }
 nat64 at__nat64__arr__nat64__nat64(ctx* ctx, arr__nat64 a, nat64 index) {
 	assert___void__bool(ctx, less__bool__nat64__nat64(index, a.size));
@@ -501,18 +519,18 @@ ptr__byte allocate_bytes__ptr__byte_arg0_is_0(ctx* ctx) {
 	return malloc(0);
 }
 _void todo___void() {
-	return hard_fail___void_arg0_is_4658090();
+	return hard_fail___void_arg0_is_4659034();
 }
 bool empty__q__bool__opt__nat64(opt__nat64 a) {
 	opt__nat64 matched = a;
 	switch (matched.kind) {
-		case opt__nat64::Kind::some__nat64: {
-			some__nat64 s = matched.as_some__nat64;
-			return false;
-		}
 		case opt__nat64::Kind::none: {
 			none n = matched.as_none;
 			return true;
+		}
+		case opt__nat64::Kind::some__nat64: {
+			some__nat64 s = matched.as_some__nat64;
+			return false;
 		}
 		default: assert(0);
 	}
@@ -528,7 +546,7 @@ _void set_at___void__ptr_mut_arr__nat64__nat64__nat64(ctx* ctx, mut_arr__nat64* 
 nat64 call__nat64__fun1__nat64__nat64__nat64(ctx* ctx, fun1__nat64__nat64 f, nat64 p0) {
 	return call_with_ctx__nat64__ptr_ctx__fun1__nat64__nat64__nat64(ctx, f, p0);
 }
-_void hard_fail___void_arg0_is_4658090() {
+_void hard_fail___void_arg0_is_4659034() {
 	assert(0);
 }
 bool greater__bool__nat64__nat64(nat64 a, nat64 b) {

@@ -32,7 +32,6 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 			else
 				out << "<<none>>";
 			out << "\n";
-			out << "arg is a " << static_cast<int>(args[i2].asConstant()->kind.kind) << "\n";
 			assert(0);
 		}
 	}
@@ -41,7 +40,9 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const ConstantOrExpr _closure)
 	: fun{_fun}, closure{_closure} {
 	assert(fun->hasClosure()); // All dynamic funs take a closure, even if it's just void*
-	assert(concreteTypeEq(closure.typeWithoutKnownLambdaBody(), fun->closureType().force()));
+	const ConcreteType closureType = closure.typeWithoutKnownLambdaBody();
+	assert(closureType.sizeOrPointerSize() == sizeof(void*));
+	assert(concreteTypeEq(closureType, fun->closureType().force()));
 	closure.match(
 		[&](const Constant* c) {
 			assert(c->kind.isNull());

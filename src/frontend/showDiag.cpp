@@ -83,6 +83,19 @@ namespace {
 		return out;
 	}
 
+	Output& operator<<(Output& out, const Purity p) {
+		switch (p) {
+			case Purity::data:
+				return out << "data";
+			case Purity::sendable:
+				return out << "sendable";
+			case Purity::nonSendable:
+				return out << "mut";
+			default:
+				assert(0);
+		}
+	}
+
 	Output& operator<<(Output& out, const Diag d) {
 		d.match(
 			[&](const Diag::CantCallNonNoCtx) {
@@ -115,9 +128,18 @@ namespace {
 				else
 					out << "there is no expected type at this location; lambdas need an expected type";
 			},
+			[&](const Diag::FieldPurityWorseThanStructPurity d) {
+				out << "struct is " << d.structPurity << ", but field is " << d.fieldPurity;
+			},
 			[&](const Diag::FileDoesNotExist) {
 				// We handle this specially
 				unreachable<void>();
+			},
+			[&](const Diag::MatchCaseStructNamesDoNotMatch d) {
+				out << "expected the case names to be: ";
+				writeWithCommas(out, d.unionMembers, [&](const StructInst* i) {
+					out << i->decl->name;
+				});
 			},
 			[&](const Diag::MatchOnNonUnion d) {
 				unused(d);
@@ -207,4 +229,3 @@ void printDiagnostics(const Diagnostics diagnostics) {
 		}
 	}
 }
-
