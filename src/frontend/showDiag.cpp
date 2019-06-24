@@ -3,32 +3,6 @@
 #include "../util/arrUtil.h"
 
 namespace {
-	struct Output {
-		Output& operator<<(const Str s) {
-			printf("%.*s", safeSizeTToInt(s.size), s.begin());
-			return *this;
-		}
-
-		Output& operator<<(const size_t s) {
-			printf("%zu", s);
-			return *this;
-		}
-
-		Output& operator<<(const uint u) {
-			return *this << static_cast<size_t>(u);
-		}
-
-		Output& operator<<(const CStr c) {
-			printf("%s", c);
-			return *this;
-		}
-
-		Output& operator<<(const char c) {
-			printf("%c", c);
-			return *this;
-		}
-	};
-
 	Output& operator<<(Output& out, const Path* p) {
 		if (p->parent.has())
 			out << p->parent.force();
@@ -80,6 +54,9 @@ namespace {
 			[&](const ParseDiag::LeadingSpace) {
 				todo<void>("leadingspace");
 			},
+			[&](const ParseDiag::LetMustHaveThen) {
+				out << "after 'x = y', must have another line after it";
+			},
 			[&](const ParseDiag::MatchWhenNewMayNotAppearInsideArg) {
 				todo<void>("mwn");
 			},
@@ -102,28 +79,6 @@ namespace {
 			},
 			[&](const ParseDiag::WhenMustHaveElse) {
 				out << "'when' expression must end in 'else'";
-			});
-		return out;
-	}
-
-	Output& operator<<(Output& out, const Type type) {
-		type.match(
-			[&](const Type::Bogus) {
-				unreachable<void>();
-			},
-			[&](const TypeParam* p) {
-				out << '?' << p->name;
-			},
-			[&](const StructInst* s) {
-				out << s->decl->name;
-				if (!isEmpty(s->typeArgs)) {
-					Cell<const Bool> first { True };
-					for (const Type t : s->typeArgs) {
-						out << (first.get() ? '<' : ' ') << t;
-						first.set(False);
-					}
-					out << '>';
-				}
 			});
 		return out;
 	}
@@ -164,6 +119,10 @@ namespace {
 				// We handle this specially
 				unreachable<void>();
 			},
+			[&](const Diag::MatchOnNonUnion d) {
+				unused(d);
+				todo<void>("matchonnonunion");
+			},
 			[&](const Diag::MultipleFunctionCandidates d) {
 				out << "multiple fun candidates match: ";
 				for (const size_t i : Range{d.candidates.size}) {
@@ -190,7 +149,7 @@ namespace {
 				out << kind << " name not found: " << d.name;
 			},
 			[&](const Diag::NoSuchFunction d) {
-				out << "no such function " << d.name << " exists with those argument types and return type";
+				out << "no such function '" << d.name << "' exists with those argument types and return type";
 			},
 			[&](const Diag::ParamShadowsPrevious) {
 				todo<void>("print paramshadowsprevious");

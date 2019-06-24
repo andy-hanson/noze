@@ -100,8 +100,7 @@ struct ConcreteFunSource {
 	// Similarly, body of the current fun, not the outer one.
 	// For a lambda or iface this is always an Expr.
 	const FunBody body;
-	// Only for lambda / iface
-	const Opt<const Arr<const ConstantOrLambdaOrVariable>> closureSpecialize;
+	const Opt<const KnownLambdaBody*> knownLambdaBody;
 
 	inline const FunDeclAndTypeArgs containingFunDeclAndTypeArgs() const {
 		return containingFunInfo.funDeclAndTypeArgs;
@@ -144,12 +143,20 @@ struct ConcretizeCtx {
 	// (When we do that we copy this to the ConcreteFunSource)
 	MutDict<const KnownLambdaBody*, const LambdaInfo, comparePointer<const KnownLambdaBody>> knownLambdaBodyToInfo {};
 	// TODO: do this eagerly
-	Late<const ConcreteType> _voidPtrType;
+	Late<const ConcreteType> _boolType;
+	Late<const ConcreteType> _charType;
+	Late<const ConcreteType> _voidType;
+	Late<const ConcreteType> _anyPtrType;
+	Late<const ConcreteType> _ctxPtrType;
 
 	ConcretizeCtx(Arena& _arena, const FunDecl* _allocFun, const Arr<const FunDecl*> _callFuns, const CommonTypes& _commonTypes)
-		: arena{_arena}, allocFun{_allocFun}, callFuns{_callFuns}, commonTypes{_commonTypes}, allConstants{arena} {}
+		: arena{_arena}, allocFun{_allocFun}, callFuns{_callFuns}, commonTypes{_commonTypes}, allConstants{} {}
 
-	const ConcreteType voidPtrType();
+	const ConcreteType boolType();
+	const ConcreteType charType();
+	const ConcreteType voidType();
+	inline const ConcreteType anyPtrType();
+	const ConcreteType ctxPtrType();
 };
 
 const ConcreteFun* getOrAddNonGenericConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl);
@@ -178,17 +185,35 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 const ConcreteType getConcreteType(ConcretizeCtx& ctx, const Type t, const TypeArgsScope typeArgsScope);
 const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope);
 
+const Opt<const ConcreteType> concreteTypeFromFields(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName);
+const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName);
+
 const Bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl);
 
 
 //TODO:MOVE?
 struct SpecializeOnArgs {
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs;
+	// This has en entry for each in specializedOnArgs that is not constant
 	const Arr<const ConstantOrExpr> notSpecializedArgs;
+
+	inline SpecializeOnArgs(
+		const Arr<const ConstantOrLambdaOrVariable> _specializeOnArgs,
+		const Arr<const ConstantOrExpr> _notSpecializedArgs
+	) : specializeOnArgs{_specializeOnArgs}, notSpecializedArgs{_notSpecializedArgs} {
+		size_t nNotSpecialized = 0;
+		for (const ConstantOrLambdaOrVariable arg : specializeOnArgs)
+			if (!arg.isConstant())
+				nNotSpecialized++;
+		if (nNotSpecialized != notSpecializedArgs.size) {
+			printf("nNotSpecialized: %zu, notSpecializedArgs: %zu\n", nNotSpecialized, notSpecializedArgs.size);
+		}
+		assert(nNotSpecialized == notSpecializedArgs.size);
+	}
 };
-const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(Arena& arena, const Arr<const ConstantOrExpr> args);
-const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const Bool isSummon);
-const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx& ctx, const FunDecl* f, const Arr<const ConstantOrExpr> args);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args, const Bool isSummon);
+const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx& ctx, const SourceRange range, const FunDecl* f, const Arr<const ConstantOrExpr> args);
 
 const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 	ConcretizeCtx& ctx,
@@ -197,3 +222,21 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 	const TypeArgsScope typeArgsScope
 );
 const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx& ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope);
+
+const ConstantOrExpr makeLambdasDynamic(ConcretizeCtx& ctx, const SourceRange range, const ConstantOrExpr expr);
+const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> expr);
+
+// TODO:MOVE?
+template <typename T>
+const ConstantOrExpr nuExpr(Arena& arena, const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, T t) {
+	return ConstantOrExpr{arena.nu<const ConcreteExpr>()(type, range, klb, t)};
+}
+
+template <typename T>
+const ConstantOrExpr nuExpr(Arena& arena, const ConcreteType type, const SourceRange range, T t) {
+	return nuExpr(arena, type, range, none<const KnownLambdaBody*>(), t);
+}
+
+inline const ConcreteFun* getAllocFun(ConcretizeCtx& ctx) {
+	return getOrAddNonGenericConcreteFunAndFillBody(ctx, ctx.allocFun);
+}

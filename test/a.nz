@@ -1,4 +1,4 @@
-| 'real' main function
+| actual main function
 main int64() trusted noctx summon
 	ctx-by-val = as<by-val<ctx>>: new zero, zero, as-non-const: zero
 	ctx-by-ptr = ctx-by-val ref-of-val
@@ -7,11 +7,31 @@ main int64() trusted noctx summon
 
 | Main function normally seen by users
 other-main void() trusted summon
+	m = empty-mut-dict<nat64, nat64>
+	m add 1, 1
+	m add 2, 2
+	m add 3, 3
+	d = m freeze
+	identity = as-non-const<fun1<nat64, nat64>>: {it}
+	uno = as-non-const<nat64>: 1
+	dos = uno + uno
+	| Closure should be by value
+	add-one = as-non-const<fun1<nat64, nat64>>: {it + uno}
+	| Closure should be a pointer
+	add-three = as-non-const<fun1<nat64, nat64>>: {it + uno + dos}
+	d2 = d map-values identity
+	d3 = d map-values add-one
+	d4 = d map-values add-three
+	print-sync: d2 at 2 to-str
+	print-sync: d3 at 2 to-str
+	print-sync: d4 at 2 to-str
+
+
+test void() trusted summon
 	a = new-arr<nat64> one, one, one
 	| get 0th element
 	b = a.data deref
 	b.to-str print-sync
-	"Hello natively compiled world!" print-sync
 	print-range: 5, 8, \x
 		x.to-str print-sync
 
@@ -22,8 +42,3 @@ print-range void(lo nat64, hi nat64, f fun1 void nat64)
 			lo.incr print-range hi, f
 		else
 			pass
-
-my-big-struct record
-	a nat64
-	b nat64
-	c nat64

@@ -87,7 +87,7 @@ namespace {
 			case 'h':
 				return strEqLiteral(name, "hard-fail") ? special(BuiltinFunKind::hardFail) : no;
 			case 'i':
-				return strEqLiteral(name, "if") ? special(BuiltinFunKind::_if)
+				return strEqLiteral(name, "if") ? _operator(BuiltinFunKind::_if)
 					: strEqLiteral(name, "is-reference-type") ? constant(BuiltinFunKind::isReferenceType)
 					: no;
 			case 'n':

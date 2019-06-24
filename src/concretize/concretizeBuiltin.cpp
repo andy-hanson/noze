@@ -51,7 +51,7 @@ namespace {
 	}
 
 	struct ComparisonTypes {
-		const ConcreteType t; // the type parameter
+		const ConcreteType t; // the type filling in for ?t in compare comparison(a ?t, b ?t)
 		const ConcreteType comparison;
 		const ConcreteType less;
 		const ConcreteType equal;
@@ -103,18 +103,20 @@ namespace {
 		const Opt<const Constant*> no = none<const Constant*>();
 
 		auto constBool = [&](const Bool value) -> const Opt<const Constant*> {
-			return yes(allConstants._bool(value));
+			return yes(allConstants._bool(arena, returnType, value));
 		};
 		auto constInt64 = [&](const Int64 value) -> const Opt<const Constant*> {
-			return yes(allConstants.int64(arena, value));
+			return yes(allConstants.int64(arena, returnType, value));
 		};
 		auto constNat64 = [&](const Nat64 value) -> const Opt<const Constant*> {
-			return yes(allConstants.nat64(arena, value));
+			return yes(allConstants.nat64(arena, returnType, value));
 		};
 		auto constPtr = [&](const Constant* array, const size_t index) {
-			return yes(allConstants.ptr(arena, array, index));
+			return yes(allConstants.ptr(arena, returnType, array, index));
 		};
-		const Opt<const Constant*> constVoid = yes(allConstants._void);
+		auto constVoid = [&]() {
+			return yes(allConstants._void(arena, returnType));
+		};
 
 		switch (info.kind) {
 			case BuiltinFunKind::addFloat64:
@@ -194,7 +196,7 @@ namespace {
 				return constBool(_or(boolArg(0), boolArg(1)));
 
 			case BuiltinFunKind::pass:
-				return constVoid;
+				return constVoid();
 
 			case BuiltinFunKind::ptrCast:
 				return no;
@@ -256,6 +258,9 @@ namespace {
 				return constInt64(i0 * i1);
 			}
 
+			case BuiltinFunKind::wrappingMulNat64:
+				return constNat64(nat64Arg(0) * nat64Arg(1));
+
 			case BuiltinFunKind::zeroInt64:
 				return constInt64(0);
 
@@ -263,31 +268,32 @@ namespace {
 				return constNat64(0);
 
 			default:
+				printf("unhandled BuiltinFunKind: %d\n", info.kind);
 				assert(0);
 		}
 	}
 
 	template <typename T>
-	inline const ConcreteExpr* genExpr(Arena& arena, T value) {
-		return arena.nu<const ConcreteExpr>()(SourceRange::empty(), none<const KnownLambdaBody*>(), value);
+	inline const ConcreteExpr* genExpr(Arena& arena, const ConcreteType type, T value) {
+		return arena.nu<const ConcreteExpr>()(type, SourceRange::empty(), none<const KnownLambdaBody*>(), value);
 	}
 
-	const ConcreteExpr* makeLess(Arena& arena, const ConcreteExpr* l, const ConcreteExpr* r) {
-		return genExpr(arena, ConcreteExpr::SpecialBinary{
+	const ConcreteExpr* makeLess(Arena& arena, const ConcreteType boolType, const ConcreteExpr* l, const ConcreteExpr* r) {
+		return genExpr(arena, boolType, ConcreteExpr::SpecialBinary{
 			ConcreteExpr::SpecialBinary::Kind::less,
 			ConstantOrExpr{l},
 			ConstantOrExpr{r}});
 	}
 
-	const ConcreteExpr* makeCond(Arena& arena, const ConcreteExpr* cond, const ConcreteExpr* then, const ConcreteExpr* elze) {
-		return genExpr(arena, ConcreteExpr::Cond{cond, ConstantOrExpr{then}, ConstantOrExpr{elze}});
+	const ConcreteExpr* makeCond(Arena& arena, const ConcreteType type, const ConcreteExpr* cond, const ConcreteExpr* then, const ConcreteExpr* elze) {
+		return genExpr(arena, type, ConcreteExpr::Cond{cond, ConstantOrExpr{then}, ConstantOrExpr{elze}});
 	}
 
 	const ConcreteExpr* combineCompares(
 		Arena& arena,
 		const ConcreteExpr* cmpFirst,
 		const ConcreteExpr* cmpSecond,
-		const ConcreteType comparisonStruct
+		const ConcreteType comparisonType
 	) {
 		/*
 		Outputs:
@@ -303,9 +309,9 @@ namespace {
 		*/
 		const ConcreteLocal* cmpFirstLocal = arena.nu<const ConcreteLocal>()(
 			strLiteral("cmp"),
-			comparisonStruct,
+			comparisonType,
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
-		const ConcreteExpr* getCmpFirst = genExpr(arena, ConcreteExpr::LocalRef{cmpFirstLocal});
+		const ConcreteExpr* getCmpFirst = genExpr(arena, comparisonType, ConcreteExpr::LocalRef{cmpFirstLocal});
 		const ConcreteExpr::Match::Case caseUseFirst = ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), ConstantOrExpr{getCmpFirst}};
 		const ConcreteExpr::Match::Case caseUseSecond = ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), ConstantOrExpr{cmpSecond}};
 		const Arr<const ConcreteExpr::Match::Case> cases = arrLiteral<const ConcreteExpr::Match::Case>(
@@ -313,8 +319,8 @@ namespace {
 			/*less*/ caseUseFirst,
 			/*equal*/ caseUseSecond,
 			/*greater*/ caseUseFirst);
-		const ConcreteExpr* then = genExpr(arena, ConcreteExpr::Match{cmpFirst, comparisonStruct.mustBeNonPointer(), cases});
-		return genExpr(arena, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
+		const ConcreteExpr* then = genExpr(arena, comparisonType, ConcreteExpr::Match{cmpFirst, comparisonType.mustBeNonPointer(), cases});
+		return genExpr(arena, comparisonType, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
 	}
 
 	const ConcreteExpr* generateCompare(ConcretizeCtx& ctx, const FunDeclAndTypeArgs declAndTypeArgs, const ConcreteFun* fun) {
@@ -322,17 +328,19 @@ namespace {
 		const ComparisonTypes types = getComparisonTypes(fun->returnType(), declAndTypeArgs.typeArgs);
 
 		auto getExpr = [&](const ConcreteType memberType) -> const ConcreteExpr* {
-			const ConcreteExpr* createMember = genExpr(arena, ConcreteExpr::CreateRecord{memberType, none<const ConcreteFun*>(), emptyArr<const ConstantOrExpr>()});
-			return genExpr(arena, ConcreteExpr::ImplicitConvertToUnion{types.comparison, memberType, ConstantOrExpr{createMember}});
+			const ConcreteExpr* createMember = genExpr(arena, memberType, ConcreteExpr::CreateRecord{emptyArr<const ConstantOrExpr>()});
+			return genExpr(arena, types.comparison, ConcreteExpr::ImplicitConvertToUnion{memberType, ConstantOrExpr{createMember}});
 		};
 
 		const ConcreteExpr* lessExpr = getExpr(types.less);
 		const ConcreteExpr* equalExpr = getExpr(types.equal);
 		const ConcreteExpr* greaterExpr = getExpr(types.greater);
 
-		assert(fun->arity() == 2);
-		const ConcreteExpr* a = genExpr(arena, ConcreteExpr::ParamRef{fun->paramsExcludingClosure().getPtr(0)});
-		const ConcreteExpr* b = genExpr(arena, ConcreteExpr::ParamRef{fun->paramsExcludingClosure().getPtr(1)});
+		assert(fun->arityExcludingCtxAndClosure() == 2);
+		const Bool aIsPointer = fun->paramsExcludingClosure().getPtr(0)->type.isPointer;
+		const Bool bIsPointer = fun->paramsExcludingClosure().getPtr(1)->type.isPointer;
+		const ConcreteExpr* a = genExpr(arena, types.t, ConcreteExpr::ParamRef{fun->paramsExcludingClosure().getPtr(0)});
+		const ConcreteExpr* b = genExpr(arena, types.t, ConcreteExpr::ParamRef{fun->paramsExcludingClosure().getPtr(1)});
 
 		auto getCompareFor = [&](const ConcreteType ct) -> const ConcreteFun* {
 			const ConcreteFunKey key = ConcreteFunKey{
@@ -340,9 +348,11 @@ namespace {
 					declAndTypeArgs.withTypeArgs(arrLiteral<const ConcreteType>(arena, ct)),
 					emptyArr<const FunDecl*>(),
 				},
-				allVariable(arena, fun->arity())};
+				allVariable(arena, fun->arityExcludingCtxAndClosure())};
 			return getOrAddConcreteFunAndFillBody(ctx, key);
 		};
+
+		const ConcreteType boolType = ctx.boolType();
 
 		if (types.t.isPointer != types.t.strukt->defaultIsPointer())
 			todo<void>("compare by value -- just take a ref and compare by ref");
@@ -361,9 +371,9 @@ namespace {
 					case BuiltinStructKind::int64:
 					case BuiltinStructKind::nat64: {
 						// Output: a < b ? less : b < a ? greater : equal
-						const ConcreteExpr* aLessB = makeLess(arena, a, b);
-						const ConcreteExpr* bLessA = makeLess(arena, b, a);
-						return makeCond(arena, aLessB, lessExpr, makeCond(arena, bLessA, greaterExpr, equalExpr));
+						const ConcreteExpr* aLessB = makeLess(arena, boolType, a, b);
+						const ConcreteExpr* bLessA = makeLess(arena, boolType, b, a);
+						return makeCond(arena, types.comparison, aLessB, lessExpr, makeCond(arena, types.comparison, bLessA, greaterExpr, equalExpr));
 					}
 
 					case BuiltinStructKind::funPtrN:
@@ -386,10 +396,10 @@ namespace {
 					// switch (a.x <=> b.x) { case less: || a.y <=> b.y
 					// `||` will short-circuit on any non-zero value.
 					// Using special operators `compare` and `orcmp`
-					const ConcreteExpr* ax = genExpr(arena, ConcreteExpr::StructFieldAccess{ConstantOrExpr(a), field});
-					const ConcreteExpr* bx = genExpr(arena, ConcreteExpr::StructFieldAccess{ConstantOrExpr(b), field});
+					const ConcreteExpr* ax = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{aIsPointer, ConstantOrExpr(a), field});
+					const ConcreteExpr* bx = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{bIsPointer, ConstantOrExpr(b), field});
 					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(arena, ConstantOrExpr{ax}, ConstantOrExpr{bx});
-					const ConcreteExpr* compareThisField = genExpr(arena, ConcreteExpr::CallConcreteFun{getCompareFor(field->type), args});
+					const ConcreteExpr* compareThisField = genExpr(arena, types.comparison, ConcreteExpr::CallConcreteFun{getCompareFor(field->type), args});
 					const ConcreteExpr* newAccum = accum.get().has()
 						? combineCompares(arena, accum.get().force(), compareThisField, types.comparison)
 						: compareThisField;

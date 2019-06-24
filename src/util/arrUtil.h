@@ -115,6 +115,11 @@ inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c) {
 }
 
 template <typename T>
+inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c, T d) {
+	return arrLiteral(arena, { a, b, c, d });
+}
+
+template <typename T>
 inline Arr<T> arrLiteral(Arena& arena, std::initializer_list<T> list) {
 	const size_t size = list.size();
 	T* out = static_cast<T*>(arena.alloc(sizeof(T) * size));

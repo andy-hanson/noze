@@ -3,9 +3,12 @@
 #include <cassert>
 #include <cstdlib> // malloc
 
+#include "../util.h"
+
 void* Arena::alloc(const size_t n_bytes) {
 	if (begin == nullptr) {
-		size_t size = 1024 * 1024;
+		// 4MB
+		size_t size = 4 * 1024 * 1024;
 		begin = static_cast<byte*>(malloc(size));
 		cur = begin;
 		end = begin + size;
@@ -15,10 +18,14 @@ void* Arena::alloc(const size_t n_bytes) {
 			*b = 0xff;
 	}
 
+	assert(n_bytes < 99999); // sanity check
+
 	// Since we filled with 0xff, should still be that way!
 	byte* res = cur;
 	cur = cur + n_bytes;
-	assert(cur <= end);
+
+	if (cur > end)
+		todo<void>("Ran out of space!");
 
 	for (byte* b = res; b < cur; b++)
 		assert(*b == 0xff);

@@ -21,7 +21,7 @@ namespace {
 	}
 
 	PuritySpecifier parsePurity(Lexer& lexer) {
-		if (tryTake(lexer, "mutable"))
+		if (tryTake(lexer, "mut"))
 			return PuritySpecifier::nonSendable;
 		else if (tryTake(lexer, "sendable"))
 			return PuritySpecifier::sendable;
@@ -150,10 +150,11 @@ namespace {
 	const Arr<const StructDeclAst::Body::Fields::Field> parseFields(Lexer& lexer) {
 		ArrBuilder<const StructDeclAst::Body::Fields::Field> res {};
 		do {
+			const Bool isMutable = tryTake(lexer, "mut ");
 			const Str name = takeName(lexer);
 			take(lexer, ' ');
 			const TypeAst type = parseType(lexer);
-			res.add(lexer.arena, StructDeclAst::Body::Fields::Field{name, type});
+			res.add(lexer.arena, StructDeclAst::Body::Fields::Field{isMutable, name, type});
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
 		return res.finish();
 	}
@@ -373,7 +374,7 @@ namespace {
 			funs.add(lexer.arena, parseFun(lexer, isPublic, start, name, typeParams));
 	}
 
-	const FileAst doParseFile(Lexer& lexer) {
+	const FileAst parseFileMayThrow(Lexer& lexer) {
 		skipBlankLines(lexer);
 		const Arr<const ImportAst> imports = tryTake(lexer, "import ")
 			? parseImports(lexer)
@@ -410,7 +411,7 @@ namespace {
 const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, const NulTerminatedStr source) {
 	try {
 		Lexer lexer = createLexer(astArena, source);
-		return success<const FileAst, const ParseDiagnostic>(doParseFile(lexer));
+		return success<const FileAst, const ParseDiagnostic>(parseFileMayThrow(lexer));
 	} catch (ParseDiagnostic p) {
 		return failure<const FileAst, const ParseDiagnostic>(p);
 	}

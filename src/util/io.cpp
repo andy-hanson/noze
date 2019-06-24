@@ -189,7 +189,7 @@ int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, c
 		ArrBuilder<const CStr> cArgs {};
 		cArgs.add(arena, executableCStr);
 		for (const Str arg : args)
-			cArgs.add(arena, strToNulTerminatedStr(arena, arg).asCStr());
+			cArgs.add(arena, strToCStr(arena, arg));
 		cArgs.add(arena, nullptr);
 		return cArgs.finish().begin();
 	}();
@@ -197,7 +197,7 @@ int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, c
 	CStr const* const cEnviron = [&]() {
 		ArrBuilder<const CStr> cEnviron {};
 		for (const KeyValuePair<const Str, const Str> pair : environ)
-			cEnviron.add(arena, strToNulTerminatedStr(arena, cat(arena, pair.key, strLiteral("="), pair.value)).asCStr());
+			cEnviron.add(arena, strToCStr(arena, cat(arena, pair.key, strLiteral("="), pair.value)));
 		cEnviron.add(arena, nullptr);
 		return cEnviron.finish().begin();
 	}();

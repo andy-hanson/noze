@@ -347,7 +347,7 @@ Lexer createLexer(Arena& arena, const NulTerminatedStr source) {
 	// Note: We *are* relying on the nul terminator to stop the lexer.
 	const Str str = stripNulTerminator(source);
 	const uint len = safeSizeTToUint(str.size);
-	assert(len < 9999);
+	assert(len < 99999);
 
 	if (len == 0)
 		todo<void>("empty file"); // TODO: allow this, but check that that's safe

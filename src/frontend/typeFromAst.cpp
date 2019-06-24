@@ -64,7 +64,7 @@ const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, con
 		},
 		[&](const StructBody::Fields f) {
 			const Arr<const StructField> fields = map<const StructField>{}(arena, f.fields, [&](const StructField f) {
-				return StructField{instantiateType(arena, f.type, decl->typeParams, typeArgs), f.name, f.index};
+				return StructField{f.isMutable, f.name, instantiateType(arena, f.type, decl->typeParams, typeArgs), f.index};
 			});
 			return StructBody{StructBody::Fields{fields}};
 		},

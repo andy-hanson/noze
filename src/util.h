@@ -22,7 +22,7 @@ using CStr = const char*;
 
 template <typename T>
 inline T todo(const CStr message) {
-	printf("%s\n", message);
+	printf("TODO: %s\n", message);
 	throw message;
 }
 
@@ -32,17 +32,17 @@ inline size_t safeIntToSizeT(const int i) {
 }
 
 inline ssize_t safeSizeTToSSizeT(const size_t s) {
-	assert(s <= 9999);
+	assert(s <= 99999);
 	return static_cast<ssize_t>(s);
 }
 
 inline int safeSizeTToInt(const size_t s) {
-	assert(s <= 9999);
+	assert(s <= 99999);
 	return s;
 }
 
 inline uint safeSizeTToUint(const size_t s) {
-	assert(s <= 9999);
+	assert(s <= 99999);
 	return s;
 }
 
@@ -71,6 +71,10 @@ template <typename T>
 const Bool neq(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value, "must be primitive");
 	return Bool{a != b};
+}
+
+inline size_t min(const size_t a, const size_t b) {
+	return a < b ? a : b;
 }
 
 inline size_t max(const size_t a, const size_t b) {
@@ -193,7 +197,7 @@ public:
 		return _has;
 	}
 
-	inline T force() const {
+	inline const T& force() const {
 		assert(has());
 		return value;
 	}
@@ -300,22 +304,22 @@ struct Arr {
 		return _begin + size;
 	}
 
-	inline T& operator[](size_t index) {
+	inline T& operator[](const size_t index) {
 		assert(index < size);
 		return _begin[index];
 	}
 
-	inline const T& operator[](size_t index) const {
+	inline const T& operator[](const size_t index) const {
 		assert(index < size);
 		return _begin[index];
 	}
 
-	inline T* getPtr(size_t index) {
+	inline T* getPtr(const size_t index) {
 		assert(index < size);
 		return _begin + index;
 	}
 
-	inline const T* getPtr(size_t index) const {
+	inline const T* getPtr(const size_t index) const {
 		assert(index < size);
 		return _begin + index;
 	}
@@ -505,7 +509,7 @@ public:
 		return Arr<T>{_begin, _size};
 	}
 
-	void deleteAt(size_t index) {
+	void deleteAt(const size_t index) {
 		assert(index < _size);
 		for (const size_t i : Range{index, _size - 1})
 			overwriteConst(_begin[i], _begin[i + 1]);
@@ -580,6 +584,10 @@ inline const NulTerminatedStr nulTerminatedStrLiteral(const CStr c) {
 }
 
 const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s);
+
+inline CStr strToCStr(Arena& arena, const Str s) {
+	return strToNulTerminatedStr(arena, s).asCStr();
+}
 
 const Bool strEq(const Str a, const Str b);
 

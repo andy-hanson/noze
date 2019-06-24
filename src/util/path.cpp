@@ -46,8 +46,12 @@ namespace {
 		return todo<const Str>("removeExtension -- no '.'");
 	}
 
+	const Str addExtension(Arena& arena, const Str s, const Str extension) {
+		return cat(arena, s, strLiteral("."), extension);
+	}
+
 	const Str changeExtension(Arena& arena, const Str s, const Str extension) {
-		return cat(arena, removeExtension(s), strLiteral("."), extension);
+		return addExtension(arena, removeExtension(s), extension);
 	}
 }
 
@@ -58,12 +62,16 @@ const Path* addManyChildren(Arena& arena, const Path* a, const Path* b) {
 	return childPath(arena, p, b->baseName);
 }
 
-const Path* changeExtension(Arena& arena, const Path* path, const Str extension) {
-	return childPath(arena, path->parent, changeExtension(arena, path->baseName, extension));
+const Path* removeExtension(Arena& arena, const Path* path) {
+	return childPath(arena, path->parent, removeExtension(path->baseName));
 }
 
 const Path* addExtension(Arena& arena, const Path* path, const Str extension) {
-	return arena.nu<const Path>()(path->parent, cat(arena, path->baseName, extension));
+	return childPath(arena, path->parent, addExtension(arena, path->baseName, extension));
+}
+
+const Path* changeExtension(Arena& arena, const Path* path, const Str extension) {
+	return childPath(arena, path->parent, changeExtension(arena, path->baseName, extension));
 }
 
 const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath) {

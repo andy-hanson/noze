@@ -63,10 +63,8 @@ inline const Type typeFromAst(ExprContext& ctx, const TypeAst typeAst) {
 }
 
 struct SingleInferringType {
-private:
 	Cell<const Opt<const Type>> type;
 
-public:
 	inline SingleInferringType(const Opt<const Type> t) : type{t} {}
 
 	inline const Opt<const Type> tryGetInferred() const {
@@ -75,7 +73,6 @@ public:
 
 	// Note: this may infer type parameters.
 	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);
-	const Opt<const Type> setTypeNoDiagnosticWorker(Arena& arena, const Type setType);
 };
 
 struct InferringTypeArgs {
@@ -153,5 +150,10 @@ public:
 
 	// Note: this may infer type parameters
 	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);
-	const Opt<const Type> setTypeNoDiagnosticWorker(Arena& arena, const Type setType);
 };
+
+struct StructAndField {
+	const StructInst* structInst;
+	const StructField* field;
+};
+const Opt<const StructAndField> tryGetStructField(const Type targetType, const Str fieldName);

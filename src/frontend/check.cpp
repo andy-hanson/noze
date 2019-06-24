@@ -62,8 +62,10 @@ namespace {
 			_bool = ng("bool"),
 			int64 = ng("int64"),
 			_char = ng("char"),
+			_ctx = ng("ctx"),
 			str = ng("str"),
-			_void = ng("void");
+			_void = ng("void"),
+			anyPtr = ng("any-ptr");
 
 		// generic types
 		auto com = [&](const CStr name, const size_t nTypeParameters) -> const Opt<const StructDecl*> {
@@ -84,7 +86,7 @@ namespace {
 			remoteFun1 = com("remote-fun1", 2),
 			remoteFun2 = com("remote-fun2", 3);
 
-		if (_bool.has() && _char.has() && int64.has() && str.has() && _void.has() &&
+		if (_bool.has() && _char.has() && int64.has() && str.has() && _void.has() && anyPtr.has() &&
 			opt.has() && some.has() && none.has() &&
 			byVal.has() && arr.has() && fut.has() &&
 			fun0.has() && fun1.has() && fun2.has() &&
@@ -93,9 +95,11 @@ namespace {
 				CommonTypes{
 					_bool.force(),
 					_char.force(),
+					_ctx.force(),
 					int64.force(),
 					str.force(),
 					_void.force(),
+					anyPtr.force(),
 					arrLiteral<const StructDecl*>(ctx.arena, opt.force(), some.force(), none.force()),
 					byVal.force(),
 					arr.force(),
@@ -301,7 +305,7 @@ namespace {
 							const Type fieldType = typeFromAst(ctx, it.type, structsAndAliasesMap, TypeParamsScope{strukt.typeParams}, delay);
 							if (isPurityWorse(fieldType.purity(), strukt.purity))
 								todo<void>("field purity is worse than struct purity");
-							return StructField{fieldType, ctx.copyStr(it.name), index};
+							return StructField{it.isMutable, ctx.copyStr(it.name), fieldType, index};
 						});
 					checkNoEqual(fields, [](const StructField a, const StructField b) { return strEq(a.name, b.name); });
 					return StructBody{StructBody::Fields{fields}};

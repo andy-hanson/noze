@@ -1,2 +1,13 @@
-a.out
+# CMake build directory
 build
+# Built executable from ./build.sh
+noze
+
+# Ignore executables in test/, but do include the .nz and .cpp files
+# (cpp files are to ensure we know when compiler's output changes)
+test
+!test/**/*.nz
+!test/**/*.cpp
+
+# scons cache
+.sconsign.dblite

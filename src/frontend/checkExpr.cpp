@@ -390,8 +390,10 @@ namespace {
 
 		const ExpectedLambdaType et = opEt.force();
 
-		if (paramAsts.size != et.paramTypes.size)
-			todo<void>("checkLambdaWorker");
+		if (paramAsts.size != et.paramTypes.size) {
+			printf("Number of params should be %zu, got %zu\n", et.paramTypes.size, paramAsts.size);
+			todo<void>("checkLambdaWorker -- # params is wrong");
+		}
 
 		const Arr<const Param> params = checkFunOrRemoteFunParamsForLambda(arena, paramAsts, et.paramTypes);
 		LambdaInfo info = LambdaInfo{params};
@@ -449,8 +451,10 @@ namespace {
 
 	const CheckedExpr checkMatch(ExprContext& ctx, const SourceRange range, const MatchAst ast, Expected& expected) {
 		const ExprAndType matchedAndType = checkAndInfer(ctx, *ast.matched);
-		if (!matchedAndType.type.isStructInst())
-			todo<void>("match on non-struct");
+		if (!matchedAndType.type.isStructInst()) {
+			ctx.diag(ast.matched->range, Diag{Diag::MatchOnNonUnion{matchedAndType.type}});
+			return expected.bogus(ast.matched->range);
+		}
 		const StructInst* matchedUnion = matchedAndType.type.asStructInst();
 		const StructDecl* strukt = matchedUnion->decl;
 		const StructBody body = strukt->body();
@@ -528,7 +532,7 @@ namespace {
 			ast.fields,
 			[&](const NewActorAst::Field field, const size_t index) {
 				const ExprAndType et = checkAndInfer(ctx, *field.expr);
-				return Expr::NewIfaceImpl::Field{ctx.copyStr(field.name), ctx.alloc(et.expr), et.type, index};
+				return Expr::NewIfaceImpl::Field{field.isMutable, ctx.copyStr(field.name), ctx.alloc(et.expr), et.type, index};
 			});
 		const Arr<const Expr> messageImpls = mapZipPtrs<const Expr>{}(
 			ctx.arena(),
@@ -555,6 +559,20 @@ namespace {
 		return CheckedExpr{Expr{range, Expr::Seq{first, then}}};
 	}
 
+	const CheckedExpr checkStructFieldSet(ExprContext& ctx, const SourceRange range, const StructFieldSetAst ast, Expected& expected) {
+		const ExprAndType target = checkAndInfer(ctx, *ast.target);
+		const Opt<const StructAndField> opStructAndField = tryGetStructField(target.type, ast.fieldName);
+		if (opStructAndField.has()) {
+			const StructAndField structAndField = opStructAndField.force();
+			if (!structAndField.field->isMutable)
+				todo<void>("diagnostic: trying to write to non-mutable field");
+			const Expr value = checkAndExpect(ctx, ast.value, structAndField.field->type);
+			const Expr::StructFieldSet sfs = Expr::StructFieldSet{ctx.alloc(target.expr), structAndField.structInst, structAndField.field, ctx.alloc(value)};
+			return expected.check(ctx, Type{ctx.commonTypes._void}, Expr{range, sfs});
+		} else
+			return todo<const CheckedExpr>("checkStructFieldSet -- no such field");
+	}
+
 	const CheckedExpr checkThen(ExprContext& ctx, const SourceRange range, const ThenAst ast, Expected& expected) {
 		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx.arena(), ast.left), ast.then}}};
 		const CallAst call = CallAst{
@@ -567,20 +585,51 @@ namespace {
 	const CheckedExpr checkExprWorker(ExprContext& ctx, const ExprAst ast, Expected& expected) {
 		const SourceRange range = ast.range;
 		return ast.kind.match(
-			[&](const CallAst a) { return checkCall(ctx, range, a, expected); },
-			[&](const CondAst a) { return checkCond(ctx, range, a, expected); },
-			[&](const CreateArrAst a) { return checkCreateArr(ctx, range, a, expected); },
-			[&](const CreateRecordAst a) { return checkCreateRecord(ctx, range, a, expected); },
-			[&](const FunAsLambdaAst a) { return checkFunAsLambda(ctx, range, a, expected); },
-			[&](const IdentifierAst a) { return checkIdentifier(ctx, range, a, expected); },
-			[&](const LambdaAst a) { return checkLambda(ctx, range, a, expected); },
-			[&](const LetAst a) { return checkLet(ctx, range, a, expected); },
-			[&](const LiteralAst a) { return checkLiteral(ctx, range, a, expected); },
-			[&](const MatchAst a) { return checkMatch(ctx, range, a, expected); },
-			[&](const MessageSendAst a) { return checkMessageSend(ctx, range, a, expected); },
-			[&](const NewActorAst a) { return checkNewActor(ctx, range, a, expected); },
-			[&](const SeqAst a) { return checkSeq(ctx, range, a, expected); },
-			[&](const ThenAst a) { return checkThen(ctx, range, a, expected); });
+			[&](const CallAst a) {
+				return checkCall(ctx, range, a, expected);
+			},
+			[&](const CondAst a) {
+				return checkCond(ctx, range, a, expected);
+			},
+			[&](const CreateArrAst a) {
+				return checkCreateArr(ctx, range, a, expected);
+			},
+			[&](const CreateRecordAst a) {
+				return checkCreateRecord(ctx, range, a, expected);
+			},
+			[&](const FunAsLambdaAst a) {
+				return checkFunAsLambda(ctx, range, a, expected);
+			},
+			[&](const IdentifierAst a) {
+				return checkIdentifier(ctx, range, a, expected);
+			},
+			[&](const LambdaAst a) {
+				return checkLambda(ctx, range, a, expected);
+			},
+			[&](const LetAst a) {
+				return checkLet(ctx, range, a, expected);
+			},
+			[&](const LiteralAst a) {
+				return checkLiteral(ctx, range, a, expected);
+			},
+			[&](const MatchAst a) {
+				return checkMatch(ctx, range, a, expected);
+			},
+			[&](const MessageSendAst a) {
+				return checkMessageSend(ctx, range, a, expected);
+			},
+			[&](const NewActorAst a) {
+				return checkNewActor(ctx, range, a, expected);
+			},
+			[&](const SeqAst a) {
+				return checkSeq(ctx, range, a, expected);
+			},
+			[&](const StructFieldSetAst a) {
+				return checkStructFieldSet(ctx, range, a, expected);
+			},
+			[&](const ThenAst a) {
+				return checkThen(ctx, range, a, expected);
+			});
 	}
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./util.h"
+#include "./util/output.h"
 #include "./util/sourceRange.h"
 
 enum class BuiltinStructKind {
@@ -196,6 +197,11 @@ struct ConcreteStruct {
 	}
 
 	inline size_t sizeBytes() const {
+		if (!_sizeBytes.isSet()) {
+			Arena arena {};
+			printf("sizeBytes failing for %s\n", strToNulTerminatedStr(arena, mangledName).asCStr());
+			todo<void>("sizeBytes failed");
+		}
 		return _sizeBytes.get();
 	}
 
@@ -213,6 +219,7 @@ struct ConcreteStruct {
 };
 
 struct ConcreteType {
+	// NOTE: ConcreteType for 'ptr' (e.g. 'ptr byte') will *not* have isPointer set -- since it's not a ptr*
 	const Bool isPointer;
 	const ConcreteStruct* strukt;
 
@@ -222,6 +229,14 @@ struct ConcreteType {
 			// union/iface are never pointers
 			assert(!isPointer);
 		}
+	}
+
+	static inline ConcreteType pointer(const ConcreteStruct* strukt) {
+		return ConcreteType{True, strukt};
+	}
+
+	static inline ConcreteType value(const ConcreteStruct* strukt) {
+		return ConcreteType{False, strukt};
 	}
 
 	static inline const ConcreteType fromStruct(const ConcreteStruct* s) {
@@ -236,27 +251,49 @@ struct ConcreteType {
 		return isPointer ? sizeof(void*) : strukt->sizeBytes();
 	}
 
+	inline const ConcreteStruct* mustBePointer() const {
+		assert(isPointer);
+		return strukt;
+	}
+
 	// Union and iface should never be pointers
 	inline const ConcreteStruct* mustBeNonPointer() const {
 		assert(!isPointer);
 		return strukt;
 	}
 
+	inline const ConcreteType changeToByRef() const {
+		assert(!isPointer);
+		return byRef();
+	}
+
 	inline const ConcreteType byRef() const {
-		return ConcreteType{True, strukt};
+		return ConcreteType::pointer(strukt);
 	}
 
 	inline const ConcreteType byVal() const {
-		return ConcreteType{False, strukt};
+		return ConcreteType::value(strukt);
 	}
 };
+
+inline Output& operator<<(Output& out, const ConcreteType t) {
+	out << t.strukt->mangledName;
+	if (t.isPointer)
+		out << '*';
+	return out;
+}
 
 inline Comparison compareConcreteType(const ConcreteType a, const ConcreteType b) {
 	const Comparison res = comparePointer(a.strukt, b.strukt);
 	return res != Comparison::equal ? res : compareBool(a.isPointer, b.isPointer);
 }
 
+inline Bool concreteTypeEq(const ConcreteType a, const ConcreteType b) {
+	return enumEq(compareConcreteType(a, b), Comparison::equal);
+}
+
 struct ConcreteField {
+	const Bool isMutable;
 	const Str mangledName;
 	const ConcreteType type;
 };
@@ -264,6 +301,10 @@ struct ConcreteField {
 struct ConcreteParam {
 	const Str mangledName;
 	const ConcreteType type;
+
+	inline const ConcreteParam withType(const ConcreteType newType) const {
+		return ConcreteParam{mangledName, newType};
+	}
 };
 
 struct ConcreteSig {
@@ -298,7 +339,6 @@ struct KnownLambdaBody;
 struct ConstantKind {
 	struct Array {
 		const ConstantArrKey key;
-		const ConcreteStruct* arrayType;
 
 		inline const ConcreteType elementType() const {
 			return key.elementType;
@@ -346,7 +386,7 @@ struct ConstantKind {
 
 	struct Void {};
 
-private:
+//TODO: private:
 	enum class Kind {
 		array,
 		_bool,
@@ -537,11 +577,18 @@ public:
 };
 
 struct Constant {
+	const ConcreteType _type;
 	const ConstantKind kind;
 	const size_t id;
-	inline Constant(const ConstantKind _kind, const size_t _id)
-		: kind{_kind}, id{_id} {}
+	inline Constant(const ConcreteType type, const ConstantKind _kind, const size_t _id)
+		: _type{type}, kind{_kind}, id{_id} {}
+
+	inline const ConcreteType type() const {
+		return _type;
+	}
 };
+
+Output& operator<<(Output& out, const Constant* c);
 
 // NOTE: a Constant can still have a KnownLambdaBody of course!
 struct ConstantOrLambdaOrVariable {
@@ -608,6 +655,8 @@ public:
 		}
 	}
 };
+
+Output& operator<<(Output& out, const ConstantOrLambdaOrVariable clv);
 
 inline Comparison compareConstantOrLambdaOrVariable(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
 	// variable < constant < knownlambdabody
@@ -679,6 +728,11 @@ public:
 				assert(0);
 		}
 	}
+
+	// Note: This ignores KnownLambdaBody!
+	const ConcreteType typeWithoutKnownLambdaBody() const;
+	// If this has a KnownLambdaBody, this is the closure type
+	const Opt<const ConcreteType> typeWithKnownLambdaBody() const;
 };
 
 struct ConcreteFunBody {
@@ -765,7 +819,7 @@ public:
 // TODO: and for iface impls
 struct ConcreteFun {
 	const Bool needsCtx;
-	const Opt<const ConcreteType> closureType;
+	const Opt<const ConcreteParam> closureParam;
 	// Note: This does not include the ctx or closure params.
 	const ConcreteSig sig;
 	const Bool isCallFun; // `call` is not a builtin, but we treat it specially
@@ -774,8 +828,8 @@ struct ConcreteFun {
 	size_t nextNewIfaceImplIndex = 0;
 	size_t nextLambdaIndex = 0;
 
-	inline ConcreteFun(const Bool _needsCtx, const Opt<const ConcreteType> _closureType, const ConcreteSig _sig, const Bool _isCallFun)
-		: needsCtx{_needsCtx}, closureType{_closureType}, sig{_sig}, isCallFun{_isCallFun} {}
+	inline ConcreteFun(const Bool _needsCtx, const Opt<const ConcreteParam> _closureParam, const ConcreteSig _sig, const Bool _isCallFun)
+		: needsCtx{_needsCtx}, closureParam{_closureParam}, sig{_sig}, isCallFun{_isCallFun} {}
 
 	inline const ConcreteFunBody body() const {
 		return _body.get();
@@ -793,8 +847,35 @@ struct ConcreteFun {
 	inline const Arr<const ConcreteParam> paramsExcludingClosure() const {
 		return sig.params;
 	}
-	inline size_t arity() const {
+
+	inline const Bool hasClosure() const {
+		return closureParam.has();
+	}
+
+	inline const Opt<const ConcreteType> closureType() const {
+		return closureParam.has() ? closureParam.force().type : none<const ConcreteType>();
+	}
+
+	inline size_t arityExcludingCtxAndClosure() const {
 		return sig.arity();
+	}
+
+	inline size_t arityExcludingCtxIncludingClosure() const {
+		return (closureParam.has() ? 1 : 0) + arityExcludingCtxAndClosure();
+	}
+
+	inline size_t arityIncludingCtxAndClosure() const {
+		return (needsCtx ? 1 : 0)  + arityExcludingCtxIncludingClosure();
+	}
+};
+
+struct ClosureSingleSpecialize {
+	const ConstantOrLambdaOrVariable clv;
+	const Opt<const ConcreteField*> field;
+
+	inline ClosureSingleSpecialize(const ConstantOrLambdaOrVariable _clv, const Opt<const ConcreteField*> _field)
+		: clv{_clv}, field{_field} {
+		assert(clv.isConstant() != field.has());
 	}
 };
 
@@ -809,55 +890,44 @@ struct ConcreteFun {
 //
 // NOTE: we *do* create one of these for each FunAsLambda as that makes it easier to handle consistently.
 struct KnownLambdaBody {
+	const ConcreteType dynamicType; // Type this lambda would satisfy if converted to dynamic
 	// Note: closure is not part of the sig.
 	const ConcreteSig nonSpecializedSig; // When we instantiate this to a ConcreteFun, we may specialize the signature.
 	// Used for the closure struct, and for generating mangled names of funs that specialize on this
 	const Str mangledName;
 	// The 'closure' type will only contain those closure fields which are not constant.
-	const Opt<const ConcreteType> closureType;
+	const Opt<const ConcreteParam> closureParam;
 	// For each closure in the Expr, we may make it a constant or KnownLambdaBody.
-	const Arr<const ConstantOrLambdaOrVariable> closureSpecialize;
+	const Arr<const ClosureSingleSpecialize> closureSpecialize;
 
 	// We'll generate this (and cache it here) if this needs to be converted to Fun. This never specializes on args.
 	// The dynamic fun will have a closure parameter added even if we don't need it,
 	// because all lambdas that might be dynamically called need identical signatures.
-	mutable Late<const ConcreteFun*> dynamicInstance;
+	mutable Late<const ConcreteFun*> dynamicInstance {};
 	// When this is called directly, we will instantiate it -- this may remove parameters that are constants.
 	mutable MutDict<
 		const Arr<const ConstantOrLambdaOrVariable>,
 		const ConcreteFun*,
 		compareConstantOrLambdaOrVariableArr
-	> directCallInstances;
+	> directCallInstances {};
 
-	KnownLambdaBody(const KnownLambdaBody&) = default;
-	KnownLambdaBody(
-		const ConcreteSig _nonSpecializedSig,
-		const Str _mangledName,
-		const Opt<const ConcreteType> _closureType,
-		const Arr<const ConstantOrLambdaOrVariable> _closureSpecialize
-	) :
-		nonSpecializedSig{_nonSpecializedSig},
-		mangledName{_mangledName},
-		closureType{_closureType},
-		closureSpecialize{_closureSpecialize}
-	{
-		// Closure is passed as void*, so it must fit in that size.
-		assert(!closureType.has() || closureType.force().sizeOrPointerSize() == sizeof(void*));
-	}
+	KnownLambdaBody(const KnownLambdaBody&) = delete;
 
 	inline const Bool hasClosure() const {
-		return closureType.has();
+		return closureParam.has();
+	}
+
+	// WARN: closureType is non-pointer by default, but a ConcreteFun for a dynamically-called lambda should take it by pointer.
+	inline const Opt<const ConcreteType> closureType() const {
+		return closureParam.has()
+			? some<const ConcreteType>(closureParam.force().type)
+			: none<const ConcreteType>();
 	}
 
 	inline const Arr<const ConcreteField> closureFields() {
-		return closureType.has()
-			? closureType.force().strukt->body().asFields().fields
+		return closureParam.has()
+			? closureParam.force().type.strukt->body().asFields().fields
 			: emptyArr<const ConcreteField>();
-	}
-
-	inline const Str closureStructMangledName() const {
-		assert(hasClosure());
-		return mangledName;
 	}
 };
 
@@ -871,17 +941,18 @@ struct ConcreteExpr {
 	// Only exists temporarily
 	struct Bogus {};
 
+	struct Alloc {
+		const ConcreteFun* alloc;
+		const ConcreteExpr* inner;
+	};
+
 	struct CallConcreteFun {
 		const ConcreteFun* called;
 		// Note: this should filter out any constant args that 'called' specialized on as constants.
 		// (But may include non-specialized-on constant args.)
 		const Arr<const ConstantOrExpr> args;
 
-		inline CallConcreteFun(const ConcreteFun* c, const Arr<const ConstantOrExpr> a) : called{c}, args{a} {
-			const size_t closureParams = called->closureType.has() ? 1 : 0;
-			const size_t other = called->paramsExcludingClosure().size;
-			assert(closureParams + other == args.size);
-		}
+		CallConcreteFun(const ConcreteFun* c, const Arr<const ConstantOrExpr> a);
 	};
 
 	struct Cond {
@@ -898,29 +969,16 @@ struct ConcreteExpr {
 		const Arr<const ConstantOrExpr> args;
 	};
 
+	// Note: CreateRecord always creates a record by-value. This may be wrapped in Alloc.
 	struct CreateRecord {
-		const ConcreteType type;
-		const Opt<const ConcreteFun*> alloc;
 		const Arr<const ConstantOrExpr> args;
-
-		inline CreateRecord(const ConcreteType _type, const Opt<const ConcreteFun*> _alloc, const Arr<const ConstantOrExpr> _args)
-			: type{_type}, alloc{_alloc}, args{_args} {
-			assert(alloc.has() == type.isPointer);
-		}
 	};
 
 	struct ImplicitConvertToUnion {
-		const ConcreteType unionType;
+		// unionType comes from the ConcreteExpr
 		const ConcreteType memberType;
 		// TODO:PERF support unions as constants; then the arg here will never be a constant
 		const ConstantOrExpr arg;
-
-		inline ImplicitConvertToUnion(const ConcreteType _unionType, const ConcreteType _memberType, const ConstantOrExpr _arg)
-			: unionType{_unionType}, memberType{_memberType}, arg{_arg} {
-			assert(exists(unionType.strukt->body().asUnion().members, [&](const ConcreteType ct) {
-				return ct.eq(memberType);
-			}));
-		}
 	};
 
 	struct Let {
@@ -938,13 +996,11 @@ struct ConcreteExpr {
 
 	// The ConcreteExpr containing this will have *no* KnownLambdaBody;
 	struct LambdaToDynamic {
-		const ConcreteExpr* inner;
-		const ConcreteFun* fun; // instantiation of 'inner'.
+		const ConcreteFun* fun; // instantiation of 'closure's knownLambdaBody (or from ConstantKind::Lambda).
+		// A constant closure should always be Null
+		const ConstantOrExpr closure;
 
-		inline LambdaToDynamic(const ConcreteExpr* _inner, const ConcreteFun* _fun)
-			: inner{_inner}, fun{_fun} {
-			assert(inner->knownLambdaBody().has());
-		}
+		LambdaToDynamic(const ConcreteFun* _fun, const ConstantOrExpr _closure);
 	};
 
 	struct LocalRef {
@@ -1032,13 +1088,28 @@ struct ConcreteExpr {
 	};
 
 	struct StructFieldAccess {
+		const Bool targetIsPointer;
 		const ConstantOrExpr target; // TODO: should never be a constant
 		const ConcreteField* field;
+	};
+
+	struct StructFieldSet {
+		// TODO: maybe just store a ConcreteType on every ConcreteExpr
+		const Bool targetIsPointer;
+		const ConcreteExpr* target;
+		const ConcreteField* field;
+		const ConstantOrExpr value;
+
+		inline StructFieldSet(const Bool _targetIsPointer, const ConcreteExpr* _target, const ConcreteField* _field, const ConstantOrExpr _value)
+			: targetIsPointer{_targetIsPointer}, target{_target}, field{_field}, value{_value} {
+			assert(field->isMutable);
+		}
 	};
 
 private:
 	enum class Kind {
 		bogus,
+		alloc,
 		callConcreteFun,
 		cond,
 		createArr,
@@ -1055,7 +1126,10 @@ private:
 		seq,
 		specialBinary,
 		structFieldAccess,
+		structFieldSet,
 	};
+	// This is the type it's *supposed* to have. KnownLambdaBody may better reflect the actual type.
+	const ConcreteType _type;
 	const SourceRange _range;
 	// If the expression has a KnownLambdaBody, we do not pass it as a Fun.
 	// We pass it as its closure. (If that were empty this would be a Constant and not a ConcreteExpr.)
@@ -1063,6 +1137,7 @@ private:
 	const Kind kind;
 	union {
 		const Bogus bogus;
+		const Alloc alloc;
 		const CallConcreteFun callConcreteFun;
 		const Cond cond;
 		const CreateArr createArr;
@@ -1079,46 +1154,74 @@ private:
 		const Seq seq;
 		const SpecialBinary specialBinary;
 		const StructFieldAccess structFieldAccess;
+		const StructFieldSet structFieldSet;
 	};
 
 public:
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Bogus a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::bogus}, bogus{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CallConcreteFun a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::callConcreteFun}, callConcreteFun{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Cond a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::cond}, cond{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CreateArr a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::createArr}, createArr{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CreateRecord a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::createRecord}, createRecord{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const ImplicitConvertToUnion a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::implicitConvertToUnion}, implicitConvertToUnion{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Lambda a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::lambda}, lambda{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const LambdaToDynamic a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::lambdaToDynamic}, lambdaToDynamic{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Let a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::let}, let{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const LocalRef a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::localRef}, localRef{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Match a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::match}, _match{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const MessageSend a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::messageSend}, messageSend{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const NewIfaceImpl a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::newIfaceImpl}, newIfaceImpl{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const ParamRef a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::paramRef}, paramRef{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Seq a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::seq}, seq{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const SpecialBinary a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::specialBinary}, specialBinary{a} {}
-	inline ConcreteExpr(const SourceRange range, const Opt<const KnownLambdaBody*> klb, const StructFieldAccess a)
-		: _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldAccess}, structFieldAccess{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Bogus a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::bogus}, bogus{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Alloc a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::alloc}, alloc{a} {
+		assert(type.isPointer);
+		// We never alloc a lambda, unless we're making the lambda dynamic (in which case klb is thrown away)
+		assert(!klb.has());
+		assert(!a.inner->typeWithKnownLambdaBody().force().isPointer);
+	}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CallConcreteFun a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::callConcreteFun}, callConcreteFun{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Cond a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::cond}, cond{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CreateArr a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::createArr}, createArr{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CreateRecord a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::createRecord}, createRecord{a} {
+		assert(!type.isPointer);
+	}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const ImplicitConvertToUnion a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::implicitConvertToUnion}, implicitConvertToUnion{a} {
+
+		assert(exists(type.strukt->body().asUnion().members, [&](const ConcreteType ct) {
+			return ct.eq(a.memberType);
+		}));
+	}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Lambda a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::lambda}, lambda{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const LambdaToDynamic a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::lambdaToDynamic}, lambdaToDynamic{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Let a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::let}, let{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const LocalRef a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::localRef}, localRef{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Match a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::match}, _match{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const MessageSend a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::messageSend}, messageSend{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const NewIfaceImpl a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::newIfaceImpl}, newIfaceImpl{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const ParamRef a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::paramRef}, paramRef{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Seq a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::seq}, seq{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const SpecialBinary a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::specialBinary}, specialBinary{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const StructFieldAccess a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldAccess}, structFieldAccess{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const StructFieldSet a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldSet}, structFieldSet{a} {}
 
 	inline const Bool isCond() const {
 		return enumEq(kind, Kind::cond);
+	}
+
+	inline const ConcreteType typeWithoutKnownLambdaBody() const {
+		return _type;
+	}
+
+	inline const Opt<const ConcreteType> typeWithKnownLambdaBody() const {
+		if (_knownLambdaBody.has())
+			return _knownLambdaBody.force()->closureType();
+		else
+			return typeWithoutKnownLambdaBody();
 	}
 
 	inline const SourceRange range() const {
@@ -1131,6 +1234,7 @@ public:
 
 	template <
 		typename CbBogus,
+		typename CbAlloc,
 		typename CbCallConcreteFun,
 		typename CbCond,
 		typename CbCreateArr,
@@ -1146,10 +1250,12 @@ public:
 		typename CbParamRef,
 		typename CbSeq,
 		typename CbSpecialBinary,
-		typename CbStructFieldAccess
+		typename CbStructFieldAccess,
+		typename CbStructFieldSet
 	>
 	inline auto match(
 		CbBogus cbBogus,
+		CbAlloc cbAlloc,
 		CbCallConcreteFun cbCallConcreteFun,
 		CbCond cbCond,
 		CbCreateArr cbCreateArr,
@@ -1165,11 +1271,14 @@ public:
 		CbParamRef cbParamRef,
 		CbSeq cbSeq,
 		CbSpecialBinary cbSpecialBinary,
-		CbStructFieldAccess cbStructFieldAccess
+		CbStructFieldAccess cbStructFieldAccess,
+		CbStructFieldSet cbStructFieldSet
 	) const {
 		switch (kind) {
 			case Kind::bogus:
 				return cbBogus(bogus);
+			case Kind::alloc:
+				return cbAlloc(alloc);
 			case Kind::callConcreteFun:
 				return cbCallConcreteFun(callConcreteFun);
 			case Kind::cond:
@@ -1202,6 +1311,8 @@ public:
 				return cbSpecialBinary(specialBinary);
 			case Kind::structFieldAccess:
 				return cbStructFieldAccess(structFieldAccess);
+			case Kind::structFieldSet:
+				return cbStructFieldSet(structFieldSet);
 			default:
 				assert(0);
 		}
@@ -1214,4 +1325,5 @@ struct ConcreteProgram {
 	const Arr<const Constant*> allConstants;
 	const Arr<const ConcreteFun*> allFuns;
 	const Arr<const ConcreteExpr::NewIfaceImpl> allNewIfaceImpls;
+	const ConcreteStruct* ctxType;
 };

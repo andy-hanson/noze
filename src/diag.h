@@ -9,6 +9,7 @@ struct ParseDiag {
 	struct ExpectedIndent {};
 	struct ExpectedPurityAfterSpace {};
 	struct LeadingSpace {};
+	struct LetMustHaveThen {};
 	struct MatchWhenNewMayNotAppearInsideArg {};
 	struct MustEndInBlankLine {};
 	struct TrailingSpace {};
@@ -25,6 +26,7 @@ private:
 		expectedIndent,
 		expectedPurityAfterSpace,
 		leadingSpace,
+		letMustHaveThen,
 		matchWhenNewMayNotAppearInsideArg,
 		mustEndInBlankLine,
 		trailingSpace,
@@ -39,6 +41,7 @@ private:
 		const ExpectedIndent expectedIndent;
 		const ExpectedPurityAfterSpace expectedPurityAfterSpace;
 		const LeadingSpace leadingSpace;
+		const LetMustHaveThen letMustHaveThen;
 		const MatchWhenNewMayNotAppearInsideArg matchWhenNewMayNotAppearInsideArg;
 		const MustEndInBlankLine mustEndInBlankLine;
 		const TrailingSpace trailingSpace;
@@ -53,6 +56,7 @@ public:
 	explicit inline ParseDiag(const ExpectedIndent d) : kind{Kind::expectedIndent}, expectedIndent{d} {}
 	explicit inline ParseDiag(const ExpectedPurityAfterSpace d) : kind{Kind::expectedPurityAfterSpace}, expectedPurityAfterSpace{d} {}
 	explicit inline ParseDiag(const LeadingSpace d) : kind{Kind::leadingSpace}, leadingSpace{d} {}
+	explicit inline ParseDiag(const LetMustHaveThen d) : kind{Kind::letMustHaveThen}, letMustHaveThen{d} {}
 	explicit inline ParseDiag(const MatchWhenNewMayNotAppearInsideArg d) : kind{Kind::matchWhenNewMayNotAppearInsideArg}, matchWhenNewMayNotAppearInsideArg{d} {}
 	explicit inline ParseDiag(const MustEndInBlankLine d) : kind{Kind::mustEndInBlankLine}, mustEndInBlankLine{d} {}
 	explicit inline ParseDiag(const TrailingSpace d) : kind{Kind::trailingSpace}, trailingSpace{d} {}
@@ -68,6 +72,7 @@ public:
 		typename CbLeadingSpace,
 		typename CbMatchWhenNewMayNotAppearInsideArg,
 		typename CbMustEndInBlankLine,
+		typename CbLetMustHaveThen,
 		typename CbTrailingSpace,
 		typename CbTypeParamCantHaveTypeArgs,
 		typename CbUnexpectedCharacter,
@@ -78,6 +83,7 @@ public:
 		CbExpectedIndent cbExpectedIndent,
 		CbExpectedPurityAfterSpace cbExpectedPurityAfterSpace,
 		CbLeadingSpace cbLeadingSpace,
+		CbLetMustHaveThen cbLetMustHaveThen,
 		CbMatchWhenNewMayNotAppearInsideArg cbMatchWhenNewMayNotAppearInsideArg,
 		CbMustEndInBlankLine cbMustEndInBlankLine,
 		CbTrailingSpace cbTrailingSpace,
@@ -95,6 +101,8 @@ public:
 				return cbExpectedPurityAfterSpace(expectedPurityAfterSpace);
 			case Kind::leadingSpace:
 				return cbLeadingSpace(leadingSpace);
+			case Kind::letMustHaveThen:
+				return cbLetMustHaveThen(letMustHaveThen);
 			case Kind::matchWhenNewMayNotAppearInsideArg:
 				return cbMatchWhenNewMayNotAppearInsideArg(matchWhenNewMayNotAppearInsideArg);
 			case Kind::mustEndInBlankLine:
@@ -138,6 +146,9 @@ struct Diag {
 		const Opt<const Type> expectedType;
 	};
 	struct FileDoesNotExist {};
+	struct MatchOnNonUnion {
+		const Type type;
+	};
 	struct MultipleFunctionCandidates {
 		const Arr<const CalledDecl> candidates;
 	};
@@ -196,6 +207,7 @@ private:
 		duplicateDeclaration,
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
+		matchOnNonUnion,
 		multipleFunctionCandidates,
 		nameNotFound,
 		noSuchFunction,
@@ -220,6 +232,7 @@ private:
 		const DuplicateDeclaration duplicateDeclaration;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
+		const MatchOnNonUnion matchOnNonUnion;
 		const MultipleFunctionCandidates multipleFunctionCandidates;
 		const NameNotFound nameNotFound;
 		const NoSuchFunction noSuchFunction;
@@ -244,6 +257,7 @@ public:
 	explicit inline Diag(const DuplicateDeclaration d) : kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
 	explicit inline Diag(const ExpectedTypeIsNotALambda d) : kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
 	explicit inline Diag(const FileDoesNotExist d) : kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
+	explicit inline Diag(const MatchOnNonUnion d) : kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
 	explicit inline Diag(const MultipleFunctionCandidates d) : kind{Kind::multipleFunctionCandidates}, multipleFunctionCandidates{d} {}
 	explicit inline Diag(const NameNotFound d) : kind{Kind::nameNotFound}, nameNotFound{d} {}
 	explicit inline Diag(const NoSuchFunction d) : kind{Kind::noSuchFunction}, noSuchFunction{d} {}
@@ -271,6 +285,7 @@ public:
 		typename CbDuplicateDeclaration,
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
+		typename CbMatchOnNonUnion,
 		typename CbMultipleFunctionCandidates,
 		typename CbNameNotFound,
 		typename CbNoSuchFunction,
@@ -293,6 +308,7 @@ public:
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
+		CbMatchOnNonUnion cbMatchOnNonUnion,
 		CbMultipleFunctionCandidates cbMultipleFunctionCandidates,
 		CbNameNotFound cbNameNotFound,
 		CbNoSuchFunction cbNoSuchFunction,
@@ -326,6 +342,8 @@ public:
 				return cbExpectedTypeIsNotALambda(expectedTypeIsNotALambda);
 			case Kind::fileDoesNotExist:
 				return cbFileDoesNotExist(fileDoesNotExist);
+			case Kind::matchOnNonUnion:
+				return cbMatchOnNonUnion(matchOnNonUnion);
 			case Kind::multipleFunctionCandidates:
 				return cbMultipleFunctionCandidates(multipleFunctionCandidates);
 			case Kind::nameNotFound:

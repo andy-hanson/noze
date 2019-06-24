@@ -58,5 +58,5 @@ const ConcreteProgram concretize(Arena& arena, const Program program) {
 	const ConcreteFun* mainConcreteFun = getOrAddNonGenericConcreteFunAndFillBody(ctx, getMainFun(program));
 	// We remove items from these dicts when we process them.
 	assert(isEmpty(ctx.concreteFunToSource));
-	return getReferencedOnly(arena, mainConcreteFun);
+	return getReferencedOnly(arena, mainConcreteFun, ctx.ctxPtrType().strukt);
 }

@@ -63,14 +63,21 @@ inline const AbsolutePath childPath(Arena& arena, const AbsolutePath parent, con
 	return AbsolutePath{childPath(arena, parent.path, name0, name1)};
 }
 
-const Path* changeExtension(Arena& arena, const Path* path, const Str extension);
-inline const AbsolutePath changeExtension(Arena& arena, const AbsolutePath path, const Str extension) {
-	return AbsolutePath{changeExtension(arena, path.path, extension)};
+const Path* removeExtension(Arena& arena, const Path* path);
+inline const AbsolutePath removeExtension(Arena& arena, const AbsolutePath path) {
+	return AbsolutePath{removeExtension(arena, path.path)};
 }
+
 const Path* addExtension(Arena& arena, const Path* path, const Str extension);
 inline const AbsolutePath addExtension(Arena& arena, const AbsolutePath path, const Str extension) {
 	return AbsolutePath{addExtension(arena, path.path, extension)};
 }
+
+const Path* changeExtension(Arena& arena, const Path* path, const Str extension);
+inline const AbsolutePath changeExtension(Arena& arena, const AbsolutePath path, const Str extension) {
+	return AbsolutePath{changeExtension(arena, path.path, extension)};
+}
+
 
 struct RelPath {
 	const uint nParents;

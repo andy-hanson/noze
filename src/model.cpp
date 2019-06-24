@@ -1,5 +1,7 @@
 #include "./model.h"
 
+#include "./util/arrUtil.h"
+
 const Bool Type::containsUnresolvedTypeParams() const {
 	return match(
 		[](const Type::Bogus) {
@@ -94,8 +96,8 @@ const Bool Expr::typeIsBogus(Arena& arena) const {
 		[](const Expr::Match) {
 			return todo<const Bool>("typeIsBogus match");
 		},
-		[](const Expr::MessageSend) {
-			return todo<const Bool>("typeIsBogus messageSend");
+		[](const Expr::MessageSend e) {
+			return e.getType().isBogus();
 		},
 		[](const Expr::NewIfaceImpl) {
 			return todo<const Bool>("typeIsBogus newIfaceImpl");
@@ -111,6 +113,9 @@ const Bool Expr::typeIsBogus(Arena& arena) const {
 		},
 		[](const Expr::StructFieldAccess e) {
 			return e.accessedFieldType().isBogus();
+		},
+		[](const Expr::StructFieldSet) {
+			return False; // always void
 		});
 }
 
@@ -155,8 +160,8 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		[](const Expr::Match) {
 			return todo<const Type>("getType match");
 		},
-		[](const Expr::MessageSend) {
-			return todo<const Type>("getType messageSend");
+		[](const Expr::MessageSend e) {
+			return e.getType();
 		},
 		[](const Expr::NewIfaceImpl) {
 			return todo<const Type>("getType newifaceimpl");
@@ -172,5 +177,150 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		},
 		[](const Expr::StructFieldAccess e) {
 			return e.accessedFieldType();
+		},
+		[&](const Expr::StructFieldSet) {
+			return Type{commonTypes._void};
 		});
+}
+
+Output& operator<<(Output& out, const Type type) {
+	type.match(
+		[&](const Type::Bogus) {
+			unreachable<void>();
+		},
+		[&](const TypeParam* p) {
+			out << '?' << p->name;
+		},
+		[&](const StructInst* s) {
+			out << s->decl->name;
+			if (!isEmpty(s->typeArgs)) {
+				Cell<const Bool> first { True };
+				for (const Type t : s->typeArgs) {
+					out << (first.get() ? '<' : ' ') << t;
+					first.set(False);
+				}
+				out << '>';
+			}
+		});
+	return out;
+}
+
+namespace {
+	const Sexpr structInstToSexpr(Arena& arena, const StructInst* si) {
+		return Sexpr{SexprRecord{
+			strLiteral("struct-inst"),
+			arrLiteral<const Sexpr>(
+				arena,
+				Sexpr{si->decl->name},
+				arrToSexpr<const Type, typeToSexpr>(arena, si->typeArgs))
+		}};
+	}
+}
+
+const Sexpr typeToSexpr(Arena& arena, const Type type) {
+	unused(arena);
+	return type.match(
+		[&](const Type::Bogus) {
+			return Sexpr{strLiteral("bogus")};
+		},
+		[&](const TypeParam* p) {
+			return Sexpr{p->name};
+		},
+		[&](const StructInst*) {
+			return todo<const Sexpr>("!!!!typetosexpr");
+		});
+}
+
+namespace {
+	const Sexpr calledDeclToSexpr(Arena& arena, const CalledDecl cd) {
+		return cd.match(
+			[&](const FunDecl* f) {
+				return Sexpr{f->name()};
+			},
+			[&](const CalledDecl::SpecUseSig) {
+				unused(arena);
+				return todo<const Sexpr>("specusesig to sexpr");
+			});
+	}
+}
+
+const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
+	return expr.match(
+		[&](const Expr::Bogus) {
+			return Sexpr{strLiteral("bogus")};
+		},
+		[&](const Expr::Call e) {
+			return Sexpr{SexprRecord{
+				strLiteral("call"),
+				arrLiteral<const Sexpr>(arena, {
+					typeToSexpr(arena, e.concreteReturnType),
+					calledDeclToSexpr(arena, e.calledDecl()),
+					arrToSexpr<const Type, typeToSexpr>(arena, e.typeArgs()),
+					arrToSexpr<const CalledDecl, calledDeclToSexpr>(arena, e.specImpls()),
+					arrToSexpr<const Expr, exprToSexpr>(arena, e.args)
+				})}};
+		},
+		[&](const Expr::ClosureFieldRef) {
+			return todo<const Sexpr>("closurefieldref");
+		},
+		[&](const Expr::Cond) {
+			return todo<const Sexpr>("cond");
+		},
+		[&](const Expr::CreateArr) {
+			return todo<const Sexpr>("createarr");
+		},
+		[&](const Expr::CreateRecord e) {
+			return Sexpr{SexprRecord{
+				strLiteral("create-record"),
+				arrLiteral<const Sexpr>(arena, {
+					structInstToSexpr(arena, e.structInst),
+					arrToSexpr<const Expr, exprToSexpr>(arena, e.args)})}};
+		},
+		[&](const Expr::FunAsLambda) {
+			return todo<const Sexpr>("funaslambda");
+		},
+		[&](const Expr::IfaceImplFieldRef) {
+			return todo<const Sexpr>("ifaceimplfieldref");
+		},
+		[&](const Expr::ImplicitConvertToUnion) {
+			return todo<const Sexpr>("implicitconverttounion");
+		},
+		[&](const Expr::Lambda) {
+			return todo<const Sexpr>("lambda");
+		},
+		[&](const Expr::Let) {
+			return todo<const Sexpr>("let");
+		},
+		[&](const Expr::LocalRef) {
+			return todo<const Sexpr>("localref");
+		},
+		[&](const Expr::Match) {
+			return todo<const Sexpr>("match");
+		},
+		[&](const Expr::MessageSend) {
+			return todo<const Sexpr>("messagesend");
+		},
+		[&](const Expr::NewIfaceImpl) {
+			return todo<const Sexpr>("newifaceimpl");
+		},
+		[&](const Expr::ParamRef) {
+			return todo<const Sexpr>("paramref");
+		},
+		[&](const Expr::Seq) {
+			return todo<const Sexpr>("seq");
+		},
+		[&](const Expr::StringLiteral) {
+			return todo<const Sexpr>("stringliteral");
+		},
+		[&](const Expr::StructFieldAccess) {
+			return todo<const Sexpr>("structfieldaccess");
+		},
+		[](const Expr::StructFieldSet) {
+			return todo<const Sexpr>("structfieldset");
+		});
+}
+
+Output& operator<<(Output& out, const Expr expr) {
+	Arena arena {};
+	return out << exprToSexpr(arena, expr);
 }

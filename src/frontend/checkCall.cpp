@@ -37,6 +37,7 @@ namespace {
 			[](const MessageSendAst) { return False; },
 			[](const NewActorAst) { return False; },
 			[](const SeqAst e) { return exprMightHaveProperties(*e.then); },
+			[](const StructFieldSetAst) { return False; },
 			// Always returns fut
 			[](const ThenAst) { return False; });
 	}
@@ -260,29 +261,10 @@ namespace {
 	}
 
 	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprContext& ctx, const Str funName, const Expr arg) {
-		const Type argType = arg.getType(ctx.arena(), ctx.commonTypes);
-		if (argType.isStructInst()) {
-			const StructInst* argStructInst = argType.asStructInst();
-			return argStructInst->body().match(
-				[](const StructBody::Builtin) {
-					return none<const Expr::StructFieldAccess>();
-				},
-				[&](const StructBody::Fields f) {
-					const Opt<const StructField*> field = findPtr(f.fields, [&](const StructField* f) {
-						return strEq(f->name, funName);
-					});
-					return field.has()
-						? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), argStructInst, field.force()})
-						: none<const Expr::StructFieldAccess>();
-				},
-				[](const StructBody::Union) {
-					return none<const Expr::StructFieldAccess>();
-				},
-				[](const StructBody::Iface) {
-					return none<const Expr::StructFieldAccess>();
-				});
-		} else
-			return none<const Expr::StructFieldAccess>();
+		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx.arena(), ctx.commonTypes), funName);
+		return field.has()
+			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), field.force().structInst, field.force().field})
+			: none<const Expr::StructFieldAccess>();
 	}
 
 	void checkCallFlags(CheckCtx& ctx, const SourceRange range, const FunFlags calledFlags, const FunFlags callerFlags) {

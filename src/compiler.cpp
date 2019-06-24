@@ -34,7 +34,10 @@ namespace {
 			strLiteral("-ansi"),
 			strLiteral("-pedantic"),
 			strLiteral("-Wno-unused-parameter"),
+			strLiteral("-Wno-unused-but-set-variable"),
 			strLiteral("-std=c++17"),
+			// TODO: configurable whether we want debug or release
+			strLiteral("-g"),
 			pathToStr(arena, cppPath),
 			strLiteral("-o"),
 			pathToStr(arena, exePath)
@@ -63,7 +66,7 @@ namespace {
 				const AbsolutePath fullMainPath = addManyChildren(modelArena, programDir, mainPath);
 				const AbsolutePath cppPath = changeExtension(modelArena, fullMainPath, strLiteral("cpp"));
 				emitProgram(program, cppPath);
-				const AbsolutePath exePath = changeExtension(modelArena, fullMainPath, strLiteral("exe"));
+				const AbsolutePath exePath = removeExtension(modelArena, fullMainPath);
 				compileCpp(cppPath, exePath, environ);
 				return some<const AbsolutePath>(exePath);
 			},

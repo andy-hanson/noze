@@ -6,4 +6,4 @@
 // This is because some things we generate may end up not being used --
 // for example, we create a constant, then we end up eliminating that later.
 // Since constants can contain lambdas / types, that requires us to do them all in a second step.
-const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun);
+const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun, const ConcreteStruct* ctxStruct);

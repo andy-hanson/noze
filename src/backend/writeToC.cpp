@@ -5,6 +5,7 @@
 #include "../concretize/writer.h"
 
 namespace {
+	//TODO: use Output, that already has a writeEscapedChar implementation
 	void writeEscapedChar(Writer& writer, const char c) {
 		switch (c) {
 			case '\n':
@@ -49,6 +50,10 @@ namespace {
 
 	void writeValueType(Writer& writer, const ConcreteStruct* s) {
 		writer.writeStr(s->mangledName);
+	}
+
+	void writeValueType(Writer& writer, const ConcreteType t) {
+		writeValueType(writer, t.mustBeNonPointer());
 	}
 
 	void writeType(Writer& writer, const ConcreteType t) {
@@ -396,13 +401,14 @@ namespace {
 			[&](const ConstantKind::Lambda l) {
 				unused(l);
 				// Don't need a decl for this (other than the concretefun), just create it here
-				todo<void>("const lambda");
+				todo<void>("write reference for const lambda");
+				// fun0___void{someFun, closurePtr};
 			},
 			[&](const Nat64 n) {
 				writer.writeUint(n);
 			},
 			[&](const ConstantKind::Null) {
-				writer.writeStatic("nullptr");
+				writer.writeStatic("0");
 			},
 			[&](const ConstantKind::Ptr p) {
 				writer.writeChar('&');
@@ -432,6 +438,7 @@ namespace {
 	}
 
 	void writeConstantDecl(Writer& writer, const Constant* c) {
+		const ConcreteType type = c->type();
 		c->kind.match(
 			[&](const ConstantKind::Array a) {
 				// static nat64 _constantArrBacking123[3] = {1, 2, 3};
@@ -456,11 +463,11 @@ namespace {
 				}
 
 				writer.writeStatic("static ");
-				writeValueType(writer, a.arrayType);
+				writeValueType(writer, type);
 				writer.writeStatic(" _constantArr");
 				writer.writeUint(id);
 				writer.writeStatic(" = ");
-				writeValueType(writer, a.arrayType);
+				writeValueType(writer, type);
 				writer.writeChar('{');
 				writer.writeUint(size);
 				writer.writeStatic(", ");
@@ -600,7 +607,7 @@ namespace {
 			ctx.writeStr(e.matchedUnion->mangledName);
 			ctx.write("::Kind::");
 			ctx.writeStr(memberName);
-			ctx.write(":");
+			ctx.write(": {");
 			ctx.indent();
 			if (kase.local.has()) {
 				writeLocalEquals(ctx.writer, kase.local.force());
@@ -611,10 +618,18 @@ namespace {
 			}
 			writeConstantOrExprAsStatement(ctx, kase.then, isReturn);
 			ctx.dedent();
+			ctx.write("}");
+			ctx.newline();
 		});
 		ctx.write("default: assert(0);");
 		ctx.dedent();
 		ctx.write("}");
+	}
+
+	void writeFieldAccess(WriteExprCtx& ctx, const Bool targetIsPointer, const ConstantOrExpr target, const ConcreteField* field) {
+		writeConstantOrExprAsExpr(ctx, target);
+		ctx.write(targetIsPointer ? "->" : ".");
+		ctx.writeStr(field->mangledName);
 	}
 
 	void writeConcreteExprAsStatement(WriteExprCtx& ctx, const ConcreteExpr ex, const Bool isReturn) {
@@ -627,6 +642,9 @@ namespace {
 		ex.match(
 			[](const ConcreteExpr::Bogus) {
 				unreachable<void>();
+			},
+			[&](const ConcreteExpr::Alloc) {
+				expr();
 			},
 			[&](const ConcreteExpr::CallConcreteFun) {
 				expr();
@@ -699,6 +717,16 @@ namespace {
 			},
 			[&](const ConcreteExpr::StructFieldAccess) {
 				expr();
+			},
+			[&](const ConcreteExpr::StructFieldSet e) {
+				writeFieldAccess(ctx, e.targetIsPointer, ConstantOrExpr{e.target}, e.field);
+				ctx.write(" = ");
+				writeConstantOrExprAsExpr(ctx, e.value);
+				ctx.write(";");
+				if (isReturn) {
+					ctx.newline();
+					ctx.write("return 0;");
+				}
 			});
 	}
 
@@ -753,6 +781,10 @@ namespace {
 				ctx.write(")");
 				break;
 
+			case BuiltinFunKind::getCtx:
+				ctx.write("ctx");
+				break;
+
 			case BuiltinFunKind::_if:
 				ctx.write("(");
 				writeArg(0);
@@ -803,7 +835,7 @@ namespace {
 				break;
 
 			case BuiltinFunKind::ptrCast:
-				ctx.write("static_cast<");
+				ctx.write("reinterpret_cast<");
 				writeType(ctx.writer, typeArgs[0]);
 				ctx.write("*>(");
 				writeArg(0);
@@ -827,6 +859,7 @@ namespace {
 				break;
 
 			default:
+				printf("Unhandled BuiltinFunKind: %d\n", bf.kind);
 				assert(0);
 		}
 	}
@@ -849,6 +882,12 @@ namespace {
 		ctx.write("(");
 		writeArgsNoCtxNoParens(ctx, args);
 		ctx.write(")");
+	}
+
+	void writeArgsNoCtxWithBraces(WriteExprCtx& ctx, const Arr<const ConstantOrExpr> args) {
+		ctx.write("{");
+		writeArgsNoCtxNoParens(ctx, args);
+		ctx.write("}");
 	}
 
 	void writeArgsWithOptionalCtx(WriteExprCtx& ctx, const Bool needsCtx, const Arr<const ConstantOrExpr> args) {
@@ -899,9 +938,24 @@ namespace {
 			ctx.write("}()");
 		};
 
+		const ConcreteType type = ce.typeWithKnownLambdaBody().force();
+
 		ce.match(
 			[](const ConcreteExpr::Bogus) {
 				unreachable<void>();
+			},
+			[&](const ConcreteExpr::Alloc e) {
+				const ConcreteFun* alloc = e.alloc;
+				assert(alloc->needsCtx); // The allocator function uses the ctx to allocate
+				ctx.write("_alloc<");
+				writeValueType(ctx.writer, type.mustBePointer());
+				ctx.write(">(");
+				ctx.writeStr(alloc->mangledName());
+				ctx.write("(ctx, ");
+				ctx.writer.writeUint(type.mustBePointer()->sizeBytes());
+				ctx.write("), ");
+				writeConcreteExprAsExpr(ctx, *e.inner);
+				ctx.write(")");
 			},
 			[&](const ConcreteExpr::CallConcreteFun e) {
 				writeCallConcreteFunAsExpr(ctx, e);
@@ -926,38 +980,38 @@ namespace {
 				todo<void>("how to alloc array in c++?");
 			},
 			[&](const ConcreteExpr::CreateRecord e) {
-				if (e.alloc.has()) {
-					const ConcreteFun* alloc = e.alloc.force();
-					assert(alloc->needsCtx); // The allocator function uses the ctx to allocate
-					ctx.write("_alloc<");
-					writeValueType(ctx.writer, e.type.strukt);
-					ctx.write(">(");
-					ctx.writeStr(alloc->mangledName());
-					ctx.write("(ctx, ");
-					ctx.writer.writeUint(e.type.strukt->sizeBytes());
-					ctx.write("), ");
-				}
-				writeValueType(ctx.writer, e.type.strukt);
-				ctx.write("{");
-				writeArgsNoCtxNoParens(ctx, e.args);
-				ctx.write("}");
-				if (e.type.isPointer)
-					ctx.write(")");
+				writeValueType(ctx.writer, type.strukt);
+				writeArgsNoCtxWithBraces(ctx, e.args);
 			},
 			[&](const ConcreteExpr::ImplicitConvertToUnion e) {
-				writeType(ctx.writer, e.unionType);
+				writeType(ctx.writer, type);
 				ctx.write("(");
 				writeConstantOrExprAsExpr(ctx, e.arg);
 				ctx.write(")");
 			},
 			[&](const ConcreteExpr::Lambda e) {
 				const KnownLambdaBody* klb = ce.knownLambdaBody().force();
-				assert(klb->hasClosure()); // Otherwise this would be a constant
-				ctx.writeStr(klb->closureStructMangledName());
-				writeArgsNoCtx(ctx, e.closureInit);
+				ctx.writeStr(klb->closureType().force().strukt->mangledName);
+				writeArgsNoCtxWithBraces(ctx, e.closureInit);
 			},
-			[&](const ConcreteExpr::LambdaToDynamic) {
-				todo<void>("write lambdatodynamic");
+			[&](const ConcreteExpr::LambdaToDynamic e) {
+				const Arr<const ConcreteField> fields = type.strukt->body().asFields().fields;
+				assert(fields.size == 2);
+				const ConcreteField funPtrField = fields[0];
+				const ConcreteField dataPtrField = fields[1];
+
+				writeValueType(ctx.writer, type.mustBeNonPointer());
+				ctx.write("{");
+				ctx.indent();
+				ctx.write("reinterpret_cast<");
+				writeType(ctx.writer, funPtrField.type);
+				ctx.write(">(");
+				ctx.writeStr(e.fun->mangledName());
+				ctx.write("), reinterpret_cast<");
+				writeType(ctx.writer, dataPtrField.type);
+				ctx.write(">(");
+				writeConstantOrExprAsExpr(ctx, e.closure);
+				ctx.write(")}");
 			},
 			[&](const ConcreteExpr::Let) {
 				iife();
@@ -1001,9 +1055,11 @@ namespace {
 				ctx.write(")");
 			},
 			[&](const ConcreteExpr::StructFieldAccess e) {
-				writeConstantOrExprAsExpr(ctx, e.target);
-				ctx.write(".");
-				ctx.writeStr(e.field->mangledName);
+				writeFieldAccess(ctx, e.targetIsPointer, e.target, e.field);
+			},
+			[&](const ConcreteExpr::StructFieldSet e) {
+				unused(e);
+				todo<void>("structfieldset as expr -- use IIFE");
 			});
 	}
 
@@ -1012,15 +1068,14 @@ namespace {
 		writeConstantOrExprAsStatement(ctx, ce, /*isReturn*/ True);
 	}
 
-	void writeSigParams(Writer& writer, const Bool needsCtx, const Opt<const ConcreteType> closure, const Arr<const ConcreteParam> params) {
+	void writeSigParams(Writer& writer, const Bool needsCtx, const Opt<const ConcreteParam> closure, const Arr<const ConcreteParam> params) {
 		writer.writeChar('(');
 		if (needsCtx)
 			writer.writeStatic("ctx* ctx");
 		if (closure.has()) {
 			if (needsCtx)
 				writer.writeStatic(", ");
-			writeType(writer, closure.force());
-			writer.writeStatic(" _closure");
+			doWriteParam(writer, closure.force());
 		}
 		writeJustParams(writer, _or(needsCtx, closure.has()), params);
 	}
@@ -1029,7 +1084,7 @@ namespace {
 		writeType(writer, fun->returnType());
 		writer.writeChar(' ');
 		writer.writeStr(fun->mangledName());
-		writeSigParams(writer, fun->needsCtx, fun->closureType, fun->paramsExcludingClosure());
+		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingClosure());
 	}
 
 	void writeConcreteFunDeclaration(Writer& writer, const ConcreteFun* fun) {
@@ -1070,6 +1125,9 @@ namespace {
 						unreachable<void>();
 						break;
 					case BuiltinFunEmit::special:
+						if (info.kind != BuiltinFunKind::hardFail) {
+							printf("Other special? %d\n", info.kind);
+						}
 						assert(info.kind == BuiltinFunKind::hardFail);
 						writeFunWithBodyWorker(writer, fun, [&]() {
 							writer.writeStatic("assert(0);");
@@ -1105,8 +1163,9 @@ const Str writeToC(Arena& arena, const ConcreteProgram program) {
 
 	writer.writeStatic("template <typename T>");
 	writer.writeStatic("\nT* _alloc(byte* out, T value) {");
-	writer.writeStatic("\n\tT* res = static_cast<T*>(out);");
+	writer.writeStatic("\n\tT* res = reinterpret_cast<T*>(out);");
 	writer.writeStatic("\n\t*res = value;");
+	writer.writeStatic("\n\treturn res;");
 	writer.writeStatic("\n}\n\n");
 
 	for (const ConcreteExpr::NewIfaceImpl impl : program.allNewIfaceImpls)

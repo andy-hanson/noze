@@ -59,15 +59,17 @@ namespace {
 	const ExprAndDedent parseLetOrThen(Lexer& lexer, const Pos start, const NameAndRange name, const Bool isArrow) {
 		const ExprAndDedent initAndDedent = parseExprNoLet(lexer);
 		if (initAndDedent.dedents != 0)
-			todo<void>("Diagnostic: block can't end in `x = ...`, something must come after");
-		const ExprAst* init = alloc(lexer, initAndDedent.expr);
-		const ExprAndDedent thenAndDedent = parseStatementsAndDedent(lexer);
-		const ExprAst* then = alloc(lexer, thenAndDedent.expr);
-		const ExprAstKind exprKind = isArrow
-			? ExprAstKind{ThenAst{LambdaAst::Param{name.range, name.name}, init, then}}
-			: ExprAstKind{LetAst{name.name, init, then}};
-		// Since we don't always expect a dedent here, the dedent isn't *extra*, so increment to get the correct number of dedents.
-		return ExprAndDedent{ExprAst{range(lexer, start), exprKind}, thenAndDedent.dedents + 1};
+			return throwDiag<const ExprAndDedent>(range(lexer, start), ParseDiag{ParseDiag::LetMustHaveThen{}});
+		else {
+			const ExprAst* init = alloc(lexer, initAndDedent.expr);
+			const ExprAndDedent thenAndDedent = parseStatementsAndDedent(lexer);
+			const ExprAst* then = alloc(lexer, thenAndDedent.expr);
+			const ExprAstKind exprKind = isArrow
+				? ExprAstKind{ThenAst{LambdaAst::Param{name.range, name.name}, init, then}}
+				: ExprAstKind{LetAst{name.name, init, then}};
+			// Since we don't always expect a dedent here, the dedent isn't *extra*, so increment to get the correct number of dedents.
+			return ExprAndDedent{ExprAst{range(lexer, start), exprKind}, thenAndDedent.dedents + 1};
+		}
 	}
 
 	const ExprAndMaybeDedent parseCallOrMessage(Lexer& lexer, const ExprAst target, const Bool allowBlock) {
@@ -90,14 +92,33 @@ namespace {
 		}
 	}
 
-	const ExprAndMaybeDedent parseCalls(Lexer& lexer, const ExprAndMaybeDedent ed, const Bool allowBlock) {
-		return !ed.dedents.has() && tryTake(lexer, ' ')
-			? parseCalls(lexer, parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock)
-			: ed;
+	const ExprAndMaybeDedent parseCallsAndStructFieldSets(Lexer& lexer, const Pos start, const ExprAndMaybeDedent ed, const Bool allowBlock) {
+		if (ed.dedents.has())
+			return ed;
+		else if (tryTake(lexer, " := ")) {
+			const ExprAst expr = ed.expr;
+			if (!expr.kind.isCall())
+				todo<void>("non-struct-field-access to left of ':='");
+			const CallAst call = expr.kind.asCall();
+			if (!isEmpty(call.typeArgs))
+				todo<void>("StructFieldSet should not have type args");
+			if (call.args.size != 1)
+				todo<void>("StructFieldSet should have exactly 1 arg");
+			const ExprAst* target = alloc(lexer, only(call.args));
+			const ExprAndMaybeDedent value = parseExprArg(lexer, ArgCtx{allowBlock, /*allowCall*/ True});
+			const StructFieldSetAst sfs = StructFieldSetAst{target, call.funName, alloc(lexer, value.expr)};
+			return ExprAndMaybeDedent{ExprAst{range(lexer, start), ExprAstKind{sfs}}, value.dedents};
+		} else if (tryTake(lexer, ' '))
+			return parseCallsAndStructFieldSets(lexer, start, parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock);
+		else
+			return ed;
 	}
 
 	template <typename Cb>
 	const Bool someInOwnBody(const ExprAst body, Cb cb) {
+		if (cb(body))
+			return True;
+
 		auto r = [&](const ExprAst sub) {
 			return someInOwnBody<Cb>(sub, cb);
 		};
@@ -141,6 +162,9 @@ namespace {
 			},
 			[](const SeqAst) {
 				return unreachable<const Bool>();
+			},
+			[&](const StructFieldSetAst e) {
+				return _or(r(*e.target), r(*e.value));
 			},
 			[](const ThenAst) {
 				return unreachable<const Bool>();
@@ -226,11 +250,12 @@ namespace {
 			else {
 				ArrBuilder<const NewActorAst::Field> res {};
 				do {
+					const Bool isMutable = tryTake(lexer, "mut ");
 					const Str name = takeName(lexer);
 					if (!tryTake(lexer, " = "))
 						todo<void>("parseNew");
 					const ExprAst init = parseExprNoBlock(lexer);
-					res.add(lexer.arena, NewActorAst::Field{name, alloc(lexer, init)});
+					res.add(lexer.arena, NewActorAst::Field{isMutable, name, alloc(lexer, init)});
 				} while (tryTake(lexer, ", "));
 				take(lexer, ')');
 				return res.finish();
@@ -309,7 +334,7 @@ namespace {
 				return parseLambda(lexer, start);
 			case Kind::lbrace: {
 				const ExprAst* body = alloc(lexer, parseExprNoBlock(lexer));
-				take(lexer, ')');
+				take(lexer, '}');
 				const SourceRange range = getRange();
 				const Arr<const LambdaAst::Param> params = bodyUsesIt(*body)
 					? arrLiteral<const LambdaAst::Param>(lexer.arena, LambdaAst::Param{range, strLiteral("it")})
@@ -365,7 +390,7 @@ namespace {
 
 	const ExprAndMaybeDedent parseExprWorker(Lexer& lexer, const Pos start, const ExpressionToken et, const ArgCtx ctx) {
 		const ExprAndMaybeDedent ed = parseExprBeforeCall(lexer, start, et, ctx);
-		return ctx.allowCall ? parseCalls(lexer, ed, ctx.allowBlock) : ed;
+		return ctx.allowCall ? parseCallsAndStructFieldSets(lexer, start, ed, ctx.allowBlock) : ed;
 	}
 
 	const ExprAst parseExprNoBlock(Lexer& lexer) {

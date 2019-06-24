@@ -2,7 +2,9 @@
 
 #include "./util.h"
 #include "./util/lineAndColumnGetter.h"
+#include "./util/output.h"
 #include "./util/path.h"
+#include "./util/sexpr.h"
 #include "./util/sourceRange.h"
 
 // A module came from the global imports directory or locally
@@ -158,8 +160,9 @@ struct Message {
 };
 
 struct StructField {
-	const Type type;
+	const Bool isMutable;
 	const Identifier name;
+	const Type type;
 	const size_t index;
 };
 
@@ -537,9 +540,11 @@ struct Module {
 struct CommonTypes {
 	const StructInst* _bool; // Needed for 'when'
 	const StructInst* _char;
+	const StructInst* ctx;
 	const StructInst* int64; // 'main' returns this
 	const StructInst* str; // Needed for str literals
 	const StructInst* _void;
+	const StructInst* anyPtr;
 	const Arr<const StructDecl*> optionSomeNone;
 	const StructDecl* byVal;
 	const StructDecl* arr;
@@ -749,6 +754,7 @@ struct Expr {
 		const Arr<const Param> params;
 		const Expr* body;
 		const Arr<const ClosureField*> closure;
+		// This is the funN type.
 		const StructInst* type;
 		const StructDecl* nonRemoteType;
 		const Bool isRemoteFun;
@@ -788,10 +794,15 @@ struct Expr {
 		const StructInst* iface;
 		const size_t messageIndex;
 		const Arr<const Expr> args;
+
+		inline const Type getType() const {
+			return iface->body().asIface().messages[messageIndex].sig.returnType;
+		}
 	};
 
 	struct NewIfaceImpl {
 		struct Field {
+			const Bool isMutable;
 			const Identifier name;
 			const Expr* expr;
 			const Type type;
@@ -844,9 +855,17 @@ struct Expr {
 		inline const Str fieldName() const {
 			return field->name;
 		}
+	};
 
-		inline size_t fieldIndex() const {
-			return field->index;
+	struct StructFieldSet {
+		const Expr* target;
+		const StructInst* targetType;
+		const StructField* field;
+		const Expr* value;
+
+		inline StructFieldSet(const Expr* _target, const StructInst* _targetType, const StructField* _field, const Expr* _value)
+			: target{_target}, targetType{_targetType}, field{_field}, value{_value} {
+			assert(field->isMutable);
 		}
 	};
 
@@ -878,6 +897,7 @@ private:
 		seq,
 		stringLiteral,
 		structFieldAccess,
+		structFieldSet,
 	};
 	const SourceRange _range;
 	const Kind kind;
@@ -901,6 +921,7 @@ private:
 		const Seq seq;
 		const StringLiteral stringLiteral;
 		const StructFieldAccess structFieldAccess;
+		const StructFieldSet structFieldSet;
 	};
 	inline Expr(const SourceRange range, const Kind _kind) : _range{range}, kind{_kind} {
 		assert(_kind == Kind::bogus);
@@ -945,6 +966,8 @@ public:
 		: _range{range}, kind{Kind::stringLiteral}, stringLiteral{_stringLiteral} {}
 	inline Expr(const SourceRange range, const StructFieldAccess _structFieldAccess)
 		: _range{range}, kind{Kind::structFieldAccess}, structFieldAccess{_structFieldAccess} {}
+	inline Expr(const SourceRange range, const StructFieldSet _structFieldSet)
+		: _range{range}, kind{Kind::structFieldSet}, structFieldSet{_structFieldSet} {}
 
 	inline SourceRange range() const {
 		return _range;
@@ -969,7 +992,8 @@ public:
 		typename CbParamRef,
 		typename CbSeq,
 		typename CbStringLiteral,
-		typename CbStructFieldAccess
+		typename CbStructFieldAccess,
+		typename CbStructFieldSet
 	>
 	inline auto match(
 		CbBogus cbBogus,
@@ -990,7 +1014,8 @@ public:
 		CbParamRef cbParamRef,
 		CbSeq cbSeq,
 		CbStringLiteral cbStringLiteral,
-		CbStructFieldAccess cbStructFieldAccess
+		CbStructFieldAccess cbStructFieldAccess,
+		CbStructFieldSet cbStructFieldSet
 	) const {
 		switch (kind) {
 			case Kind::bogus:
@@ -1031,6 +1056,8 @@ public:
 				return cbStringLiteral(stringLiteral);
 			case Kind::structFieldAccess:
 				return cbStructFieldAccess(structFieldAccess);
+			case Kind::structFieldSet:
+				return cbStructFieldSet(structFieldSet);
 			default:
 				assert(0);
 		}
@@ -1039,3 +1066,9 @@ public:
 	const Bool typeIsBogus(Arena& arena) const;
 	const Type getType(Arena& arena, const CommonTypes& commonTypes) const;
 };
+
+Output& operator<<(Output& out, const Type type);
+Output& operator<<(Output& out, const Expr expr);
+
+const Sexpr typeToSexpr(Arena& arena, const Type type);
+const Sexpr exprToSexpr(Arena& arena, const Expr expr);

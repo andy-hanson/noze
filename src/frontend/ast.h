@@ -124,6 +124,7 @@ struct MessageSendAst {
 
 struct NewActorAst {
 	struct Field {
+		const Bool isMutable;
 		const Str name;
 		const ExprAst* expr;
 	};
@@ -141,6 +142,12 @@ struct NewActorAst {
 struct SeqAst {
 	const ExprAst* first;
 	const ExprAst* then;
+};
+
+struct StructFieldSetAst {
+	const ExprAst* target;
+	const Str fieldName;
+	const ExprAst* value;
 };
 
 struct ThenAst {
@@ -165,6 +172,8 @@ private:
 		messageSend,
 		newActor,
 		seq,
+		// no StructFieldAccess, that's just 'call'
+		structFieldSet,
 		then,
 	};
 	const Kind kind;
@@ -182,6 +191,7 @@ private:
 		const MessageSendAst messageSend;
 		const NewActorAst newActor;
 		const SeqAst seq;
+		const StructFieldSetAst structFieldSet;
 		const ThenAst then;
 	};
 
@@ -199,6 +209,7 @@ public:
 	explicit inline ExprAstKind(const MessageSendAst a) : kind{Kind::messageSend}, messageSend{a} {}
 	explicit inline ExprAstKind(const NewActorAst a) : kind{Kind::newActor}, newActor{a} {}
 	explicit inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
+	explicit inline ExprAstKind(const StructFieldSetAst a) : kind{Kind::structFieldSet}, structFieldSet{a} {}
 	explicit inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
 
 	inline const Bool isIdentifier() const {
@@ -208,6 +219,15 @@ public:
 	inline const IdentifierAst asIdentifier() const {
 		assert(isIdentifier());
 		return identifier;
+	}
+
+	inline bool isCall() const {
+		return kind == Kind::call;
+	}
+
+	inline const CallAst asCall() const {
+		assert(isCall());
+		return call;
 	}
 
 	template <
@@ -224,6 +244,7 @@ public:
 		typename CbMessageSend,
 		typename CbNewActor,
 		typename CbSeq,
+		typename CbStructFieldSet,
 		typename CbThen
 	>
 	inline auto match(
@@ -240,6 +261,7 @@ public:
 		CbMessageSend cbMessageSend,
 		CbNewActor cbNewActor,
 		CbSeq cbSeq,
+		CbStructFieldSet cbStructFieldSet,
 		CbThen cbThen
 	) const {
 		switch (kind) {
@@ -269,6 +291,8 @@ public:
 				return cbNewActor(newActor);
 			case Kind::seq:
 				return cbSeq(seq);
+			case Kind::structFieldSet:
+				return cbStructFieldSet(structFieldSet);
 			case Kind::then:
 				return cbThen(then);
 			default:
@@ -326,6 +350,7 @@ struct StructDeclAst {
 		struct Builtin {};
 		struct Fields {
 			struct Field {
+				const Bool isMutable;
 				const Str name;
 				const TypeAst type;
 			};

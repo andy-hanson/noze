@@ -100,6 +100,10 @@ namespace {
 			[](const ConcreteExpr::Bogus) {
 				unreachable<void>();
 			},
+			[&](const ConcreteExpr::Alloc e) {
+				ctx.addFun(e.alloc);
+				setReferencedInExpr(ctx, *e.inner);
+			},
 			[&](const ConcreteExpr::CallConcreteFun e) {
 				ctx.addFun(e.called);
 				setReferencedInConstantOrExprs(ctx, e.args);
@@ -115,9 +119,8 @@ namespace {
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
 			[&](const ConcreteExpr::CreateRecord e) {
-				setReferencedInType(ctx, e.type);
-				if (e.alloc.has())
-					ctx.addFun(e.alloc.force());
+				const ConcreteType type = ce.typeWithKnownLambdaBody().force();
+				setReferencedInType(ctx, type);
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
 			[&](const ConcreteExpr::ImplicitConvertToUnion e) {
@@ -128,7 +131,7 @@ namespace {
 			},
 			[&](const ConcreteExpr::LambdaToDynamic e) {
 				ctx.addFun(e.fun);
-				setReferencedInExpr(ctx, *e.inner);
+				setReferencedInConstantOrExpr(ctx, e.closure);
 			},
 			[&](const ConcreteExpr::Let e) {
 				setReferencedInExpr(ctx, *e.value);
@@ -158,10 +161,16 @@ namespace {
 			},
 			[&](const ConcreteExpr::StructFieldAccess e) {
 				setReferencedInConstantOrExpr(ctx, e.target);
+			},
+			[&](const ConcreteExpr::StructFieldSet e) {
+				setReferencedInExpr(ctx, *e.target);
+				setReferencedInConstantOrExpr(ctx, e.value);
 			});
 	}
 
 	void setReferencedInFun(SetReferencedCtx& ctx, const ConcreteFun* f) {
+		if (f->closureParam.has())
+			setReferencedInType(ctx, f->closureParam.force().type);
 		setReferencedInSig(ctx, f->sig);
 		f->body().match(
 			[](const ConcreteFunBody::Builtin) {},
@@ -187,7 +196,7 @@ namespace {
 	void setReferencedInConstant(SetReferencedCtx& ctx, const Constant* c) {
 		c->kind.match(
 			[&](const ConstantKind::Array a) {
-				ctx.addStruct(a.arrayType);
+				setReferencedInType(ctx, c->type());
 				for (const Constant* element : a.elements())
 					ctx.addConstant(element);
 			},
@@ -215,7 +224,7 @@ namespace {
 	}
 }
 
-const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun) {
+const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun, const ConcreteStruct* ctxStruct) {
 	SetReferencedCtx ctx { arena };
 	ctx.addFun(mainFun);
 	for (;;) {
@@ -235,5 +244,6 @@ const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun
 		ctx.allReferencedStructs.freeze(),
 		ctx.allReferencedConstants.freeze(),
 		ctx.allReferencedFuns.freeze(),
-		ctx.allReferencedNewIfaceImpls.freeze()};
+		ctx.allReferencedNewIfaceImpls.freeze(),
+		ctxStruct};
 }

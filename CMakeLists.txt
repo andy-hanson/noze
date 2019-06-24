@@ -8,8 +8,10 @@ cmake_minimum_required(VERSION 3.9)
 project(noze)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_VERBOSE_MAKEFILE on)
 
 add_executable(noze
+	src/backend/firm.cpp
 	src/backend/writeToC.cpp
 	src/concretize/allConstants.cpp
 	src/concretize/builtinInfo.cpp
@@ -40,6 +42,17 @@ add_executable(noze
 	src/util/arena.cpp
 	src/util/io.cpp
 	src/util/lineAndColumnGetter.cpp
-	src/util/path.cpp)
-target_compile_options(noze PRIVATE -Wall -Wextra -Werror -ansi -pedantic)
+	src/util/output.cpp
+	src/util/path.cpp
+	src/util/sexpr.cpp
+	libfirm/build/debug/libfirm.so)
 
+
+#add_library(LibFirm SHARED IMPORTED)
+#set(CMAKE_PREFIX_PATH ../libfirm/build/debug)
+#find_library(LIBFIRM libfirm)
+#message("libfirm at ${LIBFIRM}")
+#find_path(LIBFIRM libfirm)
+target_link_libraries(noze "../libfirm/build/debug/libfirm.so")
+
+target_compile_options(noze PRIVATE -Wall -Wextra -Werror -ansi -pedantic -I../libfirm/include -I../libfirm/build/gen/include/libfirm)

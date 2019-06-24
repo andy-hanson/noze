@@ -80,17 +80,21 @@ namespace {
 			return none<const SpecialStructKind>();
 	}
 
+	size_t sizeFromConcreteFields(const Arr<const ConcreteField> fields) {
+		// TODO: this is definitely not accurate. Luckily I use static asserts in the generated code to check this.
+		size_t s = 0;
+		for (const ConcreteField field : fields)
+			s += max(sizeof(void*), field.type.sizeOrPointerSize());
+		return max(s, 1);
+	}
+
 	size_t sizeFromConcreteStructBody(const ConcreteStructBody body) {
 		return body.match(
 			[](const ConcreteStructBody::Builtin b) {
 				return b.info.sizeBytes;
 			},
 			[](const ConcreteStructBody::Fields f) {
-				// TODO: this is probably not 100% accurate. Luckily I use static asserts in the generated code to check this.
-				size_t s = 0;
-				for (const ConcreteField field : f.fields)
-					s += field.type.sizeOrPointerSize();
-				return max(s, 1);
+				return sizeFromConcreteFields(f.fields);
 			},
 			[](const ConcreteStructBody::Union u) {
 				size_t maxMember = 0;
@@ -115,7 +119,7 @@ namespace {
 				return none<const ConcreteType>();
 			},
 			[&](const KnownLambdaBody* klb) {
-				return klb->closureType;
+				return klb->closureType();
 			});
 	}
 
@@ -134,8 +138,7 @@ namespace {
 				return getConcreteType(ctx, p.type, typeArgsScope);
 			});
 			if (t.has())
-				// TODO: probably need to mangle the param name
-				res.add(ctx.arena, ConcreteParam{copyStr(ctx.arena, p.name), t.force()});
+				res.add(ctx.arena, ConcreteParam{mangleName(ctx.arena, p.name), t.force()});
 		}
 		return res.finish();
 	}
@@ -158,7 +161,7 @@ namespace {
 			},
 			[&](const StructBody::Fields f) {
 				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(ctx.arena, f.fields, [&](const StructField f) {
-					return ConcreteField{mangleName(ctx.arena, f.name), getConcreteType(ctx, f.type, typeArgsScope)};
+					return ConcreteField{f.isMutable, mangleName(ctx.arena, f.name), getConcreteType(ctx, f.type, typeArgsScope)};
 				});
 				return ConcreteStructBody{ConcreteStructBody::Fields{fields}};
 			},
@@ -185,7 +188,20 @@ namespace {
 
 	// This is for concretefun from FunDecl, from lambda is below
 	ConcreteFun* getConcreteFunFromKey(ConcretizeCtx& ctx, const ConcreteFunKey key) {
+
 		const FunDecl* decl = key.decl();
+
+		if (false) {
+			printf("Instantiating %s", strToCStr(ctx.arena, decl->name()));
+			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs) {
+				//TODO: print type args too
+				printf(" ");
+				Output out {};
+				out << clv;
+			}
+			printf("\n");
+		}
+
 		const TypeArgsScope typeScope = key.typeArgsScope();
 		const ConcreteType returnType = getConcreteType(ctx, decl->returnType(), typeScope);
 		const Arr<const ConcreteParam> params = concretizeParamsAndSpecialize(ctx, decl->params(), key.specializeOnArgs, typeScope);
@@ -194,7 +210,7 @@ namespace {
 			: getConcreteFunMangledName(ctx.arena, decl->name(), returnType, params, key.specImpls(), key.specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
 		// no closure for fun from decl
-		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(_not(decl->noCtx()), none<const ConcreteType>(), sig, isCallFun(ctx, decl));
+		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(_not(decl->noCtx()), none<const ConcreteParam>(), sig, isCallFun(ctx, decl));
 
 		if (isNonSpecializableBuiltin(decl))
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs)
@@ -204,7 +220,7 @@ namespace {
 			key.declAndTypeArgsAndSpecImpls,
 			key.specializeOnArgs,
 			decl->body(),
-			none<const Arr<const ConstantOrLambdaOrVariable>>()};
+			none<const KnownLambdaBody*>()};
 		ctx.concreteFunToSource.add(ctx.arena, res, source);
 		return res;
 	}
@@ -214,7 +230,7 @@ namespace {
 		// TODO: just assert it's not already set?
 		if (!cf->_body.isSet()) {
 			cf->_body.set(ConcreteFunBody{
-				ctx.arena.nu<ConcreteExpr>()(SourceRange::empty(), none<const KnownLambdaBody*>(), ConcreteExpr::Bogus{})});
+				ctx.arena.nu<ConcreteExpr>()(cf->returnType(), SourceRange::empty(), none<const KnownLambdaBody*>(), ConcreteExpr::Bogus{})});
 			const ConcreteFunSource source = ctx.concreteFunToSource.tryDeleteAndGet(cf).force();
 			const ConcreteFunBody body = source.body.match(
 				[&](const FunBody::Builtin) {
@@ -263,6 +279,11 @@ namespace {
 		return res.finish();
 	}
 
+	const Bool shouldAllocateClosureForDynamicLambda(const ConcreteType closureType) {
+		// TODO:PERF we could avoid the pointer for closures that don't exceed pointer size.
+		return _not(closureType.isPointer);
+	}
+
 	// Get a ConcreteFun for a particular instance of a KnownLambdaBody -- used by instantiateKnownLambdaBody
 	ConcreteFun* getConcreteFunFromKnownLambdaBodyAndFill(
 		ConcretizeCtx& ctx,
@@ -277,9 +298,18 @@ namespace {
 		const ConcreteType returnType = klb->nonSpecializedSig.returnType; // specialization never changes the return type
 		const Arr<const ConcreteParam> params = specializeParamsForLambdaInstance(ctx, klb->nonSpecializedSig.params, specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
-		const Opt<const ConcreteType> closure = isForDynamic && !klb->hasClosure()
-			? some<const ConcreteType>(ctx.voidPtrType())
-			: klb->closureType;
+
+		// For a dynamic lambda, the closure should always be a pointer.
+		const Opt<const ConcreteParam> closure = isForDynamic
+			? some<const ConcreteParam>([&]() {
+				if (klb->hasClosure()) {
+					const ConcreteParam closureParam = klb->closureParam.force();
+					return shouldAllocateClosureForDynamicLambda(closureParam.type) ? closureParam.withType(closureParam.type.byRef()) : closureParam;
+				} else
+					return ConcreteParam{strLiteral(""), ctx.anyPtrType()};
+			}())
+			: klb->closureParam;
+
 		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(
 			/*needsCtx*/ True, // TODO:PERF for some non-dynamic calls it does not need ctx
 			closure,
@@ -290,7 +320,7 @@ namespace {
 			info.containingFunDeclAndTypeArgsAndSpecImpls,
 			specializeOnArgs,
 			FunBody{info.body},
-			some<const Arr<const ConstantOrLambdaOrVariable>>(klb->closureSpecialize)};
+			some<const KnownLambdaBody*>(klb)};
 		ctx.concreteFunToSource.add(ctx.arena, res, source);
 
 		fillInConcreteFunBody(ctx, res);
@@ -318,8 +348,36 @@ Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b)
 		: compareArr<const ConstantOrLambdaOrVariable, compareConstantOrLambdaOrVariable>(a.specializeOnArgs, b.specializeOnArgs);
 }
 
-const ConcreteType ConcretizeCtx::voidPtrType() {
-	return getConcreteType_forStructInst(*this, commonTypes._void, TypeArgsScope::empty()).byRef();
+const ConcreteType ConcretizeCtx::boolType() {
+	return lazilySet(_boolType, [&]() {
+		return getConcreteType_forStructInst(*this, commonTypes._bool, TypeArgsScope::empty());
+	});
+}
+
+const ConcreteType ConcretizeCtx::charType() {
+	return lazilySet(_charType, [&]() {
+		return getConcreteType_forStructInst(*this, commonTypes._char, TypeArgsScope::empty());
+	});
+}
+
+const ConcreteType ConcretizeCtx::voidType() {
+	return lazilySet(_voidType, [&]() {
+		return getConcreteType_forStructInst(*this, commonTypes._void, TypeArgsScope::empty());
+	});
+}
+
+const ConcreteType ConcretizeCtx::anyPtrType() {
+	return lazilySet(_anyPtrType, [&]() {
+		return getConcreteType_forStructInst(*this, commonTypes.anyPtr, TypeArgsScope::empty());
+	});
+}
+
+const ConcreteType ConcretizeCtx::ctxPtrType() {
+	return lazilySet(_ctxPtrType, [&]() {
+		const ConcreteType res = getConcreteType_forStructInst(*this, commonTypes.ctx, TypeArgsScope::empty());
+		assert(res.isPointer);
+		return res;
+	});
 }
 
 const ConcreteFun* getOrAddNonGenericConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl) {
@@ -396,6 +454,30 @@ const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr
 	});
 }
 
+namespace {
+	const Opt<const ConcreteType> concreteTypeFromFieldsCommon(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName, const Bool neverPointer) {
+		if (isEmpty(fields))
+			return none<const ConcreteType>();
+		else {
+			ConcreteStruct* cs = arena.nu<ConcreteStruct>()(
+				mangledName,
+				none<const SpecialStructKind>(),
+				ConcreteStructBody{ConcreteStructBody::Fields{fields}});
+			cs->_sizeBytes.set(sizeFromConcreteFields(fields));
+			return some<const ConcreteType>(
+				neverPointer ? ConcreteType::value(cs) : ConcreteType::fromStruct(cs));
+		}
+	}
+}
+
+const Opt<const ConcreteType> concreteTypeFromFields(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName) {
+	return concreteTypeFromFieldsCommon(arena, fields, mangledName, False);
+}
+
+const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName) {
+	return concreteTypeFromFieldsCommon(arena, fields, mangledName, True);
+}
+
 const Bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl) {
 	return exists(ctx.callFuns, [&](const FunDecl* d) {
 		return ptrEquals(d, decl);
@@ -403,28 +485,74 @@ const Bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl) {
 }
 
 namespace {
-	const SpecializeOnArgs specializeOnAsMuchAsPossible(Arena& arena, const Arr<const ConstantOrExpr> args) {
+	const ConstantOrExpr makeLambdasDynamic_forConstant(ConcretizeCtx& ctx, const SourceRange range, const Constant* c) {
+		if (c->kind.isLambda()) {
+			const KnownLambdaBody* klb = c->kind.asLambda().knownLambdaBody;
+			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);
+			const ConcreteType closureType = fun->closureType().force();
+			const ConstantOrExpr closure = ConstantOrExpr{ctx.allConstants._null(ctx.arena, closureType)};
+			const ConcreteExpr::LambdaToDynamic ld = ConcreteExpr::LambdaToDynamic{fun, closure};
+			return nuExpr(ctx.arena, klb->dynamicType, range, ld);
+		} else {
+			return ConstantOrExpr{c};
+		}
+	}
+
+	const ConstantOrExpr makeLambdasDynamic_forExpr(ConcretizeCtx& ctx, const SourceRange range, const ConcreteExpr* e) {
+		if (e->knownLambdaBody().has()) {
+			const KnownLambdaBody* klb = e->knownLambdaBody().force();
+			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);
+			const ConcreteType closureType = klb->closureType().force();
+			const ConstantOrExpr closure = shouldAllocateClosureForDynamicLambda(closureType)
+				? nuExpr(
+					ctx.arena,
+					closureType.changeToByRef(),
+					range,
+					none<const KnownLambdaBody*>(),
+					ConcreteExpr::Alloc{getAllocFun(ctx), e})
+				: ConstantOrExpr{e};
+			return nuExpr(ctx.arena, klb->dynamicType, range, ConcreteExpr::LambdaToDynamic{fun, closure});
+		} else
+			return ConstantOrExpr{e};
+	}
+
+	const SpecializeOnArgs yesSpecialize(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args, const Bool specializeOnAllConstants) {
 		// TODO: helper to map to two different arrs
 		ArrBuilder<const ConstantOrExpr> notSpecializedArgs {};
-		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs = map<const ConstantOrLambdaOrVariable>{}(arena, args, [&](const ConstantOrExpr ce) {
+		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs = map<const ConstantOrLambdaOrVariable>{}(ctx.arena, args, [&](const ConstantOrExpr ce) {
 			return ce.match(
 				[&](const Constant* c) {
-					return ConstantOrLambdaOrVariable{c};
+					if (specializeOnAllConstants || c->kind.isLambda())
+						// Still specialize on lambda constants
+						return ConstantOrLambdaOrVariable{c};
+					else {
+						notSpecializedArgs.add(ctx.arena, ConstantOrExpr{c});
+						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
+					}
 				},
 				[&](const ConcreteExpr* e) {
-					notSpecializedArgs.add(arena, ConstantOrExpr{e});
-					return constantOrLambdaOrVariableFromConcreteExpr(*e);
+					if (e->knownLambdaBody().has()) {
+						notSpecializedArgs.add(ctx.arena, ConstantOrExpr{e});
+						return ConstantOrLambdaOrVariable{e->knownLambdaBody().force()};
+					} else {
+						notSpecializedArgs.add(ctx.arena, makeLambdasDynamic_forExpr(ctx, range, e));
+						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
+					}
 				});
 		});
 		return SpecializeOnArgs{specializeOnArgs, notSpecializedArgs.finish()};
 	}
+
+	const SpecializeOnArgs dontSpecialize(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args) {
+		return SpecializeOnArgs{allVariable(ctx.arena, args.size), makeLambdasDynamic_arr(ctx, range, args)};
+	}
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(Arena& arena, const Arr<const ConstantOrExpr> args) {
-	return specializeOnAsMuchAsPossible(arena, args);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args) {
+	return yesSpecialize(ctx, range, args, /*specializeOnAllConstants*/ False);
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<const ConstantOrExpr> args, const Bool isSummon) {
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args, const Bool isSummon) {
 	Cell<const Bool> allConstant { True };
 	Cell<const Bool> someFun { False };
 	for (const ConstantOrExpr c : args) {
@@ -435,21 +563,24 @@ const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(Arena& arena, const Arr<
 	}
 
 	// Specialize on funs with all-constant parameters that are non-'summon' as these will likely evaluate to constants.
+	// TODO: also require return type to be immutable
+	const Bool isConstant = _and(allConstant.get(), !isSummon);
+
 	// Always specialize on a fun, even if fun is summon
-	return (allConstant.get() && !isSummon) || someFun.get()
-		? specializeOnAsMuchAsPossible(arena, args)
-		: SpecializeOnArgs{allVariable(arena, args.size), args};
+	return isConstant || someFun.get()
+		? yesSpecialize(ctx, range, args, isConstant)
+		: dontSpecialize(ctx, range, args);
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx& ctx, const FunDecl* f, const Arr<const ConstantOrExpr> args) {
+const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx& ctx, const SourceRange range, const FunDecl* f, const Arr<const ConstantOrExpr> args) {
 	// Don't specialize just because a single arg is a constant.
 	// If *every* arg is a constant, we always specialize on all args.
 	// Else, specialize if some arg has a known lambda body. (TODO: and that lambda is *only* called.)
 
 	// Never specialize on 'call' -- though we do treat it specially in 'concretizeCall'
 	return f->isExtern() || isNonSpecializableBuiltin(f) || isCallFun(ctx, f)
-		? SpecializeOnArgs{allVariable(ctx.arena, args.size), args}
-		: getSpecializeOnArgsForLambdaCall(ctx.arena, args, f->isSummon());
+		? dontSpecialize(ctx, range, args)
+		: getSpecializeOnArgsForLambdaCall(ctx, range, args, f->isSummon());
 }
 
 const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
@@ -465,11 +596,27 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 			return getConcreteType(ctx, c->type, typeArgsScope);
 		});
 		if (t.has())
-			res.add(ctx.arena, ConcreteField{copyStr(ctx.arena, c->name), t.force()});
+			res.add(ctx.arena, ConcreteField{/*isMutable*/ False, copyStr(ctx.arena, c->name), t.force()});
 	}
 	return res.finish();
 }
 
 const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx& ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope) {
 	return concretizeParamsAndSpecialize(ctx, params, allVariable(ctx.arena, params.size), typeArgsScope);
+}
+
+const ConstantOrExpr makeLambdasDynamic(ConcretizeCtx& ctx, const SourceRange range, const ConstantOrExpr expr) {
+	return expr.match(
+		[&](const Constant* c) {
+			return makeLambdasDynamic_forConstant(ctx, range, c);
+		},
+		[&](const ConcreteExpr* e) {
+			return makeLambdasDynamic_forExpr(ctx, range, e);
+		});
+}
+
+const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> exprs) {
+	return map<const ConstantOrExpr>{}(ctx.arena, exprs, [&](const ConstantOrExpr expr) {
+		return makeLambdasDynamic(ctx, range, expr);
+	});
 }

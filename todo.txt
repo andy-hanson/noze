@@ -1,3 +1,157 @@
+TODO
+	Rename '_type' to '_typeWithoutKnownLambdaBody'
+
+
+TODO
+	too many functions called 'getallocfun'
+
+
+TODO
+syntax highlighting for `{it}` is bad
+
+
+
+!
+	//TODO: private:
+
+!
+	KnownLambdaBody(
+		const ConcreteType _dynamicType,
+		const ConcreteSig _nonSpecializedSig,
+		const Str _mangledName,
+		const Opt<const ConcreteParam> _closureParam,
+		const Arr<const ClosureSingleSpecialize> _closureSpecialize
+	) :
+		dynamicType{_dynamicType},
+		nonSpecializedSig{_nonSpecializedSig},
+		mangledName{_mangledName},
+		closureParam{_closureParam},
+		closureSpecialize{_closureSpecialize}
+	{
+		// Closure is passed as void*, so it must fit in that size.
+		assert(!closureParam.has() || closureParam.force().type.sizeOrPointerSize() == sizeof(void*));
+	}
+
+
+	Assertion was in wrong place
+
+
+!
+	closure struct should never be by-ref??
+	(If it's dynamic, we should take the thing that's by-value and allocate it)
+
+
+TODO
+knownlambdabody closure fields should go in their own struct? make the whole thing optional?
+
+!
+
+				// TODO:PERF support constant unions
+
+
+!
+	_nuConstant :: don't take id as an argument, just hve a global id counter
+
+!
+	mustBeNonPointer -> mustBeValue
+
+! Output should just write to string, just be Writer.
+Then printf at the end
+
+!
+	'type' of ConcreteExpr should be a getter. For most this is redundant.
+
+!
+	makeLambdasDynamic_forConstant and _forExpr: share code?
+
+!
+	KnownLambdaBody(const KnownLambdaBody&) = default;
+	= delete?
+
+!
+	assert:
+	on Call -- no argument should have a knownlambdabody unless specialized for that
+
+	on Cond -- no side should haev a knownlambdabody, period
+
+
+
+!
+createrecord:
+			assert(alloc.has() == type.isPointer);
+
+
+TODO
+	separate ConcreteExpr from ConcreteExprKind?
+
+
+TODO
+	specializeonargs and related functions to own file
+
+
+!
+	notSpecializedArgs -> nonConstantArgs
+
+
+!
+	//TODO: print type args too
+
+!
+	// TODO: also require return type to be immutable
+
+
+TODO
+each-in-range has a tendency to instantiate infinitely!
+
+TODO
+rename notSpecializedArgs to notConstantArgs
+
+
+TODO
+	name fewer structs LambdaInfo
+
+
+each-in-range -> Range type
+
+
+TODO
+	And remember: a struct with mutable properties *must* be by-reference!
+
+
+TODO
+`!=` looks like a message send!
+
+| TODO: should be able to infer type argumetns
+
+TODO
+*Ast types to ExprAstKind::*
+
+!
+	//TODO:KILL (just write field->type everywhere)
+
+!
+	sort Expr members alphabetically
+
+
+TODO
+	| NOTE: this is not a normal record, compiler treats it specially
+	Is this true?
+
+
+	There's a SpecialStructKind for that but compiler doesn't actually do anything...
+
+
+TODO
+"the type of the expression" error: should print the type
+
+
+Iterators?
+	iterator record
+		next fun0 opt<?t>
+
+	find ?t(iter iterator)
+
+
 !
 	Ensure path given to command must have '.nz' extension
 
