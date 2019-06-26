@@ -183,26 +183,27 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		});
 }
 
-Output& operator<<(Output& out, const Type type) {
+void writeType(Writer& writer, const Type type) {
 	type.match(
 		[&](const Type::Bogus) {
 			unreachable<void>();
 		},
 		[&](const TypeParam* p) {
-			out << '?' << p->name;
+			writeChar(writer, '?');
+			writeStr(writer, p->name);
 		},
 		[&](const StructInst* s) {
-			out << s->decl->name;
+			writeStr(writer, s->decl->name);
 			if (!isEmpty(s->typeArgs)) {
 				Cell<const Bool> first { True };
 				for (const Type t : s->typeArgs) {
-					out << (first.get() ? '<' : ' ') << t;
+					writeChar(writer, first.get() ? '<' : ' ');
+					writeType(writer, t);
 					first.set(False);
 				}
-				out << '>';
+				writeChar(writer, '>');
 			}
 		});
-	return out;
 }
 
 namespace {
@@ -320,7 +321,7 @@ const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
 		});
 }
 
-Output& operator<<(Output& out, const Expr expr) {
+void writeExpr(Writer& writer, const Expr expr) {
 	Arena arena {};
-	return out << exprToSexpr(arena, expr);
+	writeSexpr(writer, exprToSexpr(arena, expr));
 }

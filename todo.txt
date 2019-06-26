@@ -1,11 +1,42 @@
 !
+	showPos -> writePos?
+
+!
+	writeref
+
+!
+	indentingwriter struct
+	Just use struct WriteExprCtx, rename and move to writer.h
+
+
+!
+	specialization code to own file
+
+
+!
+	concretizeCtx should carry MutDict<ConcreteFun*, uint16_t> recursionDepths.
+	When we start filling in a function, increment it.
+	When we're done, decrement and possibly delete it.
+	I'f we're about to specialize arguments and recursionDepth is > 16, don't, leave them all as variable.
+
+
+TODO
+remove all '999' in include.nz
+
+!
+	'if' function that takes a single lambda and returns void
+	another that returns opt ?t
+		if opt ?t(cond bool, if-true ?t) noctx builtin
+		if void(cond bool, if-true void) noctx builtin
+
+!
+	Writing constants:
+	We should write the 'arrdata' constants first
+	*then* write arrs and pointers
+
+
+!
 	ctx.diag -> ctx.addDiag
-
-!
-	"mut" should be second, after name but before type
-
-!
-	kill takenewlineorindentafternl
 
 !
 	bool_to_int helper
@@ -13,10 +44,8 @@
 TODO
 	Rename '_type' to '_typeWithoutKnownLambdaBody'
 
-
 TODO
 	too many functions called 'getallocfun'
-
 
 !
 	KnownLambdaBody(
@@ -39,13 +68,11 @@ TODO
 
 	Assertion was in wrong place
 
-
 TODO
-knownlambdabody closure fields should go in their own struct? make the whole thing optional?
+	knownlambdabody closure fields should go in their own struct? make the whole thing optional?
 
 !
-
-				// TODO:PERF support constant unions
+	// TODO:PERF support constant unions
 
 
 !

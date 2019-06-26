@@ -1,20 +1,23 @@
 #include "./sexpr.h"
 
-Output& operator<<(Output& out, const Sexpr s) {
+void writeSexpr(Writer& writer, const Sexpr s) {
 	s.match(
 		[&](const Arr<const Sexpr> s) {
-			out << "[";
-			writeWithCommas(out, s);
-			out << "]";
+			writeChar(writer, '[');
+			writeWithCommas(writer, s, [&](const Sexpr element) {
+				writeSexpr(writer, element);
+			});
+			writeChar(writer, ']');
 		},
 		[&](const SexprRecord s) {
-			out << s.name;
-			out << "(";
-			writeWithCommas(out, s.children);
-			out << ")";
+			writeStr(writer, s.name);
+			writeChar(writer, '(');
+			writeWithCommas(writer, s.children, [&](const Sexpr element) {
+				writeSexpr(writer, element);
+			});
+			writeChar(writer, ')');
 		},
 		[&](const Str s) {
-			out << s;
+			writeStr(writer, s);
 		});
-	return out;
 }

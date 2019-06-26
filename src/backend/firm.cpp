@@ -2,6 +2,8 @@
 
 #include <libfirm/firm.h>
 
+#include "../util/dictBuilder.h"
+
 namespace {
 	// We'll create both of these eagerly, even if only one is needed.
 	struct TypesForStruct {

@@ -35,16 +35,16 @@ namespace {
 			specializeOnArgs[i].match(
 				[](const ConstantOrLambdaOrVariable::Variable) {},
 				[&](const Constant* c) {
-					writer.writeStatic("_arg");
-					writer.writeUint(i);
-					writer.writeStatic("_is_");
-					writer.writeUint(c->id);
+					writeStatic(writer, "_arg");
+					writeNat(writer, i);
+					writeStatic(writer, "_is_");
+					writeNat(writer, c->id);
 				},
 				[&](const KnownLambdaBody* klb) {
-					writer.writeStatic("_klb");
-					writer.writeUint(i);
-					writer.writeStatic("_is_");
-					writer.writeStr(klb->mangledName);
+					writeStatic(writer, "_klb");
+					writeNat(writer, i);
+					writeStatic(writer, "_is_");
+					writeStr(writer, klb->mangledName);
 				});
 	}
 
@@ -63,7 +63,7 @@ namespace {
 		for (const ConcreteParam param : params)
 			writeConcreteTypeForMangle(writer, param.type);
 		for (const FunDecl* si : specImpls) {
-			writer.writeStatic("__");
+			writeStatic(writer, "__");
 			writeMangledName(writer, si->name());
 		}
 		writeSpecializeOnArgsForMangle(writer, specializeOnArgs);
@@ -186,20 +186,31 @@ namespace {
 		res->_sizeBytes.setOverwrite(sizeFromConcreteStructBody(res->body()));
 	}
 
+	const bool PRINT_INSTANTIATION = false;
+
+	static uint INSTANTIATING_INDENT = 0;
+
+	void printInstantiatingIndent() {
+		for (uint i = 0; i < INSTANTIATING_INDENT; i++)
+			printf("\t");
+	}
+
 	// This is for concretefun from FunDecl, from lambda is below
 	ConcreteFun* getConcreteFunFromKey(ConcretizeCtx& ctx, const ConcreteFunKey key) {
-
 		const FunDecl* decl = key.decl();
 
-		if (false) {
-			printf("Instantiating %s", strToCStr(ctx.arena, decl->name()));
+		if (PRINT_INSTANTIATION) {
+			printInstantiatingIndent();
+			Arena arena {};
+			Writer writer { arena };
+			writeStatic(writer, "Instantiating ");
+			writeStr(writer, decl->name());
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs) {
 				//TODO: print type args too
-				printf(" ");
-				Output out {};
-				out << clv;
+				writeChar(writer, ' ');
+				writeConstantOrLambdaOrVariable(writer, clv);
 			}
-			printf("\n");
+			printf("%s\n", writer.finishCStr());
 		}
 
 		const TypeArgsScope typeScope = key.typeArgsScope();
@@ -229,6 +240,12 @@ namespace {
 	const ConcreteFunBody fillInConcreteFunBody(ConcretizeCtx& ctx, ConcreteFun* cf) {
 		// TODO: just assert it's not already set?
 		if (!cf->_body.isSet()) {
+			if (PRINT_INSTANTIATION) {
+				INSTANTIATING_INDENT++;
+				printInstantiatingIndent();
+				printf("FILLING IN BODY\n");
+			}
+
 			cf->_body.set(ConcreteFunBody{
 				ctx.arena.nu<ConcreteExpr>()(cf->returnType(), SourceRange::empty(), none<const KnownLambdaBody*>(), ConcreteExpr::Bogus{})});
 			const ConcreteFunSource source = ctx.concreteFunToSource.tryDeleteAndGet(cf).force();
@@ -243,6 +260,15 @@ namespace {
 					return toConcreteFunBody(doConcretizeExpr(ctx, source, cf, *e));
 				});
 			cf->_body.setOverwrite(body);
+
+			if (PRINT_INSTANTIATION) {
+				printInstantiatingIndent();
+				printf("DONE FILLING BODY\n");
+
+				assert(INSTANTIATING_INDENT != 0);
+				INSTANTIATING_INDENT--;
+			}
+
 			return body;
 		} else
 			return cf->body();
@@ -255,10 +281,10 @@ namespace {
 		const Bool isForDynamic
 	) {
 		Writer writer { arena };
-		writer.writeStr(knownLambdaBodyMangledName);
+		writeStr(writer, knownLambdaBodyMangledName);
 		writeSpecializeOnArgsForMangle(writer, specializeOnArgs);
 		if (isForDynamic)
-			writer.writeStatic("__dynamic");
+			writeStatic(writer, "__dynamic");
 		return writer.finish();
 	}
 

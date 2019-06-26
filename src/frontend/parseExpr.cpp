@@ -116,25 +116,26 @@ namespace {
 
 	template <typename Cb>
 	const Bool someInOwnBody(const ExprAst body, Cb cb) {
+		// Since this is only used checking for 'it' in a braced lambda, any multi-line ast is unreachable
 		if (cb(body))
 			return True;
 
-		auto r = [&](const ExprAst sub) {
+		auto recur = [&](const ExprAst sub) {
 			return someInOwnBody<Cb>(sub, cb);
 		};
 
 		return body.kind.match(
 			[&](const CallAst e) {
-				return exists(e.args, r);
+				return exists(e.args, recur);
 			},
 			[](const CondAst) {
 				return unreachable<const Bool>();
 			},
 			[&](const CreateArrAst e) {
-				return exists(e.args, r);
+				return exists(e.args, recur);
 			},
 			[&](const CreateRecordAst e) {
-				return exists(e.args, r);
+				return exists(e.args, recur);
 			},
 			[](const FunAsLambdaAst) {
 				return False;
@@ -155,7 +156,7 @@ namespace {
 				return unreachable<const Bool>();
 			},
 			[&](const MessageSendAst e) {
-				return _or(r(*e.target), exists(e.args, r));
+				return _or(recur(*e.target), exists(e.args, recur));
 			},
 			[](const NewActorAst) {
 				return unreachable<const Bool>();
@@ -164,7 +165,7 @@ namespace {
 				return unreachable<const Bool>();
 			},
 			[&](const StructFieldSetAst e) {
-				return _or(r(*e.target), r(*e.value));
+				return _or(recur(*e.target), recur(*e.value));
 			},
 			[](const ThenAst) {
 				return unreachable<const Bool>();
@@ -181,7 +182,8 @@ namespace {
 		const Pos start = curPos(lexer);
 		if (tryTake(lexer, '.')) {
 			const Str name = takeName(lexer);
-			const CallAst call = CallAst{name, emptyArr<const TypeAst>(), arrLiteral<const ExprAst>(lexer.arena, initial)};
+			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
+			const CallAst call = CallAst{name, typeArgs, arrLiteral<const ExprAst>(lexer.arena, initial)};
 			const ExprAst expr = ExprAst{range(lexer, start), ExprAstKind{call}};
 			return tryParseDots(lexer, expr);
 		} else

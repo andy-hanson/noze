@@ -1,8 +1,8 @@
 #pragma once
 
 #include "./util.h"
-#include "./util/output.h"
 #include "./util/sourceRange.h"
+#include "./util/writer.h"
 
 enum class BuiltinStructKind {
 	_bool,
@@ -50,6 +50,9 @@ enum class BuiltinFunKind {
 	unsafeDivFloat64,
 	unsafeDivInt64,
 	unsafeDivNat64,
+	unsafeModNat64,
+	unsafeNat64ToInt64,
+	unsafeInt64ToNat64,
 	wrappingAddInt64,
 	wrappingAddNat64,
 	wrappingMulInt64,
@@ -205,8 +208,10 @@ struct ConcreteStruct {
 		return _sizeBytes.get();
 	}
 
+	const Bool isSelfMutable() const;
+
 	inline const Bool defaultIsPointer() const {
-		return gt(sizeBytes(), sizeof(void*) * 2);
+		return _or(isSelfMutable(), gt(sizeBytes(), sizeof(void*) * 2));
 	}
 
 	inline const Bool isRecord() const {
@@ -276,11 +281,10 @@ struct ConcreteType {
 	}
 };
 
-inline Output& operator<<(Output& out, const ConcreteType t) {
-	out << t.strukt->mangledName;
+inline void writeConcreteType(Writer& writer, const ConcreteType t) {
+	writeStr(writer, t.strukt->mangledName);
 	if (t.isPointer)
-		out << '*';
-	return out;
+		writeChar(writer, '*');
 }
 
 inline Comparison compareConcreteType(const ConcreteType a, const ConcreteType b) {
@@ -588,7 +592,7 @@ struct Constant {
 	}
 };
 
-Output& operator<<(Output& out, const Constant* c);
+void writeConstant(Writer& writer, const Constant* c);
 
 // NOTE: a Constant can still have a KnownLambdaBody of course!
 struct ConstantOrLambdaOrVariable {
@@ -656,7 +660,7 @@ public:
 	}
 };
 
-Output& operator<<(Output& out, const ConstantOrLambdaOrVariable clv);
+void writeConstantOrLambdaOrVariable(Writer& writer, const ConstantOrLambdaOrVariable clv);
 
 inline Comparison compareConstantOrLambdaOrVariable(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
 	// variable < constant < knownlambdabody

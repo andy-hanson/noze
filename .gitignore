@@ -11,3 +11,4 @@ test
 
 # scons cache
 .sconsign.dblite
+*.o

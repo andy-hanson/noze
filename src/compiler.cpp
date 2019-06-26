@@ -35,6 +35,7 @@ namespace {
 			strLiteral("-pedantic"),
 			strLiteral("-Wno-unused-parameter"),
 			strLiteral("-Wno-unused-but-set-variable"),
+			strLiteral("-Wno-unused-variable"),
 			strLiteral("-std=c++17"),
 			// TODO: configurable whether we want debug or release
 			strLiteral("-g"),

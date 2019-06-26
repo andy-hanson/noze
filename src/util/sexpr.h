@@ -1,7 +1,7 @@
 #pragma once
 
 #include "./arrUtil.h"
-#include "./output.h"
+#include "./writer.h"
 #include "../util.h"
 
 struct Sexpr;
@@ -63,4 +63,4 @@ const Sexpr arrToSexpr(Arena& arena, const Arr<T> a) {
 	}));
 }
 
-Output& operator<<(Output& out, const Sexpr s);
+void writeSexpr(Writer& writer, const Sexpr s);

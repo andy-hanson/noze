@@ -3,142 +3,157 @@
 #include "../util/arrUtil.h"
 
 namespace {
-	Output& operator<<(Output& out, const Path* p) {
+	//TODO:MOVE
+	void writePath(Writer& writer, const Path* p) {
 		if (p->parent.has())
-			out << p->parent.force();
-		return out << '/' << p->baseName;
+			writePath(writer, p->parent.force());
+		writeChar(writer, '/');
+		writeStr(writer, p->baseName);
 	}
 
-	Output& operator<<(Output& out, const LineAndColumn lc) {
-		return out << (lc.line + 1) << ':' << (lc.column + 1);
+	//TODO:MOVE
+	void writeLineAndColumn(Writer& writer, const LineAndColumn lc) {
+		writeNat(writer, lc.line + 1);
+		writeChar(writer, ':');
+		writeNat(writer, lc.column + 1);
 	}
 
-	void showPos(Output& out, const LineAndColumnGetter lc, const Pos pos) {
-		out << lineAndColumnAtPos(lc, pos);
+	void showPos(Writer& writer, const LineAndColumnGetter lc, const Pos pos) {
+		writeLineAndColumn(writer, lineAndColumnAtPos(lc, pos));
 	}
 
-	void showRange(Output& out, const LineAndColumnGetter lc, const SourceRange range) {
-		showPos(out, lc, range.start);
-		out << '-';
-		showPos(out, lc, range.end);
+	void showRange(Writer& writer, const LineAndColumnGetter lc, const SourceRange range) {
+		showPos(writer, lc, range.start);
+		writeChar(writer, '-');
+		showPos(writer, lc, range.end);
 	}
 
-	void showChar(Output& out, char c) {
+	void showChar(Writer& writer, char c) {
 		switch (c) {
 			case '\0':
-				out << "\\0";
+				writeStatic(writer, "\\0");
 				break;
 			case '\n':
-				out << "\\n";
+				writeStatic(writer, "\\n");
 				break;
 			case '\t':
-				out << "\\t";
+				writeStatic(writer, "\\t");
 				break;
 			default:
-				out << c;
+				writeChar(writer, c);
 				break;
 		}
 	}
 
-	Output& operator<<(Output& out, const ParseDiag d) {
+	void writeParseDiag(Writer& writer, const ParseDiag d) {
 		d.match(
 			[&](const ParseDiag::ExpectedCharacter) {
 				todo<void>("expectedcharacter");
 			},
 			[&](const ParseDiag::ExpectedIndent) {
-				out << "expected an indent";
+				writeStatic(writer, "expected an indent");
 			},
 			[&](const ParseDiag::ExpectedPurityAfterSpace) {
-				out << "after trialing space, expected to parse 'mutable' or 'sendable'";
+				writeStatic(writer, "after trialing space, expected to parse 'mutable' or 'sendable'");
 			},
 			[&](const ParseDiag::LeadingSpace) {
 				todo<void>("leadingspace");
 			},
 			[&](const ParseDiag::LetMustHaveThen) {
-				out << "after 'x = y', must have another line after it";
+				writeStatic(writer, "after 'x = y', must have another line after it");
 			},
 			[&](const ParseDiag::MatchWhenNewMayNotAppearInsideArg) {
 				todo<void>("mwn");
 			},
 			[&](const ParseDiag::MustEndInBlankLine) {
-				out << "file must end in a blank line";
+				writeStatic(writer, "file must end in a blank line");
 			},
 			[&](const ParseDiag::TrailingSpace) {
 				todo<void>("trailingspace");
 			},
 			[&](const ParseDiag::TypeParamCantHaveTypeArgs) {
-				out << "a type parameter can't have type arguments";
+				writeStatic(writer, "a type parameter can't have type arguments");
 			},
 			[&](const ParseDiag::UnexpectedCharacter d) {
-				out << "unexpected character '";
-				showChar(out, d.ch);
-				out << "'";
+				writeStatic(writer, "unexpected character '");
+				showChar(writer, d.ch);
+				writeStatic(writer, "'");
 			},
 			[&](const ParseDiag::UnionCantBeEmpty) {
-				out << "union type can't be empty";
+				writeStatic(writer, "union type can't be empty");
 			},
 			[&](const ParseDiag::WhenMustHaveElse) {
-				out << "'when' expression must end in 'else'";
+				writeStatic(writer, "'when' expression must end in 'else'");
 			});
-		return out;
 	}
 
-	Output& operator<<(Output& out, const Purity p) {
+	//TODO:MOVE
+	void writePurity(Writer& writer, const Purity p) {
 		switch (p) {
 			case Purity::data:
-				return out << "data";
+				writeStatic(writer, "data");
+				break;
 			case Purity::sendable:
-				return out << "sendable";
+				writeStatic(writer, "sendable");
+				break;
 			case Purity::nonSendable:
-				return out << "mut";
+				writeStatic(writer, "mut");
+				break;
 			default:
 				assert(0);
 		}
 	}
 
-	Output& operator<<(Output& out, const Diag d) {
+	void writeDiag(Writer& writer, const Diag d) {
 		d.match(
 			[&](const Diag::CantCallNonNoCtx) {
-				out << "a 'noctx' fun can't call a non-'noctx' fun.";
+				writeStatic(writer, "a 'noctx' fun can't call a non-'noctx' fun.");
 			},
 			[&](const Diag::CantCallSummon) {
-				out << "non-'summon' fun can't call 'summon' fun";
+				writeStatic(writer, "non-'summon' fun can't call 'summon' fun");
 			},
 			[&](const Diag::CantCallUnsafe) {
-				out << "non-'trusted' and non-'unsafe' function can't call 'unsafe' function";
+				writeStatic(writer, "non-'trusted' and non-'unsafe' function can't call 'unsafe' function");
 			},
 			[&](const Diag::CantCreateNonRecordStruct d) {
-				out << "non-record struct " << d.strukt->name << " can't be constructed";
+				writeStatic(writer, "non-record struct ");
+				writeStr(writer, d.strukt->name);
+				writeStatic(writer, " can't be constructed");
 			},
 			[&](const Diag::CantInferTypeArguments) {
-				out << "can't infer type arguments";
+				writeStatic(writer, "can't infer type arguments");
 			},
 			[&](const Diag::CircularImport) {
 				todo<void>("print circular import diag");
 			},
 			[&](const Diag::CommonTypesMissing) {
-				out << "common types are missing from 'include.nz'";
+				writeStatic(writer, "common types are missing from 'include.nz'");
 			},
 			[&](const Diag::DuplicateDeclaration) {
 				todo<void>("print duplicate declaration diag");
 			},
 			[&](const Diag::ExpectedTypeIsNotALambda d) {
-				if (d.expectedType.has())
-					out << "the expected type at the lambda is " << d.expectedType.force() << ", which is not a lambda type";
-				else
-					out << "there is no expected type at this location; lambdas need an expected type";
+				if (d.expectedType.has()) {
+					writeStatic(writer, "the expected type at the lambda is ");
+					writeType(writer, d.expectedType.force());
+					writeStatic(writer, ", which is not a lambda type");
+				} else
+					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");
 			},
 			[&](const Diag::FieldPurityWorseThanStructPurity d) {
-				out << "struct is " << d.structPurity << ", but field is " << d.fieldPurity;
+				writeStatic(writer, "struct is ");
+				writePurity(writer, d.structPurity);
+				writeStatic(writer, ", but field is ");
+				writePurity(writer, d.fieldPurity);
 			},
 			[&](const Diag::FileDoesNotExist) {
 				// We handle this specially
 				unreachable<void>();
 			},
 			[&](const Diag::MatchCaseStructNamesDoNotMatch d) {
-				out << "expected the case names to be: ";
-				writeWithCommas(out, d.unionMembers, [&](const StructInst* i) {
-					out << i->decl->name;
+				writeStatic(writer, "expected the case names to be: ");
+				writeWithCommas(writer, d.unionMembers, [&](const StructInst* i) {
+					writeStr(writer, i->decl->name);
 				});
 			},
 			[&](const Diag::MatchOnNonUnion d) {
@@ -146,11 +161,11 @@ namespace {
 				todo<void>("matchonnonunion");
 			},
 			[&](const Diag::MultipleFunctionCandidates d) {
-				out << "multiple fun candidates match: ";
+				writeStatic(writer, "multiple fun candidates match: ");
 				for (const size_t i : Range{d.candidates.size}) {
 					if (i != 0)
-						out << ", ";
-					out << d.candidates[i].name();
+						writeStatic(writer, ", ");
+					writeStr(writer, d.candidates[i].name());
 				}
 			},
 			[&](const Diag::NameNotFound d) {
@@ -168,64 +183,84 @@ namespace {
 							assert(0);
 					}
 				}();
-				out << kind << " name not found: " << d.name;
+				writeStatic(writer, kind);
+				writeStatic(writer, " name not found: ");
+				writeStr(writer, d.name);
 			},
 			[&](const Diag::NoSuchFunction d) {
-				out << "no such function '" << d.name << "' exists with those argument types and return type";
+				writeStatic(writer, "no such function '");
+				writeStr(writer, d.name);
+				writeStatic(writer, "' exists with those argument types and return type");
 			},
 			[&](const Diag::ParamShadowsPrevious) {
 				todo<void>("print paramshadowsprevious");
 			},
 			[&](const ParseDiag pd) {
-				out << pd;
+				writeParseDiag(writer, pd);
 			},
 			[&](const Diag::ShouldNotHaveTypeParamsInIface) {
-				out << "a member function of an interface should not have type parameters";
+				writeStatic(writer, "a member function of an interface should not have type parameters");
 			},
 			[&](const Diag::TypeConflict d) {
-				out << "the type of the expression conflicts with its expected type.\nexpected: "
-					<< d.expected
-					<< "\nactual: "
-					<< d.actual;
+				writeStatic(writer, "the type of the expression conflicts with its expected type.\nexpected: ");
+				writeType(writer, d.expected);
+				writeStatic(writer, "\nactual: ");
+				writeType(writer, d.actual);
 			},
 			[&](const Diag::TypeNotSendable) {
-				out << "this type is not sendable and should not appear in an interface";
+				writeStatic(writer, "this type is not sendable and should not appear in an interface");
 			},
 			[&](const Diag::WrongNumberNewStructArgs d) {
-				out << "struct initializer expected to get " << d.nExpectedArgs << " args, but got " << d.nActualArgs;
+				writeStatic(writer, "struct initializer expected to get ");
+				writeNat(writer, d.nExpectedArgs);
+				writeStatic(writer, " args, but got ");
+				writeNat(writer, d.nActualArgs);
 			},
 			[&](const Diag::WrongNumberTypeArgsForSpec d) {
-				out << d.decl->name << ": expected to get " << d.nExpectedTypeArgs << " type args, but got " << d.nActualTypeArgs;
+				writeStr(writer, d.decl->name);
+				writeStatic(writer, ": expected to get ");
+				writeNat(writer, d.nExpectedTypeArgs);
+				writeStatic(writer, " type args, but got ");
+				writeNat(writer, d.nActualTypeArgs);
 			},
 			[&](const Diag::WrongNumberTypeArgsForStruct d) {
-				out << d.decl.name() << ": expected to get " << d.nExpectedTypeArgs << " type args, but got " << d.nActualTypeArgs;
+				writeStr(writer, d.decl.name());
+				writeStatic(writer, ": expected to get ");
+				writeNat(writer, d.nExpectedTypeArgs);
+				writeStatic(writer, " type args, but got ");
+				writeNat(writer, d.nActualTypeArgs);
 			});
-		return out;
 	}
 
-	void showDiagnostic(Output& out, const LineAndColumnGetter lc, const Diagnostic d) {
-		out << d.where.path << ' ';
-		showRange(out, lc, d.range);
-		out << ' ' << d.diag << '\n';
+	void showDiagnostic(Writer& writer, const LineAndColumnGetter lc, const Diagnostic d) {
+		writePath(writer, d.where.path);
+		writeChar(writer, ' ');
+		showRange(writer, lc, d.range);
+		writeChar(writer, ' ');
+		writeDiag(writer, d.diag);
+		writeChar(writer, '\n');
 	}
 }
 
 void printDiagnostics(const Diagnostics diagnostics) {
-	Output out {};
 	Arena tempArena {};
+	Writer writer { tempArena};
 	//TODO: sort diagnostics by file / range
 	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(tempArena, diagnostics.diagnostics, [&](const Diagnostic a, const Diagnostic b) {
 		return comparePathAndStorageKind(a.where, b.where);
 	});
 
 	for (const Arr<const Diagnostic> group : groups) {
-		if (group[0].diag.isFileDoesNotExist())
-			out << group[0].where.path << ": file does not exist\n";
-		else {
+		if (group[0].diag.isFileDoesNotExist()) {
+			writePath(writer, group[0].where.path);
+			writeStatic(writer, ": file does not exist\n");
+		} else {
 			for (const Diagnostic d : group) {
 				const LineAndColumnGetter lc = diagnostics.lineAndColumnGetters.mustGet(d.where);
-				showDiagnostic(out, lc, d);
+				showDiagnostic(writer, lc, d);
 			}
 		}
 	}
+
+	printf("%s\n", writer.finishCStr());
 }

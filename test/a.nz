@@ -5,8 +5,8 @@ main int64() trusted noctx summon
 	ctx-by-ptr call-with-ctx &other-main
 	zero
 
-| Main function normally seen by users
-other-main void() trusted summon
+
+test void() trusted summon
 	m = empty-mut-dict<nat64, nat64>
 	m add 1, 1
 	m add 2, 2
@@ -26,7 +26,29 @@ other-main void() trusted summon
 	print-sync: d3 at 2 to-str
 	print-sync: d4 at 2 to-str
 
+is-multiple? bool(a nat64, b nat64)
+	a mod b == 0
+
+| Main function normally seen by users
+other-main void() trusted summon
+	x = three.as<nat64> mod two
+	print-sync: 33 is-multiple? 3 to-str
+	print-sync: 34 is-multiple? 3 to-str
+	n = (34 as<nat64>) mod (3 as<nat64>)
+	print-sync: n to-str
+	pass
+
 	| Find the sum of all the multiples of 3 or 5 below 1000.
+	| TODO: pretty this up
+	sm = new<cell<nat64>> 0
+	zero to 1000 each \n
+		when
+			n is-multiple? 3 or: n is-multiple? 5
+				sm set: sm.get + n
+			else
+				pass
+
+	print-sync: sm.get.to-str
 
 iterator<?t> record mut
 	next fun0 opt<?t>
@@ -34,16 +56,22 @@ iterator<?t> record mut
 cell<?t> record mut
 	value mut ?t
 
+get ?t(c cell ?t)
+	c.value
+
+set void(c cell ?t, v ?t)
+	c.value := v
+
 get-and-incr nat64(c cell nat64)
-	res = c value
-	c.value := c.value incr
+	res = c get
+	c set: res incr
 	res
 
 iter iterator nat64(r range-nat64)
 	n = new<cell<nat64>> r.lo
 	new \
 		when
-			n.value == r.hi
+			n.get == r.hi
 				new<none>
 			else
 				new<some<nat64>> n get-and-incr

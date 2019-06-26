@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../concreteModel.h"
-#include "./writer.h"
+#include "../util/writer.h"
 
 // TODO: we actually just care if arguments have no side-effects.
 const Bool allConstant(const Arr<const ConstantOrExpr> args);

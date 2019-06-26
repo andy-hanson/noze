@@ -48,8 +48,8 @@ const Arr<const ConstantOrLambdaOrVariable> allVariable(Arena& arena, const size
 }
 
 void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t) {
-	writer.writeStatic("__");
+	writeStatic(writer, "__");
 	if (t.isPointer)
-		writer.writeStatic("ptr_");
-	writer.writeStr(t.strukt->mangledName);
+		writeStatic(writer, "ptr_");
+	writeStr(writer, t.strukt->mangledName);
 }

@@ -117,10 +117,16 @@ namespace {
 					: no;
 			case 'u':
 				return strEqLiteral(name, "unsafe-div")
-					? isFloat64(rt) ? _operator(BuiltinFunKind::unsafeDivFloat64)
-						: isInt64(rt) ? _operator(BuiltinFunKind::unsafeDivInt64)
-						: isNat64(rt) ? _operator(BuiltinFunKind::unsafeDivNat64)
-						: no
+						? isFloat64(rt) ? _operator(BuiltinFunKind::unsafeDivFloat64)
+							: isInt64(rt) ? _operator(BuiltinFunKind::unsafeDivInt64)
+							: isNat64(rt) ? _operator(BuiltinFunKind::unsafeDivNat64)
+							: no
+					: strEqLiteral(name, "unsafe-mod")
+						? _operator(BuiltinFunKind::unsafeModNat64)
+					: strEqLiteral(name, "unsafe-to-nat64")
+						? _operator(BuiltinFunKind::unsafeInt64ToNat64)
+					: strEqLiteral(name, "unsafe-to-int64")
+						? _operator(BuiltinFunKind::unsafeNat64ToInt64)
 					: no;
 			case 'w':
 				return strEqLiteral(name, "wrapping-add")
@@ -152,6 +158,8 @@ namespace {
 const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 	const Opt<const BuiltinFunInfo> res = tryGetBuiltinFunInfo(sig);
 	if (!res.has()) {
+		Arena arena {};
+		printf("%s\n", strToCStr(arena, sig.name));
 		return todo<const BuiltinFunInfo>("not a builtin fun");
 	}
 	return res.force();

@@ -135,6 +135,54 @@ namespace {
 		}
 	}
 
+	const Arr<const ConstantOrExpr> getArgsNonConst(ConcretizeExprCtx& ctx, const Arr<const Expr> argExprs) {
+		return map<const ConstantOrExpr>{}(ctx.arena(), argExprs, [&](const Expr arg) {
+			return concretizeExpr(ctx, arg);
+		});
+	}
+
+	const Arr<const ConstantOrExpr> getArgsNonConstWithDynamicLambdas(ConcretizeExprCtx& ctx, const SourceRange range, const Arr<const Expr> argExprs) {
+		return makeLambdasDynamic_arr(ctx.concretizeCtx, range, getArgsNonConst(ctx, argExprs));
+	}
+
+	const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> getArgs(ConcretizeExprCtx& ctx, const Arr<const Expr> argExprs) {
+		const Arr<const ConstantOrExpr> args = getArgsNonConst(ctx, argExprs);
+		if (every(args, [&](const ConstantOrExpr c) { return c.isConstant(); }))
+			return success<const Arr<const Constant*>, const Arr<const ConstantOrExpr>>(
+				map<const Constant*>{}(ctx.arena(), args, [](const ConstantOrExpr c) { return c.asConstant(); }));
+		else
+			return failure<const Arr<const Constant*>, const Arr<const ConstantOrExpr>>(args);
+	};
+
+	const ConstantOrExpr concretizeCreateRecord(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::CreateRecord e) {
+		Arena& arena = ctx.arena();
+		const ConcreteType type = ctx.getConcreteType_forStructInst(e.structInst);
+		auto nonConstant = [&](const Arr<const ConstantOrExpr> nonConstantArgs) -> const ConstantOrExpr {
+			const ConstantOrExpr value = nuExpr(arena, type.byVal(), range, ConcreteExpr::CreateRecord{makeLambdasDynamic_arr(ctx.concretizeCtx, range, nonConstantArgs)});
+			return type.isPointer
+				? nuExpr(
+					arena,
+					type,
+					range,
+					getKnownLambdaBodyFromConstantOrExpr(value),
+					ConcreteExpr::Alloc{getAllocFun(ctx.concretizeCtx), value.asConcreteExpr()})
+				: value;
+		};
+
+		if (type.strukt->isSelfMutable())
+			return nonConstant(getArgsNonConst(ctx, e.args));
+		else {
+			const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(ctx, e.args);
+			return args.match(
+				[&](const Arr<const Constant*> constantArgs) {
+					return ConstantOrExpr{ctx.allConstants().record(arena, type, constantArgs)};
+				},
+				[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
+					return nonConstant(nonConstantArgs);
+				});
+		}
+	}
+
 	const ConstantOrExpr concretizeFunAsLambda(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::FunAsLambda e) {
 		Arena& arena = ctx.arena();
 		if (e.isRemoteFun)
@@ -219,9 +267,9 @@ namespace {
 
 		const Str mangledName = [&]() {
 			Writer writer { arena };
-			writer.writeStr(ctx.currentConcreteFun->mangledName());
-			writer.writeStatic("__lambda");
-			writer.writeUint(ctx.currentConcreteFun->nextLambdaIndex++);
+			writeStr(writer, ctx.currentConcreteFun->mangledName());
+			writeStatic(writer, "__lambda");
+			writeNat(writer, ctx.currentConcreteFun->nextLambdaIndex++);
 			return writer.finish();
 		}();
 
@@ -314,9 +362,9 @@ namespace {
 		});
 		const Str mangledNameBase = [&]() {
 			Writer writer { arena };
-			writer.writeStr(ctx.currentConcreteFun->mangledName());
-			writer.writeStatic("__ifaceImpl");
-			writer.writeUint(ctx.currentConcreteFun->nextNewIfaceImplIndex++);
+			writeStr(writer, ctx.currentConcreteFun->mangledName());
+			writeStatic(writer, "__ifaceImpl");
+			writeNat(writer, ctx.currentConcreteFun->nextNewIfaceImplIndex++);
 			return writer.finish();
 		}();
 		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls = mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
@@ -328,9 +376,9 @@ namespace {
 				const ConstantOrExpr concreteBody = concretizeExpr(newCtx, body);
 				const Str mangledName = [&]() {
 					Writer writer { arena };
-					writer.writeStr(mangledNameBase);
-					writer.writeStatic("__");
-					writer.writeStr(sig.mangledName);
+					writeStr(writer, mangledNameBase);
+					writeStatic(writer, "__");
+					writeStr(writer, sig.mangledName);
 					return writer.finish();
 				}();
 				return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
@@ -450,31 +498,6 @@ namespace {
 		Arena& arena = ctx.arena();
 		const SourceRange range = expr.range();
 
-		auto r = [&](const Expr sub) -> const ConstantOrExpr {
-			return concretizeExpr(ctx, sub);
-		};
-
-		auto getArgsNonConst = [&](const Arr<const Expr> argExprs) -> const Arr<const ConstantOrExpr> {
-			return map<const ConstantOrExpr>{}(arena, argExprs, r);
-		};
-
-		auto getArgsNonConstWithDynamicLambdas = [&](const Arr<const Expr> argExprs) -> const Arr<const ConstantOrExpr> {
-			return makeLambdasDynamic_arr(ctx.concretizeCtx, range, getArgsNonConst(argExprs));
-		};
-
-		auto getArgs = [&](const Arr<const Expr> argExprs) -> const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> {
-			const Arr<const ConstantOrExpr> args = getArgsNonConst(argExprs);
-			if (every(args, [&](const ConstantOrExpr c) { return c.isConstant(); }))
-				return success<const Arr<const Constant*>, const Arr<const ConstantOrExpr>>(
-					map<const Constant*>{}(arena, args, [](const ConstantOrExpr c) { return c.asConstant(); }));
-			else
-				return failure<const Arr<const Constant*>, const Arr<const ConstantOrExpr>>(args);
-		};
-
-		auto lambdaDynamic = [&](const ConstantOrExpr expr) -> const ConstantOrExpr {
-			return makeLambdasDynamic(ctx.concretizeCtx, range, expr);
-		};
-
 		return expr.match(
 			[](const Expr::Bogus) {
 				return unreachable<const ConstantOrExpr>();
@@ -486,20 +509,23 @@ namespace {
 				return concretizeClosureFieldRef(ctx, range, e);
 			},
 			[&](const Expr::Cond e) {
-				const ConstantOrExpr cond = r(*e.cond);
+				const ConstantOrExpr cond = concretizeExpr(ctx, *e.cond);
 				return cond.match(
 					[&](const Constant* c) {
 						return concretizeExpr(ctx, *(c->kind.asBool() ? e.then : e.elze));
 					},
 					[&](const ConcreteExpr* condExpr) {
 						const ConcreteType type = ctx.getConcreteType(e.type);
-						return nuExpr(arena, type, range, ConcreteExpr::Cond{condExpr, lambdaDynamic(r(*e.then)), lambdaDynamic(r(*e.elze))});
+						return nuExpr(arena, type, range, ConcreteExpr::Cond{
+							condExpr,
+							makeLambdasDynamic(ctx.concretizeCtx, range, concretizeExpr(ctx, *e.then)),
+							makeLambdasDynamic(ctx.concretizeCtx, range, concretizeExpr(ctx, *e.elze))});
 					});
 			},
 			[&](const Expr::CreateArr e) {
 				if (isEmpty(e.args))
 					todo<void>("should this ever happen?");
-				const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(e.args);
+				const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(ctx, e.args);
 				const ConcreteStruct* arrayType = ctx.getConcreteType_forStructInst(e.arrType).mustBeNonPointer();
 				const ConcreteType elementType = ctx.getConcreteType(e.elementType());
 				return args.match(
@@ -516,23 +542,7 @@ namespace {
 					});
 			},
 			[&](const Expr::CreateRecord e) {
-				const ConcreteType type = ctx.getConcreteType_forStructInst(e.structInst);
-				const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(e.args);
-				return args.match(
-					[&](const Arr<const Constant*> constantArgs) {
-						return ConstantOrExpr{ctx.allConstants().record(arena, type, constantArgs)};
-					},
-					[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
-						const ConstantOrExpr value = nuExpr(arena, type.byVal(), range, ConcreteExpr::CreateRecord{makeLambdasDynamic_arr(ctx.concretizeCtx, range, nonConstantArgs)});
-						return type.isPointer
-							? nuExpr(
-								ctx.arena(),
-								type,
-								range,
-								getKnownLambdaBodyFromConstantOrExpr(value),
-								ConcreteExpr::Alloc{getAllocFun(ctx.concretizeCtx), value.asConcreteExpr()})
-							: value;
-					});
+				return concretizeCreateRecord(ctx, range, e);
 			},
 			[&](const Expr::FunAsLambda e) {
 				return concretizeFunAsLambda(ctx, range, e);
@@ -544,8 +554,9 @@ namespace {
 			[&](const Expr::ImplicitConvertToUnion e) {
 				const ConcreteType unionType = ctx.getConcreteType_forStructInst(e.unionType);
 				const ConcreteType memberType = ctx.getConcreteType_forStructInst(e.memberType);
-				auto x = ConcreteExpr::ImplicitConvertToUnion{memberType, lambdaDynamic(r(*e.inner))};
-				return nuExpr(arena, unionType, range, x);
+				return nuExpr(arena, unionType, range, ConcreteExpr::ImplicitConvertToUnion{
+					memberType,
+					makeLambdasDynamic(ctx.concretizeCtx, range, concretizeExpr(ctx, *e.inner))});
 			},
 			[&](const Expr::Lambda e) {
 				return concretizeLambda(ctx, range, e);
@@ -566,10 +577,10 @@ namespace {
 			},
 			[&](const Expr::MessageSend e) {
 				// never a constant
-				const ConstantOrExpr target = r(*e.target);
+				const ConstantOrExpr target = concretizeExpr(ctx, *e.target);
 				const ConcreteStruct* iface = ctx.getConcreteType_forStructInst(e.iface).mustBeNonPointer();
 				const ConcreteSig* message = iface->body().asIface().messages.getPtr(e.messageIndex);
-				const Arr<const ConstantOrExpr> args = getArgsNonConstWithDynamicLambdas(e.args);
+				const Arr<const ConstantOrExpr> args = getArgsNonConstWithDynamicLambdas(ctx, range, e.args);
 				const ConcreteType type = ctx.getConcreteType(e.getType());
 				return nuExpr(arena, type, range, ConcreteExpr::MessageSend{target, message, args});
 			},
@@ -580,8 +591,8 @@ namespace {
 				return concretizeParamRef(ctx, range, e);
 			},
 			[&](const Expr::Seq e) {
-				const ConstantOrExpr first = r(*e.first);
-				const ConstantOrExpr then = r(*e.then);
+				const ConstantOrExpr first = concretizeExpr(ctx, *e.first);
+				const ConstantOrExpr then = concretizeExpr(ctx, *e.then);
 				return first.match(
 					[&](const Constant*) {
 						// If first is a constant, skip it

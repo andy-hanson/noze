@@ -1,6 +1,7 @@
 #include "./check.h"
 
 #include "../util/arrUtil.h"
+#include "../util/dictBuilder.h"
 #include "../util/dictUtil.h"
 #include "../util/resultUtil.h"
 #include "./checkCtx.h"

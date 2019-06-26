@@ -1,55 +1,19 @@
 #include "./writeToC.h"
 
-#include "../util/arrUtil.h"
 #include "../concretize/concretizeUtil.h" // writeConcreteTypeForMangle
-#include "../concretize/writer.h"
+#include "../util/arrUtil.h"
+#include "../util/writer.h"
 
 namespace {
-	//TODO: use Output, that already has a writeEscapedChar implementation
-	void writeEscapedChar(Writer& writer, const char c) {
-		switch (c) {
-			case '\n':
-				writer.writeStatic("\\n");
-				break;
-			case '\t':
-				writer.writeStatic("\\t");
-				break;
-			case '\'':
-				writer.writeStatic("\\\'");
-				break;
-			case '"':
-				writer.writeStatic("\\\"");
-				break;
-			case '\\':
-				writer.writeStatic("\\\\");
-				break;
-			case '\0':
-				writer.writeStatic("\\0");
-				break;
-			default:
-				writer.writeChar(c);
-				break;
-		}
-	}
-
 	void writeQuotedString(Writer& writer, const Arr<const Constant*> chars) {
-		writer.writeChar('"');
+		writeChar(writer, '"');
 		for (const Constant* c : chars)
 			writeEscapedChar(writer, c->kind.asChar());
-		writer.writeChar('"');
-	}
-
-	template <typename T, typename Cb>
-	void writeWithCommas(Writer& w, const Arr<T> a, const Bool leadingComma, Cb cb) {
-		for (const size_t i : Range{a.size}) {
-			if (leadingComma || i != 0)
-				w.writeStatic(", ");
-			cb(a[i]);
-		}
+		writeChar(writer, '"');
 	}
 
 	void writeValueType(Writer& writer, const ConcreteStruct* s) {
-		writer.writeStr(s->mangledName);
+		writeStr(writer, s->mangledName);
 	}
 
 	void writeValueType(Writer& writer, const ConcreteType t) {
@@ -59,30 +23,30 @@ namespace {
 	void writeType(Writer& writer, const ConcreteType t) {
 		writeValueType(writer, t.strukt);
 		if (t.isPointer)
-			writer.writeChar('*');
+			writeChar(writer, '*');
 	}
 
 	void doWriteParam(Writer& writer, const ConcreteParam p) {
 		writeType(writer, p.type);
-		writer.writeChar(' ');
-		writer.writeStr(p.mangledName);
+		writeChar(writer, ' ');
+		writeStr(writer, p.mangledName);
 	}
 
 	void writeJustParams(Writer& writer, const Bool wroteFirst, const Arr<const ConcreteParam> params) {
 		Cell<const Bool> didWriteFirst { wroteFirst };
 		for (const ConcreteParam p : params) {
 			if (didWriteFirst.get())
-				writer.writeStatic(", ");
+				writeStatic(writer, ", ");
 			else
 				didWriteFirst.set(True);
 			doWriteParam(writer, p);
 		}
-		writer.writeChar(')');
+		writeChar(writer, ')');
 	}
 
 	void writeJustParamsAlwaysComma(Writer& writer, const Arr<const ConcreteParam> params) {
 		for (const ConcreteParam p : params) {
-			writer.writeStatic(", ");
+			writeStatic(writer, ", ");
 			doWriteParam(writer, p);
 		}
 	}
@@ -90,38 +54,38 @@ namespace {
 	void writeBuiltinAliasForStruct(Writer& writer, const Str name, const BuiltinStructKind kind, const Arr<const ConcreteType> typeArgs) {
 		// "bool" and "char" share the same name as in C, so no need for an alias.
 		if (kind != BuiltinStructKind::_bool && kind != BuiltinStructKind::_char) {
-			writer.writeStatic("using ");
-			writer.writeStr(name);
-			writer.writeStatic(" = ");
+			writeStatic(writer, "using ");
+			writeStr(writer, name);
+			writeStatic(writer, " = ");
 			switch (kind) {
 				case BuiltinStructKind::byte:
-					writer.writeStatic("uint8_t");
+					writeStatic(writer, "uint8_t");
 					break;
 				case BuiltinStructKind::float64:
-					writer.writeStatic("double");
+					writeStatic(writer, "double");
 					break;
 				case BuiltinStructKind::int64:
-					writer.writeStatic("int64_t");
+					writeStatic(writer, "int64_t");
 					break;
 				case BuiltinStructKind::funPtrN:
 					writeType(writer, typeArgs[0]);
-					writer.writeStatic(" (*)(");
+					writeStatic(writer, " (*)(");
 					for (const size_t i : Range{1, typeArgs.size}) {
 						if (i != 1)
-							writer.writeStatic(", ");
+							writeStatic(writer, ", ");
 						writeType(writer, typeArgs[i]);
 					}
-					writer.writeChar(')');
+					writeChar(writer, ')');
 					break;
 				case BuiltinStructKind::nat64:
-					writer.writeStatic("uint64_t");
+					writeStatic(writer, "uint64_t");
 					break;
 				case BuiltinStructKind::ptr:
 					writeType(writer, typeArgs[0]);
-					writer.writeChar('*');
+					writeChar(writer, '*');
 					break;
 				case BuiltinStructKind::_void:
-					writer.writeStatic("uint8_t");
+					writeStatic(writer, "uint8_t");
 					break;
 				case BuiltinStructKind::_bool:
 				case BuiltinStructKind::_char:
@@ -130,31 +94,31 @@ namespace {
 					assert(0);
 			}
 
-			writer.writeStatic(";\n");
+			writeStatic(writer, ";\n");
 		}
 	}
 
 	void writeStructHead(Writer& writer, const Str mangledName) {
-		writer.writeStatic("struct ");
-		writer.writeStr(mangledName);
-		writer.writeStatic(" {");
+		writeStatic(writer, "struct ");
+		writeStr(writer, mangledName);
+		writeStatic(writer, " {");
 	}
 
 	void writeStructEnd(Writer& writer) {
-		writer.writeStatic("\n};\n");
+		writeStatic(writer, "\n};\n");
 	}
 
 	void writeFieldsStruct(Writer& writer, const Str mangledName, const Arr<const ConcreteField> fields) {
 		writeStructHead(writer, mangledName);
 		if (isEmpty(fields))
-			writer.writeStatic("};\n");
+			writeStatic(writer, "};\n");
 		else {
 			for (const ConcreteField field : fields) {
-				writer.writeStatic("\n\t");
+				writeStatic(writer, "\n\t");
 				writeType(writer, field.type);
-				writer.writeStatic(" ");
-				writer.writeStr(field.mangledName);
-				writer.writeStatic(";");
+				writeStatic(writer, " ");
+				writeStr(writer, field.mangledName);
+				writeStatic(writer, ";");
 			}
 			writeStructEnd(writer);
 		}
@@ -164,37 +128,37 @@ namespace {
 		writeStructHead(writer, mangledName);
 
 		auto writeMemberName = [&](const ConcreteType member) -> void {
-			writer.writeStr(member.strukt->mangledName);
+			writeStr(writer, member.strukt->mangledName);
 		};
 
-		writer.writeStatic("\n\tenum class Kind {");
+		writeStatic(writer, "\n\tenum class Kind {");
 		for (const ConcreteType member : members) {
-			writer.writeStatic("\n\t\t");
+			writeStatic(writer, "\n\t\t");
 			writeMemberName(member);
-			writer.writeChar(',');
+			writeChar(writer, ',');
 		}
-		writer.writeStatic("\n\t};");
-		writer.writeStatic("\n\tKind kind;");
-		writer.writeStatic("\n\tunion {");
+		writeStatic(writer, "\n\t};");
+		writeStatic(writer, "\n\tKind kind;");
+		writeStatic(writer, "\n\tunion {");
 		for (const ConcreteType member : members) {
-			writer.writeStatic("\n\t\t");
+			writeStatic(writer, "\n\t\t");
 			writeType(writer, member);
-			writer.writeStatic(" as_");
+			writeStatic(writer, " as_");
 			writeMemberName(member);
-			writer.writeChar(';');
+			writeChar(writer, ';');
 		}
-		writer.writeStatic("\n\t};");
+		writeStatic(writer, "\n\t};");
 
 		for (const ConcreteType member : members) {
-			writer.writeStatic("\n\t");
-			writer.writeStr(mangledName);
-			writer.writeChar('(');
+			writeStatic(writer, "\n\t");
+			writeStr(writer, mangledName);
+			writeChar(writer, '(');
 			writeType(writer, member);
-			writer.writeStatic(" value) : kind{Kind::");
+			writeStatic(writer, " value) : kind{Kind::");
 			writeMemberName(member);
-			writer.writeStatic("}, as_");
+			writeStatic(writer, "}, as_");
 			writeMemberName(member);
-			writer.writeStatic("{value} {}");
+			writeStatic(writer, "{value} {}");
 		}
 
 		writeStructEnd(writer);
@@ -205,15 +169,15 @@ namespace {
 
 		// Create a vtable struct containing its fields.
 		// And add funs to call those.
-		writer.writeStatic("\n\tstruct Funs {");
+		writeStatic(writer, "\n\tstruct Funs {");
 		for (const ConcreteSig msg : messages) {
-			writer.writeStatic("\n\t\t");
+			writeStatic(writer, "\n\t\t");
 			writeType(writer, msg.returnType);
-			writer.writeStatic(" (*)(ctx* ctx, void* closure");
+			writeStatic(writer, " (*)(ctx* ctx, void* closure");
 			writeJustParamsAlwaysComma(writer, msg.params);
-			writer.writeChar(' ');
-			writer.writeStr(msg.mangledName);
-			writer.writeChar(';');
+			writeChar(writer, ' ');
+			writeStr(writer, msg.mangledName);
+			writeChar(writer, ';');
 		}
 		todo<void>("do without mixins");
 
@@ -224,20 +188,20 @@ namespace {
 		// }
 
 		for (const ConcreteSig msg : messages) {
-			writer.writeStatic("\n\t");
+			writeStatic(writer, "\n\t");
 			writeType(writer, msg.returnType);
-			writer.writeChar(' ');
-			writer.writeStr(msg.mangledName);
-			writer.writeStatic("ctx* ctx");
+			writeChar(writer, ' ');
+			writeStr(writer, msg.mangledName);
+			writeStatic(writer, "ctx* ctx");
 			writeJustParamsAlwaysComma(writer, msg.params);
-			writer.writeStatic(" {\n\t\treturn vtable->funs.");
-			writer.writeStr(msg.mangledName);
-			writer.writeStatic("(ctx, data");
+			writeStatic(writer, " {\n\t\treturn vtable->funs.");
+			writeStr(writer, msg.mangledName);
+			writeStatic(writer, "(ctx, data");
 			for (const ConcreteParam p : msg.params) {
-				writer.writeStatic(", ");
-				writer.writeStr(p.mangledName);
+				writeStatic(writer, ", ");
+				writeStr(writer, p.mangledName);
 			}
-			writer.writeStatic(");\n\t}");
+			writeStatic(writer, ");\n\t}");
 		}
 
 		writeStructEnd(writer);
@@ -274,9 +238,9 @@ namespace {
 	}
 
 	void declareStruct(Writer& writer, const ConcreteStruct* strukt) {
-		writer.writeStatic("struct ");
-		writer.writeStr(strukt->mangledName);
-		writer.writeStatic(";\n");
+		writeStatic(writer, "struct ");
+		writeStr(writer, strukt->mangledName);
+		writeStatic(writer, ";\n");
 	}
 
 	// Returns any new work it did -- if we declared or defined the struct
@@ -344,59 +308,59 @@ namespace {
 				break;
 		}
 
-		writer.writeStatic("\n");
+		writeStatic(writer, "\n");
 		for (const ConcreteStruct* strukt : allStructs) {
-			writer.writeStatic("static_assert(sizeof(");
-			writer.writeStr(strukt->mangledName);
-			writer.writeStatic(") == ");
-			writer.writeUint(strukt->sizeBytes());
-			writer.writeStatic(", \"\");\n");
+			writeStatic(writer, "static_assert(sizeof(");
+			writeStr(writer, strukt->mangledName);
+			writeStatic(writer, ") == ");
+			writeNat(writer, strukt->sizeBytes());
+			writeStatic(writer, ", \"\");\n");
 		}
-		writer.writeStatic("\n");
+		writeStatic(writer, "\n");
 	}
 }
 
 namespace {
 	void writeConstantRecordName(Writer& writer, const Constant* c, const ConcreteType t) {
-		writer.writeStatic("_constant__");
+		writeStatic(writer, "_constant__");
 		writeConcreteTypeForMangle(writer, t);
-		writer.writeStatic("__");
-		writer.writeUint(c->id);
+		writeStatic(writer, "__");
+		writeNat(writer, c->id);
 	}
 
 	void writeConstantUnionName(Writer& writer, const Constant* c, const ConcreteStruct* s) {
-		writer.writeStatic("_constant__");
-		writer.writeStr(s->mangledName);
-		writer.writeStatic("__");
-		writer.writeUint(c->id);
+		writeStatic(writer, "_constant__");
+		writeStr(writer, s->mangledName);
+		writeStatic(writer, "__");
+		writeNat(writer, c->id);
 	}
 
 	void writeConstantReference(Writer& writer, const Constant* c) {
-		auto writeRef = [&](const CStr s) {
-			writer.writeStatic("_constant");
-			writer.writeStatic(s);
-			writer.writeUint(c->id);
+		auto writeref = [&](const CStr s) {
+			writeStatic(writer, "_constant");
+			writeStatic(writer, s);
+			writeNat(writer, c->id);
 		};
 
 		c->kind.match(
 			[&](const ConstantKind::Array) {
-				writeRef("Arr");
+				writeref("Arr");
 			},
 			[&](const Bool b) {
-				writer.writeStatic(b ? "true" : "false");
+				writeStatic(writer, b ? "true" : "false");
 			},
 			[&](const char c) {
-				writer.writeChar('\'');
+				writeChar(writer, '\'');
 				writeEscapedChar(writer, c);
-				writer.writeChar('\'');
+				writeChar(writer, '\'');
 			},
 			[&](const ConstantKind::FunPtr f) {
-				writer.writeStatic("(&");
-				writer.writeStr(f.fun->mangledName());
-				writer.writeChar(')');
+				writeStatic(writer, "(&");
+				writeStr(writer, f.fun->mangledName());
+				writeChar(writer, ')');
 			},
 			[&](const Int64 i) {
-				writer.writeInt(i);
+				writeInt(writer, i);
 			},
 			[&](const ConstantKind::Lambda l) {
 				unused(l);
@@ -405,21 +369,21 @@ namespace {
 				// fun0___void{someFun, closurePtr};
 			},
 			[&](const Nat64 n) {
-				writer.writeUint(n);
+				writeNat(writer, n);
 			},
 			[&](const ConstantKind::Null) {
-				writer.writeStatic("0");
+				writeStatic(writer, "0");
 			},
 			[&](const ConstantKind::Ptr p) {
-				writer.writeChar('&');
+				writeChar(writer, '&');
 				writeConstantReference(writer, p.array);
-				writer.writeStatic(".data[");
-				writer.writeUint(p.index);
-				writer.writeChar(']');
+				writeStatic(writer, ".data[");
+				writeNat(writer, p.index);
+				writeChar(writer, ']');
 			},
 			[&](const ConstantKind::Record r) {
 				if (r.type.isPointer)
-					writer.writeChar('&');
+					writeChar(writer, '&');
 				writeConstantRecordName(writer, c, r.type);
 			},
 			[&](const ConstantKind::Union u) {
@@ -427,7 +391,7 @@ namespace {
 			},
 			[&](const ConstantKind::Void) {
 				// Value should be ignored, so any will do
-				writer.writeChar('0');
+				writeChar(writer, '0');
 			});
 	}
 
@@ -451,35 +415,35 @@ namespace {
 				const Bool isStr = a.elements()[0]->kind.isChar();
 				const size_t id = c->id;
 				if (size != 0 && !isStr) {
-					writer.writeStatic("static ");
+					writeStatic(writer, "static ");
 					writeType(writer, a.elementType());
-					writer.writeStatic(" _constantArrBacking");
-					writer.writeUint(id);
-					writer.writeChar('[');
-					writer.writeUint(size);
-					writer.writeStatic("] = {");
+					writeStatic(writer, " _constantArrBacking");
+					writeNat(writer, id);
+					writeChar(writer, '[');
+					writeNat(writer, size);
+					writeStatic(writer, "] = {");
 					writeConstantReferencesWithCommas(writer, a.elements());
-					writer.writeStatic("};\n");
+					writeStatic(writer, "};\n");
 				}
 
-				writer.writeStatic("static ");
+				writeStatic(writer, "static ");
 				writeValueType(writer, type);
-				writer.writeStatic(" _constantArr");
-				writer.writeUint(id);
-				writer.writeStatic(" = ");
+				writeStatic(writer, " _constantArr");
+				writeNat(writer, id);
+				writeStatic(writer, " = ");
 				writeValueType(writer, type);
-				writer.writeChar('{');
-				writer.writeUint(size);
-				writer.writeStatic(", ");
+				writeChar(writer, '{');
+				writeNat(writer, size);
+				writeStatic(writer, ", ");
 				if (isStr) {
-					writer.writeStatic("const_cast<char*>(");
+					writeStatic(writer, "const_cast<char*>(");
 					writeQuotedString(writer, a.elements());
-					writer.writeStatic(")");
+					writeStatic(writer, ")");
 				} else {
-					writer.writeStatic("_constantArrBacking");
-					writer.writeUint(id);
+					writeStatic(writer, "_constantArrBacking");
+					writeNat(writer, id);
 				}
-				writer.writeStatic("};\n");
+				writeStatic(writer, "};\n");
 			},
 			[](const Bool) {},
 			[](const char) {},
@@ -492,26 +456,26 @@ namespace {
 			// ptr will be written inlien as `&arr.data[3]`
 			[](const ConstantKind::Ptr) {},
 			[&](const ConstantKind::Record r) {
-				writer.writeStatic("static ");
+				writeStatic(writer, "static ");
 				writeType(writer, r.type);
-				writer.writeChar(' ');
+				writeChar(writer, ' ');
 				writeConstantRecordName(writer, c, r.type);
-				writer.writeStatic(" = ");
+				writeStatic(writer, " = ");
 				writeType(writer, r.type);
-				writer.writeChar('(');
+				writeChar(writer, '{');
 				writeConstantReferencesWithCommas(writer, r.args);
-				writer.writeStatic(");\n");
+				writeStatic(writer, "};\n");
 			},
 			[&](const ConstantKind::Union u) {
-				writer.writeStatic("static ");
+				writeStatic(writer, "static ");
 				writeValueType(writer, u.unionType);
-				writer.writeChar(' ');
+				writeChar(writer, ' ');
 				writeConstantUnionName(writer, c, u.unionType);
-				writer.writeStatic(" = ");
+				writeStatic(writer, " = ");
 				writeValueType(writer, u.unionType);
-				writer.writeChar('(');
+				writeChar(writer, '(');
 				writeConstantReference(writer, u.member);
-				writer.writeStatic(");\n");
+				writeStatic(writer, ");\n");
 			},
 			[](const ConstantKind::Void) {});
 	}
@@ -526,9 +490,9 @@ namespace {
 		uint _indent = 1;
 
 		void newline() {
-			writer.writeChar('\n');
+			writeChar(writer, '\n');
 			for (__attribute__((unused)) const size_t _ : Range{_indent})
-				writer.writeChar('\t');
+				writeChar(writer, '\t');
 		}
 
 		void decrIndent() {
@@ -551,11 +515,11 @@ namespace {
 		}
 
 		void write(const CStr text) {
-			writer.writeStatic(text);
+			writeStatic(writer, text);
 		}
 
 		void writeStr(const Str s) {
-			writer.writeStr(s);
+			::writeStr(writer, s);
 		}
 	};
 
@@ -588,9 +552,9 @@ namespace {
 
 	void writeLocalEquals(Writer& writer, const ConcreteLocal* local) {
 		writeType(writer, local->type);
-		writer.writeStatic(" ");
-		writer.writeStr(local->mangledName);
-		writer.writeStatic(" = ");
+		writeStatic(writer, " ");
+		writeStr(writer, local->mangledName);
+		writeStatic(writer, " = ");
 	}
 
 	void writeMatchAsStatement(WriteExprCtx& ctx, const ConcreteExpr::Match e, const Bool isReturn) {
@@ -830,6 +794,10 @@ namespace {
 				binaryOperator("/");
 				break;
 
+			case BuiltinFunKind::unsafeModNat64:
+				binaryOperator("%");
+				break;
+
 			case BuiltinFunKind::deref:
 				unaryOperator("*");
 				break;
@@ -952,7 +920,7 @@ namespace {
 				ctx.write(">(");
 				ctx.writeStr(alloc->mangledName());
 				ctx.write("(ctx, ");
-				ctx.writer.writeUint(type.mustBePointer()->sizeBytes());
+				writeNat(ctx.writer, type.mustBePointer()->sizeBytes());
 				ctx.write("), ");
 				writeConcreteExprAsExpr(ctx, *e.inner);
 				ctx.write(")");
@@ -1069,12 +1037,12 @@ namespace {
 	}
 
 	void writeSigParams(Writer& writer, const Bool needsCtx, const Opt<const ConcreteParam> closure, const Arr<const ConcreteParam> params) {
-		writer.writeChar('(');
+		writeChar(writer, '(');
 		if (needsCtx)
-			writer.writeStatic("ctx* ctx");
+			writeStatic(writer, "ctx* ctx");
 		if (closure.has()) {
 			if (needsCtx)
-				writer.writeStatic(", ");
+				writeStatic(writer, ", ");
 			doWriteParam(writer, closure.force());
 		}
 		writeJustParams(writer, _or(needsCtx, closure.has()), params);
@@ -1082,24 +1050,24 @@ namespace {
 
 	void writeFunReturnTypeNameAndParams(Writer& writer, const ConcreteFun* fun) {
 		writeType(writer, fun->returnType());
-		writer.writeChar(' ');
-		writer.writeStr(fun->mangledName());
+		writeChar(writer, ' ');
+		writeStr(writer, fun->mangledName());
 		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingClosure());
 	}
 
 	void writeConcreteFunDeclaration(Writer& writer, const ConcreteFun* fun) {
 		if (fun->body().isExtern())
-			writer.writeStatic("extern \"C\" ");
+			writeStatic(writer, "extern \"C\" ");
 		writeFunReturnTypeNameAndParams(writer, fun);
-		writer.writeStatic(";\n");
+		writeStatic(writer, ";\n");
 	}
 
 	template <typename CbWriteBody>
 	void writeFunWithBodyWorker(Writer& writer, const ConcreteFun* fun, CbWriteBody cbWriteBody) {
 		writeFunReturnTypeNameAndParams(writer, fun);
-		writer.writeStatic(" {\n\t");
+		writeStatic(writer, " {\n\t");
 		cbWriteBody();
-		writer.writeStatic("\n}\n");
+		writeStatic(writer, "\n}\n");
 	}
 
 	void writeFunWithBody(Writer& writer, const ConcreteFun* fun, const ConstantOrExpr body) {
@@ -1130,7 +1098,7 @@ namespace {
 						}
 						assert(info.kind == BuiltinFunKind::hardFail);
 						writeFunWithBodyWorker(writer, fun, [&]() {
-							writer.writeStatic("assert(0);");
+							writeStatic(writer, "assert(0);");
 						});
 						break;
 					default:
@@ -1151,8 +1119,8 @@ namespace {
 const Str writeToC(Arena& arena, const ConcreteProgram program) {
 	Writer writer { arena };
 
-	writer.writeStatic("#include <cassert>\n");
-	writer.writeStatic("#include <cstdint>\n");
+	writeStatic(writer, "#include <cassert>\n");
+	writeStatic(writer, "#include <cstdint>\n");
 
 	// Problem: pointer and function pointer types are declared using 'using' and can't be predeclared.
 	// But those may refer to other types. So may not be able to write them yet.
@@ -1161,12 +1129,12 @@ const Str writeToC(Arena& arena, const ConcreteProgram program) {
 	for (const Constant* c : program.allConstants)
 		writeConstantDecl(writer, c);
 
-	writer.writeStatic("template <typename T>");
-	writer.writeStatic("\nT* _alloc(byte* out, T value) {");
-	writer.writeStatic("\n\tT* res = reinterpret_cast<T*>(out);");
-	writer.writeStatic("\n\t*res = value;");
-	writer.writeStatic("\n\treturn res;");
-	writer.writeStatic("\n}\n\n");
+	writeStatic(writer, "template <typename T>");
+	writeStatic(writer, "\nT* _alloc(byte* out, T value) {");
+	writeStatic(writer, "\n\tT* res = reinterpret_cast<T*>(out);");
+	writeStatic(writer, "\n\t*res = value;");
+	writeStatic(writer, "\n\treturn res;");
+	writeStatic(writer, "\n}\n\n");
 
 	for (const ConcreteExpr::NewIfaceImpl impl : program.allNewIfaceImpls)
 		writeNewIfaceImpl(writer, impl);
@@ -1177,6 +1145,6 @@ const Str writeToC(Arena& arena, const ConcreteProgram program) {
 	for (const ConcreteFun* fun : program.allFuns)
 		writeConcreteFunDefinition(writer, fun);
 
-	writer.writeStatic("\n\nint main() { return (int) main__int64(); }\n");
+	writeStatic(writer, "\n\nint main() { return (int) main__int64(); }\n");
 	return writer.finish();
 }

@@ -17,37 +17,37 @@ const Str mangleName(Arena& arena, const Str declName) {
 
 void writeMangledName(Writer& writer, const Str name) {
 	if (needsEscape(name)) {
-		writer.writeChar('_');
-		writer.writeStr(name);
+		writeChar(writer, '_');
+		writeStr(writer, name);
 	} else
 		for (const char c : name)
 			switch (c) {
 				case '-':
-					writer.writeChar('_');
+					writeChar(writer, '_');
 					break;
 				case '?':
-					writer.writeStatic("__q");
+					writeStatic(writer, "__q");
 					break;
 				case '+':
-					writer.writeStatic("plus");
+					writeStatic(writer, "plus");
 					break;
 				case '*':
-					writer.writeStatic("times");
+					writeStatic(writer, "times");
 					break;
 				case '/':
-					writer.writeStatic("div");
+					writeStatic(writer, "div");
 					break;
 				case '<':
-					writer.writeStatic("less");
+					writeStatic(writer, "less");
 					break;
 				case '>':
-					writer.writeStatic("greater");
+					writeStatic(writer, "greater");
 					break;
 				case '=':
-					writer.writeStatic("equal");
+					writeStatic(writer, "equal");
 					break;
 				default:
-					writer.writeChar(c);
+					writeChar(writer, c);
 					break;
 			}
 }

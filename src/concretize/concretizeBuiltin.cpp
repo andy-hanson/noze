@@ -226,8 +226,23 @@ namespace {
 			case BuiltinFunKind::unsafeDivInt64:
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin divints");
 
-			case BuiltinFunKind::unsafeDivNat64:
-				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin divnats");
+			case BuiltinFunKind::unsafeDivNat64: {
+				const Nat64 n0 = nat64Arg(0);
+				const Nat64 n1 = nat64Arg(1);
+
+				if (n1 == 0)
+					return todo<const Opt<const Constant*>>("unsafe-div failed -- divisor is 0");
+				else
+					return constNat64(n0 / n1);
+			}
+
+			case BuiltinFunKind::unsafeModNat64: {
+				const Nat64 n0 = nat64Arg(0);
+				const Nat64 n1 = nat64Arg(1);
+				if (n1 == 0)
+					todo<void>("unsafe-mod failed");
+				return constNat64(n0 % n1);
+			}
 
 			case BuiltinFunKind::wrappingAddInt64: {
 				const Int64 i0 = int64Arg(0);

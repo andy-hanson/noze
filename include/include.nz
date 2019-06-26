@@ -202,13 +202,17 @@ nat64 builtin
 int64 builtin
 float64 builtin
 
-to-nat64 nat64(i int64) noctx builtin
-to-int64 int64(n nat64) noctx builtin
+| UB for negative numbers
+unsafe-to-nat64 nat64(i int64) noctx builtin
+
+| UB for positive numbers >= 2 ** 63
+unsafe-to-int64 int64(n nat64) noctx builtin
 
 wrapping-add nat64(a nat64, b nat64) noctx builtin
 wrapping-sub nat64(a nat64, b nat64) noctx builtin
 wrapping-mul nat64(a nat64, b nat64) noctx builtin
 unsafe-div nat64(a nat64, b nat64) unsafe noctx builtin
+unsafe-mod nat64(a nat64, b nat64) unsafe noctx builtin
 zero nat64() noctx builtin
 one nat64() noctx builtin
 two nat64() noctx
@@ -236,6 +240,8 @@ wrapping-mul int64(a int64, b int64) noctx builtin
 unsafe-div int64(a int64, b int64) unsafe noctx builtin
 zero int64() noctx builtin
 one int64() noctx builtin
+neg-one int64() noctx
+	zero wrapping-sub one
 two int64() noctx
 	one incr
 three int64() noctx
@@ -267,7 +273,8 @@ incr ptr ?t(p ptr ?t) unsafe noctx
 	p + one
 
 decr nat64(n nat64)
-	n - 1
+	forbid: n == zero
+	n wrapping-sub one
 
 | decr int64(i int64)
 |	i - 1
@@ -276,17 +283,93 @@ decr ptr ?t(p ptr ?t) unsafe noctx
 	p - one
 
 + nat64(a nat64, b nat64)
-	| TODO: asserts for safety
-	a wrapping-add b
+	res = a wrapping-add b
+	assert: res >= a and: res >= b
+	res
 - nat64(a nat64, b nat64)
 	assert: a > b
 	a wrapping-sub b
 * nat64(a nat64, b nat64)
-	| TODO: asserts for safety
-	a wrapping-mul b
+	| TODO: better safety check
+	when
+		a == zero or: b == zero
+			zero
+		else
+			res = a wrapping-mul b
+			assert: res / b == a
+			assert: res / a == b
+			res
 / nat64(a nat64, b nat64) trusted
-	forbid: b == 0
+	forbid: b == zero
+	| TODO: doing this silly thing to avoid evaluating a / b as a constant
+	when
+		b == 0
+			seven
+		else
+			a unsafe-div b
+
+mod nat64(a nat64, b nat64) trusted
+	forbid: b == zero
+	a unsafe-mod b
+
++ int64(a int64, b int64)
+	| TODO: better safety check
+	assert: a > -999
+	assert: a < 999
+	assert: b > -999
+	assert: b < 999
+	a wrapping-add b
+
+- int64(a int64, b int64)
+	| TODO: better safety check
+	assert: a > -999
+	assert: a < 999
+	assert: b > -999
+	assert: b < 999
+	a wrapping-sub b
+* int64(a int64, b int64)
+	assert: a > -999
+	assert: a < 999
+	assert: b > -999
+	assert: b < 999
+	a wrapping-mul b
+/ int64(a int64, b int64) trusted
+	forbid: b == zero
+	| If a is the smallest int and b is -1, result is UB
+	| TODO: better safety check
+	assert: a > -999
 	a unsafe-div b
+
+to-int64 int64(n nat64)
+	| assert: n < (32 pow2)
+	assert: n < 9999
+	n unsafe-to-int64
+
+to-nat64 nat64(i int64)
+	forbid: i.negative?
+	i unsafe-to-nat64
+
+negative? bool(i int64)
+	i < zero
+
+neg int64(i int64)
+	i * neg-one
+
+neg int64(n nat64)
+	n.to-int64 neg
+
+abs nat64(i int64)
+	i-abs = i.negative? if i.neg, i
+	i-abs to-nat64
+
+mod nat64(a int64, b nat64)
+	forbid: b == zero
+	when
+		a negative?
+			x = a.abs mod b
+			x == b if 0, b - x
+		else
+			a.to-nat64 mod b
 
 + float64(a float64, b float64) noctx builtin
 - float64(a float64, b float64) noctx builtin
@@ -320,13 +403,24 @@ char-to-nat64 nat64(c char) noctx
 		else
 			todo
 
-literal nat64(s str) noctx
-	l = s.size
+literal nat64(s str)
 	when
-		l == one
-			char-to-nat64: s noctx-at zero
+		s empty?
+			zero
 		else
-			todo
+			higher-digits = s.rtail.literal as<nat64>
+			higher-digits * ten + (char-to-nat64: s last)
+
+literal int64(s str)
+	fst = s at zero
+	when
+		fst == "-"
+			n = as<nat64>: s.tail.literal
+			n neg
+		fst == "+"
+			s.tail.literal.as<nat64> to-int64
+		else
+			s.literal.as<nat64> to-int64
 
 region Util
 
@@ -399,6 +493,33 @@ empty-arr arr ?t() trusted
 	| TODO: should be able to infer type argument to null!
 	new zero, null<?t>
 
+empty? bool(a arr ?t)
+	a.size == zero
+
+slice arr ?t(a arr ?t, begin nat64, size nat64) trusted
+	assert: begin + size <= a.size
+	new size, a.data + begin
+
+slice arr ?t(a arr ?t, begin nat64)
+	assert: begin <= a.size
+	a slice: begin, a.size - begin
+
+first ?t(a arr ?t)
+	forbid: a empty?
+	a at zero
+
+last ?t(a arr ?t)
+	forbid: a empty?
+	a at a.size.decr
+
+tail arr ?t(a arr ?t)
+	forbid: a empty?
+	a slice one
+
+rtail arr ?t(a arr ?t)
+	forbid: a empty?
+	a slice zero, a.size.decr
+
 noctx-at ?t(a arr ?t, index nat64) trusted noctx
 	hard-assert: index < a.size
 	a.data + index deref
@@ -406,6 +527,14 @@ noctx-at ?t(a arr ?t, index nat64) trusted noctx
 at ?t(a arr ?t, index nat64) trusted
 	assert: index < a.size
 	a.data + index deref
+
+cat arr ?t(a arr ?t, b arr ?t) trusted
+	m = uninitialized-mut-arr<?t>: a.size + b.size
+	zero to a.size each \i
+		m set-at: i, a at i
+	zero to b.size each \i
+		m set-at: (i + a.size), (b at i)
+	m freeze
 
 | NOTE: this is not a normal record, compiler treats it specially
 mut-arr<?t> record
@@ -424,7 +553,7 @@ uninitialized-mut-arr mut-arr ?t(size nat64) unsafe
 	new false, size, size, uninitialized-data<?t>: size
 
 empty-mut-arr mut-arr ?t() trusted
-	uninitialized-mut-arr<?t>: 0
+	uninitialized-mut-arr<?t>: zero
 
 set-at void(a mut-arr ?t, index nat64, value ?t) trusted
 	assert: index < a.size
@@ -447,7 +576,7 @@ at ?t(a mut-arr ?t, index nat64) trusted
 
 copy-data-from void(to ptr ?t, from ptr ?t, len nat64) unsafe
 	when
-		len == 0
+		len == zero
 			pass
 		else
 			to set: from deref
@@ -459,7 +588,7 @@ add void(a mut-arr ?t, value ?t) trusted
 		a.size == a.capacity
 			| Allocate a bigger one
 			old-data = a.data
-			a.capacity := a.size == 0 if: 4, a.size * 2
+			a.capacity := a.size == zero if: four, a.size * two
 			a.data := uninitialized-data<?t>: a.capacity
 			a.data copy-data-from old-data, a.size
 		else
@@ -515,6 +644,9 @@ print-sync void(s str) summon trusted noctx
 delay fut void() noctx
 	pass
 
+to-str str(b bool)
+	b if "true", "false"
+
 to-str str(n nat64)
 	when
 		n == 0
@@ -538,8 +670,14 @@ to-str str(n nat64)
 		n == 9
 			"9"
 		else
-			todo
+			hi = to-str: n / ten
+			lo = to-str: n mod ten
+			hi cat lo
 
+to-str str(i int64)
+	a = i.abs to-str
+	| TODO: string interpolation
+	i.negative? if ("-" cat a), a
 
 region dict
 

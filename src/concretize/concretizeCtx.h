@@ -4,7 +4,6 @@
 #include "../model.h"
 
 #include "./allConstants.h"
-#include "./writer.h"
 
 struct TypeArgsScope {
 	/*

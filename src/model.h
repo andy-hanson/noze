@@ -2,10 +2,10 @@
 
 #include "./util.h"
 #include "./util/lineAndColumnGetter.h"
-#include "./util/output.h"
 #include "./util/path.h"
 #include "./util/sexpr.h"
 #include "./util/sourceRange.h"
+#include "./util/writer.h"
 
 // A module came from the global imports directory or locally
 enum class StorageKind {
@@ -1058,8 +1058,8 @@ public:
 	const Type getType(Arena& arena, const CommonTypes& commonTypes) const;
 };
 
-Output& operator<<(Output& out, const Type type);
-Output& operator<<(Output& out, const Expr expr);
+void writeType(Writer& writer, const Type type);
+void writeExpr(Writer& writer, const Expr expr);
 
 const Sexpr typeToSexpr(Arena& arena, const Type type);
 const Sexpr exprToSexpr(Arena& arena, const Expr expr);

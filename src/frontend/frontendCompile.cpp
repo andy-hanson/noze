@@ -1,6 +1,7 @@
 #include "./frontendCompile.h"
 
 #include "../util/arrUtil.h"
+#include "../util/dictBuilder.h"
 #include "../util/resultUtil.h"
 #include "./check.h"
 #include "./parse.h"

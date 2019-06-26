@@ -2,6 +2,25 @@
 
 #include "./util/arrUtil.h"
 
+// This determines whether the tyep must be by-reference
+const Bool ConcreteStruct::isSelfMutable() const {
+	return body().match(
+		[](const ConcreteStructBody::Builtin) {
+			return False;
+		},
+		[](const ConcreteStructBody::Fields f) {
+			return exists(f.fields, [](const ConcreteField f) {
+				return f.isMutable;
+			});
+		},
+		[](const ConcreteStructBody::Union) {
+			return False;
+		},
+		[](const ConcreteStructBody::Iface) {
+			return False;
+		});
+}
+
 ConstantKind::Lambda::Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} {
 	// If it needs a closure it can't be a constant
 	// (constant things closed over are omitted from the closure)
@@ -21,17 +40,18 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 		const Opt<const ConcreteType> argType = args[i2].typeWithKnownLambdaBody();
 		if (!argType.has() || !concreteTypeEq(argType.force(), param.type)) {
 			Arena arena {};
-			Output out {};
-			out << "CallConcreteFun argument type mismatch for "
-				<< c->mangledName()
-				<< "\nExpected: "
-				<< param.type
-				<<  "\nActual: ";
+			Writer writer { arena };
+			writeStatic(writer, "CallConcreteFun argument type mismatch for ");
+			writeStr(writer, c->mangledName());
+			writeStatic(writer, "\nExpected: ");
+			writeConcreteType(writer, param.type);
+			writeStatic(writer, "\nActual: ");
 			if (argType.has())
-				out << argType.force();
+				writeConcreteType(writer, argType.force());
 			else
-				out << "<<none>>";
-			out << "\n";
+				writeStatic(writer, "<<none>>");
+			writeChar(writer, '\n');
+			printf("%s", writer.finishCStr());
 			assert(0);
 		}
 	}
@@ -56,63 +76,65 @@ const Constant* ConstantKind::Ptr::deref() const {
 	return array->kind.asArray().elements()[index];
 }
 
-Output& operator<<(Output& out, const Constant* c) {
+void writeConstant(Writer& writer, const Constant* c) {
 	c->kind.match(
 		[&](const ConstantKind::Array a) {
-			out << '[';
-			writeWithCommas(out, a.elements());
-			out << ']';
+			writeChar(writer, '[');
+			writeWithCommas(writer, a.elements(), [&](const Constant* element) {
+				writeConstant(writer, element);
+			});
+			writeChar(writer, ']');
 		},
 		[&](const Bool b) {
-			out << b;
+			writeBool(writer, b);
 		},
 		[&](const char c) {
-			out << '\'';
-			writeEscapedChar(out, c);
-			out << '\'';
+			writeChar(writer, '\'');
+			writeEscapedChar(writer, c);
+			writeChar(writer, '\'');
 		},
 		[&](const ConstantKind::FunPtr) {
 			todo<void>("output constant funptr");
 		},
 		[&](const Int64 i) {
-			out << i;
+			writeInt(writer, i);
 		},
 		[&](const ConstantKind::Lambda) {
-			out << "constant_lambda";
+			writeStatic(writer, "some_constant_lambda");
 		},
 		[&](const Nat64 n) {
-			out << n;
+			writeNat(writer, n);
 		},
 		[&](const ConstantKind::Null) {
-			out << "null";
+			writeStatic(writer, "null");
 		},
 		[&](const ConstantKind::Ptr p) {
-			out << "ptr" << p.index;
+			writeStatic(writer, "ptr");
+			writeNat(writer, p.index);
 		},
 		[&](const ConstantKind::Record) {
-			todo<void>("output constant record");
+			writeStatic(writer, "some_constant_record\n");
+			//todo<void>("output constant record");
 		},
 		[&](const ConstantKind::Union) {
 			todo<void>("output constant union");
 		},
 		[&](const ConstantKind::Void) {
-			out << "void";
+			writeStatic(writer, "void");
 		});
-	return out;
 }
 
-Output& operator<<(Output& out, const ConstantOrLambdaOrVariable clv) {
+void writeConstantOrLambdaOrVariable(Writer& writer, const ConstantOrLambdaOrVariable clv) {
 	clv.match(
 		[&](const ConstantOrLambdaOrVariable::Variable) {
-			out << "variable";
+			writeStatic(writer, "variable");
 		},
 		[&](const Constant* c) {
-			out << c;
+			writeConstant(writer, c);
 		},
 		[&](const KnownLambdaBody*) {
-			out << "some_lambda";
+			writeStatic(writer, "some_lambda");
 		});
-	return out;
 }
 
 const ConcreteType ConstantOrExpr::typeWithoutKnownLambdaBody() const {
