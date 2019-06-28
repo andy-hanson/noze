@@ -31,13 +31,13 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 	assert(called->arityExcludingCtxIncludingClosure() == args.size);
 
 	if (called->closureParam.has()) {
-		assert(concreteTypeEq(args[0].typeWithKnownLambdaBody().force(), called->closureParam.force().type));
+		assert(concreteTypeEq(at(args, 0).typeWithKnownLambdaBody().force(), called->closureParam.force().type));
 	}
-	for (const size_t i : Range{called->paramsExcludingClosure().size}) {
-		const ConcreteParam param = called->paramsExcludingClosure()[i];
+	for (const size_t i : Range{called->paramsExcludingCtxAndClosure().size}) {
+		const ConcreteParam param = at(called->paramsExcludingCtxAndClosure(), i);
 		const size_t i2 = i + (called->closureParam.has() ? 1 : 0);
 		// If the arg has a knownlambdabody but no closure, we shouldn't bother passing it.
-		const Opt<const ConcreteType> argType = args[i2].typeWithKnownLambdaBody();
+		const Opt<const ConcreteType> argType = at(args, i2).typeWithKnownLambdaBody();
 		if (!argType.has() || !concreteTypeEq(argType.force(), param.type)) {
 			Arena arena {};
 			Writer writer { arena };
@@ -51,7 +51,7 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 			else
 				writeStatic(writer, "<<none>>");
 			writeChar(writer, '\n');
-			printf("%s", writer.finishCStr());
+			debugPrint(writer.finishCStr());
 			assert(0);
 		}
 	}
@@ -73,7 +73,7 @@ ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const Co
 }
 
 const Constant* ConstantKind::Ptr::deref() const {
-	return array->kind.asArray().elements()[index];
+	return at(array->kind.asArray().elements(), index);
 }
 
 void writeConstant(Writer& writer, const Constant* c) {

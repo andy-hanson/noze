@@ -1,4 +1,3 @@
-#include "./util.h"
 #include "./util/io.h" // Environ
 #include "./util/path.h"
 

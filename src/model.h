@@ -1,7 +1,8 @@
 #pragma once
 
-#include "./util.h"
+#include "./util/dict.h"
 #include "./util/lineAndColumnGetter.h"
+#include "./util/late.h"
 #include "./util/path.h"
 #include "./util/sexpr.h"
 #include "./util/sourceRange.h"
@@ -754,7 +755,7 @@ struct Expr {
 
 		// For a RemoteFun this is missing the 'fut'
 		inline const Type nonFutReturnType() const {
-			return type->typeArgs[0];
+			return at(type->typeArgs, 0);
 		}
 	};
 
@@ -787,7 +788,7 @@ struct Expr {
 		const Arr<const Expr> args;
 
 		inline const Type getType() const {
-			return iface->body().asIface().messages[messageIndex].sig.returnType;
+			return at(iface->body().asIface().messages, messageIndex).sig.returnType;
 		}
 	};
 

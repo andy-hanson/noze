@@ -1,9 +1,6 @@
 #include "./arena.h"
 
-#include <cassert>
 #include <cstdlib> // malloc
-
-#include "../util.h"
 
 void* Arena::alloc(const size_t n_bytes) {
 	if (begin == nullptr) {

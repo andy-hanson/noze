@@ -22,9 +22,9 @@ namespace {
 
 	template <typename Cb>
 	inline auto withLambda(ExprContext& ctx, LambdaInfo* info, Cb cb) {
-		ctx.lambdas.push(ctx.arena(), info);
+		push(ctx.arena(), ctx.lambdas, info);
 		auto res = cb();
-		LambdaInfo* popped = ctx.lambdas.mustPop();
+		LambdaInfo* popped = mustPop(ctx.lambdas);
 		assert(ptrEquals(popped, info));
 		return res;
 	}
@@ -159,8 +159,8 @@ namespace {
 			} else {
 				//TODO: mapzip
 				const Arr<const Expr> args = fillArr<const Expr>{}(ctx.arena(), fields.size, [&](const size_t i) {
-					const Type expectedType = instantiateType(ctx.arena(), fields[i].type, si);
-					return checkAndExpect(ctx, ast.args[i], expectedType);
+					const Type expectedType = instantiateType(ctx.arena(), at(fields, i).type, si);
+					return checkAndExpect(ctx, at(ast.args, i), expectedType);
 				});
 				const Expr expr = Expr{range, Expr::CreateRecord{si, args}};
 				return typeIsFromExpected.get() ? CheckedExpr{expr} : expected.check(ctx, Type(si), expr);
@@ -262,36 +262,47 @@ namespace {
 		const Arr<LambdaInfo*> passedLambdas,
 		Expected& expected
 	) {
-		const Expr* exprPtr = ctx.alloc(expr);
 		if (isEmpty(passedLambdas))
 			return expected.check(ctx, type, expr);
 		else {
-			// Each lambda we passed out of to reach this reference needs a closure field for it.
-			for (LambdaInfo* l : passedLambdas) {
-				assert(!exists(l->closureFields.tempAsArr(), [&](const ClosureField* it) {
-					return strEq(it->name, name);
-				}));
-				const ClosureField* field = ctx.arena().nu<const ClosureField>()(
-					ctx.copyStr(name),
-					type,
-					exprPtr,
-					l->closureFields.size());
-				l->closureFields.push(ctx.arena(), field);
-			}
-			// The return the innermost closure field.
-			return expected.check(ctx, type, Expr{range, Expr::ClosureFieldRef{last(last(passedLambdas)->closureFields)}});
+			// First of passedLambdas is the outermost one where we found the param/local. This one can access it directly.
+			// Inner ones must reference this by a closure field.
+			LambdaInfo* l0 = first(passedLambdas);
+			// Shouldn't have already closed over it (or we should just be using that)
+			assert(!exists(tempAsArr(l0->closureFields), [&](const ClosureField* it) {
+				return strEq(it->name, name);
+			}));
+			const ClosureField* field = ctx.arena().nu<const ClosureField>()(
+				ctx.copyStr(name),
+				type,
+				ctx.alloc(expr),
+				l0->closureFields.size());
+			push<const ClosureField*>(ctx.arena(), l0->closureFields, field);
+			return checkRef(
+				ctx,
+				Expr{range, Expr::ClosureFieldRef{field}},
+				range,
+				name,
+				type,
+				tail(passedLambdas),
+				expected);
 		}
 	}
 
 	const CheckedExpr checkIdentifier(ExprContext& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
 		const Str name = ast.name;
+
+		if (strEqLiteral(name, "pred"))
+			debugger();
+
 		if (!isEmpty(ctx.lambdas)) {
 			// Innermost lambda first
-			for (ssize_t i = ctx.lambdas.size() - 1; i >= 0; i--) {
-				LambdaInfo* lambda = ctx.lambdas[i];
-				const Arr<LambdaInfo*> passedLambdas = slice(ctx.lambdas.tempAsArr(), i + 1);
+			for (const size_t i : RangeDown{ctx.lambdas.size()}) {
+				LambdaInfo* lambda = at(ctx.lambdas, i);
+				// Lambdas we skipped past that need closures
+				const Arr<LambdaInfo*> passedLambdas = slice(tempAsArr(ctx.lambdas), i + 1);
 
-				for (const Local* local : lambda->locals.tempAsArr())
+				for (const Local* local : tempAsArr(lambda->locals))
 					if (strEq(local->name, name))
 						return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, passedLambdas, expected);
 
@@ -300,15 +311,15 @@ namespace {
 						return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, passedLambdas, expected);
 
 				// Check if we've already added something with this name to closureFields to avoid adding it twice.
-				for (const ClosureField* field : lambda->closureFields.tempAsArr())
+				for (const ClosureField* field : tempAsArr(lambda->closureFields))
 					if (strEq(field->name, name))
 						return checkRef(ctx, Expr{range, Expr::ClosureFieldRef{field}}, range, name, field->type, passedLambdas, expected);
 			}
 		}
 
-		const Arr<LambdaInfo*> allLambdas = ctx.lambdas.tempAsArr();
+		const Arr<LambdaInfo*> allLambdas = tempAsArr(ctx.lambdas);
 
-		for (const Local* local : ctx.messageOrFunctionLocals.tempAsArr())
+		for (const Local* local : tempAsArr(ctx.messageOrFunctionLocals))
 			if (strEq(local->name, name))
 				return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, allLambdas, expected);
 
@@ -348,10 +359,10 @@ namespace {
 	auto checkWithLocal_worker(ExprContext& ctx, const Local* local, Cb cb) {
 		MutArr<const Local*>& locals = isEmpty(ctx.lambdas)
 			? ctx.messageOrFunctionLocals
-			: ctx.lambdas.peek().force()->locals;
-		locals.push(ctx.arena(), local);
+			: mustPeek(ctx.lambdas)->locals;
+		push(ctx.arena(), locals, local);
 		auto res = cb();
-		const Local* popped = locals.mustPop();
+		const Local* popped = mustPop(locals);
 		assert(ptrEquals(popped, local));
 		return res;
 	}
@@ -423,7 +434,7 @@ namespace {
 		const Expr::Lambda lambda = Expr::Lambda{
 			params,
 			body,
-			info.closureFields.freeze(),
+			freeze(info.closureFields),
 			instFunStruct,
 			et.nonRemoteFunStruct,
 			et.isRemoteFun,
@@ -452,7 +463,8 @@ namespace {
 	const CheckedExpr checkMatch(ExprContext& ctx, const SourceRange range, const MatchAst ast, Expected& expected) {
 		const ExprAndType matchedAndType = checkAndInfer(ctx, *ast.matched);
 		if (!matchedAndType.type.isStructInst()) {
-			ctx.diag(ast.matched->range, Diag{Diag::MatchOnNonUnion{matchedAndType.type}});
+			if (!matchedAndType.type.isBogus())
+				ctx.diag(ast.matched->range, Diag{Diag::MatchOnNonUnion{matchedAndType.type}});
 			return expected.bogus(ast.matched->range);
 		}
 		const StructInst* matchedUnion = matchedAndType.type.asStructInst();

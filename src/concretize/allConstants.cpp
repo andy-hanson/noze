@@ -50,7 +50,7 @@ const Constant* AllConstants::ptr(Arena& arena, const ConcreteType pointerType, 
 			return _nuConstant(arena, pointerType, ConstantKind{ConstantKind::Ptr{array, idx}}, nextPtrId++);
 		});
 	});
-	return ptrs[index];
+	return at(ptrs, index);
 }
 
 const Constant* AllConstants::_null(Arena& arena, const ConcreteType pointerType) {

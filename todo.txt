@@ -1,4 +1,47 @@
 !
+	| TODO: omit type arguments
+
+!
+	iter iterator nat64(s stream nat64)
+
+	obviously this should be generic
+
+Don't use '$' for specs. Just use a 'spec' keyword
+
+
+!
+Support comments at end of a line
+
+
+!
+	| TODO:GENERIC
+
+!
+checkRef: have a getRef helper that doesn't take expected
+
+
+
+!
+	kill concretizeexprctx.currentconcretefun, that's in the concretefunsource ??
+
+
+!
+
+	sortandgroup -- take a fn not a lambda?
+
+!
+	//TODO:MOVE
+
+TODO
+	MutArr index operator --> 'at'
+
+//TODO:EACHWITHINDEX
+
+TODO
+	implement getSpecImpl
+
+
+!
 	showPos -> writePos?
 
 !

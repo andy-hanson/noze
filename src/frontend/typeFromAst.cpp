@@ -7,11 +7,11 @@ namespace {
 	template<typename T, typename Cb>
 	const Opt<const T*> findInEither(const Arr<T> a, const Arr<T> b, Cb cb) {
 		for (const size_t i : Range{a.size})
-			if (cb(a[i]))
-				return some<const T*>(a.getPtr(i));
+			if (cb(at(a, i)))
+				return some<const T*>(getPtr(a, i));
 		for (const size_t i : Range{b.size})
-			if (cb(b[i]))
-				return some<const T*>(b.getPtr(i));
+			if (cb(at(b, i)))
+				return some<const T*>(getPtr(b, i));
 		return none<const T*>();
 	}
 
@@ -92,7 +92,7 @@ const StructInst* instantiateStruct(
 	const Arr<const Type> typeArgs,
 	DelayStructInsts delayStructInsts
 ) {
-	for (const StructInst* si : decl->insts.tempAsArr())
+	for (const StructInst* si : tempAsArr(decl->insts))
 		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
 			return si;
 
@@ -108,8 +108,8 @@ const StructInst* instantiateStruct(
 		res->setBody(instantiateStructBody(arena, decl, typeArgs));
 	else
 		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
-		delayStructInsts.force()->push(arena, res);
-	decl->insts.push(arena, res);
+		push(arena, *delayStructInsts.force(), res);
+	push<const StructInst*>(arena, decl->insts, res);
 	return res;
 }
 

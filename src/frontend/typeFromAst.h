@@ -77,7 +77,7 @@ template <typename T>
 inline Opt<T*> tryGetTypeArg(const Arr<const TypeParam> typeParams, Arr<T> typeArgs, const TypeParam* typeParam) {
 	const Bool hasTypeParam = ptrEquals(typeParams.begin() + typeParam->index, typeParam);
 	return hasTypeParam
-		? some<T*>(typeArgs.getPtr(typeParam->index))
+		? some<T*>(getPtr(typeArgs, typeParam->index))
 		: none<T*>();
 }
 

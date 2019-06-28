@@ -12,7 +12,7 @@ struct IncludeAndImportsIter {
 	ssize_t index;
 
 	inline const Module* operator*() const {
-		return index == -1 ? include.force() : imports[index];
+		return index == -1 ? include.force() : at(imports, index);
 	}
 
 	inline void operator++() {
@@ -33,7 +33,7 @@ struct IncludeAndImportsRange {
 	}
 
 	inline IncludeAndImportsIter end() {
-		return IncludeAndImportsIter{include, imports, safeSizeTToSSizeT(imports.size)};
+		return IncludeAndImportsIter{include, imports, static_cast<ssize_t>(imports.size)};
 	}
 };
 

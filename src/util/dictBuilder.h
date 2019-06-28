@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../util.h"
+#include "./arrBuilder.h"
+#include "./dict.h"
 
 template <typename K, typename V, Cmp<K> cmp>
 struct DictBuilder {
@@ -20,23 +21,23 @@ public:
 		for (const size_t i : Range{allPairs.size}) {
 			Cell<const Bool> isConflict { False };
 			for (const size_t j : Range{res.size()}) {
-				if (cmp(allPairs[i].key, res[j].key) == Comparison::equal) {
-					cbConflict(allPairs[i].key, res[j].value, allPairs[i].value);
+				if (cmp(at(allPairs, i).key, at(res, j).key) == Comparison::equal) {
+					cbConflict(at(allPairs, i).key, at(res, j).value, at(allPairs, i).value);
 					isConflict.set(True);
 					break;
 				}
 			}
 			if (!isConflict.get())
-				res.push(arena, allPairs[i]);
+				push(arena, res, at(allPairs, i));
 		}
-		return Dict<K, V, cmp>{res.freeze()};
+		return Dict<K, V, cmp>{freeze(res)};
 	}
 
 	Dict<K, V, cmp> finishShouldBeNoConflict() {
 		Arr<KeyValuePair<K, V>> allPairs = builder.finish();
 		for (const size_t i : Range{allPairs.size})
 			for (const size_t j : Range{i})
-				assert(cmp(allPairs[i].key, allPairs[j].key) != Comparison::equal);
+				assert(cmp(at(allPairs, i).key, at(allPairs, j).key) != Comparison::equal);
 		return Dict<K, V, cmp>{allPairs};
 	}
 };

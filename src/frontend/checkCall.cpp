@@ -71,9 +71,9 @@ namespace {
 				(isEmpty(explicitTypeArgs) || nTypeParams == explicitTypeArgs.size)) {
 				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx.arena(), nTypeParams, [&](const size_t i) {
 					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
-					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(explicitTypeArgs[i])};
+					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(at(explicitTypeArgs, i))};
 				});
-				res.push(ctx.arena(), Candidate{called, inferringTypeArgs});
+				push(ctx.arena(), res, Candidate{called, inferringTypeArgs});
 			}
 		});
 		return res;
@@ -224,7 +224,7 @@ namespace {
 	}
 
 	const Type getCandidateExpectedParameterType(Arena& arena, const Candidate& candidate, const size_t argIdx) {
-		return getCandidateExpectedParameterTypeRecur(arena, candidate, candidate.called.params()[argIdx].type);
+		return getCandidateExpectedParameterTypeRecur(arena, candidate, at(candidate.called.params(), argIdx).type);
 	}
 
 	struct CommonOverloadExpected {
@@ -303,8 +303,8 @@ namespace {
 		const Arr<const Type> typeArgs;
 
 		const Type substitute(const TypeParam* p) const {
-			assert(ptrEquals(typeParams.getPtr(p->index), p));
-			return typeArgs[p->index];
+			assert(ptrEquals(getPtr(typeParams, p->index), p));
+			return at(typeArgs, p->index);
 		}
 	};
 
@@ -357,7 +357,7 @@ namespace {
 			}));
 	}
 
-	const CalledDecl findSpecSigImplementation(ExprContext& ctx, const SourceRange range, const Sig specSig, const TypeArgsScope typeArgs) {
+	const Opt<const CalledDecl> findSpecSigImplementation(ExprContext& ctx, const SourceRange range, const Sig specSig, const TypeArgsScope typeArgs) {
 		Cell<const Opt<const CalledDecl>> match { none<const CalledDecl>() };
 		eachFunInScope(ctx, specSig.name, [&](const CalledDecl called) {
 			// TODO: support matching a aspec with a generic function
@@ -372,13 +372,15 @@ namespace {
 			const CalledDecl res = match.get().force();
 			if (res.isFunDecl())
 				checkCallFlags(ctx.checkCtx, range, res.asFunDecl()->flags, ctx.outermostFun->flags);
-			return res;
-		} else
-			return todo<const CalledDecl>("findSpecSigImplementation -- no match");
-
+			return some<const CalledDecl>(res);
+		} else {
+			ctx.diag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
+			return none<const CalledDecl>();
+		}
 	}
 
-	const Arr<const CalledDecl> checkSpecImpls(ExprContext& ctx, const SourceRange range, const CalledDecl called, const Arr<const Type> typeArgs) {
+	// On failure, returns none.
+	const Opt<const Arr<const CalledDecl>> checkSpecImpls(ExprContext& ctx, const SourceRange range, const CalledDecl called, const Arr<const Type> typeArgs) {
 		return called.match(
 			[&](const FunDecl* f) {
 				// We store a flat array. Calculate the size ahead of time.
@@ -396,17 +398,19 @@ namespace {
 						TypeParamsAndArgs{specUse.spec->typeParams, specUse.typeArgs},
 						TypeParamsAndArgs{called.typeParams(), typeArgs}};
 					for (const Sig sig : specUse.spec->sigs) {
-						res.set(outI, findSpecSigImplementation(ctx, range, sig, typeArgsScope));
+						const Opt<const CalledDecl> impl = findSpecSigImplementation(ctx, range, sig, typeArgsScope);
+						if (!impl.has())
+							return none<const Arr<const CalledDecl>>();
+						setAt<const CalledDecl>(res, outI, impl.force());
 						outI++;
 					}
 				}
 				assert(outI == size);
-				return res.freeze();
-
+				return some<const Arr<const CalledDecl>>(freeze(res));
 			},
 			[](const CalledDecl::SpecUseSig) {
 				// Specs can't have specs
-				return emptyArr<const CalledDecl>();
+				return some<const Arr<const CalledDecl>>(emptyArr<const CalledDecl>());
 			});
 	}
 
@@ -429,10 +433,13 @@ namespace {
 		if (candidateTypeArgs.has()) {
 			const Type callReturnType = getCallReturnType(ctx.arena(), candidate.called.returnType(), candidate.called, candidateTypeArgs.force());
 			//TODO: PERF second return type check may be unnecessary if we already filtered by return type at the beginning
-			const Arr<const CalledDecl> specImpls = checkSpecImpls(ctx, range, candidate.called, candidateTypeArgs.force());
-			Expr::Call::Called called = Expr::Call::Called{candidate.called, candidateTypeArgs.force(), specImpls};
-			const Expr expr = Expr{range, Expr::Call{callReturnType, called, args}};
-			return expected.check(ctx, callReturnType, expr);
+			const Opt<const Arr<const CalledDecl>> specImpls = checkSpecImpls(ctx, range, candidate.called, candidateTypeArgs.force());
+			if (specImpls.has()){
+				Expr::Call::Called called = Expr::Call::Called{candidate.called, candidateTypeArgs.force(), specImpls.force()};
+				const Expr expr = Expr{range, Expr::Call{callReturnType, called, args}};
+				return expected.check(ctx, callReturnType, expr);
+			} else
+				return expected.bogusWithType(range, callReturnType);
 		} else {
 			ctx.diag(range, Diag{Diag::CantInferTypeArguments{}});
 			return expected.bogus(range);
@@ -452,7 +459,8 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 	if (expectedReturnType.has())
 		// Filter by return type. Also does type argument inference on the candidate.
 		filterUnordered(candidates, [&](Candidate& candidate) {
-			return matchActualAndCandidateTypeForReturn(ctx.arena(), expectedReturnType.force(), candidate.called.returnType(), candidate);
+			return matchActualAndCandidateTypeForReturn(
+				ctx.arena(), expectedReturnType.force(), candidate.called.returnType(), candidate);
 		});
 
 	Cell<const Bool> someArgIsBogus { False };
@@ -461,8 +469,8 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 			// Already certainly failed.
 			return none<const Expr>();
 
-		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx.arena(), candidates.tempAsArr(), argIdx);
-		Expr arg = checkExpr(ctx, ast.args[argIdx], common.expected);
+		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx.arena(), tempAsArr(candidates), argIdx);
+		Expr arg = checkExpr(ctx, at(ast.args, argIdx), common.expected);
 
 		// If it failed to check, don't continue, just stop there.
 		if (arg.typeIsBogus(ctx.arena())) {
@@ -482,7 +490,7 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 		return some<const Expr>(arg);
 	});
 
-	const Arr<Candidate> candidatesArr = candidates.freeze();
+	const Arr<Candidate> candidatesArr = freeze(candidates);
 
 	if (someArgIsBogus.get())
 		return expected.bogus(range);

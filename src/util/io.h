@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../util.h"
+#include "../util/dict.h"
 #include "../util/path.h"
 
 const Bool fileExists(const AbsolutePath path);

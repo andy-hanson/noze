@@ -68,12 +68,12 @@ namespace {
 					writeStatic(writer, "int64_t");
 					break;
 				case BuiltinStructKind::funPtrN:
-					writeType(writer, typeArgs[0]);
+					writeType(writer, first(typeArgs));
 					writeStatic(writer, " (*)(");
 					for (const size_t i : Range{1, typeArgs.size}) {
 						if (i != 1)
 							writeStatic(writer, ", ");
-						writeType(writer, typeArgs[i]);
+						writeType(writer, at(typeArgs, i));
 					}
 					writeChar(writer, ')');
 					break;
@@ -81,7 +81,7 @@ namespace {
 					writeStatic(writer, "uint64_t");
 					break;
 				case BuiltinStructKind::ptr:
-					writeType(writer, typeArgs[0]);
+					writeType(writer, at(typeArgs, 0));
 					writeChar(writer, '*');
 					break;
 				case BuiltinStructKind::_void:
@@ -412,7 +412,7 @@ namespace {
 				// static arr_char _constantArr123 = arr_char{5, const_cast<char*>("hello")};
 
 				const size_t size = a.size();
-				const Bool isStr = a.elements()[0]->kind.isChar();
+				const Bool isStr = first(a.elements())->kind.isChar();
 				const size_t id = c->id;
 				if (size != 0 && !isStr) {
 					writeStatic(writer, "static ");
@@ -696,7 +696,7 @@ namespace {
 
 	void writeCallOperator(WriteExprCtx& ctx, const BuiltinFunInfo bf, const Arr<const ConcreteType> typeArgs, const ConcreteExpr::CallConcreteFun e) {
 		auto writeArg = [&](const size_t index) -> void {
-			writeConstantOrExprAsExpr(ctx, e.args[index]);
+			writeConstantOrExprAsExpr(ctx, at(e.args, index));
 		};
 
 		auto binaryOperatorWorker = [&](const Str _operator) -> void {
@@ -804,7 +804,7 @@ namespace {
 
 			case BuiltinFunKind::ptrCast:
 				ctx.write("reinterpret_cast<");
-				writeType(ctx.writer, typeArgs[0]);
+				writeType(ctx.writer, first(typeArgs));
 				ctx.write("*>(");
 				writeArg(0);
 				ctx.write(")");
@@ -965,8 +965,8 @@ namespace {
 			[&](const ConcreteExpr::LambdaToDynamic e) {
 				const Arr<const ConcreteField> fields = type.strukt->body().asFields().fields;
 				assert(fields.size == 2);
-				const ConcreteField funPtrField = fields[0];
-				const ConcreteField dataPtrField = fields[1];
+				const ConcreteField funPtrField = at(fields, 0);
+				const ConcreteField dataPtrField = at(fields, 1);
 
 				writeValueType(ctx.writer, type.mustBeNonPointer());
 				ctx.write("{");
@@ -1052,7 +1052,7 @@ namespace {
 		writeType(writer, fun->returnType());
 		writeChar(writer, ' ');
 		writeStr(writer, fun->mangledName());
-		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingClosure());
+		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
 	}
 
 	void writeConcreteFunDeclaration(Writer& writer, const ConcreteFun* fun) {

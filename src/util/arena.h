@@ -1,9 +1,10 @@
 #pragma once
 
 #include <cstddef> // size_t
-#include <cstdint> // uint8_t
 #include <new> // Support placement new
 #include <type_traits> // remove_const
+
+#include "./types.h"
 
 using byte = uint8_t;
 

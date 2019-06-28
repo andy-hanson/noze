@@ -139,8 +139,8 @@ namespace {
 		});
 		for (const size_t i : Range{typeParams.size})
 			for (const size_t prev_i : Range{i})
-				if (strEq(typeParams[prev_i].name, typeParams[i].name))
-					ctx.diag(typeParams[i].range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
+				if (strEq(at(typeParams, prev_i).name, at(typeParams, i).name))
+					ctx.diag(at(typeParams, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
 		return typeParams;
 	}
 
@@ -183,8 +183,8 @@ namespace {
 		});
 		for (const size_t i : Range{params.size})
 			for (const size_t prev_i : Range{i})
-				if (strEq(params[prev_i].name, params[i].name))
-					ctx.diag(params[i].range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
+				if (strEq(at(params, prev_i).name, at(params, i).name))
+					ctx.diag(at(params, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
 		return params;
 	}
 
@@ -280,7 +280,7 @@ namespace {
 	void checkNoEqual(const Arr<T> a, CbEqual eq) {
 		for (const size_t i : Range{a.size})
 			for (const size_t j : Range{i})
-				if (eq(a[i], a[j]))
+				if (eq(at(a, i), at(a, j)))
 					todo<void>("checkNoEqual");
 	}
 
@@ -501,7 +501,7 @@ namespace {
 			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypes = getCommonTypes(ctx, structsAndAliasesMap, delayStructInsts);
 			return flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(commonTypes, [&](const CommonTypes commonTypes) {
 				checkStructBodies(ctx, commonTypes, structsAndAliasesMap, structs, ast.structs, delayStructInsts);
-				for (StructInst* i : delayStructInsts.freeze())
+				for (StructInst* i : freeze(delayStructInsts))
 					i->setBody(instantiateStructBody(arena, i->decl, i->typeArgs));
 				const FunsAndMap funsAndMap = checkFuns(ctx, commonTypes, specsMap, structsAndAliasesMap, ast.funs);
 				if (ctx.hasDiags())

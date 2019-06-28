@@ -4,7 +4,6 @@
 #include <sys/resource.h> // rlimit
 #include <unistd.h> // getcwd
 
-#include "./util.h"
 #include "./util/arrUtil.h"
 #include "./util/io.h"
 #include "./concreteModel.h"

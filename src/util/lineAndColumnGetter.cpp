@@ -1,6 +1,8 @@
 #include "./lineAndColumnGetter.h"
 
+#include "./arrBuilder.h"
 #include "./arrUtil.h"
+#include "./str.h"
 
 namespace {
 	const uint TAB_SIZE = 4; // TODO: configurable
@@ -12,8 +14,8 @@ namespace {
 	const LineAndColumn lineAndColumnAtPosSlow(const Str text, const Pos pos) {
 		uint line = 0;
 		uint column = 0;
-		for (const size_t i : Range{pos})
-			switch (text[i]) {
+		for (const char c : slice(text, 0, pos))
+			switch (c) {
 				case '\n':
 					line++;
 					column = 0;
@@ -36,8 +38,9 @@ namespace {
 const LineAndColumnGetter lineAndColumnGetterForText(Arena& arena, const Str text) {
 	ArrBuilder<const Pos> res {};
 	res.add(arena, 0);
+	// TODO:EACHWITHINDEX
 	for (const size_t i : Range{text.size})
-		if (text[i] == '\n')
+		if (at(text, i) == '\n')
 			res.add(arena, safeSizeTToUint(i + 1));
 	return LineAndColumnGetter{copyStr(arena, text), res.finish()};
 }
@@ -50,7 +53,7 @@ const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos p
 
 	while (lowLine < highLine - 1) {
 		const uint middleLine = mid(lowLine, highLine);
-		const uint middlePos = lc.lineToPos[middleLine];
+		const uint middlePos = at(lc.lineToPos, middleLine);
 		if (pos == middlePos)
 			return LineAndColumn{middleLine, 0};
 		else if (pos < middlePos)
@@ -62,13 +65,13 @@ const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos p
 	}
 
 	const uint line = lowLine;
-	const Pos lineStart = lc.lineToPos[line];
-	assert(pos >= lineStart && (line == lc.lineToPos.size - 1 || pos <= lc.lineToPos[line + 1]));
+	const Pos lineStart = at(lc.lineToPos, line);
+	assert(pos >= lineStart && (line == lc.lineToPos.size - 1 || pos <= at(lc.lineToPos, line + 1)));
 	// Need to walk the line looking for tabs, which count as more
 	// (TODO: precalculate the # tabs on each line)
 	uint column= 0;
-	for (uint i = lineStart; i < pos; i++)
-		switch (lc.text[i]) {
+	for (const char c : sliceFromTo(lc.text, lineStart, pos))
+		switch (c) {
 			case '\n':
 				unreachable<void>();
 				break;

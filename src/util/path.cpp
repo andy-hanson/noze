@@ -25,22 +25,22 @@ namespace {
 		size_t i = size;
 		if (nulTerminated) {
 			i --;
-			res.set(i, '\0');
+			setAt<const char>(res, i, '\0');
 		}
 		walkPathBackwards(path, [&](const Str part) {
 			i -= part.size;
 			copyFrom(res, i, part);
 			i--;
-			res.set(i, '/');
+			setAt<const char>(res, i, '/');
 		});
 		assert(i == 0);
-		return res.freeze();
+		return freeze(res);
 	}
 
 	const Str removeExtension(const Str s) {
 		// Find the '.'
 		for (const size_t i : RangeDown{s.size}) {
-			if (s[i] == '.')
+			if (at(s, i) == '.')
 				return slice(s, 0, i);
 		}
 		return todo<const Str>("removeExtension -- no '.'");
@@ -88,10 +88,10 @@ const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath
 
 namespace {
 	const RelPath parseRelPath(Arena& arena, const Str s) {
-		if (s[0] == '.') {
-			if (s[1] == '/')
+		if (at(s, 0) == '.') {
+			if (at(s, 1) == '/')
 				return parseRelPath(arena, slice(s, 2));
-			else if (s[1] == '.' && s[2] == '/') {
+			else if (at(s, 1) == '.' && at(s, 2) == '/') {
 				const RelPath r = parseRelPath(arena, slice(s, 3));
 				return RelPath{r.nParents + 1, r.path};
 			} else
@@ -103,7 +103,7 @@ namespace {
 }
 
 const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena& arena, const Str s) {
-	switch (s[0]) {
+	switch (at(s, 0)) {
 		case '.':
 			return AbsoluteOrRelPath{parseRelPath(arena, s)};
 		case '/':
@@ -111,7 +111,7 @@ const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena& arena, const Str s) {
 		case '\\':
 			return todo<const AbsoluteOrRelPath>("unc path?");
 		default:
-			if (s[1] == ':')
+			if (at(s, 1) == ':')
 				return todo<const AbsoluteOrRelPath>("C:/?");
 			else
 				return AbsoluteOrRelPath{RelPath{0, parsePath(arena, s)}};
@@ -127,15 +127,15 @@ const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
 }
 
 const Path* parsePath(Arena& arena, const Str str) {
-	size_t i = 0;
 	const size_t len = str.size;
-	if (i < len && str[i] == '/')
+	size_t i = 0;
+	if (i < len && at(str, i) == '/')
 		// Ignore leading slash
 		i++;
 
 	Path const* path = [&]() {
 		const size_t begin = i;
-		while (i < len && str[i] != '/')
+		while (i < len && at(str, i) != '/')
 			i++;
 		assert(i != begin);
 		return rootPath(arena, sliceFromTo(str, begin, i));
@@ -143,12 +143,12 @@ const Path* parsePath(Arena& arena, const Str str) {
 
 
 	while (i < len) {
-		if (str[i] == '/')
+		if (at(str, i) == '/')
 			i++;
 		if (i == len)
 			break;
 		const size_t begin = i;
-		while (i < len && str[i] != '/')
+		while (i < len && at(str, i) != '/')
 			i++;
 		path = childPath(arena, path, sliceFromTo(str, begin, i));
 	}

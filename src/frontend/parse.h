@@ -3,7 +3,6 @@
 #include "./ast.h"
 #include "../diag.h" // ParseDiag
 #include "../model.h"
-#include "../util.h"
 
 // Only used temporarily while parsing
 struct ParseDiagnostic {

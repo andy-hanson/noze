@@ -54,9 +54,9 @@ namespace {
 		const Str name = sig.name;
 		const Opt<const BuiltinFunInfo> no = none<const BuiltinFunInfo>();
 		const Type rt = sig.returnType;
-		const Type p0 = sig.params.size > 0 ? sig.params[0].type : Type{Type::Bogus{}};
+		const Type p0 = sig.params.size > 0 ? at(sig.params, 0).type : Type{Type::Bogus{}};
 
-		switch (name[0]) {
+		switch (first(name)) {
 			case '<':
 				return strEqLiteral(name, "<=>")
 					? generate(BuiltinFunKind::compare)

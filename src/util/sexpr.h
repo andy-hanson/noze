@@ -2,7 +2,6 @@
 
 #include "./arrUtil.h"
 #include "./writer.h"
-#include "../util.h"
 
 struct Sexpr;
 

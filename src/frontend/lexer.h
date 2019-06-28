@@ -7,7 +7,9 @@
 
 struct Lexer {
 	Arena& arena;
+	// Null-terminated.
 	const CStr sourceBegin;
+	// Starts at sourceBegin and proceeds until it hits NUL
 	CStr ptr;
 	size_t indent = 0;
 };

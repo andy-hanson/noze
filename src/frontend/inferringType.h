@@ -130,7 +130,11 @@ public:
 	}
 
 	inline const CheckedExpr bogus(const SourceRange range) {
-		type.set(some<const Type>(Type{Type::Bogus{}}));
+		return bogusWithType(range, Type{Type::Bogus{}});
+	}
+
+	inline const CheckedExpr bogusWithType(const SourceRange range, const Type setType) {
+		type.set(setType);
 		return bogusWithoutAffectingExpected(range);
 	}
 

@@ -73,6 +73,13 @@ struct ConcreteFunKey {
 	const FunDeclAndTypeArgsAndSpecImpls declAndTypeArgsAndSpecImpls;
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs;
 
+	inline ConcreteFunKey(
+		const FunDeclAndTypeArgsAndSpecImpls _declAndTypeArgsAndSpecImpls,
+		const Arr<const ConstantOrLambdaOrVariable> _specializeOnArgs
+	) : declAndTypeArgsAndSpecImpls{_declAndTypeArgsAndSpecImpls}, specializeOnArgs{_specializeOnArgs} {
+		assert(declAndTypeArgsAndSpecImpls.decl()->arity() == specializeOnArgs.size);
+	}
+
 	inline const FunDecl* decl() const {
 		return declAndTypeArgsAndSpecImpls.decl();
 	}
@@ -89,6 +96,7 @@ struct ConcreteFunKey {
 Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b);
 
 struct ConcreteFunSource {
+	const ConcreteFun* concreteFun;
 	// NOTE: for a lambda, this is for the *outermost* fun (the one with type args and spec impls).
 	// The FunDecl is needed for its TypeParam declataions.
 	const FunDeclAndTypeArgsAndSpecImpls containingFunInfo;
@@ -100,6 +108,15 @@ struct ConcreteFunSource {
 	// For a lambda or iface this is always an Expr.
 	const FunBody body;
 	const Opt<const KnownLambdaBody*> knownLambdaBody;
+
+	inline ConcreteFunSource(
+		const ConcreteFun* _concreteFun,
+		const FunDeclAndTypeArgsAndSpecImpls _containingFunInfo,
+		const Arr<const ConstantOrLambdaOrVariable> _paramsSpecialize,
+		const FunBody _body,
+		const Opt<const KnownLambdaBody*> _knownLambdaBody
+	) : concreteFun{_concreteFun}, containingFunInfo{_containingFunInfo}, paramsSpecialize{_paramsSpecialize}, body{_body}, knownLambdaBody{_knownLambdaBody} {
+	}
 
 	inline const FunDeclAndTypeArgs containingFunDeclAndTypeArgs() const {
 		return containingFunInfo.funDeclAndTypeArgs;
@@ -115,6 +132,10 @@ struct ConcreteFunSource {
 
 	inline const TypeArgsScope typeArgsScope() const {
 		return containingFunDeclAndTypeArgs().typeArgsScope();
+	}
+
+	inline const Arr<const FunDecl*> specImpls() const {
+		return containingFunInfo.specImpls;
 	}
 };
 

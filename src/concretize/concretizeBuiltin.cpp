@@ -61,9 +61,9 @@ namespace {
 		const ConcreteType t = only(typeArgs);
 		const Arr<const ConcreteType> unionMembers = comparison.strukt->body().asUnion().members;
 		assert(unionMembers.size == 3);
-		const ConcreteType less = unionMembers[0];
-		const ConcreteType equal = unionMembers[1];
-		const ConcreteType greater = unionMembers[2];
+		const ConcreteType less = at(unionMembers, 0);
+		const ConcreteType equal = at(unionMembers, 1);
+		const ConcreteType greater = at(unionMembers, 2);
 		assert(strEqLiteral(comparison.strukt->mangledName, "comparison")
 			&& strEqLiteral(less.strukt->mangledName, "less")
 			&& strEqLiteral(equal.strukt->mangledName, "equal")
@@ -80,10 +80,10 @@ namespace {
 		const ConcreteType returnType
 	) {
 		auto typeArg = [&](const size_t index) -> const ConcreteType {
-			return typeArgs[index];
+			return at(typeArgs, index);
 		};
 		auto constantArg = [&](const size_t index) -> const Constant* {
-			return constArgs[index];
+			return at(constArgs, index);
 		};
 		auto boolArg = [&](const size_t index) -> Bool {
 			return constantArg(index)->kind.asBool();
@@ -352,10 +352,12 @@ namespace {
 		const ConcreteExpr* greaterExpr = getExpr(types.greater);
 
 		assert(fun->arityExcludingCtxAndClosure() == 2);
-		const Bool aIsPointer = fun->paramsExcludingClosure().getPtr(0)->type.isPointer;
-		const Bool bIsPointer = fun->paramsExcludingClosure().getPtr(1)->type.isPointer;
-		const ConcreteExpr* a = genExpr(arena, types.t, ConcreteExpr::ParamRef{fun->paramsExcludingClosure().getPtr(0)});
-		const ConcreteExpr* b = genExpr(arena, types.t, ConcreteExpr::ParamRef{fun->paramsExcludingClosure().getPtr(1)});
+		const ConcreteParam* aParam = getPtr(fun->paramsExcludingCtxAndClosure(), 0);
+		const ConcreteParam* bParam = getPtr(fun->paramsExcludingCtxAndClosure(), 1);
+		const Bool aIsPointer = aParam->type.isPointer;
+		const Bool bIsPointer = bParam->type.isPointer;
+		const ConcreteExpr* a = genExpr(arena, types.t, ConcreteExpr::ParamRef{aParam});
+		const ConcreteExpr* b = genExpr(arena, types.t, ConcreteExpr::ParamRef{bParam});
 
 		auto getCompareFor = [&](const ConcreteType ct) -> const ConcreteFun* {
 			const ConcreteFunKey key = ConcreteFunKey{

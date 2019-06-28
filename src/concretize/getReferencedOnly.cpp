@@ -5,8 +5,8 @@
 namespace {
 	template <typename T>
 	void pushIfNotContained(Arena& arena, MutArr<const T*>& all, const T* t) {
-		if (!contains<const T*, ptrEquals<const T>>(all.tempAsArr(), t))
-			all.push(arena, t);
+		if (!contains<const T*, ptrEquals<const T>>(tempAsArr(all), t))
+			push(arena, all, t);
 	}
 
 	struct SetReferencedCtx {
@@ -42,9 +42,9 @@ namespace {
 			pushIfNotContained(arena, allReferencedFuns, f);
 		}
 
-		void addNewIfaceImpl(ConcreteExpr::NewIfaceImpl impl) {
+		void addNewIfaceImpl(const ConcreteExpr::NewIfaceImpl impl) {
 			// These don't have isReferenced, but we'll only walk the function containing them once.
-			allReferencedNewIfaceImpls.push(arena, impl);
+			push<const ConcreteExpr::NewIfaceImpl>(arena, allReferencedNewIfaceImpls, impl);
 		}
 	};
 
@@ -229,21 +229,21 @@ const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun
 	ctx.addFun(mainFun);
 	for (;;) {
 		if (ctx.nextStructIndexToScan < ctx.allReferencedStructs.size())
-			setReferencedInStruct(ctx, ctx.allReferencedStructs[ctx.nextStructIndexToScan++]);
+			setReferencedInStruct(ctx, at(ctx.allReferencedStructs, ctx.nextStructIndexToScan++));
 		else if (ctx.nextConstantIndexToScan < ctx.allReferencedConstants.size())
-			setReferencedInConstant(ctx, ctx.allReferencedConstants[ctx.nextConstantIndexToScan++]);
+			setReferencedInConstant(ctx, at(ctx.allReferencedConstants, ctx.nextConstantIndexToScan++));
 		else if (ctx.nextFunIndexToScan < ctx.allReferencedFuns.size())
-			setReferencedInFun(ctx, ctx.allReferencedFuns[ctx.nextFunIndexToScan++]);
+			setReferencedInFun(ctx, at(ctx.allReferencedFuns, ctx.nextFunIndexToScan++));
 		else if (ctx.nextNewIfaceImplIndexToScan < ctx.allReferencedNewIfaceImpls.size())
-			setReferencedInNewIfaceImpl(ctx, ctx.allReferencedNewIfaceImpls[ctx.nextNewIfaceImplIndexToScan++]);
+			setReferencedInNewIfaceImpl(ctx, at(ctx.allReferencedNewIfaceImpls, ctx.nextNewIfaceImplIndexToScan++));
 		else
 			break;
 	}
 
 	return ConcreteProgram{
-		ctx.allReferencedStructs.freeze(),
-		ctx.allReferencedConstants.freeze(),
-		ctx.allReferencedFuns.freeze(),
-		ctx.allReferencedNewIfaceImpls.freeze(),
+		freeze(ctx.allReferencedStructs),
+		freeze(ctx.allReferencedConstants),
+		freeze(ctx.allReferencedFuns),
+		freeze(ctx.allReferencedNewIfaceImpls),
 		ctxStruct};
 }

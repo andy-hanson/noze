@@ -181,6 +181,9 @@ struct Diag {
 		const Kind kind;
 	};
 	struct ShouldNotHaveTypeParamsInIface {};
+	struct SpecImplNotFound {
+		const Str sigName;
+	};
 	struct TypeConflict {
 		const Type expected;
 		const Type actual;
@@ -223,6 +226,7 @@ private:
 		paramShadowsPrevious,
 		parseDiag,
 		shouldNotHaveTypeParamsInIface,
+		specImplNotFound,
 		typeConflict,
 		typeNotSendable,
 		wrongNumberNewStructArgs,
@@ -250,6 +254,7 @@ private:
 		const ParamShadowsPrevious paramShadowsPrevious;
 		const ParseDiag parseDiag;
 		const ShouldNotHaveTypeParamsInIface shouldNotHaveTypeParamsInIface;
+		const SpecImplNotFound specImplNotFound;
 		const TypeConflict typeConflict;
 		const TypeNotSendable typeNotSendable;
 		const WrongNumberNewStructArgs wrongNumberNewStructArgs;
@@ -277,6 +282,7 @@ public:
 	explicit inline Diag(const ParamShadowsPrevious d) : kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
 	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
 	explicit inline Diag(const ShouldNotHaveTypeParamsInIface d) : kind{Kind::shouldNotHaveTypeParamsInIface}, shouldNotHaveTypeParamsInIface{d} {}
+	explicit inline Diag(const SpecImplNotFound d) : kind{Kind::specImplNotFound}, specImplNotFound{d} {}
 	explicit inline Diag(const TypeConflict d) : kind{Kind::typeConflict}, typeConflict{d} {}
 	explicit inline Diag(const TypeNotSendable d) : kind{Kind::typeNotSendable}, typeNotSendable{d} {}
 	explicit inline Diag(const WrongNumberNewStructArgs d) : kind{Kind::wrongNumberNewStructArgs}, wrongNumberNewStructArgs{d} {}
@@ -307,6 +313,7 @@ public:
 		typename CbParamShadowsPrevious,
 		typename CbParseDiag,
 		typename CbShouldNotHaveTypeParamsInIface,
+		typename CbSpecImplNotFound,
 		typename CbTypeConflict,
 		typename CbTypeNotSendable,
 		typename CbWrongNumberNewStructArgs,
@@ -332,6 +339,7 @@ public:
 		CbParamShadowsPrevious cbParamShadowsPrevious,
 		CbParseDiag cbParseDiag,
 		CbShouldNotHaveTypeParamsInIface cbShouldNotHaveTypeParamsInIface,
+		CbSpecImplNotFound cbSpecImplNotFound,
 		CbTypeConflict cbTypeConflict,
 		CbTypeNotSendable cbTypeNotSendable,
 		CbWrongNumberNewStructArgs cbWrongNumberNewStructArgs,
@@ -377,6 +385,8 @@ public:
 				return cbParseDiag(parseDiag);
 			case Kind::shouldNotHaveTypeParamsInIface:
 				return cbShouldNotHaveTypeParamsInIface(shouldNotHaveTypeParamsInIface);
+			case Kind::specImplNotFound:
+				return cbSpecImplNotFound(specImplNotFound);
 			case Kind::typeConflict:
 				return cbTypeConflict(typeConflict);
 			case Kind::typeNotSendable:

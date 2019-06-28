@@ -157,15 +157,15 @@ namespace {
 				});
 			},
 			[&](const Diag::MatchOnNonUnion d) {
-				unused(d);
-				todo<void>("matchonnonunion");
+				writeType(writer, d.type);
+				writeStatic(writer, " is not a union type");
 			},
 			[&](const Diag::MultipleFunctionCandidates d) {
 				writeStatic(writer, "multiple fun candidates match: ");
 				for (const size_t i : Range{d.candidates.size}) {
 					if (i != 0)
 						writeStatic(writer, ", ");
-					writeStr(writer, d.candidates[i].name());
+					writeStr(writer, at(d.candidates, i).name());
 				}
 			},
 			[&](const Diag::NameNotFound d) {
@@ -200,6 +200,10 @@ namespace {
 			},
 			[&](const Diag::ShouldNotHaveTypeParamsInIface) {
 				writeStatic(writer, "a member function of an interface should not have type parameters");
+			},
+			[&](const Diag::SpecImplNotFound d) {
+				writeStatic(writer, "no implementation was found for spec signature ");
+				writeStr(writer, d.sigName);
 			},
 			[&](const Diag::TypeConflict d) {
 				writeStatic(writer, "the type of the expression conflicts with its expected type.\nexpected: ");
@@ -251,8 +255,9 @@ void printDiagnostics(const Diagnostics diagnostics) {
 	});
 
 	for (const Arr<const Diagnostic> group : groups) {
-		if (group[0].diag.isFileDoesNotExist()) {
-			writePath(writer, group[0].where.path);
+		if (first(group).diag.isFileDoesNotExist()) {
+			assert(group.size == 1);
+			writePath(writer, only(group).where.path);
 			writeStatic(writer, ": file does not exist\n");
 		} else {
 			for (const Diagnostic d : group) {

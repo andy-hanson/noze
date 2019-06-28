@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../util.h"
 #include "../util/path.h"
 #include "../util/sourceRange.h"
 

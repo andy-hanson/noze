@@ -1,5 +1,7 @@
 #include "./cli.h"
 
+#include <stdio.h>
+
 #include "./compiler.h"
 #include "./util/arrUtil.h"
 #include "./util/io.h"
@@ -122,13 +124,13 @@ namespace {
 	}
 
 	const Command parseRunCommand(Arena& arena, const AbsolutePath cwd, const Arr<const Str> args) {
-		if (args.size == 0 || isHelp(args[0]))
+		if (args.size == 0 || isHelp(at(args, 0)))
 			return Command{Command::HelpRun{}};
 		else {
-			const ProgramDirAndMain programDirAndMain = parseProgramDirAndMain(arena, cwd, args[0]);
+			const ProgramDirAndMain programDirAndMain = parseProgramDirAndMain(arena, cwd, at(args, 0));
 			if (args.size == 1)
 				return Command{Command::Run{programDirAndMain, emptyArr<const Str>()}};
-			else if (!strEqLiteral(args[1], "--"))
+			else if (!strEqLiteral(at(args, 1), "--"))
 				return Command{Command::HelpRun{}};
 			else
 				return Command{Command::Run{programDirAndMain, slice(args, 2)}};
@@ -140,7 +142,7 @@ namespace {
 		if (args.size == 0)
 			return Command{Command::Help{}};
 		else {
-			const Str arg0 = args[0];
+			const Str arg0 = at(args, 0);
 			if (strEqLiteral(arg0, "help") || strEqLiteral(arg0, "--help"))
 				return Command{Command::Help{}};
 			else if (strEqLiteral(arg0, "version") || strEqLiteral(arg0, "--version"))

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../util.h"
+#include "./opt.h"
+#include "./str.h"
 
 inline const Bool isValidPathPartChar(const char c) {
 	switch (c) {

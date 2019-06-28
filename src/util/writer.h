@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../util.h"
+#include "./arrBuilder.h"
+#include "./str.h"
 
 struct Writer {
 	Arena& arena;
@@ -26,8 +27,8 @@ void writeStr(Writer& writer, const Str s);
 inline void writeStatic(Writer& writer, const char* c) {
 	writeStr(writer, strLiteral(c));
 }
-void writeNat(Writer& writer, const size_t s);
-void writeInt(Writer& writer, const ssize_t s);
+void writeNat(Writer& writer, const Nat64 s);
+void writeInt(Writer& writer, const Int64 s);
 inline void writeBool(Writer& writer, const Bool b) {
 	writeStatic(writer, b ? "true" : "false");
 }
@@ -37,7 +38,7 @@ void writeWithCommas(Writer& writer, const Arr<T> a, Cb cb) {
 	for (const size_t i : Range{a.size}) {
 		if (i != 0)
 			writeStatic(writer, ", ");
-		cb(a[i]);
+		cb(at(a, i));
 	}
 }
 
@@ -46,7 +47,7 @@ void writeWithCommas(Writer& writer, const Arr<T> a, const Bool leadingComma, Cb
 	for (const size_t i : Range{a.size}) {
 		if (leadingComma || i != 0)
 			writeStatic(writer, ", ");
-		cb(a[i]);
+		cb(at(a, i));
 	}
 }
 

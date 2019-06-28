@@ -31,8 +31,9 @@ namespace {
 	}
 
 	void writeSpecializeOnArgsForMangle(Writer& writer, const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs) {
+		//TODO:EACHWITHINDEX
 		for (const size_t i : Range{specializeOnArgs.size})
-			specializeOnArgs[i].match(
+			at(specializeOnArgs, i).match(
 				[](const ConstantOrLambdaOrVariable::Variable) {},
 				[&](const Constant* c) {
 					writeStatic(writer, "_arg");
@@ -84,8 +85,8 @@ namespace {
 		// TODO: this is definitely not accurate. Luckily I use static asserts in the generated code to check this.
 		size_t s = 0;
 		for (const ConcreteField field : fields)
-			s += max(sizeof(void*), field.type.sizeOrPointerSize());
-		return max(s, 1);
+			s += max<const size_t>(sizeof(void*), field.type.sizeOrPointerSize());
+		return max<const size_t>(s, 1);
 	}
 
 	size_t sizeFromConcreteStructBody(const ConcreteStructBody body) {
@@ -99,7 +100,7 @@ namespace {
 			[](const ConcreteStructBody::Union u) {
 				size_t maxMember = 0;
 				for (const ConcreteType ct : u.members)
-					maxMember = max(maxMember, ct.sizeOrPointerSize());
+					maxMember = max<const size_t>(maxMember, ct.sizeOrPointerSize());
 				// Must factor in the 'kind' size. It seems that enums are int-sized.
 				return roundUp(sizeof(int) + maxMember, sizeof(void*));
 			},
@@ -133,8 +134,8 @@ namespace {
 		// TODO: mapOpZip helper
 		ArrBuilder<const ConcreteParam> res {};
 		for (const size_t i : Range{params.size}) {
-			const Param p = params[i];
-			const Opt<const ConcreteType> t = getSpecializedParamType(specializeOnArgs[i], [&]() {
+			const Param p = at(params, i);
+			const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() {
 				return getConcreteType(ctx, p.type, typeArgsScope);
 			});
 			if (t.has())
@@ -227,7 +228,10 @@ namespace {
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs)
 				assert(clv.isVariable());
 
-		const ConcreteFunSource source =  ConcreteFunSource{
+		assert(key.decl()->params().size == key.specializeOnArgs.size);
+
+		const ConcreteFunSource source = ConcreteFunSource{
+			res,
 			key.declAndTypeArgsAndSpecImpls,
 			key.specializeOnArgs,
 			decl->body(),
@@ -297,8 +301,8 @@ namespace {
 		ArrBuilder<const ConcreteParam> res {};
 		//TODO: 'zip' helper
 		for (const size_t i : Range{nonSpecializedParams.size}) {
-			const ConcreteParam p = nonSpecializedParams[i];
-			const Opt<const ConcreteType> t = getSpecializedParamType(specializeOnArgs[i], [&]() { return p.type; });
+			const ConcreteParam p = at(nonSpecializedParams, i);
+			const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() { return p.type; });
 			if (t.has())
 				res.add(ctx.arena, ConcreteParam{p.mangledName, t.force()});
 		}
@@ -343,6 +347,7 @@ namespace {
 			/*isCallFun*/ False);
 
 		const ConcreteFunSource source = ConcreteFunSource{
+			res,
 			info.containingFunDeclAndTypeArgsAndSpecImpls,
 			specializeOnArgs,
 			FunBody{info.body},
@@ -466,8 +471,8 @@ const ConcreteType getConcreteType(ConcretizeCtx& ctx, const Type t, const TypeA
 		},
 		[&](const TypeParam* p) {
 			// Handle calledConcreteFun first
-			assert(ptrEquals(p, typeArgsScope.typeParams.getPtr(p->index)));
-			return typeArgsScope.typeArgs[p->index];
+			assert(ptrEquals(p, getPtr(typeArgsScope.typeParams, p->index)));
+			return at(typeArgsScope.typeArgs, p->index);
 		},
 		[&](const StructInst* i) {
 			return getConcreteType_forStructInst(ctx, i, typeArgsScope);
@@ -617,8 +622,8 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 ) {
 	ArrBuilder<const ConcreteField> res;
 	for (const size_t i : Range{closure.size}) {
-		const ClosureField* c = closure[i];
-		const Opt<const ConcreteType> t = getSpecializedParamType(closureSpecialize[i], [&]() {
+		const ClosureField* c = at(closure, i);
+		const Opt<const ConcreteType> t = getSpecializedParamType(at(closureSpecialize, i), [&]() {
 			return getConcreteType(ctx, c->type, typeArgsScope);
 		});
 		if (t.has())

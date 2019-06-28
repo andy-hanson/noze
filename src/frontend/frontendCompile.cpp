@@ -2,6 +2,8 @@
 
 #include "../util/arrUtil.h"
 #include "../util/dictBuilder.h"
+#include "../util/mutDict.h"
+#include "../util/mutSet.h"
 #include "../util/resultUtil.h"
 #include "./check.h"
 #include "./parse.h"
@@ -80,11 +82,11 @@ namespace {
 		MutSet<const PathAndStorageKind, comparePathAndStorageKind> seenSet {};
 
 		const PathAndStorageKind firstPathAndStorageKind = PathAndStorageKind{mainPath, StorageKind::local};
-		toParse.push(tempArena, firstPathAndStorageKind);
+		push<const PathAndStorageKind>(tempArena, toParse, firstPathAndStorageKind);
 		seenSet.add(tempArena, firstPathAndStorageKind);
 
 		for (;;) {
-			const Opt<const PathAndStorageKind> opPath = toParse.pop();
+			const Opt<const PathAndStorageKind> opPath = pop(toParse);
 			if (!opPath.has())
 				break;
 
@@ -101,7 +103,7 @@ namespace {
 					todo<void>("diagnostic: import resolution failed");
 				const PathAndStorageKind dependencyPath = opDependencyPath.force();
 				if (seenSet.tryAdd(tempArena, dependencyPath))
-					toParse.push(tempArena, dependencyPath);
+					push<const PathAndStorageKind>(tempArena, toParse, dependencyPath);
 			}
 		}
 

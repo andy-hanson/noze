@@ -1,5 +1,7 @@
 #include "./compiler.h"
 
+#include <stdio.h>
+
 #include "./backend/writeToC.h"
 #include "./concreteModel.h"
 #include "./diag.h"
@@ -45,7 +47,7 @@ namespace {
 		});
 		int err = spawnAndWaitSync(cppCompiler, args, environ);
 		if (err != 0) {
-			printf("Compile error! Exit code: %d\n", err);
+			printf("c++ compile error! Exit code: %d\n", err);
 			todo<void>("compile error");
 		}
 	}

@@ -107,10 +107,10 @@ namespace {
 							return throwUnexpected<char>(lexer);
 					}
 				}();
-				res.set(outI, c);
+				setAt<const char>(res, outI, c);
 				outI++;
 			} else {
-				res.set(outI, *lexer.ptr);
+				setAt<const char>(res, outI, *lexer.ptr);
 				outI++;
 			}
 			lexer.ptr++;
@@ -119,7 +119,7 @@ namespace {
 		lexer.ptr++; // Skip past the closing '"'
 
 		assert(outI == res.size());
-		return res.freeze();
+		return freeze(res);
 	}
 
 	const Str takeNameRest(Lexer& lexer, const CStr begin) {
@@ -284,7 +284,7 @@ void takeDedent(Lexer& lexer)  {
 }
 
 const Bool tryTakeIndent(Lexer& lexer)  {
-	const Bool res = charEq(curChar(lexer), '\n');
+	const Bool res = eq<const char>(curChar(lexer), '\n');
 	if (res)
 		takeIndent(lexer);
 	return res;
@@ -334,7 +334,7 @@ Lexer createLexer(Arena& arena, const NulTerminatedStr source) {
 
 	if (len == 0)
 		todo<void>("empty file"); // TODO: allow this, but check that that's safe
-	else if (str[len - 1] != '\n')
+	else if (last(str) != '\n')
 		throw ParseDiagnostic{
 			SourceRange{len - 1, len},
 			ParseDiag{ParseDiag::MustEndInBlankLine{}}};

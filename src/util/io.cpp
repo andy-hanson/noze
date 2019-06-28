@@ -7,6 +7,7 @@
 #include <sys/wait.h> // waitpid
 #include <unistd.h>
 
+#include "./arrBuilder.h"
 #include "./arrUtil.h"
 
 namespace {
@@ -88,9 +89,9 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const AbsolutePath p
 	if (nBytesRead != size)
 		return todo<Ret>("nBytesRead not right?");
 
-	res.set(res.size() - 1, '\0');
+	setAt<const char>(res, res.size() - 1, '\0');
 
-	return some<const NulTerminatedStr>(NulTerminatedStr{res.freeze()});
+	return some<const NulTerminatedStr>(NulTerminatedStr{freeze(res)});
 }
 
 
@@ -212,7 +213,7 @@ const CommandLineArgs parseArgs(Arena& arena, const int argc, CStr const* const 
 	});
 	const AbsolutePath cwd = getCwd(arena);
 	// Take the tail because the first one is the executable
-	return CommandLineArgs{cwd, getPathToThisExecutable(arena, cwd, args[0]), tail(args), getEnviron(arena)};
+	return CommandLineArgs{cwd, getPathToThisExecutable(arena, cwd, first(args)), tail(args), getEnviron(arena)};
 }
 
 const Environ getEnviron(Arena& arena) {

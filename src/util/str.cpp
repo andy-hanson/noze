@@ -1,9 +1,9 @@
-#include "./util.h"
+#include "./str.h"
 
-#include "./util/arrUtil.h"
+#include "./arrUtil.h"
 
 const Bool strEq(const Str a, const Str b) {
-	return arrEq<const char, charEq>(a, b);
+	return arrEq<const char, eq<const char>>(a, b);
 }
 
 Comparison compareStr(const Str a, const Str b) {
@@ -13,11 +13,19 @@ Comparison compareStr(const Str a, const Str b) {
 	else if (isEmpty(b))
 		return Comparison::greater;
 	else {
-		const Comparison res = compareChar(a[0], b[0]);
+		const Comparison res = comparePrimitive<const char>(at(a, 0), at(b, 0));
 		return res != Comparison::equal ? res : compareStr(tail(a), tail(b));
 	}
 }
 
 const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s) {
 	return NulTerminatedStr{cat(arena, s, Str{"\0", 1})};
+}
+
+const Str copyStr(Arena& arena, const Str s) {
+	return copyArr(arena, s);
+}
+
+const Str stripNulTerminator(const NulTerminatedStr n)  {
+	return rtail(n.str);
 }

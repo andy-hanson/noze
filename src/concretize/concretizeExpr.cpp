@@ -17,12 +17,6 @@ namespace {
 		ConcretizeExprCtx(const ConcretizeExprCtx&) = delete;
 		ConcretizeExprCtx(ConcretizeExprCtx&&) = default;
 
-		const FunDecl* getSpecImpl(const size_t index) const {
-			unused(index);
-			// Add this info to the ConcreteFunSource
-			return todo<const FunDecl*>("getSpecImpl");
-		}
-
 		Arena& arena() {
 			return concretizeCtx.arena;
 		}
@@ -63,44 +57,47 @@ namespace {
 		const Arr<const ConstantOrExpr> notSpecializedArgs;
 	};
 
+	const FunDecl* funDeclFromCalledDecl(ConcretizeExprCtx& ctx, const CalledDecl d) {
+		return d.match(
+			[](const FunDecl* f) {
+				return f;
+			},
+			[&](const CalledDecl::SpecUseSig s) {
+				const FunDecl* f = at(ctx.concreteFunSource.specImpls(), s.sigIndexOverAllSpecUses);
+				return f;
+			});
+	}
+
 	const ConstantOrExpr concretizeCall(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Call e) {
 		const Arr<const ConstantOrExpr> args = map<const ConstantOrExpr>{}(ctx.arena(), e.args, [&](const Expr arg) {
 			return concretizeExpr(ctx, arg);
 		});
-		//TODO: handle calling specs
-		const FunDecl* f = e.calledDecl().asFunDecl();
-
+		const FunDecl* fDecl = funDeclFromCalledDecl(ctx, e.calledDecl());
 		const FunAndArgs funAndArgs = [&]() {
 			const Opt<const KnownLambdaBody*> opKnownLambdaBody = isEmpty(args)
 				? none<const KnownLambdaBody*>()
-				: getKnownLambdaBodyFromConstantOrExpr(args[0]);
+				: getKnownLambdaBodyFromConstantOrExpr(first(args));
 
 			// TODO: also handle isCallFunPtr
-			if (isCallFun(ctx.concretizeCtx, f) && opKnownLambdaBody.has()) {
+			if (isCallFun(ctx.concretizeCtx, fDecl) && opKnownLambdaBody.has()) {
 				const KnownLambdaBody* klb = opKnownLambdaBody.force();
 				const Arr<const ConstantOrExpr> itsArgs = tail(args);
-				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, f, itsArgs);
+				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, fDecl, itsArgs);
 				const ConcreteFun* actualCalled = instantiateKnownLambdaBodyForDirectCall(ctx.concretizeCtx, klb, itsSpecializeOnArgs.specializeOnArgs);
 				const Arr<const ConstantOrExpr> itsNotSpecializedArgs = itsSpecializeOnArgs.notSpecializedArgs;
 				// If arg0 is a constant, completely omit it. Else pass it as the closure arg.
 				const Arr<const ConstantOrExpr> allArgs = klb->hasClosure()
-					? prepend<const ConstantOrExpr>(ctx.arena(), args[0], itsNotSpecializedArgs)
+					? prepend<const ConstantOrExpr>(ctx.arena(), first(args), itsNotSpecializedArgs)
 					: itsNotSpecializedArgs;
 				return FunAndArgs{actualCalled, allArgs};
 			} else {
-				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, f, args);
+				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, fDecl, args);
 				const Arr<const FunDecl*> specImpls = map<const FunDecl*>{}(ctx.arena(), e.specImpls(), [&](const CalledDecl specImpl) {
-					return specImpl.match(
-						[](const FunDecl* f) {
-							return f;
-						},
-						[&](const CalledDecl::SpecUseSig s) {
-							return  ctx.getSpecImpl(s.sigIndexOverAllSpecUses);
-						});
+					return funDeclFromCalledDecl(ctx, specImpl);
 				});
 				const ConcreteFun* fun = getConcreteFunForCallAndFillBody(
 					ctx.concretizeCtx,
-					f,
+					fDecl,
 					ctx.typesToConcreteTypes(e.typeArgs()),
 					specImpls,
 					specializeOnArgs.specializeOnArgs);
@@ -122,7 +119,7 @@ namespace {
 		const KnownLambdaBody* klb = ctx.concreteFunSource.knownLambdaBody.force();
 		const size_t index = e.index();
 		const Arr<const ClosureSingleSpecialize> specialize = klb->closureSpecialize;
-		const ClosureSingleSpecialize specialized = specialize[index];
+		const ClosureSingleSpecialize specialized = at(specialize, index);
 		if (specialized.clv.isConstant())
 			return ConstantOrExpr{specialized.clv.asConstant()};
 		else {
@@ -245,7 +242,7 @@ namespace {
 			const Opt<const ConcreteField*> field = clv.isConstant()
 				? none<const ConcreteField*>()
 				: [&]() {
-					const ConcreteField* res = closureFields.getPtr(fieldI);
+					const ConcreteField* res = getPtr(closureFields, fieldI);
 					fieldI++;
 					return some<const ConcreteField*>(res);
 				}();
@@ -330,7 +327,7 @@ namespace {
 			[&](const Constant* c) {
 				const ConstantKind::Union u = c->kind.asUnion();
 				assert(u.unionType == matchedUnion);
-				const Expr::Match::Case kase = e.cases[u.memberIndex];
+				const Expr::Match::Case kase = at(e.cases, u.memberIndex);
 				if (kase.local.has()) {
 					const ConcreteLocal* local = concretizeLocal(ctx, kase.local.force(), ConstantOrLambdaOrVariable{u.member});
 					return concretizeWithLocal(ctx, kase.local.force(), local, *kase.then);
@@ -391,15 +388,15 @@ namespace {
 	const ConcreteParam* findCorrespondingConcreteParam(const ConcretizeExprCtx& ctx, const size_t paramIndex) {
 		size_t paramI = 0;
 		for (const size_t i : Range{paramIndex})
-			if (!ctx.concreteFunSource.paramsSpecialize[i].isConstant())
+			if (!at(ctx.concreteFunSource.paramsSpecialize, i).isConstant())
 				paramI++;
-		return ctx.currentConcreteFun->paramsExcludingClosure().getPtr(paramI);
+		return getPtr(ctx.currentConcreteFun->paramsExcludingCtxAndClosure(), paramI);
 	}
 
 	const ConstantOrExpr concretizeParamRef(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::ParamRef e) {
 		const size_t paramIndex = e.param->index;
 		// NOTE: we'll never see a ParamRef to a param from outside of a lambda -- that would be a ClosureFieldRef instead.
-		const ConstantOrLambdaOrVariable paramSpecialize = ctx.concreteFunSource.paramsSpecialize[paramIndex];
+		const ConstantOrLambdaOrVariable paramSpecialize = at(ctx.concreteFunSource.paramsSpecialize, paramIndex);
 		if (paramSpecialize.isConstant())
 			return ConstantOrExpr{paramSpecialize.asConstant()};
 		else {
@@ -410,8 +407,7 @@ namespace {
 	}
 
 	const ConcreteField* getMatchingField(const ConcreteType type, const size_t fieldIndex) {
-		return type.strukt->body().asFields().fields.getPtr(fieldIndex);
-
+		return getPtr(type.strukt->body().asFields().fields, fieldIndex);
 	}
 
 	const ConcreteField* getMatchingField(ConcretizeExprCtx& ctx, const StructInst* targetType, const StructField* field) {
@@ -440,7 +436,7 @@ namespace {
 				if (kind.isRecord()) {
 					const ConstantKind::Record r = kind.asRecord();
 					assert(compareConcreteType(targetType, r.type) == Comparison::equal);
-					return ConstantOrExpr{r.args[fieldIndex]};
+					return ConstantOrExpr{at(r.args, fieldIndex)};
 				} else if (kind.isArray()) {
 					const ConstantKind::Array a = kind.asArray();
 					// Fields are "size", "data"
@@ -579,7 +575,7 @@ namespace {
 				// never a constant
 				const ConstantOrExpr target = concretizeExpr(ctx, *e.target);
 				const ConcreteStruct* iface = ctx.getConcreteType_forStructInst(e.iface).mustBeNonPointer();
-				const ConcreteSig* message = iface->body().asIface().messages.getPtr(e.messageIndex);
+				const ConcreteSig* message = getPtr(iface->body().asIface().messages, e.messageIndex);
 				const Arr<const ConstantOrExpr> args = getArgsNonConstWithDynamicLambdas(ctx, range, e.args);
 				const ConcreteType type = ctx.getConcreteType(e.getType());
 				return nuExpr(arena, type, range, ConcreteExpr::MessageSend{target, message, args});

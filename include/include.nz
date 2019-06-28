@@ -597,30 +597,6 @@ add void(a mut-arr ?t, value ?t) trusted
 	(a.data + a.size) set value
 	a.size := a.size incr
 
-range-nat64 record
-	| lo inclusive, hi exclusive
-	lo nat64
-	hi nat64
-
-to range-nat64(lo nat64, hi nat64)
-	lo <= hi assert
-	new lo, hi
-
-empty? bool(r range-nat64)
-	r.lo == r.hi
-
-tail range-nat64(r range-nat64)
-	r.empty? forbid
-	r.lo.incr to r.hi
-
-each void(r range-nat64, f fun1 void nat64)
-	when
-		r empty?
-			pass
-		else
-			f call r.lo
-			r.tail each f
-
 make-arr arr ?t(size nat64, f fun1 ?t nat64)
 	size make-mut-arr f freeze
 
@@ -635,9 +611,13 @@ to-mut-arr mut-arr ?t(a arr ?t)
 		a at i
 
 | Currently only used to implement print-sync, so don't worry about varargs
-printf void(format c-str, sz nat64, data ptr char) summon unsafe extern
+| TODO: 'summon'
+printf void(format c-str, sz nat64, data ptr char) unsafe extern
 
 print-sync void(s str) summon trusted noctx
+	printf: "%.*s\n\0".data, s.size, s.data
+
+debug-print void(s str) trusted noctx
 	printf: "%.*s\n\0".data, s.size, s.data
 
 | Used to make code run after the actor's next step. Equivalent to `sleep 0`.
@@ -755,3 +735,117 @@ map arr ?out(a arr ?in, mapper fun1 ?out ?in) trusted
 map-values dict ?k ?v-out(d dict ?k ?v-in, mapper fun1 ?v-out ?v-in)
 	new-values = d.values map mapper
 	new d.keys, new-values
+
+
+region cell
+
+cell<?t> record mut
+	value mut ?t
+
+get ?t(c cell ?t)
+	c.value
+
+set void(c cell ?t, v ?t)
+	c.value := v
+
+get-and-incr nat64(c cell nat64)
+	res = c get
+	c set: res incr
+	res
+
+region iterator
+
+| TODO: ALIAS
+iterator<?t> record mut
+	get-next fun0 opt<?t>
+
+next opt ?t(i iterator ?t)
+	i.get-next call
+
+| Iterator that can be started over from the beginning.
+stream<?t> record mut
+	get-iter fun0 iterator<?t>
+
+iter iterator ?t(s stream ?t)
+	s.get-iter call
+
+$iter<?t, ?e>
+	iter iterator ?e(t ?t)
+
+to-stream<?t, ?e> stream ?e(t ?t) $iter<?t, ?e>
+	new {t iter}
+
+region range
+
+range-nat64 record
+	| lo inclusive, hi exclusive
+	lo nat64
+	hi nat64
+
+iter iterator nat64(r range-nat64)
+	n = new<cell<nat64>> r.lo
+	new \
+		when
+			n.get == r.hi
+				new<none>
+			else
+				new<some<nat64>> n get-and-incr
+
+to range-nat64(lo nat64, hi nat64)
+	lo <= hi assert
+	new lo, hi
+
+empty? bool(r range-nat64)
+	r.lo == r.hi
+
+tail range-nat64(r range-nat64)
+	r.empty? forbid
+	r.lo.incr to r.hi
+
+each void(s stream ?t, f fun1 void ?t)
+	s.iter each-recur f
+
+each void(r range-nat64, f fun1 void nat64)
+	r.iter each-recur f
+
+| TODO: generic
+each-recur void(i iterator ?t, f fun1 void ?t)
+	match i next
+		none
+			pass
+		some s
+			f call s.value
+			| TODO: omit type arguments
+			i each-recur<?t> f
+
+| TODO: generic
+filter stream nat64(in stream nat64, pred fun1 bool nat64)
+	| TODO: omit type arguments
+	new<stream<nat64>> \
+		itr = in iter
+		new<iterator<nat64>> {itr filter-helper pred}
+
+filter-helper opt nat64(i iterator nat64, pred fun1 bool nat64)
+	match i next
+		none
+			new<none>
+		some s
+			v = s.value
+			when
+				pred call v
+					new<some<nat64>> v
+				else
+					| This one didn't satisfy the predicate, but keep trying until we get one or each the end
+					i filter-helper pred
+
+
+
+sum nat64(t ?t) $iter<?t, nat64>
+	t.iter sum-helper
+
+sum-helper nat64(i iterator nat64)
+	match i.next
+		none
+			zero
+		some s
+			s.value + i.sum-helper

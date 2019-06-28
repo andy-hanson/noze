@@ -17,9 +17,9 @@ private:
 	Late<const Constant*> _false;
 	Late<const Constant*> _true;
 	Late<const Constant*> __void;
-	MutDict<const char, const Constant*, compareChar> chars;
-	MutDict<const Int64, const Constant*, compareInt64> int64s;
-	MutDict<const Nat64, const Constant*, compareNat64> nat64s;
+	MutDict<const char, const Constant*, comparePrimitive<const char>> chars;
+	MutDict<const Int64, const Constant*, comparePrimitive<const Int64>> int64s;
+	MutDict<const Nat64, const Constant*, comparePrimitive<const Nat64>> nat64s;
 	size_t nextLambdaId;
 	// No dict for lambdas?
 	MutDict<const ConcreteType, ConstantsForRecord*, compareConcreteType> records;

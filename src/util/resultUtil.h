@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../util.h"
+#include "./result.h"
 
 template <typename Success, typename Failure>
 inline Result<Success, Failure> success(Success s) {

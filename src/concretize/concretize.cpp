@@ -43,7 +43,7 @@ namespace {
 	const Arr<const FunDecl*> getCallFuns(Arena& arena, const Program& program) {
 		const Arr<const FunDecl*> allCallFuns = program.includeModule->funsMap.get(strLiteral("call"));
 		const Arr<const FunDecl*> res = filter(arena, allCallFuns, [&](const FunDecl* f) {
-			const StructDecl* decl = f->params()[0].type.asStructInst()->decl;
+			const StructDecl* decl = first(f->params()).type.asStructInst()->decl;
 			return exists(program.commonTypes.funTypes, [&](const StructDecl* funStruct) {
 				return ptrEquals(decl, funStruct);
 			});

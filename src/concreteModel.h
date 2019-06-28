@@ -1,6 +1,7 @@
 #pragma once
 
-#include "./util.h"
+#include "./util/late.h"
+#include "./util/mutDict.h"
 #include "./util/sourceRange.h"
 #include "./util/writer.h"
 
@@ -202,7 +203,6 @@ struct ConcreteStruct {
 	inline size_t sizeBytes() const {
 		if (!_sizeBytes.isSet()) {
 			Arena arena {};
-			printf("sizeBytes failing for %s\n", strToNulTerminatedStr(arena, mangledName).asCStr());
 			todo<void>("sizeBytes failed");
 		}
 		return _sizeBytes.get();
@@ -848,7 +848,7 @@ struct ConcreteFun {
 	inline const ConcreteType returnType() const {
 		return sig.returnType;
 	}
-	inline const Arr<const ConcreteParam> paramsExcludingClosure() const {
+	inline const Arr<const ConcreteParam> paramsExcludingCtxAndClosure() const {
 		return sig.params;
 	}
 

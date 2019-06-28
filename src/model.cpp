@@ -49,8 +49,8 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{False, s});
 
 	for (const size_t i : Range{remoteFunTypes.size})
-		if (ptrEquals(remoteFunTypes[i], s))
-			return some<const CommonTypes::LambdaInfo>(LambdaInfo{True, funTypes[i]});
+		if (ptrEquals(at(remoteFunTypes, i), s))
+			return some<const CommonTypes::LambdaInfo>(LambdaInfo{True, at(funTypes, i)});
 
 	return none<const CommonTypes::LambdaInfo>();
 }
@@ -186,7 +186,7 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 void writeType(Writer& writer, const Type type) {
 	type.match(
 		[&](const Type::Bogus) {
-			unreachable<void>();
+			writeStatic(writer, "<<bogus>>");
 		},
 		[&](const TypeParam* p) {
 			writeChar(writer, '?');

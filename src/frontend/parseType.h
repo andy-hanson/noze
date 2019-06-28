@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../util.h"
 #include "./lexer.h"
 
 const Arr<const TypeAst> tryParseTypeArgs(Lexer& lexer);
