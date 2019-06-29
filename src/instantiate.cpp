@@ -7,8 +7,7 @@ const Type instantiateType(Arena& arena, const Type type, const TypeParamsAndArg
 		},
 		[&](const TypeParam* p) {
 			const Opt<const Type> op = tryGetTypeArg(typeParamsAndArgs, p);
-			return op.force(); // TODO: never fials, right?
-			//return op.has() ? op.force() : type;
+			return op.has() ? op.force() : type;
 		},
 		[&](const StructInst* i) {
 			return Type{instantiateStructInst(arena, i, typeParamsAndArgs)};
@@ -62,9 +61,9 @@ const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, con
 		},
 		[&](const StructBody::Fields f) {
 			const Arr<const StructField> fields = map<const StructField>{}(arena, f.fields, [&](const StructField f) {
-				return StructField{f.isMutable, f.name, instantiateType(arena, f.type, typeParamsAndArgs), f.index};
+				return f.withType(instantiateType(arena, f.type, typeParamsAndArgs));
 			});
-			return StructBody{StructBody::Fields{fields}};
+			return StructBody{StructBody::Fields{f.forcedByValOrRef, fields}};
 		},
 		[&](const StructBody::Union u) {
 			const Arr<const StructInst*> members = map<const StructInst*>{}(arena, u.members, [&](const StructInst* i) {
@@ -102,12 +101,13 @@ const StructInst* instantiateStruct(
 	}();
 
 	StructInst* res = arena.nu<StructInst>()(decl, typeArgs, purity);
+	push<const StructInst*>(arena, decl->insts, res);
+
 	if (decl->bodyIsSet())
 		res->setBody(instantiateStructBody(arena, decl, typeArgs));
 	else
 		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
 		push(arena, *delayStructInsts.force(), res);
-	push<const StructInst*>(arena, decl->insts, res);
 	return res;
 }
 

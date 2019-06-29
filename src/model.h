@@ -156,15 +156,26 @@ struct Message {
 };
 
 struct StructField {
+	const SourceRange range;
 	const Bool isMutable;
 	const Identifier name;
 	const Type type;
 	const size_t index;
+
+	inline const StructField withType(const Type newType) const {
+		return StructField{range, isMutable, name, newType, index};
+	}
+};
+
+enum class ForcedByValOrRef {
+	byVal,
+	byRef,
 };
 
 struct StructBody {
 	struct Builtin {};
 	struct Fields {
+		const Opt<const ForcedByValOrRef> forcedByValOrRef;
 		const Arr<const StructField> fields;
 	};
 	struct Union {

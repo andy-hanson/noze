@@ -1,8 +1,18 @@
 | actual main function
 main int64() trusted noctx summon
-	ctx-by-val = as<by-val<ctx>>: new zero, zero, as-non-const: zero
-	ctx-by-ptr = ctx-by-val ref-of-val
-	ctx-by-ptr call-with-ctx &other-main
+	n-threads = one as<nat64>
+	gctx-by-val = new-global-ctx
+	gctx = gctx-by-val ref-of-val
+	vat-by-val = new-vat: gctx, zero
+	vat = vat-by-val ref-of-val
+
+	| TODO: vat.get-actor-id
+	actor-id = new<some<actor-id>> zero
+
+	ctx-by-val = new-ctx: vat, actor-id
+	ctx = ctx-by-val ref-of-val
+	ctx call-with-ctx &other-main
+	| TODO: catch exceptions and return 1 on error
 	zero
 
 test void() trusted summon

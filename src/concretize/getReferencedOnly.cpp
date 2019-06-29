@@ -104,7 +104,7 @@ namespace {
 				ctx.addFun(e.alloc);
 				setReferencedInExpr(ctx, *e.inner);
 			},
-			[&](const ConcreteExpr::CallConcreteFun e) {
+			[&](const ConcreteExpr::Call e) {
 				ctx.addFun(e.called);
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},

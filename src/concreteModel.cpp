@@ -1,25 +1,7 @@
 #include "./concreteModel.h"
 
+#include "./concretize/concretizeUtil.h" // getKnownLambdaBodyFromConstantOrExpr
 #include "./util/arrUtil.h"
-
-// This determines whether the tyep must be by-reference
-const Bool ConcreteStruct::isSelfMutable() const {
-	return body().match(
-		[](const ConcreteStructBody::Builtin) {
-			return False;
-		},
-		[](const ConcreteStructBody::Fields f) {
-			return exists(f.fields, [](const ConcreteField f) {
-				return f.isMutable;
-			});
-		},
-		[](const ConcreteStructBody::Union) {
-			return False;
-		},
-		[](const ConcreteStructBody::Iface) {
-			return False;
-		});
-}
 
 ConstantKind::Lambda::Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} {
 	// If it needs a closure it can't be a constant
@@ -27,7 +9,7 @@ ConstantKind::Lambda::Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} 
 	assert(!klb->hasClosure());
 }
 
-ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<const ConstantOrExpr> a) : called{c}, args{a} {
+ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a) : called{c}, args{a} {
 	assert(called->arityExcludingCtxIncludingClosure() == args.size);
 
 	if (called->closureParam.has()) {
@@ -35,13 +17,13 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 	}
 	for (const size_t i : Range{called->paramsExcludingCtxAndClosure().size}) {
 		const ConcreteParam param = at(called->paramsExcludingCtxAndClosure(), i);
-		const size_t i2 = i + (called->closureParam.has() ? 1 : 0);
 		// If the arg has a knownlambdabody but no closure, we shouldn't bother passing it.
-		const Opt<const ConcreteType> argType = at(args, i2).typeWithKnownLambdaBody();
+		const ConstantOrExpr arg = at(args, i + boolToNat(called->closureParam.has()));
+		const Opt<const ConcreteType> argType = arg.typeWithKnownLambdaBody();
 		if (!argType.has() || !concreteTypeEq(argType.force(), param.type)) {
 			Arena arena {};
 			Writer writer { arena };
-			writeStatic(writer, "CallConcreteFun argument type mismatch for ");
+			writeStatic(writer, "Call argument type mismatch for ");
 			writeStr(writer, c->mangledName());
 			writeStatic(writer, "\nExpected: ");
 			writeConcreteType(writer, param.type);
@@ -57,11 +39,17 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 	}
 }
 
+ConcreteExpr::Cond::Cond(const ConcreteExpr* _cond, const ConstantOrExpr _then, const ConstantOrExpr _elze)
+	: cond{_cond}, then{_then}, elze{_elze} {
+	// Can't specialize with KnownLambdaBody when there are different branches
+	assert(!getKnownLambdaBodyFromConstantOrExpr(then).has() && !getKnownLambdaBodyFromConstantOrExpr(elze).has());
+}
+
 ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const ConstantOrExpr _closure)
 	: fun{_fun}, closure{_closure} {
 	assert(fun->hasClosure()); // All dynamic funs take a closure, even if it's just void*
 	const ConcreteType closureType = closure.typeWithoutKnownLambdaBody();
-	assert(closureType.sizeOrPointerSize() == sizeof(void*));
+	assert(closureType.sizeOrPointerSizeBytes() == sizeof(void*));
 	assert(concreteTypeEq(closureType, fun->closureType().force()));
 	closure.match(
 		[&](const Constant* c) {

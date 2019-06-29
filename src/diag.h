@@ -137,7 +137,8 @@ struct Diag {
 		enum class Kind {
 			structOrAlias,
 			spec,
-			iface,
+			field,
+			unionMember,
 		};
 		const Kind kind;
 		const Str name;

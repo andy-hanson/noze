@@ -39,3 +39,9 @@ inline const T max(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value, "must be primitive");
 	return a > b ? a : b;
 }
+
+template <typename T>
+inline const T min(const T a, const T b) {
+	static_assert(std::is_fundamental<T>::value, "must be primitive");
+	return a < b ? a : b;
+}

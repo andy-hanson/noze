@@ -1,12 +1,25 @@
+!
+	| TODO: should be able to infer type argument to null!
+
+!
+	`decr-noctx` has `noctx` highlighted
+
+!
+	noctx lambdas are hard??
+	Should have a noctx-fun type maybe?
 
 
 !
-	specialization code to own file
+	"can't call a non-'noctx' fun": mention the name of the fun being called!
 
+!
+	ctx-by-v = new-ctx vat, actor-id
+
+	This is wrong (should be colon after "new-ctx"), but the parse error was confusing.
 
 
 !
-	containingFunInfo -> containingFuninst
+	move 'everyPair' somewhere
 
 !
 	// TODO: make sure to infer type params in this case!
@@ -22,9 +35,6 @@
 
 !
 	Kill TypeParamsScope? just use Arr<const TypeParam>
-
-!
-	ExprContext -> ExprCtx
 
 !
 	Is FunDeclAndTypeArgs ever used independently of ConcreteFuNInst?
@@ -46,34 +56,20 @@
 
 
 !
-
-	sortandgroup -- take a fn not a lambda?
-
-!
 	rename concretefunInst?
-
 	concretefun is fully-concrete
-
 	concretefuninst is missing parameter specializations
 
 !
 	//TODO:MOVE
 
-TODO
-	MutArr index operator --> 'at'
-
 //TODO:EACHWITHINDEX
-
-TODO
-	implement getSpecImpl
-
 
 !
 	showPos -> writePos?
 
 !
 	writeref
-
 
 !
 	concretizeCtx should carry MutDict<ConcreteFun*, uint16_t> recursionDepths.
@@ -96,10 +92,6 @@ remove all '999' in include.nz
 	We should write the 'arrdata' constants first
 	*then* write arrs and pointers
 
-
-!
-	ctx.diag -> ctx.addDiag
-
 !
 	bool_to_int helper
 
@@ -108,27 +100,6 @@ TODO
 
 TODO
 	too many functions called 'getallocfun'
-
-!
-	KnownLambdaBody(
-		const ConcreteType _dynamicType,
-		const ConcreteSig _nonSpecializedSig,
-		const Str _mangledName,
-		const Opt<const ConcreteParam> _closureParam,
-		const Arr<const ClosureSingleSpecialize> _closureSpecialize
-	) :
-		dynamicType{_dynamicType},
-		nonSpecializedSig{_nonSpecializedSig},
-		mangledName{_mangledName},
-		closureParam{_closureParam},
-		closureSpecialize{_closureSpecialize}
-	{
-		// Closure is passed as void*, so it must fit in that size.
-		assert(!closureParam.has() || closureParam.force().type.sizeOrPointerSize() == sizeof(void*));
-	}
-
-
-	Assertion was in wrong place
 
 TODO
 	knownlambdabody closure fields should go in their own struct? make the whole thing optional?
@@ -139,9 +110,6 @@ TODO
 
 !
 	_nuConstant :: don't take id as an argument, just hve a global id counter
-
-!
-	mustBeNonPointer -> mustBeValue
 
 ! Output should just write to string, just be Writer.
 Then printf at the end
@@ -156,44 +124,14 @@ Then printf at the end
 	KnownLambdaBody(const KnownLambdaBody&) = default;
 	= delete?
 
-!
-	assert:
-	on Call -- no argument should have a knownlambdabody unless specialized for that
-
-	on Cond -- no side should haev a knownlambdabody, period
-
-
-
-!
-createrecord:
-			assert(alloc.has() == type.isPointer);
-
-
 TODO
 	separate ConcreteExpr from ConcreteExprKind?
-
-
-TODO
-	specializeonargs and related functions to own file
-
-
-!
-	notSpecializedArgs -> nonConstantArgs
-
 
 !
 	//TODO: print type args too
 
 !
 	// TODO: also require return type to be immutable
-
-
-TODO
-each-in-range has a tendency to instantiate infinitely!
-
-TODO
-rename notSpecializedArgs to notConstantArgs
-
 
 TODO
 	name fewer structs LambdaInfo

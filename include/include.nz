@@ -1,7 +1,7 @@
 region basic
 
 | Unrecoverable assertion failure
-hard-fail ?t(reason str) unsafe noctx builtin
+hard-fail ?t(reason str) noctx unsafe builtin
 
 fail ?t(reason str)
 	todo
@@ -12,16 +12,12 @@ todo ?t() trusted noctx
 
 region system
 
-| This will be a large struct
-ctx record
-	a nat64
-	b nat64
-	c nat64
-
 by-val<?t> builtin
 
 | Unsafe because the ref will only be valid temporarily!
-ref-of-val ?t(b by-val ?t) unsafe noctx builtin
+ref-of-val ?t(b by-val ?t) noctx unsafe builtin
+
+ptr-to ptr ?t(t ?t) noctx unsafe builtin
 
 | Since this fun is not marked 'noctx', it simply returns the ctx that already exists.
 get-ctx ctx() unsafe builtin
@@ -31,28 +27,28 @@ byte builtin
 
 | NOTE: if ?t is a reference type, ptr<?t> is a pointer to a pointer to ?t
 ptr<?t> builtin
-deref ?t(p ptr ?t) unsafe noctx builtin
-set void(p ptr ?t, value ?t) unsafe noctx builtin
+deref ?t(p ptr ?t) noctx unsafe builtin
+set void(p ptr ?t, value ?t) noctx unsafe builtin
 
-null ptr ?t() unsafe noctx builtin
+null ptr ?t() noctx builtin
 
 any-ptr alias
 	ptr byte
 
-is-reference-type<?t> bool() unsafe noctx builtin
-size-of<?t> nat64() unsafe noctx builtin
+is-reference-type<?t> bool() noctx unsafe builtin
+size-of<?t> nat64() noctx unsafe builtin
 
-size-or-pointer-size<?t> nat64() unsafe noctx
+size-or-pointer-size<?t> nat64() noctx unsafe
 	when
 		is-reference-type<?t>
 			size-of<ptr<void>>
 		else
 			size-of<?t>
 
-ptr-cast ptr ?out(p ptr ?in) unsafe noctx builtin
+ptr-cast ptr ?out(p ptr ?in) noctx unsafe builtin
 
-+ ptr ?t(p ptr ?t, offset nat64) unsafe noctx builtin
-- ptr ?t(p ptr ?t, offset nat64) unsafe noctx builtin
++ ptr ?t(p ptr ?t, offset nat64) noctx unsafe builtin
+- ptr ?t(p ptr ?t, offset nat64) noctx unsafe builtin
 
 malloc any-ptr(size nat64) unsafe extern
 
@@ -211,8 +207,8 @@ unsafe-to-int64 int64(n nat64) noctx builtin
 wrapping-add nat64(a nat64, b nat64) noctx builtin
 wrapping-sub nat64(a nat64, b nat64) noctx builtin
 wrapping-mul nat64(a nat64, b nat64) noctx builtin
-unsafe-div nat64(a nat64, b nat64) unsafe noctx builtin
-unsafe-mod nat64(a nat64, b nat64) unsafe noctx builtin
+unsafe-div nat64(a nat64, b nat64) noctx unsafe builtin
+unsafe-mod nat64(a nat64, b nat64) noctx unsafe builtin
 zero nat64() noctx builtin
 one nat64() noctx builtin
 two nat64() noctx
@@ -233,11 +229,15 @@ nine nat64() noctx
 	eight incr
 ten nat64() noctx
 	nine incr
+hundred nat64() noctx
+	ten wrapping-mul ten
+thousand nat64() noctx
+	hundred wrapping-mul ten
 
 wrapping-add int64(a int64, b int64) noctx builtin
 wrapping-sub int64(a int64, b int64) noctx builtin
 wrapping-mul int64(a int64, b int64) noctx builtin
-unsafe-div int64(a int64, b int64) unsafe noctx builtin
+unsafe-div int64(a int64, b int64) noctx unsafe builtin
 zero int64() noctx builtin
 one int64() noctx builtin
 neg-one int64() noctx
@@ -269,8 +269,12 @@ incr int64(i int64) noctx
 	| TODO: assert: i != max-value
 	i wrapping-add one
 
-incr ptr ?t(p ptr ?t) unsafe noctx
+incr ptr ?t(p ptr ?t) noctx unsafe
 	p + one
+
+decr-noctx nat64(n nat64) noctx unsafe
+	hard-forbid: n == zero
+	n wrapping-sub one
 
 decr nat64(n nat64)
 	forbid: n == zero
@@ -279,7 +283,7 @@ decr nat64(n nat64)
 | decr int64(i int64)
 |	i - 1
 
-decr ptr ?t(p ptr ?t) unsafe noctx
+decr ptr ?t(p ptr ?t) noctx unsafe
 	p - one
 
 + nat64(a nat64, b nat64)
@@ -374,7 +378,7 @@ mod nat64(a int64, b nat64)
 + float64(a float64, b float64) noctx builtin
 - float64(a float64, b float64) noctx builtin
 * float64(a float64, b float64) noctx builtin
-unsafe-div float64(a float64, b float64) unsafe noctx builtin
+unsafe-div float64(a float64, b float64) noctx unsafe builtin
 zero float64() noctx builtin
 one float64() noctx builtin
 
@@ -426,10 +430,10 @@ region Util
 
 pass void() noctx builtin
 pass fut void() noctx builtin
-drop void(t ?t)
+drop void(t ?t) noctx
 	pass
 
-hard-assert void(condition bool) unsafe noctx
+hard-assert void(condition bool) noctx unsafe
 	when
 		condition
 			pass
@@ -443,10 +447,13 @@ assert void(condition bool)
 		else
 			"Assertion failed!" fail
 
+hard-forbid void(condition bool) noctx unsafe
+	condition.not hard-assert
+
 forbid void(condition bool)
 	condition.not assert
 
-hard-assert-unreachable ?t() unsafe noctx
+hard-assert-unreachable ?t() noctx unsafe
 	"should be unreachable" hard-fail
 
 assert-unreachable ?t()
@@ -489,7 +496,7 @@ arr<?t> record
 	size nat64
 	data ptr ?t
 
-empty-arr arr ?t() trusted
+empty-arr arr ?t() noctx trusted
 	| TODO: should be able to infer type argument to null!
 	new zero, null<?t>
 
@@ -552,15 +559,18 @@ uninitialized-data ptr ?t(size nat64) unsafe
 uninitialized-mut-arr mut-arr ?t(size nat64) unsafe
 	new false, size, size, uninitialized-data<?t>: size
 
-empty-mut-arr mut-arr ?t() trusted
-	uninitialized-mut-arr<?t>: zero
+new-mut-arr mut-arr ?t() trusted
+	new false, zero, zero, null
+
+new-mut-arr-by-val by-val mut-arr<?t>() noctx trusted
+	new false, zero, zero, null
 
 set-at void(a mut-arr ?t, index nat64, value ?t) trusted
 	assert: index < a.size
 	(a.data + index) set value
 
 | Unsafe as this does *not* freeze it!
-unsafe-as-arr arr ?t(a mut-arr ?t) unsafe noctx
+unsafe-as-arr arr ?t(a mut-arr ?t) noctx unsafe
 	new a.size, a.data
 
 freeze arr ?t(a mut-arr ?t) noctx trusted
@@ -679,7 +689,7 @@ mut-dict<?k, ?v> record
 
 empty-mut-dict mut-dict ?k ?v()
 	| TODO: should be able to infer type arguments -- worked when there was only one field...
-	new empty-mut-arr<?k>, empty-mut-arr<?v>
+	new new-mut-arr<?k>, new-mut-arr<?v>
 
 unsafe-as-dict dict ?k ?v(m mut-dict ?k ?v) unsafe
 	new m.keys.unsafe-as-arr, m.values.unsafe-as-arr
@@ -843,3 +853,194 @@ sum-helper nat64(i iterator nat64)
 			zero
 		some s
 			s.value + i.sum-helper
+
+
+region atomic
+
+atomic-bool record
+	value mut bool
+
+new-atomic-bool by-val atomic-bool() noctx
+	new false
+
+| TODO: works on any primitive type, not just bool
+compare-exchange-strong bool(value-ptr ptr bool, expected-ptr ptr bool, desired bool) noctx builtin
+
+try-change bool(a atomic-bool, old-value bool) noctx trusted
+	a.value.ptr-to compare-exchange-strong old-value.ptr-to, old-value.not
+
+try-set bool(a atomic-bool) noctx
+	a try-change false
+
+try-unset bool(a atomic-bool) noctx
+	a try-change true
+
+must-unset void(a atomic-bool) noctx unsafe
+	did-unset = a try-unset
+	did-unset hard-assert
+
+lock record
+	by-ref
+	| Storing this by-val to avoid needing allocations.
+	| User should prefer to store the lock by-val too, and only pass by-ref
+	is-locked by-val atomic-bool
+
+new-lock by-val lock() noctx
+	new new-atomic-bool
+
+try-acquire-lock bool(l lock) noctx trusted
+	l.is-locked.ref-of-val try-set
+
+acquire-lock void(l lock) noctx unsafe
+	l acquire-lock-recur zero
+
+acquire-lock-recur void(l lock, n-tries nat64) noctx unsafe
+	when
+		l.try-acquire-lock
+			pass
+		n-tries == thousand
+			hard-fail: "Couldn't acquire lock after 1000 tries"
+		else
+			l acquire-lock-recur n-tries.incr
+
+release-lock void(l lock) noctx unsafe
+	l.is-locked.ref-of-val must-unset
+
+with-lock ?t(l lock, f fun0 ?t) trusted
+	l acquire-lock
+	res = f call
+	l release-lock
+	res
+
+condition record
+	lk by-val lock
+	value mut nat64
+
+new-condition by-val condition() noctx
+	new new-lock, zero
+
+broadcast void(c condition) trusted
+	c.lk.ref-of-val with-lock \
+		c.value := c.value incr
+
+get-last-checked nat64(c condition) noctx
+	c.value
+
+usleep void(micro-seconds nat64) extern
+
+| TODO:MOVE
+sleep-ms-sync void(ms nat64) noctx
+	| TODO: wrapping-mul is unsafe
+	ms wrapping-mul thousand usleep
+
+wait-on void(c condition, last-checked nat64) noctx
+	when
+		c.value == last-checked
+			pass
+		else
+			hundred sleep-ms-sync
+
+
+| TODO: use atomic operations for this
+thread-safe-counter record
+	lk by-val lock
+	value mut nat64
+
+new-thread-safe-counter by-val thread-safe-counter() noctx
+	new new-lock, zero
+
+increment void(t thread-safe-counter) noctx
+	t.get-and-increment drop
+
+get-and-increment nat64(t thread-safe-counter) noctx trusted
+	l = t.lk.ref-of-val
+	l acquire-lock
+	res = t.value
+	t.value := t.value incr
+	l release-lock
+	res
+
+| Returns true if the counter is now 0.
+decrement bool(t thread-safe-counter) noctx
+	t.get-and-decrement == zero
+
+get-and-decrement nat64(t thread-safe-counter) noctx trusted
+	l = t.lk.ref-of-val
+	l acquire-lock
+	res = t.value
+	hard-forbid: res == zero
+	t.value := t.value decr-noctx
+	l release-lock
+	res
+
+region runtime
+
+global-ctx record mut
+	lk by-val lock
+	| TODO: mut-arr
+	vats mut arr vat
+	n-live-threads mut nat64
+	may-be-work-to-do by-val condition
+	is-shut-down mut bool
+
+new-global-ctx by-val global-ctx() noctx
+	new new-lock, empty-arr<vat>, zero, new-condition, false
+
+vat-id alias
+	nat64
+actor-id alias
+	nat64
+
+
+gc record mut
+	lk by-val lock
+	is-doing-gc mut bool
+	begin ptr byte
+	next ptr byte
+
+new-gc by-val gc() noctx
+	new new-lock, false, null, null
+
+task record mut
+	by-val
+	fun fun0 void
+	actor-id opt actor-id
+
+linked-mut-queue-node<?t> record
+	value ?t
+	next opt linked-mut-queue-node<?t>
+
+linked-mut-queue<?t> record mut
+	head mut opt linked-mut-queue-node<?t>
+	tail mut opt linked-mut-queue-node<?t>
+
+new-linked-mut-queue by-val linked-mut-queue<?t>() noctx
+	new new<none>, new<none>
+
+vat record mut
+	gctx global-ctx
+	id vat-id
+	| TODO: name this 'gc', currently that causes compilation errors
+	g by-val gc
+
+	| these variables are all protected by tasks-lock
+	tasks-lock by-val lock
+	tasks by-val linked-mut-queue<task>
+	| TODO: mut-set
+	currently-running-actors by-val mut-arr<actor-id>
+	n-threads-running nat64
+
+	| not protected by tasks-lock, thread-safe on its own
+	next-actor-id by-val thread-safe-counter
+
+new-vat by-val vat(gctx global-ctx, id vat-id) noctx
+	new gctx, id, new-gc, new-lock, new-linked-mut-queue, new-mut-arr-by-val, zero, new-thread-safe-counter
+
+| This will be a large struct
+ctx record mut
+	vt vat
+	actor-id opt actor-id
+	| TODO: exception context
+
+new-ctx by-val ctx(vat vat, actor-id opt actor-id) noctx
+	new vat, actor-id

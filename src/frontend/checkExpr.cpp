@@ -7,10 +7,10 @@
 
 namespace {
 	template <typename Cb>
-	inline auto withMessageImpl(ExprContext& ctx, const NewAndMessageInfo info, Cb cb) {
+	inline auto withMessageImpl(ExprCtx& ctx, const NewAndMessageInfo info, Cb cb) {
 		// Since 'new' is not a closure, discard lambdas from outside of it.
 		// Note: 'messageOrFunctionLocals' and 'lambdas' intentionally not passed down.
-		ExprContext newCtx {
+		ExprCtx newCtx {
 			ctx.checkCtx,
 			ctx.structsAndAliasesMap,
 			ctx.funsMap,
@@ -21,7 +21,7 @@ namespace {
 	}
 
 	template <typename Cb>
-	inline auto withLambda(ExprContext& ctx, LambdaInfo* info, Cb cb) {
+	inline auto withLambda(ExprCtx& ctx, LambdaInfo* info, Cb cb) {
 		push(ctx.arena(), ctx.lambdas, info);
 		auto res = cb();
 		LambdaInfo* popped = mustPop(ctx.lambdas);
@@ -34,36 +34,36 @@ namespace {
 		const Type type;
 	};
 
-	const CheckedExpr checkExprWorker(ExprContext& ctx, const ExprAst ast, Expected& expected);
+	const CheckedExpr checkExprWorker(ExprCtx& ctx, const ExprAst ast, Expected& expected);
 
-	const Expr checkExpr(ExprContext& ctx, const ExprAst* ast, Expected& expected) {
+	const Expr checkExpr(ExprCtx& ctx, const ExprAst* ast, Expected& expected) {
 		return checkExpr(ctx, *ast, expected);
 	}
 
-	const ExprAndType checkAndInfer(ExprContext& ctx, const ExprAst ast) {
+	const ExprAndType checkAndInfer(ExprCtx& ctx, const ExprAst ast) {
 		Expected expected = Expected::infer();
 		const Expr expr = checkExpr(ctx, ast, expected);
 		return ExprAndType{expr, expected.inferred()};
 	}
 
-	const Expr checkAndExpect(ExprContext& ctx, const ExprAst ast, const Opt<const Type> expected) {
+	const Expr checkAndExpect(ExprCtx& ctx, const ExprAst ast, const Opt<const Type> expected) {
 		Expected et = Expected{expected};
 		return checkExpr(ctx, ast, et);
 	}
 
-	const Expr checkAndExpect(ExprContext& ctx, const ExprAst ast, const Type expected) {
+	const Expr checkAndExpect(ExprCtx& ctx, const ExprAst ast, const Type expected) {
 		return checkAndExpect(ctx, ast, some<const Type>(expected));
 	}
 
-	const Expr checkAndExpect(ExprContext& ctx, const ExprAst* ast, const Type expected) {
+	const Expr checkAndExpect(ExprCtx& ctx, const ExprAst* ast, const Type expected) {
 		return checkAndExpect(ctx, *ast, expected);
 	}
 
-	const Expr checkAndExpect(ExprContext& ctx, const ExprAst* ast, const StructInst* expected) {
+	const Expr checkAndExpect(ExprCtx& ctx, const ExprAst* ast, const StructInst* expected) {
 		return checkAndExpect(ctx, ast, Type{expected});
 	}
 
-	const CheckedExpr checkCond(ExprContext& ctx, const SourceRange range, const CondAst ast, Expected& expected) {
+	const CheckedExpr checkCond(ExprCtx& ctx, const SourceRange range, const CondAst ast, Expected& expected) {
 		const Expr* cond = ctx.alloc(checkAndExpect(ctx, ast.cond, ctx.commonTypes._bool));
 		const Expr* then = ctx.alloc(checkExpr(ctx, ast.then, expected));
 		const Expr* elze = ctx.alloc(checkExpr(ctx, ast.elze, expected));
@@ -76,7 +76,7 @@ namespace {
 		const Type elementType;
 	};
 
-	const CheckedExpr checkCreateArr(ExprContext& ctx, const SourceRange range, const CreateArrAst ast, Expected& expected) {
+	const CheckedExpr checkCreateArr(ExprCtx& ctx, const SourceRange range, const CreateArrAst ast, Expected& expected) {
 		const ArrExpectedType aet = [&]() {
 			if (ast.elementType.has()) {
 				const Type ta = typeFromAst(ctx, ast.elementType.force());
@@ -105,7 +105,7 @@ namespace {
 			: expected.check(ctx, Type{aet.arrType}, expr);
 	}
 
-	const CheckedExpr checkCreateRecord(ExprContext& ctx, const SourceRange range, const CreateRecordAst ast, Expected& expected) {
+	const CheckedExpr checkCreateRecord(ExprCtx& ctx, const SourceRange range, const CreateRecordAst ast, Expected& expected) {
 		Cell<const Bool> typeIsFromExpected { False };
 		const Type t = [&]() {
 			if (ast.type.has())
@@ -135,7 +135,7 @@ namespace {
 					else
 						return todo<const Opt<const StructBody::Fields>>("byval of non-record, -- I guess just cantcreatenonrecordstruct");
 				} else {
-					ctx.diag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
+					ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
 					return none<const StructBody::Fields>();
 				}
 			},
@@ -143,18 +143,18 @@ namespace {
 				return some<const StructBody::Fields>(f);
 			},
 			[&](const StructBody::Union) {
-				ctx.diag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
+				ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
 				return none<const StructBody::Fields>();
 			},
 			[&](const StructBody::Iface) {
-				ctx.diag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
+				ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
 				return none<const StructBody::Fields>();
 			});
 
 		if (opFields.has()) {
 			const Arr<const StructField> fields = opFields.force().fields;
 			if (ast.args.size != fields.size) {
-				ctx.diag(range, Diag{Diag::WrongNumberNewStructArgs{decl, fields.size, ast.args.size}});
+				ctx.addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, fields.size, ast.args.size}});
 				return typeIsFromExpected.get() ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
 			} else {
 				//TODO: mapzip
@@ -177,10 +177,10 @@ namespace {
 		const Type nonInstantiatedPossiblyFutReturnType;
 	};
 
-	const Opt<const ExpectedLambdaType> getExpectedLambdaType(ExprContext& ctx, const SourceRange range, Expected& expected) {
+	const Opt<const ExpectedLambdaType> getExpectedLambdaType(ExprCtx& ctx, const SourceRange range, Expected& expected) {
 		const Opt<const Type> expectedType = expected.shallowInstantiateType();
 		if (!expectedType.has() && !expectedType.force().isStructInst()) {
-			ctx.diag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
+			ctx.addDiag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
 			return none<const ExpectedLambdaType>();
 		}
 		const StructInst* expectedStructInst = expectedType.force().asStructInst();
@@ -188,7 +188,7 @@ namespace {
 
 		const Opt<const CommonTypes::LambdaInfo> opInfo = ctx.commonTypes.getFunStructInfo(funStruct);
 		if (!opInfo.has()) {
-			ctx.diag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
+			ctx.addDiag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
 			return none<const ExpectedLambdaType>();
 		}
 
@@ -205,7 +205,7 @@ namespace {
 		return some<const ExpectedLambdaType>(ExpectedLambdaType{funStruct, info.nonRemote, info.isRemote, paramTypes, nonInstantiatedReturnType});
 	}
 
-	const CheckedExpr checkFunAsLambda(ExprContext& ctx, const SourceRange range, const FunAsLambdaAst ast, Expected& expected) {
+	const CheckedExpr checkFunAsLambda(ExprCtx& ctx, const SourceRange range, const FunAsLambdaAst ast, Expected& expected) {
 		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
 		if (!opEt.has())
 			return expected.bogus(range);
@@ -254,7 +254,7 @@ namespace {
 	}
 
 	const CheckedExpr checkRef(
-		ExprContext& ctx,
+		ExprCtx& ctx,
 		const Expr expr,
 		const SourceRange range,
 		const Str name,
@@ -289,7 +289,7 @@ namespace {
 		}
 	}
 
-	const CheckedExpr checkIdentifier(ExprContext& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
+	const CheckedExpr checkIdentifier(ExprCtx& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
 		const Str name = ast.name;
 
 		if (strEqLiteral(name, "pred"))
@@ -339,11 +339,11 @@ namespace {
 		return checkIdentifierCall(ctx, range, name, expected);
 	}
 
-	const CheckedExpr checkNoCallLiteral(ExprContext& ctx, const SourceRange range, const Str literal, Expected& expected) {
+	const CheckedExpr checkNoCallLiteral(ExprCtx& ctx, const SourceRange range, const Str literal, Expected& expected) {
 		return expected.check(ctx, Type{ctx.commonTypes.str}, Expr{range, Expr::StringLiteral{ctx.copyStr(literal)}});
 	}
 
-	const CheckedExpr checkLiteral(ExprContext& ctx, const SourceRange range, const LiteralAst ast, Expected& expected) {
+	const CheckedExpr checkLiteral(ExprCtx& ctx, const SourceRange range, const LiteralAst ast, Expected& expected) {
 		if (expected.isExpectingString(ctx.commonTypes.str) || !expected.hasExpected())
 			return checkNoCallLiteral(ctx, range, ast.literal, expected);
 		else {
@@ -356,7 +356,7 @@ namespace {
 	}
 
 	template <typename Cb>
-	auto checkWithLocal_worker(ExprContext& ctx, const Local* local, Cb cb) {
+	auto checkWithLocal_worker(ExprCtx& ctx, const Local* local, Cb cb) {
 		MutArr<const Local*>& locals = isEmpty(ctx.lambdas)
 			? ctx.messageOrFunctionLocals
 			: mustPeek(ctx.lambdas)->locals;
@@ -367,7 +367,7 @@ namespace {
 		return res;
 	}
 
-	const Expr checkWithLocal(ExprContext& ctx, const Local* local, const ExprAst ast, Expected& expected) {
+	const Expr checkWithLocal(ExprCtx& ctx, const Local* local, const ExprAst ast, Expected& expected) {
 		return checkWithLocal_worker(ctx, local, [&]() {
 			return checkExpr(ctx, ast, expected);
 		});
@@ -388,7 +388,7 @@ namespace {
 	}
 
 	const CheckedExpr checkLambdaWorker(
-		ExprContext& ctx,
+		ExprCtx& ctx,
 		const SourceRange range,
 		const Arr<const LambdaAst::Param> paramAsts,
 		const ExprAst bodyAst,
@@ -443,28 +443,28 @@ namespace {
 		return CheckedExpr{Expr{range, lambda}};
 	}
 
-	const CheckedExpr checkLambda(ExprContext& ctx, const SourceRange range, const LambdaAst ast, Expected& expected) {
+	const CheckedExpr checkLambda(ExprCtx& ctx, const SourceRange range, const LambdaAst ast, Expected& expected) {
 		return checkLambdaWorker(ctx, range, ast.params, *ast.body, expected);
 	}
 
-	const CheckedExpr checkLet(ExprContext& ctx, const SourceRange range, const LetAst ast, Expected& expected) {
+	const CheckedExpr checkLet(ExprCtx& ctx, const SourceRange range, const LetAst ast, Expected& expected) {
 		const ExprAndType init = checkAndInfer(ctx, *ast.initializer);
 		const Local* local = ctx.arena().nu<Local>()(ctx.copyStr(ast.name), init.type);
 		const Expr* then = ctx.alloc(checkWithLocal(ctx, local, *ast.then, expected));
 		return CheckedExpr{Expr{range, Expr::Let{local, ctx.alloc(init.expr), then}}};
 	}
 
-	const Expr checkWithOptLocal(ExprContext& ctx, Opt<const Local*> local, const ExprAst ast, Expected& expected) {
+	const Expr checkWithOptLocal(ExprCtx& ctx, Opt<const Local*> local, const ExprAst ast, Expected& expected) {
 		return local.has()
 			? checkWithLocal(ctx, local.force(), ast, expected)
 			: checkExpr(ctx, ast, expected);
 	}
 
-	const CheckedExpr checkMatch(ExprContext& ctx, const SourceRange range, const MatchAst ast, Expected& expected) {
+	const CheckedExpr checkMatch(ExprCtx& ctx, const SourceRange range, const MatchAst ast, Expected& expected) {
 		const ExprAndType matchedAndType = checkAndInfer(ctx, *ast.matched);
 		if (!matchedAndType.type.isStructInst()) {
 			if (!matchedAndType.type.isBogus())
-				ctx.diag(ast.matched->range, Diag{Diag::MatchOnNonUnion{matchedAndType.type}});
+				ctx.addDiag(ast.matched->range, Diag{Diag::MatchOnNonUnion{matchedAndType.type}});
 			return expected.bogus(ast.matched->range);
 		}
 		const StructInst* matchedUnion = matchedAndType.type.asStructInst();
@@ -480,7 +480,7 @@ namespace {
 				return !strEq(member->decl->name, caseAst.structName);
 			}));
 		if (badCases) {
-			ctx.diag(range, Diag{Diag::MatchCaseStructNamesDoNotMatch{members}});
+			ctx.addDiag(range, Diag{Diag::MatchCaseStructNamesDoNotMatch{members}});
 			return expected.bogus(range);
 		} else {
 			const Arr<const Expr::Match::Case> cases = mapZip<const Expr::Match::Case>{}(
@@ -508,7 +508,7 @@ namespace {
 		return ifaceInst->body().asIface().messages;
 	}
 
-	const CheckedExpr checkMessageSend(ExprContext& ctx, const SourceRange range, const MessageSendAst ast, Expected& expected) {
+	const CheckedExpr checkMessageSend(ExprCtx& ctx, const SourceRange range, const MessageSendAst ast, Expected& expected) {
 		const ExprAndType targetAndType = checkAndInfer(ctx, *ast.target);
 		const Expr* target = ctx.alloc(targetAndType.expr);
 		const Type targetType = targetAndType.type;
@@ -539,7 +539,7 @@ namespace {
 			});
 	}
 
-	const CheckedExpr checkNewActor(ExprContext& ctx, const SourceRange range, const NewActorAst ast, Expected& expected) {
+	const CheckedExpr checkNewActor(ExprCtx& ctx, const SourceRange range, const NewActorAst ast, Expected& expected) {
 		const Opt<const Type> t = expected.tryGetDeeplyInstantiatedType(ctx.arena());
 		if (!t.has() || !t.force().isStructInst())
 			todo<void>("checkNewActor");
@@ -562,7 +562,7 @@ namespace {
 					if (!strEq(param.name, paramName.name))
 						todo<void>("checkNewActor -- param names don't match");
 				});
-				return withMessageImpl(ctx, NewAndMessageInfo{message->sig.params, fields, message}, [&](ExprContext& newCtx) {
+				return withMessageImpl(ctx, NewAndMessageInfo{message->sig.params, fields, message}, [&](ExprCtx& newCtx) {
 					// message->sig.returnType is already wrapped in `fut`
 					return checkAndExpect(newCtx, impl->body, message->sig.returnType);
 				});
@@ -570,13 +570,13 @@ namespace {
 		return expected.check(ctx, Type{instIface}, Expr{range, Expr::NewIfaceImpl{instIface, fields, messageImpls}});
 	}
 
-	const CheckedExpr checkSeq(ExprContext& ctx, const SourceRange range, const SeqAst ast, Expected& expected) {
+	const CheckedExpr checkSeq(ExprCtx& ctx, const SourceRange range, const SeqAst ast, Expected& expected) {
 		const Expr* first = ctx.alloc(checkAndExpect(ctx, ast.first, ctx.commonTypes._void));
 		const Expr* then = ctx.alloc(checkExpr(ctx, ast.then, expected));
 		return CheckedExpr{Expr{range, Expr::Seq{first, then}}};
 	}
 
-	const CheckedExpr checkStructFieldSet(ExprContext& ctx, const SourceRange range, const StructFieldSetAst ast, Expected& expected) {
+	const CheckedExpr checkStructFieldSet(ExprCtx& ctx, const SourceRange range, const StructFieldSetAst ast, Expected& expected) {
 		const ExprAndType target = checkAndInfer(ctx, *ast.target);
 		const Opt<const StructAndField> opStructAndField = tryGetStructField(target.type, ast.fieldName);
 		if (opStructAndField.has()) {
@@ -590,7 +590,7 @@ namespace {
 			return todo<const CheckedExpr>("checkStructFieldSet -- no such field");
 	}
 
-	const CheckedExpr checkThen(ExprContext& ctx, const SourceRange range, const ThenAst ast, Expected& expected) {
+	const CheckedExpr checkThen(ExprCtx& ctx, const SourceRange range, const ThenAst ast, Expected& expected) {
 		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx.arena(), ast.left), ast.then}}};
 		const CallAst call = CallAst{
 			strLiteral("then"),
@@ -599,7 +599,7 @@ namespace {
 		return checkCall(ctx, range, call, expected);
 	}
 
-	const CheckedExpr checkExprWorker(ExprContext& ctx, const ExprAst ast, Expected& expected) {
+	const CheckedExpr checkExprWorker(ExprCtx& ctx, const ExprAst ast, Expected& expected) {
 		const SourceRange range = ast.range;
 		return ast.kind.match(
 			[&](const CallAst a) {
@@ -658,10 +658,10 @@ const Expr* checkFunctionBody(
 	const FunDecl* fun,
 	const CommonTypes& commonTypes
 ) {
-	ExprContext exprCtx {checkCtx, structsAndAliasesMap, funsMap, commonTypes, fun, none<const NewAndMessageInfo>()};
+	ExprCtx exprCtx {checkCtx, structsAndAliasesMap, funsMap, commonTypes, fun, none<const NewAndMessageInfo>()};
 	return exprCtx.alloc(checkAndExpect(exprCtx, ast, fun->returnType()));
 }
 
-const Expr checkExpr(ExprContext& ctx, const ExprAst ast, Expected& expected) {
+const Expr checkExpr(ExprCtx& ctx, const ExprAst ast, Expected& expected) {
 	return checkExprWorker(ctx, ast, expected).expr;
 }

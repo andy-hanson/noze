@@ -91,7 +91,9 @@ namespace {
 					: strEqLiteral(name, "is-reference-type") ? constant(BuiltinFunKind::isReferenceType)
 					: no;
 			case 'n':
-				return strEqLiteral(name, "not") ? _operator(BuiltinFunKind::_not) : no;
+				return strEqLiteral(name, "not") ? _operator(BuiltinFunKind::_not)
+					: strEqLiteral(name, "null") ? constant(BuiltinFunKind::null)
+					: no;
 			case 'o':
 				return strEqLiteral(name, "one")
 						? isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("one float")

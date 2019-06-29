@@ -572,7 +572,7 @@ namespace {
 			[&](const ConcreteExpr::Alloc) {
 				expr();
 			},
-			[&](const ConcreteExpr::CallConcreteFun) {
+			[&](const ConcreteExpr::Call) {
 				expr();
 			},
 			[&](const ConcreteExpr::Cond e) {
@@ -656,7 +656,7 @@ namespace {
 			});
 	}
 
-	void writeCallOperator(WriterWithIndent& writer, const BuiltinFunInfo bf, const Arr<const ConcreteType> typeArgs, const ConcreteExpr::CallConcreteFun e) {
+	void writeCallOperator(WriterWithIndent& writer, const BuiltinFunInfo bf, const Arr<const ConcreteType> typeArgs, const ConcreteExpr::Call e) {
 		auto writeArg = [&](const size_t index) -> void {
 			writeConstantOrExprAsExpr(writer, at(e.args, index));
 		};
@@ -779,7 +779,7 @@ namespace {
 				break;
 
 			case BuiltinFunKind::setPtr:
-				// TODO: this is ugly in the usual case that we're writing as a statement. Have a writeCallConcreteFunAsStatement too.
+				// TODO: this is ugly in the usual case that we're writing as a statement. Have a writeCallAsStatement too.
 				// [&]() { *(p) = v; return 0; }()
 				writeStatic(writer, "[&]() { *(");
 				writeArg(0);
@@ -827,7 +827,7 @@ namespace {
 			writeArgsNoCtx(writer, args);
 	}
 
-	void writeCallConcreteFunAsExpr(WriterWithIndent& writer, const ConcreteExpr::CallConcreteFun e) {
+	void writeCallAsExpr(WriterWithIndent& writer, const ConcreteExpr::Call e) {
 		auto call = [&]() -> void {
 			writeStr(writer, e.called->mangledName());
 			writeArgsWithOptionalCtx(writer, e.called->needsCtx, e.args);
@@ -887,8 +887,8 @@ namespace {
 				writeConcreteExprAsExpr(writer, *e.inner);
 				writeStatic(writer, ")");
 			},
-			[&](const ConcreteExpr::CallConcreteFun e) {
-				writeCallConcreteFunAsExpr(writer, e);
+			[&](const ConcreteExpr::Call e) {
+				writeCallAsExpr(writer, e);
 			},
 			[&](const ConcreteExpr::Cond e) {
 				writeConcreteExprAsExpr(writer, *e.cond);

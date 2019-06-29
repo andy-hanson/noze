@@ -82,7 +82,7 @@ const Bool Expr::typeIsBogus(Arena& arena) const {
 			return todo<const Bool>("typeIsBogus ifaceimplfieldref");
 		},
 		[](const Expr::ImplicitConvertToUnion) {
-			return todo<const Bool>("typeIsBogus implicitConvertToUnion");
+			return False;
 		},
 		[](const Expr::Lambda) {
 			return False;

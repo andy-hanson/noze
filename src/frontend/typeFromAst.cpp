@@ -38,7 +38,7 @@ namespace {
 
 		const Opt<TDecl> r = res.get();
 		if (!r.has())
-			ctx.diag(range, Diag{Diag::NameNotFound{ctx.copyStr(name), kind}});
+			ctx.addDiag(range, Diag{Diag::NameNotFound{ctx.copyStr(name), kind}});
 		return r;
 	}
 }
@@ -64,7 +64,7 @@ const Opt<const StructInst*> instStructFromAst(
 	const Arr<const Type> typeArgs = [&]() {
 		const size_t nActualTypeArgs = ast.typeArgs.size;
 		if (nActualTypeArgs != nExpectedTypeArgs) {
-			ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForStruct{sOrA, nExpectedTypeArgs, nActualTypeArgs}});
+			ctx.addDiag(ast.range, Diag{Diag::WrongNumberTypeArgsForStruct{sOrA, nExpectedTypeArgs, nActualTypeArgs}});
 			return fillArr<const Type>{}(ctx.arena, nExpectedTypeArgs, [](const size_t) {
 				return Type{Type::Bogus{}};
 			});
@@ -100,7 +100,7 @@ const Type typeFromAst(
 			if (found.has())
 				return Type{found.force()};
 			else {
-				ctx.diag(p.range, Diag{Diag::NameNotFound{ctx.copyStr(p.name), Diag::NameNotFound::Kind::typeParam}});
+				ctx.addDiag(p.range, Diag{Diag::NameNotFound{ctx.copyStr(p.name), Diag::NameNotFound::Kind::typeParam}});
 				return Type{Type::Bogus{}};
 			}
 		},

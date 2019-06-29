@@ -51,6 +51,7 @@ int main(const int argc, CStr const* const argv) {
 	if (true)
 		return cli(argc, argv);
 	else {
+		printf("%zu\n", sizeof(Bool));
 		return 0;
 	}
 }

@@ -140,7 +140,7 @@ namespace {
 		for (const size_t i : Range{typeParams.size})
 			for (const size_t prev_i : Range{i})
 				if (strEq(at(typeParams, prev_i).name, at(typeParams, i).name))
-					ctx.diag(at(typeParams, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
+					ctx.addDiag(at(typeParams, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
 		return typeParams;
 	}
 
@@ -178,7 +178,7 @@ namespace {
 		for (const size_t i : Range{params.size})
 			for (const size_t prev_i : Range{i})
 				if (strEq(at(params, prev_i).name, at(params, i).name))
-					ctx.diag(at(params, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
+					ctx.addDiag(at(params, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
 		return params;
 	}
 
@@ -259,15 +259,37 @@ namespace {
 
 	void checkSendable(CheckCtx& ctx, const SourceRange range, const Type type) {
 		if (!typeIsPossiblySendable(type))
-			ctx.diag(range, Diag{Diag::TypeNotSendable{}});
+			ctx.addDiag(range, Diag{Diag::TypeNotSendable{}});
 	}
 
-	template <typename T, typename CbEqual>
-	void checkNoEqual(const Arr<T> a, CbEqual eq) {
+	//TODO:MOVE
+	template <typename T, typename Cb>
+	void everyPairWithIndex(const Arr<T> a, Cb cb) {
 		for (const size_t i : Range{a.size})
 			for (const size_t j : Range{i})
-				if (eq(at(a, i), at(a, j)))
-					todo<void>("checkNoEqual");
+				cb(at(a, i), at(a, j), i, j);
+	}
+
+	//TODO:MOVE
+	template <typename T, typename Cb>
+	void everyPair(const Arr<T> a, Cb cb) {
+		for (const size_t i : Range{a.size})
+			for (const size_t j : Range{i})
+				cb(at(a, i), at(a, j));
+	}
+
+	const Opt<const ForcedByValOrRef> getForcedByValOrRef(const Opt<const ExplicitByValOrRef> e) {
+		if (e.has())
+			switch (e.force()) {
+				case ExplicitByValOrRef::byVal:
+					return some<const ForcedByValOrRef>(ForcedByValOrRef::byVal);
+				case ExplicitByValOrRef::byRef:
+					return some<const ForcedByValOrRef>(ForcedByValOrRef::byRef);
+				default:
+					assert(0);
+			}
+		else
+			return none<const ForcedByValOrRef>();
 	}
 
 	const StructBody checkFields(
@@ -283,11 +305,14 @@ namespace {
 			[&](const StructDeclAst::Body::Fields::Field field, const size_t index) {
 				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt.typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
 				if (isPurityWorse(fieldType.purity(), strukt.purity))
-					ctx.diag(field.range, Diag{Diag::FieldPurityWorseThanStructPurity{fieldType.purity(), strukt.purity}});
-				return StructField{field.isMutable, ctx.copyStr(field.name), fieldType, index};
+					ctx.addDiag(field.range, Diag{Diag::FieldPurityWorseThanStructPurity{fieldType.purity(), strukt.purity}});
+				return StructField{field.range, field.isMutable, ctx.copyStr(field.name), fieldType, index};
 			});
-		checkNoEqual(fields, [](const StructField a, const StructField b) { return strEq(a.name, b.name); });
-		return StructBody{StructBody::Fields{fields}};
+		everyPair(fields, [&](const StructField a, const StructField b) {
+			if (strEq(a.name, b.name))
+				ctx.addDiag(b.range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::field, a.name}});
+		});
+		return StructBody{StructBody::Fields{getForcedByValOrRef(f.explicitByValOrRef), fields}};
 	}
 
 	void checkStructBodies(
@@ -316,7 +341,10 @@ namespace {
 							todo<void>("union member purity worse than union purity");
 						return res.force();
 					});
-					checkNoEqual(members, [](const StructInst* a, const StructInst* b) { return ptrEquals(a->decl, b->decl); });
+					everyPairWithIndex(members, [&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
+						if (ptrEquals(a->decl, b->decl))
+							ctx.addDiag(at(un.members, bIndex).range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::unionMember, a->decl->name}});
+					});
 					return StructBody{StructBody::Union{members}};
 				},
 				[&](const StructDeclAst::Body::Iface i) {
@@ -361,7 +389,7 @@ namespace {
 		for (const StructAlias* a : ptrsRange(aliases))
 			d.add(ctx.arena, a->name, StructOrAlias{a});
 		return d.finish(ctx.arena, [&](const Str name, const StructOrAlias, const StructOrAlias b) {
-			ctx.diag(b.range(), Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::structOrAlias, name}});
+			ctx.addDiag(b.range(), Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::structOrAlias, name}});
 		});
 	}
 
@@ -374,7 +402,7 @@ namespace {
 				return KeyValuePair<const Str, T*>{it.name, &it};
 			},
 			[&](const Str name, T*, T* t) {
-				ctx.diag(t->range, Diag{Diag::DuplicateDeclaration{kind, name}});
+				ctx.addDiag(t->range, Diag{Diag::DuplicateDeclaration{kind, name}});
 			});
 	}
 
@@ -401,12 +429,12 @@ namespace {
 					typeParamsScope,
 					none<MutArr<StructInst*>*>());
 				if (typeArgs.size != spec->typeParams.size) {
-					ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, typeArgs.size}});
+					ctx.addDiag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, typeArgs.size}});
 					return none<const SpecInst*>();
 				} else
 					return some<const SpecInst*>(instantiateSpec(ctx.arena, spec, typeArgs));
 			} else {
-				ctx.diag(ast.range, Diag{Diag::NameNotFound{ctx.copyStr(ast.spec), Diag::NameNotFound::Kind::spec}});
+				ctx.addDiag(ast.range, Diag{Diag::NameNotFound{ctx.copyStr(ast.spec), Diag::NameNotFound::Kind::spec}});
 				return none<const SpecInst*>();
 			}
 		});

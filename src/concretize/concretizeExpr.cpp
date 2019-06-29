@@ -4,6 +4,7 @@
 #include "../util/arrUtil.h"
 #include "./concretizeUtil.h"
 #include "./mangleName.h"
+#include "./specialize.h"
 
 namespace {
 	struct ConcretizeExprCtx {
@@ -76,7 +77,9 @@ namespace {
 
 	struct FunAndArgs {
 		const ConcreteFun* fun;
-		const Arr<const ConstantOrExpr> notSpecializedArgs;
+		// Arguments that haven't been skipped as constants.
+		// (NOte: sometimes we choose not to specialize on a constant, so that would still show up here)
+		const Arr<const ConstantOrExpr> nonOmittedArgs;
 	};
 
 	const ConstantOrExpr concretizeCall(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Call e) {
@@ -96,16 +99,16 @@ namespace {
 				const Arr<const ConstantOrExpr> itsArgs = tail(args);
 				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl, itsArgs);
 				const ConcreteFun* actualCalled = instantiateKnownLambdaBodyForDirectCall(ctx.concretizeCtx, klb, itsSpecializeOnArgs.specializeOnArgs);
-				const Arr<const ConstantOrExpr> itsNotSpecializedArgs = itsSpecializeOnArgs.notSpecializedArgs;
+				const Arr<const ConstantOrExpr> itsNonOmittedArgs = itsSpecializeOnArgs.nonOmittedArgs;
 				// If arg0 is a constant, completely omit it. Else pass it as the closure arg.
 				const Arr<const ConstantOrExpr> allArgs = klb->hasClosure()
-					? prepend<const ConstantOrExpr>(ctx.arena(), first(args), itsNotSpecializedArgs)
-					: itsNotSpecializedArgs;
+					? prepend<const ConstantOrExpr>(ctx.arena(), first(args), itsNonOmittedArgs)
+					: itsNonOmittedArgs;
 				return FunAndArgs{actualCalled, allArgs};
 			} else {
 				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl, args);
 				const ConcreteFun* fun = getConcreteFunForCallAndFillBody(ctx.concretizeCtx, concreteCalled, specializeOnArgs.specializeOnArgs);
-				return FunAndArgs{fun, specializeOnArgs.notSpecializedArgs};
+				return FunAndArgs{fun, specializeOnArgs.nonOmittedArgs};
 			}
 		}();
 
@@ -114,7 +117,7 @@ namespace {
 		if (body.isConstant() && allConstant(args))
 			return ConstantOrExpr{body.asConstant()};
 		else {
-			const ConcreteExpr::CallConcreteFun callFun = ConcreteExpr::CallConcreteFun{funAndArgs.fun, funAndArgs.notSpecializedArgs};
+			const ConcreteExpr::Call callFun = ConcreteExpr::Call{funAndArgs.fun, funAndArgs.nonOmittedArgs};
 			return nuExpr(ctx.arena(), funAndArgs.fun->returnType(), range, knownLambdaBodyFromConcreteFunBody(body), callFun);
 		}
 	}
@@ -251,7 +254,7 @@ namespace {
 		});
 		assert(fieldI == closureFields.size);
 
-		return ClosureSpecialize{closureParam, closureSpecialize, specializeOnArgs.notSpecializedArgs};
+		return ClosureSpecialize{closureParam, closureSpecialize, specializeOnArgs.nonOmittedArgs};
 
 	}
 

@@ -129,8 +129,27 @@ namespace {
 			[&](const Diag::CommonTypesMissing) {
 				writeStatic(writer, "common types are missing from 'include.nz'");
 			},
-			[&](const Diag::DuplicateDeclaration) {
-				todo<void>("print duplicate declaration diag");
+			[&](const Diag::DuplicateDeclaration d) {
+				writeStatic(writer, "duplicate ");
+				switch (d.kind) {
+					case Diag::DuplicateDeclaration::Kind::structOrAlias:
+						writeStatic(writer, "struct");
+						break;
+					case Diag::DuplicateDeclaration::Kind::spec:
+						writeStatic(writer, "spec");
+						break;
+					case Diag::DuplicateDeclaration::Kind::field:
+						writeStatic(writer, "field");
+						break;
+					case Diag::DuplicateDeclaration::Kind::unionMember:
+						writeStatic(writer, "member");
+						break;
+					default:
+						assert(0);
+				}
+				writeStatic(writer, " '");
+				writeStr(writer, d.name);
+				writeChar(writer, '\'');
 			},
 			[&](const Diag::ExpectedTypeIsNotALambda d) {
 				if (d.expectedType.has()) {
@@ -141,10 +160,11 @@ namespace {
 					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");
 			},
 			[&](const Diag::FieldPurityWorseThanStructPurity d) {
-				writeStatic(writer, "struct is ");
+				writeStatic(writer, "struct has purity '");
 				writePurity(writer, d.structPurity);
-				writeStatic(writer, ", but field is ");
+				writeStatic(writer, "', but field has purity '");
 				writePurity(writer, d.fieldPurity);
+				writeStatic(writer, "'");
 			},
 			[&](const Diag::FileDoesNotExist) {
 				// We handle this specially

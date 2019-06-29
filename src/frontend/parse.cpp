@@ -151,17 +151,30 @@ namespace {
 		}
 	}
 
-	const Arr<const StructDeclAst::Body::Fields::Field> parseFields(Lexer& lexer) {
+	const StructDeclAst::Body::Fields parseFields(Lexer& lexer) {
 		ArrBuilder<const StructDeclAst::Body::Fields::Field> res {};
+		Cell<const Opt<const ExplicitByValOrRef>> explicitByValOrRef = none<const ExplicitByValOrRef>();
+		Cell<const Bool> isFirstLine = True;
 		do {
 			const Pos start = curPos(lexer);
 			const Str name = takeName(lexer);
-			take(lexer, ' ');
-			const Bool isMutable = tryTake(lexer, "mut ");
-			const TypeAst type = parseType(lexer);
-			res.add(lexer.arena, StructDeclAst::Body::Fields::Field{range(lexer, start), isMutable, name, type});
+			if (strEqLiteral(name, "by-val")) {
+				if (!isFirstLine.get())
+					todo<void>("by-val on later line");
+				explicitByValOrRef.set(some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
+			} else if (strEqLiteral(name, "by-ref")) {
+				if (!isFirstLine.get())
+					todo<void>("by-ref on later line");
+				explicitByValOrRef.set(some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
+			} else {
+				take(lexer, ' ');
+				const Bool isMutable = tryTake(lexer, "mut ");
+				const TypeAst type = parseType(lexer);
+				res.add(lexer.arena, StructDeclAst::Body::Fields::Field{range(lexer, start), isMutable, name, type});
+			}
+			isFirstLine.set(False);
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
-		return res.finish();
+		return StructDeclAst::Body::Fields{explicitByValOrRef.get(), res.finish()};
 	}
 
 	const Arr<const TypeAst::InstStruct> parseUnionMembers(Lexer& lexer) {
@@ -313,10 +326,10 @@ namespace {
 							if (tookIndent)
 								todo<void>("shouldn't indent after builtin");
 							return Body{Body::Builtin{}};
-						case NonFunKeyword::record: {
-							const Arr<const Body::Fields::Field> fields = tookIndent ? parseFields(lexer) : emptyArr<const Body::Fields::Field>();
-							return Body{Body::Fields{fields}};
-						}
+						case NonFunKeyword::record:
+							return Body{tookIndent
+								? parseFields(lexer)
+								: Body::Fields{none<const ExplicitByValOrRef>(), emptyArr<const Body::Fields::Field>()}};
 						case NonFunKeyword::_union:
 							return tookIndent
 								? Body{Body::Union{parseUnionMembers(lexer)}}

@@ -241,7 +241,7 @@ const Bool SingleInferringType::setTypeNoDiagnostic(Arena& arena, const Type set
 }
 
 
-const CheckedExpr Expected::check(ExprContext& ctx, const Type exprType, const Expr expr) {
+const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr expr) {
 	// Allow implicitly converting to union
 	// TODO: implicitly convert to Fut by wrapping in 'resolved'
 	if (type.get().has() && type.get().force().isStructInst() && exprType.isStructInst()) {
@@ -278,7 +278,7 @@ const CheckedExpr Expected::check(ExprContext& ctx, const Type exprType, const E
 						return CheckedExpr{Expr{expr.range(), toU}};
 					},
 					[&](const SetTypeResult::Fail) {
-						ctx.diag(expr.range(), Diag{Diag::TypeConflict{type.get().force(), exprType}});
+						ctx.addDiag(expr.range(), Diag{Diag::TypeConflict{type.get().force(), exprType}});
 						return CheckedExpr{Expr{expr.range(), Expr::Bogus{}}};
 					});
 			}
@@ -289,7 +289,7 @@ const CheckedExpr Expected::check(ExprContext& ctx, const Type exprType, const E
 		return CheckedExpr{expr};
 	else {
 		// Failed to set type. This happens if there was already an inferred type.
-		ctx.diag(expr.range(), Diag{Diag::TypeConflict{type.get().force(), exprType}});
+		ctx.addDiag(expr.range(), Diag{Diag::TypeConflict{type.get().force(), exprType}});
 		return bogus(expr.range());
 	}
 }

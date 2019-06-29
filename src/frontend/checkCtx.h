@@ -46,7 +46,7 @@ struct CheckCtx {
 
 	CheckCtx(const CheckCtx&) = delete;
 
-	inline void diag(const SourceRange range, const Diag diag) {
+	inline void addDiag(const SourceRange range, const Diag diag) {
 		diagsBuilder.add(arena, Diagnostic{path, range, diag});
 	}
 

@@ -2,6 +2,8 @@
 
 #include <type_traits> // std::is_fundamental
 
+#include "./types.h"
+
 struct Bool {
 	bool b;
 
@@ -44,4 +46,8 @@ template <typename T>
 inline const Bool gt(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value, "must be primitive");
 	return Bool{a > b};
+}
+
+inline size_t boolToNat(const Bool b) {
+	return b ? 1 : 0;
 }

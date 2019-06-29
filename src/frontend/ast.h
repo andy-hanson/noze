@@ -345,6 +345,11 @@ struct StructAliasAst {
 	const TypeAst::InstStruct target;
 };
 
+enum class ExplicitByValOrRef {
+	byVal,
+	byRef
+};
+
 struct StructDeclAst {
 	struct Body {
 		struct Builtin {};
@@ -355,6 +360,7 @@ struct StructDeclAst {
 				const Str name;
 				const TypeAst type;
 			};
+			const Opt<const ExplicitByValOrRef> explicitByValOrRef;
 			const Arr<const Field> fields;
 		};
 		struct Union {

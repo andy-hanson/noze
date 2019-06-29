@@ -14,4 +14,4 @@ const Expr* checkFunctionBody(
 	const CommonTypes& commonTypes
 );
 
-const Expr checkExpr(ExprContext& ctx, const ExprAst ast, Expected& expected);
+const Expr checkExpr(ExprCtx& ctx, const ExprAst ast, Expected& expected);

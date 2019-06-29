@@ -38,6 +38,7 @@ enum class BuiltinFunKind {
 	isReferenceType,
 	mulFloat64,
 	_not,
+	null,
 	oneInt64,
 	oneNat64,
 	_or,
@@ -82,6 +83,8 @@ struct ConcreteType;
 struct ConcreteSig;
 
 struct ConcreteStructBody {
+	struct Bogus {};
+
 	struct Builtin {
 		const BuiltinStructInfo info;
 		const Arr<const ConcreteType> typeArgs;
@@ -101,6 +104,7 @@ struct ConcreteStructBody {
 
 private:
 	enum class Kind {
+		bogus,
 		builtin,
 		fields,
 		_union,
@@ -108,6 +112,7 @@ private:
 	};
 	const Kind kind;
 	union {
+		const Bogus bogus;
 		const Builtin builtin;
 		const Fields fields;
 		const Union _union;
@@ -115,6 +120,7 @@ private:
 	};
 
 public:
+	explicit inline ConcreteStructBody(const Bogus _bogus) : kind{Kind::bogus}, bogus{_bogus} {}
 	explicit inline ConcreteStructBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
 	explicit inline ConcreteStructBody(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
 	explicit inline ConcreteStructBody(const Union __union) : kind{Kind::_union}, _union{__union} {}
@@ -162,6 +168,8 @@ public:
 		CbIface cbIface
 	) const {
 		switch (kind) {
+			case Kind::bogus:
+				assert(0);
 			case Kind::builtin:
 				return cbBuiltin(builtin);
 			case Kind::fields:
@@ -181,37 +189,42 @@ enum class SpecialStructKind {
 	mutArr,
 };
 
+struct ConcreteStructInfo {
+	const ConcreteStructBody body;
+	const size_t sizeBytes;
+	const Bool isSelfMutable;
+	const Bool defaultIsPointer;
+};
+
 struct ConcreteStruct {
 	const Str mangledName;
 	const Opt<const SpecialStructKind> special;
-	Late<const ConcreteStructBody> _body;
-	Late<const size_t> _sizeBytes;
+	Late<const ConcreteStructInfo> _info;
 
 	ConcreteStruct(const ConcreteStruct&) = delete;
 
 	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructKind> sp) : mangledName{mn}, special{sp} {}
-	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructKind> sp, const ConcreteStructBody body)
-		: mangledName{mn}, special{sp}, _body{body} {}
+	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructKind> sp, const ConcreteStructInfo info)
+		: mangledName{mn}, special{sp}, _info{info} {}
+
+	inline const ConcreteStructInfo info() const {
+		return _info.get();
+	}
 
 	inline const ConcreteStructBody body() const {
-		return _body.get();
-	}
-	inline void setBody(const ConcreteStructBody body) {
-		_body.set(body);
+		return info().body;
 	}
 
 	inline size_t sizeBytes() const {
-		if (!_sizeBytes.isSet()) {
-			Arena arena {};
-			todo<void>("sizeBytes failed");
-		}
-		return _sizeBytes.get();
+		return info().sizeBytes;
 	}
 
-	const Bool isSelfMutable() const;
+	inline const Bool isSelfMutable() const {
+		return info().isSelfMutable;
+	}
 
 	inline const Bool defaultIsPointer() const {
-		return _or(isSelfMutable(), gt(sizeBytes(), sizeof(void*) * 2));
+		return info().defaultIsPointer;
 	}
 
 	inline const Bool isRecord() const {
@@ -227,14 +240,6 @@ struct ConcreteType {
 	// NOTE: ConcreteType for 'ptr' (e.g. 'ptr byte') will *not* have isPointer set -- since it's not a ptr*
 	const Bool isPointer;
 	const ConcreteStruct* strukt;
-
-	inline ConcreteType(const Bool _isPointer, const ConcreteStruct* _strukt) : isPointer{_isPointer}, strukt{_strukt} {
-		const ConcreteStructBody body = strukt->body();
-		if (!body.isFields() && !(body.isBuiltin() && body.asBuiltin().info.kind == BuiltinStructKind::_void)) {
-			// union/iface are never pointers
-			assert(!isPointer);
-		}
-	}
 
 	static inline ConcreteType pointer(const ConcreteStruct* strukt) {
 		return ConcreteType{True, strukt};
@@ -252,7 +257,7 @@ struct ConcreteType {
 		return _and(isPointer == other.isPointer, ptrEquals(strukt, other.strukt));
 	}
 
-	inline size_t sizeOrPointerSize() const {
+	inline size_t sizeOrPointerSizeBytes() const {
 		return isPointer ? sizeof(void*) : strukt->sizeBytes();
 	}
 
@@ -950,19 +955,21 @@ struct ConcreteExpr {
 		const ConcreteExpr* inner;
 	};
 
-	struct CallConcreteFun {
+	struct Call {
 		const ConcreteFun* called;
 		// Note: this should filter out any constant args that 'called' specialized on as constants.
 		// (But may include non-specialized-on constant args.)
 		const Arr<const ConstantOrExpr> args;
 
-		CallConcreteFun(const ConcreteFun* c, const Arr<const ConstantOrExpr> a);
+		Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a);
 	};
 
 	struct Cond {
 		const ConcreteExpr* cond;
 		const ConstantOrExpr then;
 		const ConstantOrExpr elze;
+
+		Cond(const ConcreteExpr* _cond, const ConstantOrExpr _then, const ConstantOrExpr _elze);
 	};
 
 	struct CreateArr {
@@ -1114,7 +1121,7 @@ private:
 	enum class Kind {
 		bogus,
 		alloc,
-		callConcreteFun,
+		call,
 		cond,
 		createArr,
 		createRecord,
@@ -1142,7 +1149,7 @@ private:
 	union {
 		const Bogus bogus;
 		const Alloc alloc;
-		const CallConcreteFun callConcreteFun;
+		const Call call;
 		const Cond cond;
 		const CreateArr createArr;
 		const CreateRecord createRecord;
@@ -1171,8 +1178,8 @@ public:
 		assert(!klb.has());
 		assert(!a.inner->typeWithKnownLambdaBody().force().isPointer);
 	}
-	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CallConcreteFun a)
-		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::callConcreteFun}, callConcreteFun{a} {}
+	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Call a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::call}, call{a} {}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Cond a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::cond}, cond{a} {}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const CreateArr a)
@@ -1239,7 +1246,7 @@ public:
 	template <
 		typename CbBogus,
 		typename CbAlloc,
-		typename CbCallConcreteFun,
+		typename CbCall,
 		typename CbCond,
 		typename CbCreateArr,
 		typename CbCreateRecord,
@@ -1260,7 +1267,7 @@ public:
 	inline auto match(
 		CbBogus cbBogus,
 		CbAlloc cbAlloc,
-		CbCallConcreteFun cbCallConcreteFun,
+		CbCall cbCall,
 		CbCond cbCond,
 		CbCreateArr cbCreateArr,
 		CbCreateRecord cbCreateRecord,
@@ -1283,8 +1290,8 @@ public:
 				return cbBogus(bogus);
 			case Kind::alloc:
 				return cbAlloc(alloc);
-			case Kind::callConcreteFun:
-				return cbCallConcreteFun(callConcreteFun);
+			case Kind::call:
+				return cbCall(call);
 			case Kind::cond:
 				return cbCond(cond);
 			case Kind::createArr:

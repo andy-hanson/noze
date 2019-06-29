@@ -15,8 +15,8 @@ struct LambdaInfo {
 	MutArr<const ClosureField*> closureFields = MutArr<const ClosureField*>{};
 };
 
-struct ExprContext {
-	ExprContext(const ExprContext&) = delete;
+struct ExprCtx {
+	ExprCtx(const ExprCtx&) = delete;
 
 	CheckCtx& checkCtx;
 	const StructsAndAliasesMap structsAndAliasesMap;
@@ -40,8 +40,8 @@ struct ExprContext {
 		return checkCtx.arena;
 	}
 
-	inline void diag(const SourceRange range, const Diag diag) {
-		checkCtx.diag(range, diag);
+	inline void addDiag(const SourceRange range, const Diag diag) {
+		checkCtx.addDiag(range, diag);
 	}
 
 	inline Type makeFutType(const Type type) {
@@ -53,7 +53,7 @@ struct ExprContext {
 	}
 };
 
-inline const Type typeFromAst(ExprContext& ctx, const TypeAst typeAst) {
+inline const Type typeFromAst(ExprCtx& ctx, const TypeAst typeAst) {
 	return typeFromAst(
 		ctx.checkCtx,
 		typeAst,
@@ -159,7 +159,7 @@ public:
 		return _and(type.get().has(), typeEquals(type.get().force(), Type{stringType}));
 	}
 
-	const CheckedExpr check(ExprContext& ctx, const Type exprType, const Expr expr);
+	const CheckedExpr check(ExprCtx& ctx, const Type exprType, const Expr expr);
 
 	// Note: this may infer type parameters
 	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);

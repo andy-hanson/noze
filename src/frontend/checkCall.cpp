@@ -8,7 +8,7 @@ namespace {
 		return tryGetTypeArg(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
 	}
 
-	const Arr<const Type> typeArgsFromAsts(ExprContext& ctx, const Arr<const TypeAst> typeAsts) {
+	const Arr<const Type> typeArgsFromAsts(ExprCtx& ctx, const Arr<const TypeAst> typeAsts) {
 		return map<const Type>{}(ctx.arena(), typeAsts, [&](const TypeAst it) { return typeFromAst(ctx, it); });
 	}
 
@@ -48,7 +48,7 @@ namespace {
 		}
 	};
 
-	MutArr<Candidate> getInitialCandidates(ExprContext& ctx, const Str funName, const Arr<const Type> explicitTypeArgs, const size_t arity) {
+	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Str funName, const Arr<const Type> explicitTypeArgs, const size_t arity) {
 		MutArr<Candidate> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			const size_t nTypeParams = called.typeParams().size;
@@ -120,7 +120,7 @@ namespace {
 		}
 	}
 
-	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprContext& ctx, const Str funName, const Expr arg) {
+	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx& ctx, const Str funName, const Expr arg) {
 		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx.arena(), ctx.commonTypes), funName);
 		return field.has()
 			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), field.force().structInst, field.force().field})
@@ -129,11 +129,11 @@ namespace {
 
 	void checkCallFlags(CheckCtx& ctx, const SourceRange range, const FunFlags calledFlags, const FunFlags callerFlags) {
 		if (!calledFlags.noCtx && callerFlags.noCtx)
-			ctx.diag(range, Diag{Diag::CantCallNonNoCtx{}});
+			ctx.addDiag(range, Diag{Diag::CantCallNonNoCtx{}});
 		if (calledFlags.summon && !callerFlags.summon)
-			ctx.diag(range, Diag{Diag::CantCallSummon{}});
+			ctx.addDiag(range, Diag{Diag::CantCallSummon{}});
 		if (calledFlags.unsafe && !callerFlags.trusted && !callerFlags.unsafe)
-			ctx.diag(range, Diag{Diag::CantCallUnsafe{}});
+			ctx.addDiag(range, Diag{Diag::CantCallUnsafe{}});
 	}
 
 	template <typename TypeArgsEqual>
@@ -143,7 +143,7 @@ namespace {
 			eachCorresponds(a->typeArgs, b->typeArgs, typeArgsEqual));
 	}
 
-	void checkCalledDeclFlags(ExprContext& ctx, const CalledDecl res, const SourceRange range) {
+	void checkCalledDeclFlags(ExprCtx& ctx, const CalledDecl res, const SourceRange range) {
 		res.match(
 			[&](const FunDecl* f) {
 				checkCallFlags(ctx.checkCtx, range, f->flags, ctx.outermostFun->flags);
@@ -173,9 +173,9 @@ namespace {
 		});
 	}
 
-	const Opt<const Called> getCalledFromCandidate(ExprContext& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
+	const Opt<const Called> getCalledFromCandidate(ExprCtx& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
 
-	const Opt<const Called> findSpecSigImplementation(ExprContext& ctx, const SourceRange range, const Sig specSig) {
+	const Opt<const Called> findSpecSigImplementation(ExprCtx& ctx, const SourceRange range, const Sig specSig) {
 		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), specSig.arity());
 		filterByReturnType(ctx.arena(), candidates, specSig.returnType);
 		for (const size_t argIdx : Range{specSig.arity()})
@@ -185,7 +185,7 @@ namespace {
 		const Arr<const Candidate> candidatesArr = asConst(freeze(candidates));
 		switch (candidatesArr.size) {
 			case 0:
-				ctx.diag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
+				ctx.addDiag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
 				return none<const Called>();
 			case 1:
 				return getCalledFromCandidate(ctx, range, only(candidatesArr), /*allowSpecs*/ false);
@@ -196,7 +196,7 @@ namespace {
 	}
 
 	// On failure, returns none.
-	const Opt<const Arr<const Called>> checkSpecImpls(ExprContext& ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
+	const Opt<const Arr<const Called>> checkSpecImpls(ExprCtx& ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
 		// We store the impls in a flat array. Calculate the size ahead of time.
 		const size_t size = [&]() {
 			size_t s = 0;
@@ -206,7 +206,7 @@ namespace {
 		}();
 
 		if (size != 0 && !allowSpecs) {
-			ctx.diag(range, Diag{Diag::SpecImplHasSpecs{}});
+			ctx.addDiag(range, Diag{Diag::SpecImplHasSpecs{}});
 			return none<const Arr<const Called>>();
 		} else {
 			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx.arena(), size);
@@ -228,7 +228,7 @@ namespace {
 		}
 	}
 
-	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprContext& ctx, const SourceRange range, const Candidate candidate) {
+	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprCtx& ctx, const SourceRange range, const Candidate candidate) {
 		const Opt<const Arr<const Type>> res = mapOrNone<const Type>{}(
 			ctx.arena(),
 			candidate.typeArgs,
@@ -236,11 +236,11 @@ namespace {
 				return i.tryGetInferred();
 			});
 		if (!res.has())
-			ctx.diag(range, Diag{Diag::CantInferTypeArguments{}});
+			ctx.addDiag(range, Diag{Diag::CantInferTypeArguments{}});
 		return res;
 	}
 
-	const Opt<const Called> getCalledFromCandidate(ExprContext& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
+	const Opt<const Called> getCalledFromCandidate(ExprCtx& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
 		checkCalledDeclFlags(ctx, candidate.called, range);
 		const Opt<const Arr<const Type>> candidateTypeArgs = finishCandidateTypeArgs(ctx, range, candidate);
 		if (candidateTypeArgs.has()) {
@@ -261,7 +261,7 @@ namespace {
 	}
 
 	const CheckedExpr checkCallAfterChoosingOverload(
-		ExprContext& ctx,
+		ExprCtx& ctx,
 		const Candidate candidate,
 		const SourceRange range,
 		const Arr<const Expr> args,
@@ -278,7 +278,7 @@ namespace {
 	}
 }
 
-const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const CallAst ast, Expected& expected) {
+const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst ast, Expected& expected) {
 	const size_t arity = ast.args.size;
 
 	const Bool mightBePropertyAccess = _and(arity == 1, exprMightHaveProperties(only(ast.args)));
@@ -330,13 +330,13 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 
 	if (!args.has() || candidatesArr.size != 1) {
 		if (isEmpty(candidatesArr))
-			ctx.diag(range, Diag{Diag::NoSuchFunction{ctx.checkCtx.copyStr(ast.funName)}});
+			ctx.addDiag(range, Diag{Diag::NoSuchFunction{ctx.checkCtx.copyStr(ast.funName)}});
 		else {
 			const Arr<const CalledDecl> calledDecls = map<const CalledDecl>{}(
 				ctx.arena(),
 				candidatesArr,
 				[](const Candidate c) { return c.called; });
-			ctx.diag(range, Diag{Diag::MultipleFunctionCandidates{calledDecls}});
+			ctx.addDiag(range, Diag{Diag::MultipleFunctionCandidates{calledDecls}});
 		}
 		return expected.bogus(range);
 	} else

@@ -3,7 +3,7 @@
 #include "./inferringType.h"
 
 template <typename Cb>
-void eachFunInScope(ExprContext& ctx, const Str funName, Cb cb) {
+void eachFunInScope(ExprCtx& ctx, const Str funName, Cb cb) {
 	size_t totalIndex = 0;
 	for (const SpecInst* specInst : ctx.outermostFun->specs) {
 		const Arr<const Sig> sigs = specInst->sigs;
@@ -23,8 +23,8 @@ void eachFunInScope(ExprContext& ctx, const Str funName, Cb cb) {
 				cb(CalledDecl{f});
 }
 
-const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const CallAst ast, Expected& expected);
+const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst ast, Expected& expected);
 
-inline const CheckedExpr checkIdentifierCall(ExprContext& ctx, const SourceRange range, const Str name, Expected& expected) {
+inline const CheckedExpr checkIdentifierCall(ExprCtx& ctx, const SourceRange range, const Str name, Expected& expected) {
 	return checkCall(ctx, range, CallAst{name, emptyArr<const TypeAst>(), emptyArr<const ExprAst>()}, expected);
 }

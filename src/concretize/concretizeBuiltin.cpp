@@ -111,6 +111,9 @@ namespace {
 		auto constNat64 = [&](const Nat64 value) -> const Opt<const Constant*> {
 			return yes(allConstants.nat64(arena, returnType, value));
 		};
+		auto constNull = [&](const ConcreteType pointerType) -> const Opt<const Constant*> {
+			return yes(allConstants._null(arena, pointerType));
+		};
 		auto constPtr = [&](const Constant* array, const size_t index) {
 			return yes(allConstants.ptr(arena, returnType, array, index));
 		};
@@ -185,6 +188,9 @@ namespace {
 
 			case BuiltinFunKind::_not:
 				return constBool(_not(boolArg(0)));
+
+			case BuiltinFunKind::null:
+				return constNull(returnType);
 
 			case BuiltinFunKind::oneInt64:
 				return constInt64(1);
@@ -413,7 +419,7 @@ namespace {
 					const ConcreteExpr* ax = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{aIsPointer, ConstantOrExpr(a), field});
 					const ConcreteExpr* bx = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{bIsPointer, ConstantOrExpr(b), field});
 					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(arena, ConstantOrExpr{ax}, ConstantOrExpr{bx});
-					const ConcreteExpr* compareThisField = genExpr(arena, types.comparison, ConcreteExpr::CallConcreteFun{getCompareFor(field->type), args});
+					const ConcreteExpr* compareThisField = genExpr(arena, types.comparison, ConcreteExpr::Call{getCompareFor(field->type), args});
 					const ConcreteExpr* newAccum = accum.get().has()
 						? combineCompares(arena, accum.get().force(), compareThisField, types.comparison)
 						: compareThisField;

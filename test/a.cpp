@@ -1,26 +1,44 @@
 #include <cassert>
 #include <cstdint>
 using int64 = int64_t;
-struct ctx;
+struct global_ctx;
+struct lock;
+struct arr__ptr_vat;
 using nat64 = uint64_t;
-using _void = uint8_t;
+struct condition;
+struct atomic_bool {
+	bool value;
+};
+struct vat;
+struct gc;
+struct linked_mut_queue__task;
+struct mut_arr__nat64;
+struct thread_safe_counter;
+struct opt__ptr_linked_mut_queue_node__task;
+using ptr__nat64 = nat64*;
 using byte = uint8_t;
+struct none {};
+struct some__ptr_linked_mut_queue_node__task;
+struct linked_mut_queue_node__task;
+struct task;
+struct fun0___void;
+struct opt__nat64;
+struct some__nat64 {
+	nat64 value;
+};
+using _void = uint8_t;
+struct ctx;
 struct arr__char;
 struct stream__nat64;
 struct fun0__iterator__nat64;
 struct iterator__nat64;
 struct fun0__opt__nat64;
-struct opt__nat64;
-struct none {};
-struct some__nat64 {
-	nat64 value;
-};
 struct to_stream__stream__nat64__iter_arg0_is_0__lambda0___closure;
 struct range_nat64 {
 	nat64 lo;
 	nat64 hi;
 };
-struct filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure;
+struct filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure;
 struct comparison;
 struct less {};
 struct greater {};
@@ -28,7 +46,7 @@ struct equal {};
 struct cell__nat64 {
 	nat64 value;
 };
-struct filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure;
+struct filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure;
 struct mut_arr__char;
 struct cat__arr__char__arr__char__arr__char__lambda0___closure;
 struct cat__arr__char__arr__char__arr__char__lambda1___closure;
@@ -36,13 +54,28 @@ struct iter__iterator__nat64__range_nat64__lambda0___closure {
 	cell__nat64* n;
 	range_nat64 r;
 };
-struct ctx {
-	nat64 a;
-	nat64 b;
-	nat64 c;
+struct lock {
+	atomic_bool is_locked;
+};
+struct condition {
+	lock lk;
+	nat64 value;
+};
+using ptr__ptr_vat = vat**;
+struct mut_arr__nat64 {
+	bool frozen;
+	nat64 size;
+	nat64 capacity;
+	ptr__nat64 data;
+};
+struct thread_safe_counter {
+	lock lk;
+	nat64 value;
 };
 using ptr__byte = byte*;
-using ptr__char = char*;
+struct some__ptr_linked_mut_queue_node__task {
+	linked_mut_queue_node__task* value;
+};
 struct opt__nat64 {
 	enum class Kind {
 		none,
@@ -56,6 +89,13 @@ struct opt__nat64 {
 	opt__nat64(none value) : kind{Kind::none}, as_none{value} {}
 	opt__nat64(some__nat64 value) : kind{Kind::some__nat64}, as_some__nat64{value} {}
 };
+using fun_ptr2___void__ptr_ctx__ptr__byte = _void (*)(ctx*, ptr__byte);
+struct ctx {
+	vat* vt;
+	opt__nat64 actor_id;
+};
+using ptr__char = char*;
+using fun_ptr2__opt__nat64__ptr_ctx__ptr__byte = opt__nat64 (*)(ctx*, ptr__byte);
 struct to_stream__stream__nat64__iter_arg0_is_0__lambda0___closure {
 	range_nat64 t;
 };
@@ -81,12 +121,41 @@ struct mut_arr__char {
 	nat64 capacity;
 	ptr__char data;
 };
-using fun_ptr2___void__ptr_ctx__ptr__byte = _void (*)(ctx*, ptr__byte);
+struct arr__ptr_vat {
+	nat64 size;
+	ptr__ptr_vat data;
+};
+struct gc {
+	lock lk;
+	bool is_doing_gc;
+	ptr__byte begin;
+	ptr__byte next;
+};
+struct opt__ptr_linked_mut_queue_node__task {
+	enum class Kind {
+		none,
+		some__ptr_linked_mut_queue_node__task,
+	};
+	Kind kind;
+	union {
+		none as_none;
+		some__ptr_linked_mut_queue_node__task as_some__ptr_linked_mut_queue_node__task;
+	};
+	opt__ptr_linked_mut_queue_node__task(none value) : kind{Kind::none}, as_none{value} {}
+	opt__ptr_linked_mut_queue_node__task(some__ptr_linked_mut_queue_node__task value) : kind{Kind::some__ptr_linked_mut_queue_node__task}, as_some__ptr_linked_mut_queue_node__task{value} {}
+};
+struct fun0___void {
+	fun_ptr2___void__ptr_ctx__ptr__byte fun_ptr;
+	ptr__byte closure;
+};
 struct arr__char {
 	nat64 size;
 	ptr__char data;
 };
-using fun_ptr2__opt__nat64__ptr_ctx__ptr__byte = opt__nat64 (*)(ctx*, ptr__byte);
+struct fun0__opt__nat64 {
+	fun_ptr2__opt__nat64__ptr_ctx__ptr__byte fun_ptr;
+	ptr__byte closure;
+};
 struct cat__arr__char__arr__char__arr__char__lambda0___closure {
 	mut_arr__char* m;
 	arr__char a;
@@ -96,15 +165,40 @@ struct cat__arr__char__arr__char__arr__char__lambda1___closure {
 	arr__char a;
 	arr__char b;
 };
-struct fun0__opt__nat64 {
-	fun_ptr2__opt__nat64__ptr_ctx__ptr__byte fun_ptr;
-	ptr__byte closure;
+struct global_ctx {
+	lock lk;
+	arr__ptr_vat vats;
+	nat64 n_live_threads;
+	condition may_be_work_to_do;
+	bool is_shut_down;
+};
+struct linked_mut_queue__task {
+	opt__ptr_linked_mut_queue_node__task head;
+	opt__ptr_linked_mut_queue_node__task tail;
+};
+struct task {
+	fun0___void fun;
+	opt__nat64 actor_id;
 };
 struct iterator__nat64 {
 	fun0__opt__nat64 get_next;
 };
-struct filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure {
+struct filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure {
 	iterator__nat64 itr;
+};
+struct vat {
+	global_ctx* gctx;
+	nat64 id;
+	gc g;
+	lock tasks_lock;
+	linked_mut_queue__task tasks;
+	mut_arr__nat64 currently_running_actors;
+	nat64 n_threads_running;
+	thread_safe_counter next_actor_id;
+};
+struct linked_mut_queue_node__task {
+	task value;
+	opt__ptr_linked_mut_queue_node__task next;
 };
 using fun_ptr2__iterator__nat64__ptr_ctx__ptr__byte = iterator__nat64 (*)(ctx*, ptr__byte);
 struct fun0__iterator__nat64 {
@@ -114,17 +208,38 @@ struct fun0__iterator__nat64 {
 struct stream__nat64 {
 	fun0__iterator__nat64 get_iter;
 };
-struct filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure {
+struct filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure {
 	stream__nat64 in;
 };
 
 static_assert(sizeof(int64) == 8, "");
-static_assert(sizeof(ctx) == 24, "");
+static_assert(sizeof(global_ctx) == 56, "");
+static_assert(sizeof(lock) == 1, "");
+static_assert(sizeof(arr__ptr_vat) == 16, "");
 static_assert(sizeof(nat64) == 8, "");
-static_assert(sizeof(_void) == 1, "");
-static_assert(sizeof(fun_ptr2___void__ptr_ctx__ptr__byte) == 8, "");
+static_assert(sizeof(condition) == 16, "");
+static_assert(sizeof(bool) == 1, "");
+static_assert(sizeof(atomic_bool) == 1, "");
+static_assert(sizeof(ptr__ptr_vat) == 8, "");
+static_assert(sizeof(vat) == 136, "");
+static_assert(sizeof(gc) == 24, "");
+static_assert(sizeof(linked_mut_queue__task) == 32, "");
+static_assert(sizeof(mut_arr__nat64) == 32, "");
+static_assert(sizeof(thread_safe_counter) == 16, "");
 static_assert(sizeof(ptr__byte) == 8, "");
+static_assert(sizeof(opt__ptr_linked_mut_queue_node__task) == 16, "");
+static_assert(sizeof(ptr__nat64) == 8, "");
 static_assert(sizeof(byte) == 1, "");
+static_assert(sizeof(none) == 1, "");
+static_assert(sizeof(some__ptr_linked_mut_queue_node__task) == 8, "");
+static_assert(sizeof(linked_mut_queue_node__task) == 48, "");
+static_assert(sizeof(task) == 32, "");
+static_assert(sizeof(fun0___void) == 16, "");
+static_assert(sizeof(opt__nat64) == 16, "");
+static_assert(sizeof(fun_ptr2___void__ptr_ctx__ptr__byte) == 8, "");
+static_assert(sizeof(some__nat64) == 8, "");
+static_assert(sizeof(_void) == 1, "");
+static_assert(sizeof(ctx) == 24, "");
 static_assert(sizeof(arr__char) == 16, "");
 static_assert(sizeof(ptr__char) == 8, "");
 static_assert(sizeof(char) == 1, "");
@@ -134,38 +249,36 @@ static_assert(sizeof(fun_ptr2__iterator__nat64__ptr_ctx__ptr__byte) == 8, "");
 static_assert(sizeof(iterator__nat64) == 16, "");
 static_assert(sizeof(fun0__opt__nat64) == 16, "");
 static_assert(sizeof(fun_ptr2__opt__nat64__ptr_ctx__ptr__byte) == 8, "");
-static_assert(sizeof(opt__nat64) == 16, "");
-static_assert(sizeof(none) == 1, "");
-static_assert(sizeof(some__nat64) == 8, "");
-static_assert(sizeof(bool) == 1, "");
 static_assert(sizeof(to_stream__stream__nat64__iter_arg0_is_0__lambda0___closure) == 16, "");
 static_assert(sizeof(range_nat64) == 16, "");
-static_assert(sizeof(filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure) == 16, "");
+static_assert(sizeof(filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure) == 16, "");
 static_assert(sizeof(comparison) == 8, "");
 static_assert(sizeof(less) == 1, "");
 static_assert(sizeof(greater) == 1, "");
 static_assert(sizeof(equal) == 1, "");
 static_assert(sizeof(cell__nat64) == 8, "");
-static_assert(sizeof(filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure) == 16, "");
+static_assert(sizeof(filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure) == 16, "");
 static_assert(sizeof(mut_arr__char) == 32, "");
 static_assert(sizeof(cat__arr__char__arr__char__arr__char__lambda0___closure) == 24, "");
 static_assert(sizeof(cat__arr__char__arr__char__arr__char__lambda1___closure) == 40, "");
 static_assert(sizeof(iter__iterator__nat64__range_nat64__lambda0___closure) == 24, "");
 
-static arr__char _constantArr4665367 = arr__char{14, const_cast<char*>("hello ya world")};
-static arr__char _constantArr4665368 = arr__char{6, const_cast<char*>("%.*s\n\0")};
-static range_nat64 _constant____range_nat64__0 = range_nat64{0, 1000};
-static arr__char _constantArr4665370 = arr__char{1, const_cast<char*>("0")};
-static arr__char _constantArr4665371 = arr__char{1, const_cast<char*>("1")};
-static arr__char _constantArr4665373 = arr__char{1, const_cast<char*>("2")};
-static arr__char _constantArr4665372 = arr__char{1, const_cast<char*>("3")};
-static arr__char _constantArr4665377 = arr__char{1, const_cast<char*>("4")};
-static arr__char _constantArr4665376 = arr__char{1, const_cast<char*>("5")};
-static arr__char _constantArr4665379 = arr__char{1, const_cast<char*>("6")};
-static arr__char _constantArr4665380 = arr__char{1, const_cast<char*>("7")};
-static arr__char _constantArr4665381 = arr__char{1, const_cast<char*>("8")};
-static arr__char _constantArr4665382 = arr__char{1, const_cast<char*>("9")};
+static some__nat64 _constant____some__nat64__0 = some__nat64{0};
+static arr__ptr_vat _constant____arr__ptr_vat__0 = arr__ptr_vat{0, 0};
 static none _constant____none__0 = none{};
+static arr__char _constantArr4666935 = arr__char{14, const_cast<char*>("hello ya world")};
+static arr__char _constantArr4666936 = arr__char{6, const_cast<char*>("%.*s\n\0")};
+static range_nat64 _constant____range_nat64__0 = range_nat64{0, 1000};
+static arr__char _constantArr4666938 = arr__char{1, const_cast<char*>("0")};
+static arr__char _constantArr4666939 = arr__char{1, const_cast<char*>("1")};
+static arr__char _constantArr4666941 = arr__char{1, const_cast<char*>("2")};
+static arr__char _constantArr4666940 = arr__char{1, const_cast<char*>("3")};
+static arr__char _constantArr4666945 = arr__char{1, const_cast<char*>("4")};
+static arr__char _constantArr4666944 = arr__char{1, const_cast<char*>("5")};
+static arr__char _constantArr4666947 = arr__char{1, const_cast<char*>("6")};
+static arr__char _constantArr4666948 = arr__char{1, const_cast<char*>("7")};
+static arr__char _constantArr4666949 = arr__char{1, const_cast<char*>("8")};
+static arr__char _constantArr4666950 = arr__char{1, const_cast<char*>("9")};
 template <typename T>
 T* _alloc(byte* out, T value) {
 	T* res = reinterpret_cast<T*>(out);
@@ -174,16 +287,26 @@ T* _alloc(byte* out, T value) {
 }
 
 int64 main__int64();
-ctx as__ctx__ctx(ctx value);
-nat64 as_non_const__nat64__nat64(nat64 value);
+global_ctx new_global_ctx__global_ctx();
+global_ctx* ref_of_val__ptr_global_ctx__global_ctx(global_ctx b);
+vat new_vat__vat__ptr_global_ctx__nat64(global_ctx* gctx, nat64 id);
+vat* ref_of_val__ptr_vat__vat(vat b);
+ctx new_ctx__ctx__ptr_vat__opt__nat64(vat* vat, opt__nat64 actor_id);
 ctx* ref_of_val__ptr_ctx__ctx(ctx b);
-_void call_with_ctx___void__ptr_ctx_arg1_is_4216033(ctx* c);
+_void call_with_ctx___void__ptr_ctx_arg1_is_4216113(ctx* c);
+lock new_lock__lock();
+condition new_condition__condition();
+gc new_gc__gc();
+linked_mut_queue__task new_linked_mut_queue__linked_mut_queue__task();
+mut_arr__nat64 new_mut_arr_by_val__mut_arr__nat64();
+thread_safe_counter new_thread_safe_counter__thread_safe_counter();
 _void call___void__fun_ptr2___void__ptr_ctx__ptr__byte__ptr_ctx__ptr__byte(fun_ptr2___void__ptr_ctx__ptr__byte f, ctx* p0, ptr__byte p1);
 _void other_main___void__asLambda__dynamic(ctx* ctx, ptr__byte );
+atomic_bool new_atomic_bool__atomic_bool();
 _void other_main___void(ctx* ctx);
 _void print_sync___void__arr__char(arr__char s);
 stream__nat64 to_stream__stream__nat64__iter_arg0_is_0(ctx* ctx);
-stream__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216032(ctx* ctx, stream__nat64 in);
+stream__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216112(ctx* ctx, stream__nat64 in);
 nat64 sum__nat64__stream__nat64__iter(ctx* ctx, stream__nat64 t);
 _void assert___void__bool(ctx* ctx, bool condition);
 bool equalequal__bool__nat64__nat64(nat64 a, nat64 b);
@@ -191,17 +314,17 @@ arr__char to_str__arr__char__nat64(ctx* ctx, nat64 n);
 extern "C" _void printf(ptr__char format, nat64 sz, ptr__char data);
 iterator__nat64 to_stream__stream__nat64__iter_arg0_is_0__lambda0__dynamic(ctx* ctx, to_stream__stream__nat64__iter_arg0_is_0__lambda0___closure* _closure);
 ptr__byte allocate_bytes__ptr__byte__nat64(ctx* ctx, nat64 size);
-iterator__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure* _closure);
+iterator__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure* _closure);
 nat64 sum_helper__nat64__iterator__nat64(ctx* ctx, iterator__nat64 i);
 iterator__nat64 iter__iterator__nat64__stream__nat64(ctx* ctx, stream__nat64 s);
-_void fail___void_arg0_is_4665374(ctx* ctx);
+_void fail___void_arg0_is_4666942(ctx* ctx);
 comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b);
 nat64 div__nat64__nat64__nat64(ctx* ctx, nat64 a, nat64 b);
 nat64 mod__nat64__nat64__nat64(ctx* ctx, nat64 a, nat64 b);
 arr__char cat__arr__char__arr__char__arr__char(ctx* ctx, arr__char a, arr__char b);
 iterator__nat64 iter__iterator__nat64__range_nat64(ctx* ctx, range_nat64 r);
 extern "C" ptr__byte malloc(nat64 size);
-opt__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure* _closure);
+opt__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure* _closure);
 opt__nat64 next__opt__nat64__iterator__nat64(ctx* ctx, iterator__nat64 i);
 nat64 plus__nat64__nat64__nat64(ctx* ctx, nat64 a, nat64 b);
 iterator__nat64 call__iterator__nat64__fun0__iterator__nat64(ctx* ctx, fun0__iterator__nat64 f);
@@ -215,14 +338,14 @@ range_nat64 to__range_nat64__nat64__nat64(ctx* ctx, nat64 lo, nat64 hi);
 _void each___void__range_nat64__cat__arr__char__arr__char__arr__char__lambda1___closure_klb1_is_cat__arr__char__arr__char__arr__char__lambda1(ctx* ctx, range_nat64 r, cat__arr__char__arr__char__arr__char__lambda1___closure f);
 arr__char freeze__arr__char__ptr_mut_arr__char(mut_arr__char* a);
 opt__nat64 iter__iterator__nat64__range_nat64__lambda0__dynamic(ctx* ctx, iter__iterator__nat64__range_nat64__lambda0___closure* _closure);
-opt__nat64 filter_helper__opt__nat64__iterator__nat64_arg1_is_4216032(ctx* ctx, iterator__nat64 i);
+opt__nat64 filter_helper__opt__nat64__iterator__nat64_arg1_is_4216112(ctx* ctx, iterator__nat64 i);
 opt__nat64 call__opt__nat64__fun0__opt__nat64(ctx* ctx, fun0__opt__nat64 f);
 nat64 wrapping_add__nat64__nat64__nat64(nat64 a, nat64 b);
 bool and__bool__bool__bool(bool a, bool b);
 bool greaterequal__bool__nat64__nat64(nat64 a, nat64 b);
 iterator__nat64 call_with_ctx__iterator__nat64__ptr_ctx__fun0__iterator__nat64(ctx* c, fun0__iterator__nat64 f);
 ctx* get_ctx__ptr_ctx(ctx* ctx);
-_void hard_fail___void_arg0_is_4665375();
+_void hard_fail___void_arg0_is_4666943();
 bool not__bool__bool(bool a);
 ptr__char uninitialized_data__ptr__char__nat64(ctx* ctx, nat64 size);
 _void each_recur___void__iterator__nat64__cat__arr__char__arr__char__arr__char__lambda0___closure_klb1_is_cat__arr__char__arr__char__arr__char__lambda0(ctx* ctx, iterator__nat64 i, cat__arr__char__arr__char__arr__char__lambda0___closure f);
@@ -250,21 +373,55 @@ _void set___void__ptr__char__char(ptr__char p, char value);
 ptr__char plus__ptr__char__ptr__char__nat64(ptr__char p, nat64 offset);
 char deref__char__ptr__char(ptr__char p);
 int64 main__int64() {
-	ctx ctx_by_val = ctx{0, 0, 0};
-	ctx* ctx_by_ptr = &(ctx_by_val);
-	call_with_ctx___void__ptr_ctx_arg1_is_4216033(ctx_by_ptr);
+	global_ctx gctx_by_val = new_global_ctx__global_ctx();
+	global_ctx* gctx = &(gctx_by_val);
+	vat vat_by_val = new_vat__vat__ptr_global_ctx__nat64(gctx, 0);
+	vat* vat = &(vat_by_val);
+	ctx ctx_by_val = new_ctx__ctx__ptr_vat__opt__nat64(vat, opt__nat64(_constant____some__nat64__0));
+	ctx* ctx = &(ctx_by_val);
+	call_with_ctx___void__ptr_ctx_arg1_is_4216113(ctx);
 	return 0;
 }
-_void call_with_ctx___void__ptr_ctx_arg1_is_4216033(ctx* c) {
+global_ctx new_global_ctx__global_ctx() {
+	return global_ctx{new_lock__lock(), _constant____arr__ptr_vat__0, 0, new_condition__condition(), false};
+}
+vat new_vat__vat__ptr_global_ctx__nat64(global_ctx* gctx, nat64 id) {
+	return vat{gctx, id, new_gc__gc(), new_lock__lock(), new_linked_mut_queue__linked_mut_queue__task(), new_mut_arr_by_val__mut_arr__nat64(), 0, new_thread_safe_counter__thread_safe_counter()};
+}
+ctx new_ctx__ctx__ptr_vat__opt__nat64(vat* vat, opt__nat64 actor_id) {
+	return ctx{vat, actor_id};
+}
+_void call_with_ctx___void__ptr_ctx_arg1_is_4216113(ctx* c) {
 	return (&other_main___void__asLambda__dynamic)(c, 0);
+}
+lock new_lock__lock() {
+	return lock{new_atomic_bool__atomic_bool()};
+}
+condition new_condition__condition() {
+	return condition{new_lock__lock(), 0};
+}
+gc new_gc__gc() {
+	return gc{new_lock__lock(), false, 0, 0};
+}
+linked_mut_queue__task new_linked_mut_queue__linked_mut_queue__task() {
+	return linked_mut_queue__task{opt__ptr_linked_mut_queue_node__task(_constant____none__0), opt__ptr_linked_mut_queue_node__task(_constant____none__0)};
+}
+mut_arr__nat64 new_mut_arr_by_val__mut_arr__nat64() {
+	return mut_arr__nat64{false, 0, 0, 0};
+}
+thread_safe_counter new_thread_safe_counter__thread_safe_counter() {
+	return thread_safe_counter{new_lock__lock(), 0};
 }
 _void other_main___void__asLambda__dynamic(ctx* ctx, ptr__byte ) {
 	return other_main___void(ctx);
 }
+atomic_bool new_atomic_bool__atomic_bool() {
+	return atomic_bool{false};
+}
 _void other_main___void(ctx* ctx) {
-	print_sync___void__arr__char(_constantArr4665367);
+	print_sync___void__arr__char(_constantArr4666935);
 	stream__nat64 rgs = to_stream__stream__nat64__iter_arg0_is_0(ctx);
-	stream__nat64 filtered = filter__stream__nat64__stream__nat64_arg1_is_4216032(ctx, rgs);
+	stream__nat64 filtered = filter__stream__nat64__stream__nat64_arg1_is_4216112(ctx, rgs);
 	nat64 x = sum__nat64__stream__nat64__iter(ctx, filtered);
 	assert___void__bool(ctx, equalequal__bool__nat64__nat64(x, 233168));
 	print_sync___void__arr__char(to_str__arr__char__nat64(ctx, x));
@@ -272,15 +429,15 @@ _void other_main___void(ctx* ctx) {
 	return 0;
 }
 _void print_sync___void__arr__char(arr__char s) {
-	return printf(&_constantArr4665368.data[0], s.size, s.data);
+	return printf(&_constantArr4666936.data[0], s.size, s.data);
 }
 stream__nat64 to_stream__stream__nat64__iter_arg0_is_0(ctx* ctx) {
 	return stream__nat64{fun0__iterator__nat64{
 		reinterpret_cast<fun_ptr2__iterator__nat64__ptr_ctx__ptr__byte>(to_stream__stream__nat64__iter_arg0_is_0__lambda0__dynamic), reinterpret_cast<ptr__byte>(_alloc<to_stream__stream__nat64__iter_arg0_is_0__lambda0___closure>(allocate_bytes__ptr__byte__nat64(ctx, 16), to_stream__stream__nat64__iter_arg0_is_0__lambda0___closure{_constant____range_nat64__0}))}};
 }
-stream__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216032(ctx* ctx, stream__nat64 in) {
+stream__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216112(ctx* ctx, stream__nat64 in) {
 	return stream__nat64{fun0__iterator__nat64{
-		reinterpret_cast<fun_ptr2__iterator__nat64__ptr_ctx__ptr__byte>(filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic), reinterpret_cast<ptr__byte>(_alloc<filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure>(allocate_bytes__ptr__byte__nat64(ctx, 16), filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure{in}))}};
+		reinterpret_cast<fun_ptr2__iterator__nat64__ptr_ctx__ptr__byte>(filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic), reinterpret_cast<ptr__byte>(_alloc<filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure>(allocate_bytes__ptr__byte__nat64(ctx, 16), filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure{in}))}};
 }
 nat64 sum__nat64__stream__nat64__iter(ctx* ctx, stream__nat64 t) {
 	return sum_helper__nat64__iterator__nat64(ctx, iter__iterator__nat64__stream__nat64(ctx, t));
@@ -289,7 +446,7 @@ _void assert___void__bool(ctx* ctx, bool condition) {
 	if (condition) {
 		return 0;
 	} else {
-		return fail___void_arg0_is_4665374(ctx);
+		return fail___void_arg0_is_4666942(ctx);
 	}
 }
 bool equalequal__bool__nat64__nat64(nat64 a, nat64 b) {
@@ -309,25 +466,25 @@ bool equalequal__bool__nat64__nat64(nat64 a, nat64 b) {
 }
 arr__char to_str__arr__char__nat64(ctx* ctx, nat64 n) {
 	if (equalequal__bool__nat64__nat64(n, 0)) {
-		return _constantArr4665370;
+		return _constantArr4666938;
 	} else if (equalequal__bool__nat64__nat64(n, 1)) {
-		return _constantArr4665371;
+		return _constantArr4666939;
 	} else if (equalequal__bool__nat64__nat64(n, 2)) {
-		return _constantArr4665373;
+		return _constantArr4666941;
 	} else if (equalequal__bool__nat64__nat64(n, 3)) {
-		return _constantArr4665372;
+		return _constantArr4666940;
 	} else if (equalequal__bool__nat64__nat64(n, 4)) {
-		return _constantArr4665377;
+		return _constantArr4666945;
 	} else if (equalequal__bool__nat64__nat64(n, 5)) {
-		return _constantArr4665376;
+		return _constantArr4666944;
 	} else if (equalequal__bool__nat64__nat64(n, 6)) {
-		return _constantArr4665379;
+		return _constantArr4666947;
 	} else if (equalequal__bool__nat64__nat64(n, 7)) {
-		return _constantArr4665380;
+		return _constantArr4666948;
 	} else if (equalequal__bool__nat64__nat64(n, 8)) {
-		return _constantArr4665381;
+		return _constantArr4666949;
 	} else if (equalequal__bool__nat64__nat64(n, 9)) {
-		return _constantArr4665382;
+		return _constantArr4666950;
 	} else {
 		arr__char hi = to_str__arr__char__nat64(ctx, div__nat64__nat64__nat64(ctx, n, 10));
 		arr__char lo = to_str__arr__char__nat64(ctx, mod__nat64__nat64__nat64(ctx, n, 10));
@@ -340,10 +497,10 @@ iterator__nat64 to_stream__stream__nat64__iter_arg0_is_0__lambda0__dynamic(ctx* 
 ptr__byte allocate_bytes__ptr__byte__nat64(ctx* ctx, nat64 size) {
 	return malloc(size);
 }
-iterator__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0___closure* _closure) {
+iterator__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0___closure* _closure) {
 	iterator__nat64 itr = iter__iterator__nat64__stream__nat64(ctx, _closure->in);
 	return iterator__nat64{fun0__opt__nat64{
-		reinterpret_cast<fun_ptr2__opt__nat64__ptr_ctx__ptr__byte>(filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0__dynamic), reinterpret_cast<ptr__byte>(_alloc<filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure>(allocate_bytes__ptr__byte__nat64(ctx, 16), filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure{itr}))}};
+		reinterpret_cast<fun_ptr2__opt__nat64__ptr_ctx__ptr__byte>(filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0__dynamic), reinterpret_cast<ptr__byte>(_alloc<filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure>(allocate_bytes__ptr__byte__nat64(ctx, 16), filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure{itr}))}};
 }
 nat64 sum_helper__nat64__iterator__nat64(ctx* ctx, iterator__nat64 i) {
 	opt__nat64 matched = next__opt__nat64__iterator__nat64(ctx, i);
@@ -361,7 +518,7 @@ nat64 sum_helper__nat64__iterator__nat64(ctx* ctx, iterator__nat64 i) {
 iterator__nat64 iter__iterator__nat64__stream__nat64(ctx* ctx, stream__nat64 s) {
 	return call__iterator__nat64__fun0__iterator__nat64(ctx, s.get_iter);
 }
-_void fail___void_arg0_is_4665374(ctx* ctx) {
+_void fail___void_arg0_is_4666942(ctx* ctx) {
 	return todo___void();
 }
 comparison lessequalgreater__comparison__nat64__nat64(nat64 a, nat64 b) {
@@ -396,8 +553,8 @@ iterator__nat64 iter__iterator__nat64__range_nat64(ctx* ctx, range_nat64 r) {
 	return iterator__nat64{fun0__opt__nat64{
 		reinterpret_cast<fun_ptr2__opt__nat64__ptr_ctx__ptr__byte>(iter__iterator__nat64__range_nat64__lambda0__dynamic), reinterpret_cast<ptr__byte>(_alloc<iter__iterator__nat64__range_nat64__lambda0___closure>(allocate_bytes__ptr__byte__nat64(ctx, 24), iter__iterator__nat64__range_nat64__lambda0___closure{n, r}))}};
 }
-opt__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216032__lambda0__dynamic__lambda0___closure* _closure) {
-	return filter_helper__opt__nat64__iterator__nat64_arg1_is_4216032(ctx, _closure->itr);
+opt__nat64 filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0__dynamic(ctx* ctx, filter__stream__nat64__stream__nat64_arg1_is_4216112__lambda0__dynamic__lambda0___closure* _closure) {
+	return filter_helper__opt__nat64__iterator__nat64_arg1_is_4216112(ctx, _closure->itr);
 }
 opt__nat64 next__opt__nat64__iterator__nat64(ctx* ctx, iterator__nat64 i) {
 	return call__opt__nat64__fun0__opt__nat64(ctx, i.get_next);
@@ -411,7 +568,7 @@ iterator__nat64 call__iterator__nat64__fun0__iterator__nat64(ctx* ctx, fun0__ite
 	return call_with_ctx__iterator__nat64__ptr_ctx__fun0__iterator__nat64(ctx, f);
 }
 _void todo___void() {
-	return hard_fail___void_arg0_is_4665375();
+	return hard_fail___void_arg0_is_4666943();
 }
 _void forbid___void__bool(ctx* ctx, bool condition) {
 	return assert___void__bool(ctx, !(condition));
@@ -440,7 +597,7 @@ opt__nat64 iter__iterator__nat64__range_nat64__lambda0__dynamic(ctx* ctx, iter__
 		return opt__nat64(some__nat64{get_and_incr__nat64__ptr_cell__nat64(ctx, _closure->n)});
 	}
 }
-opt__nat64 filter_helper__opt__nat64__iterator__nat64_arg1_is_4216032(ctx* ctx, iterator__nat64 i) {
+opt__nat64 filter_helper__opt__nat64__iterator__nat64_arg1_is_4216112(ctx* ctx, iterator__nat64 i) {
 	opt__nat64 matched = next__opt__nat64__iterator__nat64(ctx, i);
 	switch (matched.kind) {
 		case opt__nat64::Kind::none: {
@@ -452,7 +609,7 @@ opt__nat64 filter_helper__opt__nat64__iterator__nat64_arg1_is_4216032(ctx* ctx, 
 			if (other_main___void__lambda0(ctx, v)) {
 				return opt__nat64(some__nat64{v});
 			} else {
-				return filter_helper__opt__nat64__iterator__nat64_arg1_is_4216032(ctx, i);
+				return filter_helper__opt__nat64__iterator__nat64_arg1_is_4216112(ctx, i);
 			}
 		}
 		default: assert(0);
@@ -467,7 +624,7 @@ bool greaterequal__bool__nat64__nat64(nat64 a, nat64 b) {
 iterator__nat64 call_with_ctx__iterator__nat64__ptr_ctx__fun0__iterator__nat64(ctx* c, fun0__iterator__nat64 f) {
 	return f.fun_ptr(c, f.closure);
 }
-_void hard_fail___void_arg0_is_4665375() {
+_void hard_fail___void_arg0_is_4666943() {
 	assert(0);
 }
 ptr__char uninitialized_data__ptr__char__nat64(ctx* ctx, nat64 size) {
