@@ -288,7 +288,7 @@ inline void writeConcreteType(Writer& writer, const ConcreteType t) {
 }
 
 inline Comparison compareConcreteType(const ConcreteType a, const ConcreteType b) {
-	const Comparison res = comparePointer(a.strukt, b.strukt);
+	const Comparison res = comparePtr(a.strukt, b.strukt);
 	return res != Comparison::equal ? res : compareBool(a.isPointer, b.isPointer);
 }
 
@@ -334,7 +334,7 @@ struct ConstantArrKey {
 
 inline Comparison compareConstantArrKey(const ConstantArrKey a, const ConstantArrKey b) {
 	const Comparison res = compareConcreteType(a.elementType, b.elementType);
-	return res != Comparison::equal ? res : compareArr<const Constant*, comparePointer<const Constant>>(a.elements, b.elements);
+	return res != Comparison::equal ? res : compareArr<const Constant*, comparePtr<const Constant>>(a.elements, b.elements);
 }
 
 struct ConcreteFun;
@@ -672,10 +672,10 @@ inline Comparison compareConstantOrLambdaOrVariable(const ConstantOrLambdaOrVari
 				return Comparison::equal;
 			},
 			[&](const Constant* ca) {
-				return comparePointer(ca, b.asConstant());
+				return comparePtr(ca, b.asConstant());
 			},
 			[&](const KnownLambdaBody* klba) {
-				return comparePointer(klba, b.asKnownLambdaBody());
+				return comparePtr(klba, b.asKnownLambdaBody());
 			});
 }
 

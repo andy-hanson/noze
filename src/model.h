@@ -446,7 +446,7 @@ struct FunDecl {
 		return n;
 	}
 
-	inline const Bool isGeneric() const {
+	inline const Bool isTemplate() const {
 		return _or(!isEmpty(typeParams), !isEmpty(specs));
 	}
 
@@ -803,7 +803,7 @@ struct Expr {
 		const Arr<const Expr> args;
 	};
 
-	// Currently this only works on a non-generic fun.
+	// Currently this only works on a non-template fun.
 	struct FunAsLambda {
 		const FunDecl* fun;
 		const StructInst* type;
@@ -812,7 +812,7 @@ struct Expr {
 		inline FunAsLambda(
 			const FunDecl* _fun, const StructInst* _type, const Bool _isRemoteFun)
 			: fun{_fun}, type{_type}, isRemoteFun{_isRemoteFun} {
-			assert(!fun->isGeneric());
+			assert(!fun->isTemplate());
 		}
 	};
 

@@ -8,10 +8,6 @@ namespace {
 		return tryGetTypeArg(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
 	}
 
-	SingleInferringType* getTypeArg(InferringTypeArgs inferringTypeArgs, const TypeParam* typeParam) {
-		return tryGetTypeArg(inferringTypeArgs, typeParam).force();
-	}
-
 	const Arr<const Type> typeArgsFromAsts(ExprContext& ctx, const Arr<const TypeAst> typeAsts) {
 		return map<const Type>{}(ctx.arena(), typeAsts, [&](const TypeAst it) { return typeFromAst(ctx, it); });
 	}
@@ -68,108 +64,6 @@ namespace {
 		return res;
 	}
 
-	//TODO: share more code with matchActualAndCandidateTypeForReturn?
-	//Though that handles implicit cast to union and this should not.
-	// TODO: share code with matchTypesNoDiagnostic?
-	const Bool matchActualAndCandidateTypeInner(Arena& arena, const Type fromExternal, const Type fromCandidate, Candidate& candidate) {
-		return fromExternal.match(
-			[](const Type::Bogus) {
-				return todo<const Bool>("bogus");
-			},
-			[&](const TypeParam*) {
-				// Case A: expected return type is a type parameter. So the function we're calling must be generic too.
-				// Case B: If providing a type parameter as an argument, must be calling a function that is itself generic.
-				// for example:
-				//    id ?T(v ?T)
-				//        v
-				//    id2 ?U(v ?U)
-				//        id v
-				// In the call to `id`, we expect '?U', and the call will actually return '?U' (by inferring `id<?U>`).
-				return fromCandidate.isTypeParam();
-			},
-			[&](const StructInst* structInstFromExternal) {
-				return fromCandidate.match(
-					[](const Type::Bogus) {
-						return False;
-					},
-					[&](const TypeParam* p) {
-						return getTypeArg(candidate.inferringTypeArgs(), p)->setTypeNoDiagnostic(arena, fromExternal);
-					},
-					[&](const StructInst* structInstFromCandidate) {
-						return _and(
-							ptrEquals(structInstFromExternal->decl, structInstFromCandidate->decl),
-							eachCorresponds(
-								structInstFromExternal->typeArgs,
-								structInstFromCandidate->typeArgs,
-								[&](const Type a, const Type b) { return matchActualAndCandidateTypeInner(arena, a, b, candidate); }));
-					});
-			});
-	}
-
-	const Bool typeArgsMatch(Arena& arena, const Arr<const Type> expected, const Arr<const Type> actual, Candidate& candidate) {
-		return eachCorresponds(expected, actual, [&](const Type expectedTypeArg, const Type declaredTypeArg) {
-			return matchActualAndCandidateTypeInner(arena, expectedTypeArg, declaredTypeArg, candidate);
-		});
-	}
-
-	const Bool matchActualAndCandidateTypeForReturn(Arena& arena, const Type expectedReturnType, const Type candidateReturnType, Candidate& candidate) {
-		auto handleTypeParam = [&](const TypeParam* p) {
-			// Function returns a type parameter, and we get expect it to return <bogus> or a particular struct inst.
-			const Opt<SingleInferringType*> t = tryGetTypeArg(candidate.inferringTypeArgs(), p);
-			if (t.has())
-				return t.force()->setTypeNoDiagnostic(arena, expectedReturnType);
-			else
-				return todo<const Bool>("matchActualAndCandidateTypeForReturn type param");
-		};
-
-		return expectedReturnType.match(
-			[&](const Type::Bogus) {
-				return candidateReturnType.match(
-					[](const Type::Bogus) { return True; },
-					handleTypeParam,
-					[](const StructInst*) { return True; });
-			},
-			[&](const TypeParam*) {
-				// We expect to return a type param.
-				// It's possible that declaredReturnType is one of the candidate's type params.
-				if (candidateReturnType.isTypeParam()) {
-					const Opt<SingleInferringType*> typeArg = tryGetTypeArg(candidate.inferringTypeArgs(), candidateReturnType.asTypeParam());
-					return typeArg.has()
-						? typeArg.force()->setTypeNoDiagnostic(arena, expectedReturnType)
-						: expectedReturnType.typeEquals(candidateReturnType);
-				} else
-					return False;
-			},
-			[&](const StructInst* expectedStructInst) {
-				return candidateReturnType.match(
-					[](const Type::Bogus) {
-						return todo<const Bool>("matchActualAndCandidateTypeForReturn bogus");
-					},
-					handleTypeParam,
-					[&](const StructInst* actualStructInst) {
-						if (ptrEquals(expectedStructInst->decl, actualStructInst->decl))
-							return typeArgsMatch(arena, expectedStructInst->typeArgs, actualStructInst->typeArgs, candidate);
-						else {
-							const StructBody body = expectedStructInst->decl->body();
-							if (body.isUnion()) {
-								// May be suitable for implicitConvertToUnion
-								const Opt<const StructInst*> member = find(body.asUnion().members, [&](const StructInst* i) {
-									return ptrEquals(i->decl, actualStructInst->decl);
-								});
-								return _and(
-									member.has(),
-									typeArgsMatch(
-										arena,
-										instantiateStructInst(arena, member.force(), expectedStructInst)->typeArgs,
-										actualStructInst->typeArgs,
-										candidate));
-							} else
-								return False;
-						}
-					});
-			});
-	}
-
 	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type candidateParamType) {
 		return candidateParamType.match(
 			[](const Type::Bogus) {
@@ -211,7 +105,7 @@ namespace {
 				// For multiple candidates, only have an expected type if they have exactly the same param type
 				Cell<const Opt<const Type>> expected { none<const Type>() };
 				for (const Candidate& candidate : candidates) {
-					// If we get a generic candidate and haven't inferred this param type yet, no expected type.
+					// If we get a template candidate and haven't inferred this param type yet, no expected type.
 					const Type paramType = getCandidateExpectedParameterType(arena, candidate, argIdx);
 					if (expected.get().has()) {
 						if (!typeEquals(paramType, expected.get().force()))
@@ -262,7 +156,12 @@ namespace {
 	void filterByReturnType(Arena& arena, MutArr<Candidate>& candidates, const Type expectedReturnType) {
 		// Filter by return type. Also does type argument inference on the candidate.
 		filterUnordered(candidates, [&](Candidate& candidate) {
-			return matchActualAndCandidateTypeForReturn(arena, expectedReturnType, candidate.called.returnType(), candidate);
+			return matchTypesNoDiagnostic(
+				arena,
+				candidate.called.returnType(),
+				expectedReturnType,
+				candidate.inferringTypeArgs(),
+				/*allowConvertAToBUnion*/ True);
 		});
 	}
 

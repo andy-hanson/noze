@@ -12,7 +12,7 @@ namespace {
 const Str mangleName(Arena& arena, const Str declName) {
 	Writer writer { arena };
 	writeMangledName(writer, declName);
-	return writer.finish();
+	return finishWriter(writer);
 }
 
 void writeMangledName(Writer& writer, const Str name) {

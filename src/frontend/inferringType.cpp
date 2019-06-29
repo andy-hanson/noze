@@ -59,50 +59,77 @@ namespace {
 	// When matching a type, we may fill in type parameters, so we may want to set a new more specific expected type.
 	const SetTypeResult setTypeNoDiagnosticWorkerWorkerWorker(
 		Arena& arena,
-		const Type expectedType,
-		const Type setType,
-		InferringTypeArgs& inferringTypeArgs
+		const Type a,
+		const Type b,
+		InferringTypeArgs& aInferringTypeArgs,
+		const Bool allowConvertAToBUnion
 	);
+
+	const SetTypeResult setForStructInstsWithSameDecl(
+		Arena& arena,
+		const StructDecl* decl,
+		const Arr<const Type> as,
+		const Arr<const Type> bs,
+		InferringTypeArgs& aInferringTypeArgs
+	) {
+		// If we need to set at least one type arg, return Set.
+		// If all passed, return Keep.
+		// Else, return Fail.
+		Cell<const Bool> someIsSet { False };
+		const Opt<const Arr<const Type>> newTypeArgs = zipOrFail<const Type>{}(
+			arena,
+			as,
+			bs,
+			[&](const Type a, const Type b) {
+				const SetTypeResult res = setTypeNoDiagnosticWorkerWorkerWorker(arena, a, b, aInferringTypeArgs, False);
+				return res.match(
+					[&](const SetTypeResult::Set s) {
+						someIsSet.set(True);
+						return some<const Type>(s.type);
+					},
+					[&](const SetTypeResult::Keep) {
+						return some<const Type>(a);
+					},
+					[](const SetTypeResult::Fail) {
+						return none<const Type>();
+					});
+			});
+		return newTypeArgs.has()
+			? someIsSet.get()
+				? SetTypeResult{SetTypeResult::Set{Type{instantiateStructNeverDelay(arena, decl, newTypeArgs.force())}}}
+				: SetTypeResult{SetTypeResult::Keep{}}
+			: SetTypeResult{SetTypeResult::Fail{}};
+	}
 
 	const SetTypeResult setTypeNoDiagnosticWorker_forStructInst(
 		Arena& arena,
-		const StructInst* expectedType,
-		const StructInst* setType,
-		InferringTypeArgs& inferringTypeArgs
+		const StructInst* a,
+		const StructInst* b,
+		InferringTypeArgs& aInferringTypeArgs,
+		const Bool allowConvertAToBUnion
 	) {
 		// Handling a union expected type is done in Expected::check
-		if (ptrEquals(setType->decl, expectedType->decl)) {
-			// If we need to set at least one type arg, return Set.
-			// If all passed, return Keep.
-			// Else, return Fail.
-
-			Cell<const Bool> someIsSet { False };
-
-			const Opt<const Arr<const Type>> newTypeArgs = zipOrFail<const Type>{}(
-				arena,
-				expectedType->typeArgs,
-				setType->typeArgs,
-				[&](const Type expectedTypeArg, const Type setTypeArg) {
-					const SetTypeResult res = setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedTypeArg, setTypeArg, inferringTypeArgs);
-					return res.match(
-						[&](const SetTypeResult::Set s) {
-							someIsSet.set(True);
-							return some<const Type>(s.type);
-						},
-						[&](const SetTypeResult::Keep) {
-							return some<const Type>(expectedTypeArg);
-						},
-						[](const SetTypeResult::Fail) {
-							return none<const Type>();
-						});
+		// TODO: but it's done here to for case of call return type ...
+		if (ptrEquals(a->decl, b->decl))
+			return setForStructInstsWithSameDecl(arena, a->decl, a->typeArgs, b->typeArgs, aInferringTypeArgs);
+		else {
+			const StructBody bBody = b->decl->body();
+			if (allowConvertAToBUnion && bBody.isUnion()) {
+				const Opt<const StructInst*> bMember = find(bBody.asUnion().members, [&](const StructInst* i) {
+					return ptrEquals(i->decl, a->decl);
 				});
-			return newTypeArgs.has()
-				? someIsSet.get()
-					? SetTypeResult{SetTypeResult::Set{Type{instantiateStructNeverDelay(arena, setType->decl, newTypeArgs.force())}}}
-					: SetTypeResult{SetTypeResult::Keep{}}
-				: SetTypeResult{SetTypeResult::Fail{}};
-		} else
-			return SetTypeResult{SetTypeResult::Fail{}};
+				if (bMember.has())
+					return setForStructInstsWithSameDecl(
+						arena,
+						a->decl,
+						a->typeArgs,
+						instantiateStructInst(arena, bMember.force(), b)->typeArgs,
+						aInferringTypeArgs);
+				else
+					return SetTypeResult{SetTypeResult::Fail{}};
+			} else
+				return SetTypeResult{SetTypeResult::Fail{}};
+		}
 	}
 
 	inline Opt<SingleInferringType*> tryGetTypeArg(InferringTypeArgs& inferringTypeArgs, const TypeParam* typeParam) {
@@ -134,13 +161,13 @@ namespace {
 
 	const SetTypeResult setTypeNoDiagnosticWorkerWorker(
 		Arena& arena,
-		const Opt<const Type> expectedType,
-		const Type setType,
-		InferringTypeArgs& inferringTypeArgs
+		const Opt<const Type> a,
+		const Type b,
+		InferringTypeArgs& aInferringTypeArgs
 	) {
-		return expectedType.has()
-			? setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType.force(), setType, inferringTypeArgs)
-			: SetTypeResult{SetTypeResult::Set{setType}};
+		return a.has()
+			? setTypeNoDiagnosticWorkerWorkerWorker(arena, a.force(), b, aInferringTypeArgs, False)
+			: SetTypeResult{SetTypeResult::Set{b}};
 	}
 
 	const SetTypeResult setTypeNoDiagnosticWorker_forSingleInferringType(Arena& arena, SingleInferringType& sit, const Type setType) {
@@ -156,33 +183,42 @@ namespace {
 	}
 
 	// TODO:NAME
+	// We are trying to assign 'a = b'.
+	// 'a' may contain type parameters from inferringTypeArgs. We'll infer those here.
+	// If 'allowConvertAToBUnion' is set, if 'b' is a union type and 'a' is a member, we'll set it to the union.
 	const SetTypeResult setTypeNoDiagnosticWorkerWorkerWorker(
 		Arena& arena,
-		const Type expectedType,
-		const Type setType,
-		InferringTypeArgs& inferringTypeArgs
+		const Type a,
+		const Type b,
+		InferringTypeArgs& aInferringTypeArgs,
+		const Bool allowConvertAToBUnion
 	) {
-		return expectedType.match(
+		return a.match(
 			[](const Type::Bogus) {
+				// TODO: make sure to infer type params in this case!
 				return SetTypeResult{SetTypeResult::Keep{}};
 			},
-			[&](const TypeParam* p) {
-				if (setType.isTypeParam() && ptrEquals(setType.asTypeParam(), p))
-					// Setting a type parameter to itself
-					return SetTypeResult{SetTypeResult::Keep{}};
-				else {
-					const Opt<SingleInferringType*> it = tryGetTypeArg(inferringTypeArgs, p);
-					if (it.has())
-						return setTypeNoDiagnosticWorker_forSingleInferringType(arena, *it.force(), setType);
-					else if (setType.isBogus())
-						return SetTypeResult{SetTypeResult::Keep{}};
-					else
-						return SetTypeResult{SetTypeResult::Fail{}};
-				}
+			[&](const TypeParam* pa) {
+				const Opt<SingleInferringType*> aInferring = tryGetTypeArg(aInferringTypeArgs, pa);
+				return aInferring.has()
+					? setTypeNoDiagnosticWorker_forSingleInferringType(arena, *aInferring.force(), b)
+					: b.match(
+						[](const Type::Bogus) {
+							return SetTypeResult{SetTypeResult::Keep{}};
+						},
+						[&](const TypeParam* pb) {
+							return ptrEquals(pa, pb)
+								? SetTypeResult{SetTypeResult::Keep{}}
+								: SetTypeResult{SetTypeResult::Fail{}};
+						},
+						[](const StructInst*) {
+							// Expecting a type param, got a particular type
+							return SetTypeResult{SetTypeResult::Fail{}};
+						});
 			},
-			[&](const StructInst* i) {
-				return setType.isStructInst()
-					? setTypeNoDiagnosticWorker_forStructInst(arena, i, setType.asStructInst(), inferringTypeArgs)
+			[&](const StructInst* ai) {
+				return b.isStructInst()
+					? setTypeNoDiagnosticWorker_forStructInst(arena, ai, b.asStructInst(), aInferringTypeArgs, allowConvertAToBUnion)
 					: SetTypeResult{SetTypeResult::Fail{}};
 			});
 	}
@@ -222,12 +258,12 @@ const CheckedExpr Expected::check(ExprContext& ctx, const Type exprType, const E
 			if (expectedUnionMember.has()) {
 				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(ctx.arena(), expectedUnionMember.force(), expectedStruct);
 
-				// Fill in type args
 				const SetTypeResult setTypeResult = setTypeNoDiagnosticWorker_forStructInst(
 					ctx.arena(),
 					instantiatedExpectedUnionMember,
 					exprStruct,
-					inferringTypeArgs);
+					inferringTypeArgs,
+					/*allowConvertAToBUnion*/ False);
 
 				return setTypeResult.match(
 					[](const SetTypeResult::Set) {
@@ -286,8 +322,8 @@ const Opt<const Type> Expected::tryGetDeeplyInstantiatedTypeFor(Arena& arena, co
 	return tryGetDeeplyInstantiatedTypeWorker(arena, t, inferringTypeArgs);
 }
 
-const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs) {
-	return setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType, setType, inferringTypeArgs).match(
+const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs, const Bool allowConvertToUnion) {
+	return setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType, setType, inferringTypeArgs, allowConvertToUnion).match(
 		[](const SetTypeResult::Set) {
 			return True;
 		},

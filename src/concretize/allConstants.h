@@ -12,7 +12,7 @@ private:
 	size_t nextArrId;
 	MutDict<const ConstantArrKey, const Constant*, compareConstantArrKey> arrays;
 	// Dict from array to an array of each pointer inside it
-	MutDict<const Constant*, Arr<const Constant*>, comparePointer<const Constant>> arrayToPtrs;
+	MutDict<const Constant*, Arr<const Constant*>, comparePtr<const Constant>> arrayToPtrs;
 	size_t nextPtrId;
 	Late<const Constant*> _false;
 	Late<const Constant*> _true;
@@ -23,8 +23,8 @@ private:
 	size_t nextLambdaId;
 	// No dict for lambdas?
 	MutDict<const ConcreteType, ConstantsForRecord*, compareConcreteType> records;
-	MutDict<const ConcreteStruct*, ConstantsForUnion*, comparePointer<const ConcreteStruct>> unions;
-	MutDict<const ConcreteStruct*, const Constant*, comparePointer<const ConcreteStruct>> nulls;
+	MutDict<const ConcreteStruct*, ConstantsForUnion*, comparePtr<const ConcreteStruct>> unions;
+	MutDict<const ConcreteStruct*, const Constant*, comparePtr<const ConcreteStruct>> nulls;
 	ArrBuilder<const Constant*> all;
 
 	const Constant* _nuConstant(Arena& arena, const ConcreteType type, const ConstantKind kind, const size_t id);

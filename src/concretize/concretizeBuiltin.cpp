@@ -338,9 +338,9 @@ namespace {
 		return genExpr(arena, comparisonType, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
 	}
 
-	const ConcreteExpr* generateCompare(ConcretizeCtx& ctx, const FunDeclAndTypeArgs declAndTypeArgs, const ConcreteFun* fun) {
+	const ConcreteExpr* generateCompare(ConcretizeCtx& ctx, const ConcreteFunInst concreteFunInst, const ConcreteFun* fun) {
 		Arena& arena = ctx.arena;
-		const ComparisonTypes types = getComparisonTypes(fun->returnType(), declAndTypeArgs.typeArgs);
+		const ComparisonTypes types = getComparisonTypes(fun->returnType(), concreteFunInst.typeArgs);
 
 		auto getExpr = [&](const ConcreteType memberType) -> const ConcreteExpr* {
 			const ConcreteExpr* createMember = genExpr(arena, memberType, ConcreteExpr::CreateRecord{emptyArr<const ConstantOrExpr>()});
@@ -361,10 +361,7 @@ namespace {
 
 		auto getCompareFor = [&](const ConcreteType ct) -> const ConcreteFun* {
 			const ConcreteFunKey key = ConcreteFunKey{
-				ConcreteFunInst{
-					declAndTypeArgs.withTypeArgs(arrLiteral<const ConcreteType>(arena, ct)),
-					emptyArr<const ConcreteFunInst>(),
-				},
+				concreteFunInst.withTypeArgs(arrLiteral<const ConcreteType>(arena, ct)),
 				allVariable(arena, fun->arityExcludingCtxAndClosure())};
 			return getOrAddConcreteFunAndFillBody(ctx, key);
 		};
@@ -449,7 +446,7 @@ const ConcreteFunBody getBuiltinFunBody(ConcretizeCtx& ctx, const ConcreteFunSou
 	} else
 		switch (info.kind) {
 			case BuiltinFunKind::compare:
-				return ConcreteFunBody{generateCompare(ctx, source.containingFunDeclAndTypeArgs(), cf)};
+				return ConcreteFunBody{generateCompare(ctx, source.containingFunInst, cf)};
 			default:
 				assert(info.emit != BuiltinFunEmit::generate);
 				return ConcreteFunBody{ConcreteFunBody::Builtin{info, typeArgs}};

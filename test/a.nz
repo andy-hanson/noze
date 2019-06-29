@@ -35,8 +35,7 @@ f nat64(s stream nat64)
 other-main void() trusted summon
 	print-sync: "hello ya world"
 	rgs = (zero to 1000).to-stream<range-nat64, nat64>
-	| TODO: 'as' should be unnecessary
-	filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5} as<stream<nat64>>
+	filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5}
 	x = filtered sum
 	assert: x == 233168
 	print-sync: x.to-str

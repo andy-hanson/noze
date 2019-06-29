@@ -9,23 +9,23 @@
 #include "./typeFromAst.h"
 
 namespace {
-	const Opt<const StructDecl*> getCommonGenericType(
+	const Opt<const StructDecl*> getCommonTemplateType(
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const Str name,
 		const size_t expectedTypeParams
 	) {
 		const Opt<const StructOrAlias> res = structsAndAliasesMap.get(name);
 		if (res.has()) {
-			// may fail -- builtin generic should not be an alias
+			// may fail -- builtin Template should not be an alias
 			const StructDecl* decl = res.force().asDecl();
 			if (decl->typeParams.size != expectedTypeParams)
-				todo<void>("getCommonGenericType");
+				todo<void>("getCommonTemplateType");
 			return some<const StructDecl*>(decl);
 		} else
 			return none<const StructDecl*>();
 	}
 
-	const Opt<const StructInst*> getCommonNonGenericType(
+	const Opt<const StructInst*> getCommonNonTemplateType(
 		Arena& arena,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const Str name,
@@ -55,9 +55,9 @@ namespace {
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		MutArr<StructInst*>& delayedStructInsts
 	) {
-		// non-generic types
+		// non-template types
 		auto ng = [&](const CStr s) -> const Opt<const StructInst*> {
-			return getCommonNonGenericType(ctx.arena, structsAndAliasesMap, strLiteral(s), delayedStructInsts);
+			return getCommonNonTemplateType(ctx.arena, structsAndAliasesMap, strLiteral(s), delayedStructInsts);
 		};
 		const Opt<const StructInst*>
 			_bool = ng("bool"),
@@ -68,9 +68,9 @@ namespace {
 			_void = ng("void"),
 			anyPtr = ng("any-ptr");
 
-		// generic types
+		// gemplate types
 		auto com = [&](const CStr name, const size_t nTypeParameters) -> const Opt<const StructDecl*> {
-			return getCommonGenericType(structsAndAliasesMap, strLiteral(name), nTypeParameters);
+			return getCommonTemplateType(structsAndAliasesMap, strLiteral(name), nTypeParameters);
 		};
 		const Opt<const StructDecl*>
 			opt = com("opt", 1),

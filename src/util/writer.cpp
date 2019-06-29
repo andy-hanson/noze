@@ -42,3 +42,9 @@ void writeEscapedChar(Writer& writer, const char c) {
 			break;
 	}
 }
+
+void newline(WriterWithIndent& writer) {
+	writeChar(writer, '\n');
+	for (__attribute__((unused)) const size_t _ : Range{writer._indent})
+		writeChar(writer, '\t');
+}

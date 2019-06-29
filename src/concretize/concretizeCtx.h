@@ -38,40 +38,29 @@ struct ConcreteStructKey {
 
 Comparison compareConcreteStructKey(const ConcreteStructKey a, const ConcreteStructKey b);
 
-struct FunDeclAndTypeArgs {
+// Unlike FunInst, this uses ConcreteType for type args instead of Type.
+// Unlike ConcreteFun, this doesn't have specialized params yet.
+struct ConcreteFunInst {
 	const FunDecl* decl;
 	const Arr<const ConcreteType> typeArgs;
+	const Arr<const ConcreteFunInst> specImpls;
 
-	inline FunDeclAndTypeArgs(const FunDecl* _decl, const Arr<const ConcreteType> _typeArgs)
-		: decl{_decl}, typeArgs{_typeArgs} {
-		assert(decl->typeParams.size == typeArgs.size);
+	inline ConcreteFunInst(const FunDecl* _decl, const Arr<const ConcreteType> _typeArgs, const Arr<const ConcreteFunInst> _specImpls)
+		: decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls} {
+		assert(typeArgs.size == decl->typeParams.size);
+		assert(specImpls.size == decl->nSpecImpls());
 	}
 
 	inline const TypeArgsScope typeArgsScope() const {
 		return TypeArgsScope{decl->typeParams, typeArgs};
 	}
 
-	inline const FunDeclAndTypeArgs withTypeArgs(const Arr<const ConcreteType> newTypeArgs) const {
-		return FunDeclAndTypeArgs{decl, newTypeArgs};
-	}
-};
-
-// Unlike FunInst, this uses ConcreteType for type args instead of Type.
-// Unlike ConcreteFun, this doesn't have specialized params yet.
-struct ConcreteFunInst {
-	const FunDeclAndTypeArgs funDeclAndTypeArgs;
-	const Arr<const ConcreteFunInst> specImpls;
-
-	inline const FunDecl* decl() const {
-		return funDeclAndTypeArgs.decl;
-	}
-
-	inline const TypeArgsScope typeArgsScope() const {
-		return funDeclAndTypeArgs.typeArgsScope();
-	}
-
 	inline size_t arity() const {
-		return decl()->arity();
+		return decl->arity();
+	}
+
+	inline const ConcreteFunInst withTypeArgs(const Arr<const ConcreteType> newTypeArgs) const {
+		return ConcreteFunInst{decl, newTypeArgs, specImpls};
 	}
 };
 
@@ -87,7 +76,7 @@ struct ConcreteFunKey {
 	}
 
 	inline const FunDecl* decl() const {
-		return funInst.decl();
+		return funInst.decl;
 	}
 
 	inline const TypeArgsScope typeArgsScope() const {
@@ -105,7 +94,7 @@ struct ConcreteFunSource {
 	const ConcreteFun* concreteFun;
 	// NOTE: for a lambda, this is for the *outermost* fun (the one with type args and spec impls).
 	// The FunDecl is needed for its TypeParam declataions.
-	const ConcreteFunInst containingFunInfo;
+	const ConcreteFunInst containingFunInst;
 	// Specializations on the parameters of *this* fun, e.g. the lambda and not the outer fun.
 	// We don't need specializations of outer parameters because those are handled by closure specialization.
 	// Note: this does not include the closure parameter (which is always specialized anyway)
@@ -115,33 +104,20 @@ struct ConcreteFunSource {
 	const FunBody body;
 	const Opt<const KnownLambdaBody*> knownLambdaBody;
 
-	inline ConcreteFunSource(
-		const ConcreteFun* _concreteFun,
-		const ConcreteFunInst _containingFunInfo,
-		const Arr<const ConstantOrLambdaOrVariable> _paramsSpecialize,
-		const FunBody _body,
-		const Opt<const KnownLambdaBody*> _knownLambdaBody
-	) : concreteFun{_concreteFun}, containingFunInfo{_containingFunInfo}, paramsSpecialize{_paramsSpecialize}, body{_body}, knownLambdaBody{_knownLambdaBody} {
-	}
-
-	inline const FunDeclAndTypeArgs containingFunDeclAndTypeArgs() const {
-		return containingFunInfo.funDeclAndTypeArgs;
+	inline const FunDecl* containingFunDecl() const {
+		return containingFunInst.decl;
 	}
 
 	inline const Arr<const ConcreteType> typeArgs() const {
-		return containingFunDeclAndTypeArgs().typeArgs;
-	}
-
-	inline const FunDecl* containingFunDecl() const {
-		return containingFunDeclAndTypeArgs().decl;
+		return containingFunInst.typeArgs;
 	}
 
 	inline const TypeArgsScope typeArgsScope() const {
-		return containingFunDeclAndTypeArgs().typeArgsScope();
+		return containingFunInst.typeArgsScope();
 	}
 
 	inline const Arr<const ConcreteFunInst> specImpls() const {
-		return containingFunInfo.specImpls;
+		return containingFunInst.specImpls;
 	}
 };
 
@@ -164,10 +140,10 @@ struct ConcretizeCtx {
 	// Funs we still need to write the bodies for
 	MutArr<ConcreteFun*> concreteFunsQueue {};
 	// This will only have an entry while a ConcreteFun hasn't had it's body filled in yet.
-	MutDict<const ConcreteFun*, const ConcreteFunSource, comparePointer<const ConcreteFun>> concreteFunToSource {};
+	MutDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>> concreteFunToSource {};
 	// This keeps the entry forever, because we don't know when we'll need to instantiate it again.
 	// (When we do that we copy this to the ConcreteFunSource)
-	MutDict<const KnownLambdaBody*, const LambdaInfo, comparePointer<const KnownLambdaBody>> knownLambdaBodyToInfo {};
+	MutDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>> knownLambdaBodyToInfo {};
 	// TODO: do this eagerly
 	Late<const ConcreteType> _boolType;
 	Late<const ConcreteType> _charType;
@@ -185,7 +161,7 @@ struct ConcretizeCtx {
 	const ConcreteType ctxPtrType();
 };
 
-const ConcreteFun* getOrAddNonGenericConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl);
+const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl);
 
 const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx& ctx, const ConcreteFunKey key);
 
@@ -257,5 +233,5 @@ const ConstantOrExpr nuExpr(Arena& arena, const ConcreteType type, const SourceR
 }
 
 inline const ConcreteFun* getAllocFun(ConcretizeCtx& ctx) {
-	return getOrAddNonGenericConcreteFunAndFillBody(ctx, ctx.allocFun);
+	return getOrAddNonTemplateConcreteFunAndFillBody(ctx, ctx.allocFun);
 }

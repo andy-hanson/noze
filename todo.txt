@@ -1,15 +1,27 @@
+
+
 !
-	sublime text: ignore 'libfirm' directory
+	specialization code to own file
+
+
+
+!
+	containingFunInfo -> containingFuninst
+
+!
+	// TODO: make sure to infer type params in this case!
+
+!
+	make a backup!
+
+!
+	workerworkerworker -- rename!
 
 !
 	typesToConcreteTypes -> getConcreteTypes
 
 !
-	struct ShouldNotHaveTypeParamsInIface {};
-	never used
-
-!
-	Kill TypeParamsScopE? just use Arr<const TypeParam>
+	Kill TypeParamsScope? just use Arr<const TypeParam>
 
 !
 	ExprContext -> ExprCtx
@@ -20,34 +32,12 @@
 !
 	size_t -> Nat
 
-!
 
 !
-	comparePointer -> comparePtr
+	Support comments at end of a line
 
 !
-	| TODO: omit type arguments
-
-!
-	| TODO: 'as' should be unnecessary
-
-!
-	iter iterator nat64(s stream nat64)
-
-	obviously this should be generic
-
-Don't use '$' for specs. Just use a 'spec' keyword
-
-
-!
-Support comments at end of a line
-
-
-!
-	| TODO:GENERIC
-
-!
-checkRef: have a getRef helper that doesn't take expected
+	checkRef: have a getRef helper that doesn't take expected
 
 
 
@@ -58,6 +48,13 @@ checkRef: have a getRef helper that doesn't take expected
 !
 
 	sortandgroup -- take a fn not a lambda?
+
+!
+	rename concretefunInst?
+
+	concretefun is fully-concrete
+
+	concretefuninst is missing parameter specializations
 
 !
 	//TODO:MOVE
@@ -76,14 +73,6 @@ TODO
 
 !
 	writeref
-
-!
-	indentingwriter struct
-	Just use struct WriteExprCtx, rename and move to writer.h
-
-
-!
-	specialization code to own file
 
 
 !

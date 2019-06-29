@@ -40,8 +40,8 @@ inline const Type instantiateType(Arena& arena, const Type type, const StructIns
 
 const FunInst* instantiateFun(Arena& arena, const FunDecl* decl, const Arr<const Type> typeArgs, const Arr<const Called> specImpls);
 
-inline const FunInst* instantiateNonGenericFun(Arena& arena, const FunDecl* decl) {
-	assert(!decl->isGeneric());
+inline const FunInst* instantiateNonTemplateFun(Arena& arena, const FunDecl* decl) {
+	assert(!decl->isTemplate());
 	return instantiateFun(arena, decl, emptyArr<const Type>(), emptyArr<const Called>());
 }
 

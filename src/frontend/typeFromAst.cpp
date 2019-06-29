@@ -136,7 +136,7 @@ const Bool typeIsPossiblySendable(const Type type) {
 			return True;
 		},
 		[](const TypeParam*) {
-			// type param *might* have a sendable type arg. Issue errors when instantiating a generic iface, not declaring it.
+			// type param *might* have a sendable type arg. Issue errors when instantiating a template iface, not declaring it.
 			return True;
 		},
 		[](const StructInst* i) {

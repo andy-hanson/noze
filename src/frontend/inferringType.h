@@ -93,7 +93,16 @@ inline const CheckedExpr bogusWithoutAffectingExpected(const SourceRange range) 
 	return CheckedExpr{Expr{range, Expr::Bogus{}}};
 }
 
-const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setTYpe, InferringTypeArgs inferringTypeArgs);
+// Inferring type args are in 'a', not 'b'
+const Bool matchTypesNoDiagnostic(
+	Arena& arena,
+	const Type a,
+	const Type b,
+	InferringTypeArgs aInferringTypeArgs,
+	const Bool allowConvertAToBUnion);
+inline const Bool matchTypesNoDiagnostic(Arena& arena, const Type a, const Type b, InferringTypeArgs aInferringTypeArgs) {
+	return matchTypesNoDiagnostic(arena, a, b, aInferringTypeArgs, /*allowConvertAToBUnion*/ False);
+}
 
 struct Expected {
 private:

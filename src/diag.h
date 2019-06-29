@@ -180,7 +180,6 @@ struct Diag {
 		};
 		const Kind kind;
 	};
-	struct ShouldNotHaveTypeParamsInIface {};
 	struct SpecImplNotFound {
 		const Str sigName;
 	};
@@ -228,7 +227,6 @@ private:
 		noSuchFunction,
 		paramShadowsPrevious,
 		parseDiag,
-		shouldNotHaveTypeParamsInIface,
 		specImplHasSpecs,
 		specImplNotFound,
 		typeConflict,
@@ -257,7 +255,6 @@ private:
 		const NoSuchFunction noSuchFunction;
 		const ParamShadowsPrevious paramShadowsPrevious;
 		const ParseDiag parseDiag;
-		const ShouldNotHaveTypeParamsInIface shouldNotHaveTypeParamsInIface;
 		const SpecImplHasSpecs specImplHasSpecs;
 		const SpecImplNotFound specImplNotFound;
 		const TypeConflict typeConflict;
@@ -286,7 +283,6 @@ public:
 	explicit inline Diag(const NoSuchFunction d) : kind{Kind::noSuchFunction}, noSuchFunction{d} {}
 	explicit inline Diag(const ParamShadowsPrevious d) : kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
 	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
-	explicit inline Diag(const ShouldNotHaveTypeParamsInIface d) : kind{Kind::shouldNotHaveTypeParamsInIface}, shouldNotHaveTypeParamsInIface{d} {}
 	explicit inline Diag(const SpecImplHasSpecs d) : kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
 	explicit inline Diag(const SpecImplNotFound d) : kind{Kind::specImplNotFound}, specImplNotFound{d} {}
 	explicit inline Diag(const TypeConflict d) : kind{Kind::typeConflict}, typeConflict{d} {}
@@ -318,7 +314,6 @@ public:
 		typename CbNoSuchFunction,
 		typename CbParamShadowsPrevious,
 		typename CbParseDiag,
-		typename CbShouldNotHaveTypeParamsInIface,
 		typename CbSpecImplHasSpecs,
 		typename CbSpecImplNotFound,
 		typename CbTypeConflict,
@@ -345,7 +340,6 @@ public:
 		CbNoSuchFunction cbNoSuchFunction,
 		CbParamShadowsPrevious cbParamShadowsPrevious,
 		CbParseDiag cbParseDiag,
-		CbShouldNotHaveTypeParamsInIface cbShouldNotHaveTypeParamsInIface,
 		CbSpecImplHasSpecs cbSpecImplHasSpecs,
 		CbSpecImplNotFound cbSpecImplNotFound,
 		CbTypeConflict cbTypeConflict,
@@ -391,8 +385,6 @@ public:
 				return cbParamShadowsPrevious(paramShadowsPrevious);
 			case Kind::parseDiag:
 				return cbParseDiag(parseDiag);
-			case Kind::shouldNotHaveTypeParamsInIface:
-				return cbShouldNotHaveTypeParamsInIface(shouldNotHaveTypeParamsInIface);
 			case Kind::specImplHasSpecs:
 				return cbSpecImplHasSpecs(specImplHasSpecs);
 			case Kind::specImplNotFound:

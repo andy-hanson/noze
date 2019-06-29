@@ -13,7 +13,7 @@ namespace {
 
 		//TODO: this should go in the ConcreteFunSource
 		const Arr<const ConcreteField> fields; // If this is inside a new iface
-		MutDict<const Local*, const ConcreteLocal*, comparePointer<const Local>> locals {};
+		MutDict<const Local*, const ConcreteLocal*, comparePtr<const Local>> locals {};
 
 		ConcretizeExprCtx(const ConcretizeExprCtx&) = delete;
 		ConcretizeExprCtx(ConcretizeExprCtx&&) = default;
@@ -60,12 +60,12 @@ namespace {
 					return getConcreteFunInstFromCalled(ctx, calledSpecImpl);
 				});
 				return ConcreteFunInst{
-					FunDeclAndTypeArgs{funInst->decl, ctx.typesToConcreteTypes(funInst->typeArgs)},
-					specImpls,
-				};
+					funInst->decl,
+					ctx.typesToConcreteTypes(funInst->typeArgs),
+					specImpls};
 			},
 			[&](const SpecSig specSig) {
-				return at(ctx.concreteFunSource.containingFunInfo.specImpls, specSig.indexOverAllSpecUses);
+				return at(ctx.concreteFunSource.specImpls(), specSig.indexOverAllSpecUses);
 			});
 		unused(ctx); unused(called);
 		return todo<const ConcreteFunInst>("!!!!!");
@@ -90,11 +90,11 @@ namespace {
 				: getKnownLambdaBodyFromConstantOrExpr(first(args));
 
 			// TODO: also handle isCallFunPtr
-			if (isCallFun(ctx.concretizeCtx, concreteCalled.decl()) && opKnownLambdaBody.has()) {
+			if (isCallFun(ctx.concretizeCtx, concreteCalled.decl) && opKnownLambdaBody.has()) {
 				const KnownLambdaBody* klb = opKnownLambdaBody.force();
 				assert(isEmpty(concreteCalled.specImpls));
 				const Arr<const ConstantOrExpr> itsArgs = tail(args);
-				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl(), itsArgs);
+				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl, itsArgs);
 				const ConcreteFun* actualCalled = instantiateKnownLambdaBodyForDirectCall(ctx.concretizeCtx, klb, itsSpecializeOnArgs.specializeOnArgs);
 				const Arr<const ConstantOrExpr> itsNotSpecializedArgs = itsSpecializeOnArgs.notSpecializedArgs;
 				// If arg0 is a constant, completely omit it. Else pass it as the closure arg.
@@ -103,7 +103,7 @@ namespace {
 					: itsNotSpecializedArgs;
 				return FunAndArgs{actualCalled, allArgs};
 			} else {
-				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl(), args);
+				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl, args);
 				const ConcreteFun* fun = getConcreteFunForCallAndFillBody(ctx.concretizeCtx, concreteCalled, specializeOnArgs.specializeOnArgs);
 				return FunAndArgs{fun, specializeOnArgs.notSpecializedArgs};
 			}
@@ -189,7 +189,7 @@ namespace {
 		if (e.isRemoteFun)
 			todo<void>("funaslambda remote");
 
-		const ConcreteFun* cf = getOrAddNonGenericConcreteFunAndFillBody(ctx.concretizeCtx, e.fun);
+		const ConcreteFun* cf = getOrAddNonTemplateConcreteFunAndFillBody(ctx.concretizeCtx, e.fun);
 		const Str mangledName = cat(arena, cf->mangledName(), strLiteral("__asLambda"));
 
 		const ConcreteType dynamicType = ctx.getConcreteType_forStructInst(e.type);
@@ -203,9 +203,9 @@ namespace {
 			range,
 			Expr::Call{
 				// TODO: this should technically use the model arena and not the concrete arena?
-				Called{instantiateNonGenericFun(ctx.arena(), e.fun)},
+				Called{instantiateNonTemplateFun(ctx.arena(), e.fun)},
 				args});
-		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInfo, body};
+		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInst, body};
 		ctx.concretizeCtx.knownLambdaBodyToInfo.add(arena, klb, info);
 		return ConstantOrExpr{ctx.allConstants().lambda(arena, klb)};
 	}
@@ -268,7 +268,7 @@ namespace {
 			writeStr(writer, ctx.currentConcreteFun->mangledName());
 			writeStatic(writer, "__lambda");
 			writeNat(writer, ctx.currentConcreteFun->nextLambdaIndex++);
-			return writer.finish();
+			return finishWriter(writer);
 		}();
 
 		const Arr<const ConstantOrExpr> closureArgsWithConstants = map<const ConstantOrExpr>{}(arena,  e.closure, [&](const ClosureField* f) {
@@ -283,7 +283,7 @@ namespace {
 
 		const KnownLambdaBody* klb = arena.nu<const KnownLambdaBody>()(
 			dynamicType, nonSpecializedSig, mangledName, closureSpecialize.closureParam, closureSpecialize.closureSpecialize);
-		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInfo, e.body};
+		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInst, e.body};
 
 		ctx.concretizeCtx.knownLambdaBodyToInfo.add(arena, klb, info);
 
@@ -363,7 +363,7 @@ namespace {
 			writeStr(writer, ctx.currentConcreteFun->mangledName());
 			writeStatic(writer, "__ifaceImpl");
 			writeNat(writer, ctx.currentConcreteFun->nextNewIfaceImplIndex++);
-			return writer.finish();
+			return finishWriter(writer);
 		}();
 		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls = mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
 			arena,
@@ -377,7 +377,7 @@ namespace {
 					writeStr(writer, mangledNameBase);
 					writeStatic(writer, "__");
 					writeStr(writer, sig.mangledName);
-					return writer.finish();
+					return finishWriter(writer);
 				}();
 				return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
 			});

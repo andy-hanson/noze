@@ -51,7 +51,7 @@ ConcreteExpr::CallConcreteFun::CallConcreteFun(const ConcreteFun* c, const Arr<c
 			else
 				writeStatic(writer, "<<none>>");
 			writeChar(writer, '\n');
-			debugPrint(writer.finishCStr());
+			debugPrint(finishWriterToCStr(writer));
 			assert(0);
 		}
 	}

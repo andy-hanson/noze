@@ -769,10 +769,10 @@ stream<?t> record mut
 iter iterator ?t(s stream ?t)
 	s.get-iter call
 
-$iter<?t, ?e>
+iter<?t, ?e> spec
 	iter iterator ?e(t ?t)
 
-to-stream<?t, ?e> stream ?e(t ?t) $iter<?t, ?e>
+to-stream<?t, ?e> stream ?e(t ?t) iter<?t, ?e>
 	new {t iter}
 
 region range
@@ -814,7 +814,6 @@ each-recur void(i iterator ?t, f fun1 void ?t)
 			pass
 		some s
 			f call s.value
-			| TODO: omit type arguments
 			i each-recur f
 
 filter stream ?t(in stream ?t, pred fun1 bool ?t)
@@ -833,12 +832,9 @@ filter-helper opt ?t(i iterator ?t, pred fun1 bool ?t)
 					new<some<?t>> v
 				else
 					| This one didn't satisfy the predicate, but keep trying until we get one or each the end
-					| TODO: omit type arguments
-					i filter-helper<?t> pred
+					i filter-helper pred
 
-
-
-sum nat64(t ?t) $iter<?t, nat64>
+sum nat64(t ?t) iter<?t, nat64>
 	t.iter sum-helper
 
 sum-helper nat64(i iterator nat64)

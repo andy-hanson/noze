@@ -4,7 +4,7 @@
 
 namespace {
 	Comparison compareArrConstants(const Arr<const Constant*> a, const Arr<const Constant*> b) {
-		return compareArr<const Constant*, comparePointer<const Constant>>(a, b);
+		return compareArr<const Constant*, comparePtr<const Constant>>(a, b);
 	}
 }
 
@@ -17,7 +17,7 @@ struct ConstantsForRecord {
 struct ConstantsForUnion {
 	size_t nextId;
 	// Maps a struct to that struct as a member of the union
-	MutDict<const Constant*, const Constant*, comparePointer<const Constant>> values;
+	MutDict<const Constant*, const Constant*, comparePtr<const Constant>> values;
 	ConstantsForUnion(const ConstantsForUnion&) = delete;
 };
 

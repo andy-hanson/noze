@@ -5,19 +5,17 @@
 
 struct Writer {
 	Arena& arena;
-	ArrBuilder<const char> res;
-
-	inline Writer(Arena& _arena) : arena{_arena}, res{} {}
-
-	inline const Str finish() {
-		return res.finish();
-	}
-
-	inline CStr finishCStr() {
-		res.add(arena, '\0');
-		return res.finish().begin();
-	}
+	ArrBuilder<const char> res {};
 };
+
+inline const Str finishWriter(Writer& writer) {
+	return writer.res.finish();
+}
+
+inline CStr finishWriterToCStr(Writer& writer) {
+	writer.res.add(writer.arena, '\0');
+	return writer.res.finish().begin();
+}
 
 //TODO:KILL
 inline void writeChar(Writer& writer, const char c) {
@@ -52,3 +50,41 @@ void writeWithCommas(Writer& writer, const Arr<T> a, const Bool leadingComma, Cb
 }
 
 void writeEscapedChar(Writer& writer, const char c);
+
+struct WriterWithIndent {
+	Writer& writer;
+	uint _indent = 1;
+};
+
+void newline(WriterWithIndent& writer);
+
+inline void decrIndent(WriterWithIndent& writer) {
+	assert(writer._indent != 0);
+	writer._indent--;
+}
+
+inline void incrIndent(WriterWithIndent& writer) {
+	writer._indent++;
+}
+
+inline void indent(WriterWithIndent& writer) {
+	incrIndent(writer);
+	newline(writer);
+}
+
+inline void dedent(WriterWithIndent& writer) {
+	decrIndent(writer);
+	newline(writer);
+}
+
+inline void writeChar(WriterWithIndent& writer, const char c) {
+	writeChar(writer.writer, c);
+}
+
+inline void writeStatic(WriterWithIndent& writer, const CStr text) {
+	writeStatic(writer.writer, text);
+}
+
+inline void writeStr(WriterWithIndent& writer, const Str s) {
+	writeStr(writer.writer, s);
+}

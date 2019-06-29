@@ -17,7 +17,7 @@ namespace {
 		}
 	};
 
-	using TypesDict = Dict<const ConcreteStruct*, const TypesForStruct, comparePointer<const ConcreteStruct>>;
+	using TypesDict = Dict<const ConcreteStruct*, const TypesForStruct, comparePtr<const ConcreteStruct>>;
 
 	// Just create the type, fill it in later.
 	// This is never a pointer type (unless the type is ptr)
@@ -59,7 +59,7 @@ namespace {
 
 	const TypesDict getTypesDict(Arena& arena, const Arr<const ConcreteStruct*> allStructs) {
 		const TypesDict typesDict = [&]() {
-			DictBuilder<const ConcreteStruct*, const TypesForStruct, comparePointer<const ConcreteStruct>> allTypes {};
+			DictBuilder<const ConcreteStruct*, const TypesForStruct, comparePtr<const ConcreteStruct>> allTypes {};
 			for (const ConcreteStruct* s : allStructs) {
 				ir_type* valueType = initValueType(s);
 				ir_type* pointerType = new_type_pointer(valueType);

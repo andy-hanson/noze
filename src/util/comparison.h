@@ -30,7 +30,7 @@ inline const Bool ptrEquals(const T* a, const T* b) {
 }
 
 template <typename T>
-inline Comparison comparePointer(const T* a, const T* b) {
+inline Comparison comparePtr(const T* a, const T* b) {
 	return a < b ? Comparison::less : a >  b ? Comparison::greater : Comparison::equal;
 }
 

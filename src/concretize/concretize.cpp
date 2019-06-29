@@ -8,8 +8,8 @@ namespace {
 	void checkMainSignature(const CommonTypes& commonTypes, const FunDecl* mainFun) {
 		if (!mainFun->noCtx())
 			todo<void>("main must be noctx");
-		if (mainFun->isGeneric())
-			todo<void>("main is generic?");
+		if (mainFun->isTemplate())
+			todo<void>("main is Template?");
 		const Arr<const Param> params = mainFun->params();
 		if (params.size == 0) {
 			const Type ret = mainFun->returnType();
@@ -55,7 +55,7 @@ namespace {
 
 const ConcreteProgram concretize(Arena& arena, const Program program) {
 	ConcretizeCtx ctx { arena, getAllocFun(program), getCallFuns(arena, program), program.commonTypes };
-	const ConcreteFun* mainConcreteFun = getOrAddNonGenericConcreteFunAndFillBody(ctx, getMainFun(program));
+	const ConcreteFun* mainConcreteFun = getOrAddNonTemplateConcreteFunAndFillBody(ctx, getMainFun(program));
 	// We remove items from these dicts when we process them.
 	assert(isEmpty(ctx.concreteFunToSource));
 	return getReferencedOnly(arena, mainConcreteFun, ctx.ctxPtrType().strukt);

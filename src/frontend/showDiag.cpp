@@ -198,9 +198,6 @@ namespace {
 			[&](const ParseDiag pd) {
 				writeParseDiag(writer, pd);
 			},
-			[&](const Diag::ShouldNotHaveTypeParamsInIface) {
-				writeStatic(writer, "a member function of an interface should not have type parameters");
-			},
 			[&](const Diag::SpecImplHasSpecs d) {
 				writeStatic(writer, "spec implementation ");
 				writeStr(writer, d.funName);
@@ -272,5 +269,5 @@ void printDiagnostics(const Diagnostics diagnostics) {
 		}
 	}
 
-	printf("%s\n", writer.finishCStr());
+	printf("%s\n", finishWriterToCStr(writer));
 }

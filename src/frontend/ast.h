@@ -465,7 +465,7 @@ public:
 
 struct FunDeclAst {
 	const Bool isPublic;
-	// Note: this may be omitted and the function may still be generic
+	// Note: if this is empty, the function may still have type params and they should be inferred
 	const Arr<const TypeParamAst> typeParams;
 	const SigAst sig;
 	const Arr<const SpecUseAst> specUses;
