@@ -43,84 +43,6 @@ namespace {
 	}
 }
 
-const Type instantiateType(Arena& arena, const Type type, const Arr<const TypeParam> typeParams, const Arr<const Type> typeArgs) {
-	return type.match(
-		[](const Type::Bogus) {
-			return Type{Type::Bogus{}};
-		},
-		[&](const TypeParam* p) {
-			const Opt<const Type*> op = tryGetTypeArg<const Type>(typeParams, typeArgs, p);
-			return op.has() ? *op.force() : type;
-		},
-		[&](const StructInst* i) {
-			return Type{instantiateStructInst(arena, i, typeParams, typeArgs)};
-		});
-}
-
-const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
-	return decl->body().match(
-		[](const StructBody::Builtin) {
-			return StructBody{StructBody::Builtin{}};
-		},
-		[&](const StructBody::Fields f) {
-			const Arr<const StructField> fields = map<const StructField>{}(arena, f.fields, [&](const StructField f) {
-				return StructField{f.isMutable, f.name, instantiateType(arena, f.type, decl->typeParams, typeArgs), f.index};
-			});
-			return StructBody{StructBody::Fields{fields}};
-		},
-		[&](const StructBody::Union u) {
-			const Arr<const StructInst*> members = map<const StructInst*>{}(arena, u.members, [&](const StructInst* i) {
-				return instantiateStructInst(arena, i, decl->typeParams, typeArgs);
-			});
-			return StructBody{StructBody::Union{members}};
-		},
-		[&](const StructBody::Iface i) {
-			const Arr<const Message> messages = map<const Message>{}(arena, i.messages, [&](const Message m) {
-				const Arr<const Param> params = map<const Param>{}(arena, m.sig.params, [&](const Param p) {
-					return Param{p.range, p.name, instantiateType(arena, p.type, decl->typeParams, typeArgs), p.index};
-				});
-				const Sig sig = Sig{m.sig.range, m.sig.name, instantiateType(arena, m.sig.returnType, decl->typeParams, typeArgs), params};
-				return Message{sig, m.index};
-			});
-			return StructBody{StructBody::Iface{messages}};
-		});
-}
-
-const StructInst* instantiateStruct(
-	Arena& arena,
-	const StructDecl* decl,
-	const Arr<const Type> typeArgs,
-	DelayStructInsts delayStructInsts
-) {
-	for (const StructInst* si : tempAsArr(decl->insts))
-		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
-			return si;
-
-	const Purity purity = [&]() {
-		Purity pur = decl->purity;
-		for (const Type typeArg : typeArgs)
-			pur = worsePurity(pur, typeArg.purity());
-		return pur;
-	}();
-
-	StructInst* res = arena.nu<StructInst>()(decl, typeArgs, purity);
-	if (decl->bodyIsSet())
-		res->setBody(instantiateStructBody(arena, decl, typeArgs));
-	else
-		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
-		push(arena, *delayStructInsts.force(), res);
-	push<const StructInst*>(arena, decl->insts, res);
-	return res;
-}
-
-const StructInst* instantiateStructInst(Arena& arena, const StructInst* structInst, const Arr<const TypeParam> typeParams, const Arr<const Type> typeArgs) {
-	// TODO:PERF don't create the array if we don't need it (`instantiate` could take the callback)
-	const Arr<const Type> itsTypeArgs = map<const Type>{}(arena, structInst->typeArgs, [&](const Type t) {
-		return instantiateType(arena, t, typeParams, typeArgs);
-	});
-	return instantiateStructNeverDelay(arena, structInst->decl, itsTypeArgs);
-}
-
 const Opt<const StructInst*> instStructFromAst(
 	CheckCtx& ctx,
 	const TypeAst::InstStruct ast,
@@ -172,10 +94,9 @@ const Type typeFromAst(
 ) {
 	return ast.match(
 		[&](const TypeAst::TypeParam p) {
-			const Opt<const TypeParam*> found = findInEither(
-				typeParamsScope.outer,
-				typeParamsScope.innerTypeParams,
-				[&](const TypeParam it) { return strEq(it.name, p.name); });
+			const Opt<const TypeParam*> found = findPtr(typeParamsScope.innerTypeParams, [&](const TypeParam* it) {
+				return strEq(it->name, p.name);
+			});
 			if (found.has())
 				return Type{found.force()};
 			else {

@@ -61,7 +61,7 @@ const Bool Expr::typeIsBogus(Arena& arena) const {
 			return True;
 		},
 		[](const Expr::Call e) {
-			return e.concreteReturnType.isBogus();
+			return e.called.returnType().isBogus();
 		},
 		[](const Expr::ClosureFieldRef e) {
 			return e.field->type.isBogus();
@@ -125,7 +125,7 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 			return Type{Type::Bogus{}};
 		},
 		[](const Expr::Call e) {
-			return e.concreteReturnType;
+			return e.called.returnType();
 		},
 		[](const Expr::ClosureFieldRef e) {
 			return e.field->type;
@@ -233,14 +233,14 @@ const Sexpr typeToSexpr(Arena& arena, const Type type) {
 }
 
 namespace {
-	const Sexpr calledDeclToSexpr(Arena& arena, const CalledDecl cd) {
-		return cd.match(
-			[&](const FunDecl* f) {
-				return Sexpr{f->name()};
+	const Sexpr calledToSexpr(Arena& arena, const Called c) {
+		unused(arena);
+		return c.match(
+			[&](const FunInst*) {
+				return todo<const Sexpr>("funinst to sexpr");
 			},
-			[&](const CalledDecl::SpecUseSig) {
-				unused(arena);
-				return todo<const Sexpr>("specusesig to sexpr");
+			[&](const SpecSig) {
+				return todo<const Sexpr>("specsig to sexpr");
 			});
 	}
 }
@@ -254,10 +254,7 @@ const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
 			return Sexpr{SexprRecord{
 				strLiteral("call"),
 				arrLiteral<const Sexpr>(arena, {
-					typeToSexpr(arena, e.concreteReturnType),
-					calledDeclToSexpr(arena, e.calledDecl()),
-					arrToSexpr<const Type, typeToSexpr>(arena, e.typeArgs()),
-					arrToSexpr<const CalledDecl, calledDeclToSexpr>(arena, e.specImpls()),
+					calledToSexpr(arena, e.called),
 					arrToSexpr<const Expr, exprToSexpr>(arena, e.args)
 				})}};
 		},

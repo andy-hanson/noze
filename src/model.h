@@ -133,6 +133,10 @@ struct Param {
 	const Identifier name;
 	const Type type;
 	const size_t index;
+
+	inline const Param withType(const Type t) const {
+		return Param{range, name, t, index};
+	}
 };
 
 struct Sig {
@@ -312,11 +316,22 @@ public:
 	}
 };
 
+struct SpecInst;
+
 struct SpecDecl {
 	const SourceRange range;
 	const Bool isPublic;
 	const Identifier name;
 	const Arr<const TypeParam> typeParams;
+	const Arr<const Sig> sigs;
+	mutable MutArr<const SpecInst*> insts {};
+};
+
+// Don't instantiate directly, use instantiateSpec
+struct SpecInst {
+	const SpecDecl* decl;
+	const Arr<const Type> typeArgs;
+	// Instantiated signatures
 	const Arr<const Sig> sigs;
 };
 
@@ -378,19 +393,16 @@ struct FunFlags {
 	}
 };
 
-struct SpecUse {
-	const SpecDecl* spec;
-	const Arr<const Type> typeArgs;
-	const size_t index;
-};
+struct FunInst;
 
 struct FunDecl {
 	const Bool isPublic;
 	const FunFlags flags;
 	const Sig sig;
 	const Arr<const TypeParam> typeParams;
-	const Arr<const SpecUse> specs;
+	const Arr<const SpecInst*> specs;
 	Late<FunBody> _body {};
+	mutable MutArr<const FunInst*> insts {};
 
 	inline const FunBody body() const {
 		return _body.get();
@@ -427,12 +439,193 @@ struct FunDecl {
 		return sig.arity();
 	}
 
+	inline size_t nSpecImpls() const {
+		size_t n = 0;
+		for (const SpecInst* s : specs)
+			n += s->sigs.size;
+		return n;
+	}
+
 	inline const Bool isGeneric() const {
 		return _or(!isEmpty(typeParams), !isEmpty(specs));
 	}
 
 	inline const Bool isSummon() const {
 		return flags.summon;
+	}
+};
+
+struct Called;
+
+// Cached by FunDecl
+// Unlike ConcreteFun, the type arguments here may just be other type parameters.
+struct FunInst {
+	const FunDecl* decl;
+	const Arr<const Type> typeArgs;
+	const Arr<const Called> specImpls;
+	const Sig sig;
+
+	inline FunInst(const FunDecl* _decl, const Arr<const Type> _typeArgs, const Arr<const Called> _specImpls, const Sig _sig)
+		: decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls}, sig{_sig} {
+		assert(typeArgs.size == decl->typeParams.size);
+		assert(specImpls.size == decl->nSpecImpls());
+	}
+
+	inline const Str name() const {
+		return decl->name();
+	}
+
+	inline size_t arity() const {
+		return decl->arity();
+	}
+};
+
+struct SpecSig {
+	const SpecInst* specInst;
+	// Note: this is the instantiated sig
+	const Sig* sig;
+	const size_t indexOverAllSpecUses;
+
+	inline const Str name() const {
+		return sig->name;
+	}
+};
+
+// Like 'Called', but we haven't fully instantiated yet. (This is used for Candidate when checking a call expr.)
+struct CalledDecl {
+private:
+	enum class Kind {
+		funDecl,
+		specSig,
+	};
+	const Kind kind;
+	union {
+		const FunDecl* funDecl;
+		const SpecSig specSig;
+	};
+
+public:
+	explicit inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
+	explicit inline CalledDecl(const SpecSig _specSig) : kind{Kind::specSig}, specSig{_specSig} {}
+
+	template <typename CbFunDecl, typename CbSpecSig>
+	auto match(CbFunDecl cbFunDecl, CbSpecSig cbSpecSig) const {
+		switch (kind) {
+			case Kind::funDecl:
+				return cbFunDecl(funDecl);
+			case Kind::specSig:
+				return cbSpecSig(specSig);
+			default:
+				assert(0);
+		}
+	}
+
+	inline const Sig* sig() const {
+		return match(
+			[](const FunDecl* f) {
+				return &f->sig;
+			},
+			[](const SpecSig s) {
+				return s.sig;
+			});
+	}
+
+	inline const Str name() const {
+		return sig()->name;
+	}
+
+	inline const Type returnType() const {
+		return sig()->returnType;
+	}
+
+	inline const Arr<const Param> params() const {
+		return sig()->params;
+	}
+
+	inline size_t arity() const {
+		return sig()->arity();
+	}
+
+	inline const Arr<const TypeParam> typeParams() const {
+		return match(
+			[](const FunDecl* f) {
+				return f->typeParams;
+			},
+			[](const SpecSig) {
+				return emptyArr<const TypeParam>();
+			});
+	}
+};
+
+struct Called {
+private:
+	enum class Kind {
+		funInst,
+		specSig,
+	};
+	const Kind kind;
+	union {
+		const FunInst* funInst;
+		const SpecSig specSig;
+	};
+
+public:
+	explicit inline Called(const FunInst* _funInst) : kind{Kind::funInst}, funInst{_funInst} {}
+	explicit inline Called(const SpecSig _specSig) : kind{Kind::specSig}, specSig{_specSig} {}
+
+	inline const Bool isFunInst() const {
+		return enumEq(kind, Kind::funInst);
+	}
+	inline const Bool isSpecSig() const {
+		return enumEq(kind, Kind::specSig);
+	}
+	inline const FunInst* asFunInst() const {
+		assert(isFunInst());
+		return funInst;
+	}
+	inline const SpecSig asSpecSig() const {
+		assert(isSpecSig());
+		return specSig;
+	}
+
+	template <typename CbFunInst, typename CbSpecSig>
+	auto match(CbFunInst cbFunInst, CbSpecSig cbSpecSig) const {
+		switch (kind) {
+			case Kind::funInst:
+				return cbFunInst(funInst);
+			case Kind::specSig:
+				return cbSpecSig(specSig);
+			default:
+				assert(0);
+		}
+	}
+
+	inline const Sig* sig() const {
+		return match(
+			[](const FunInst* f) {
+				return &f->sig;
+			},
+			[](const SpecSig s) {
+				return s.sig;
+			});
+	}
+
+	inline size_t arity() const {
+		return sig()->arity();
+	}
+
+	inline const Str name() const {
+		return match(
+			[](const FunInst* f) { return f->name(); },
+			[](const SpecSig s) { return s.name(); });
+	}
+
+	inline const Type returnType() const {
+		return sig()->returnType;
+	}
+
+	inline const Arr<const Param> params() const {
+		return sig()->params;
 	}
 };
 
@@ -581,124 +774,12 @@ struct ClosureField {
 	const size_t index;
 };
 
-struct CalledDecl {
-	struct SpecUseSig {
-		const SpecUse* specUse;
-		// TODO: isn't it redundant to have both sig and sigIndex?
-		const Sig* sig;
-		const size_t sigIndexOverAllSpecUses;
-
-		inline const Str name() const {
-			return sig->name;
-		}
-	};
-
-private:
-	enum class Kind {
-		funDecl,
-		specUseSig,
-	};
-	const Kind kind;
-	union {
-		const FunDecl* funDecl;
-		const SpecUseSig specUseSig;
-	};
-
-public:
-	explicit inline CalledDecl(const FunDecl* _funDecl) : kind{Kind::funDecl}, funDecl{_funDecl} {}
-	explicit inline CalledDecl(const SpecUseSig _specUseSig) : kind{Kind::specUseSig}, specUseSig{_specUseSig} {}
-
-	inline const Bool isFunDecl() const {
-		return enumEq(kind, Kind::funDecl);
-	}
-	inline const Bool isSpecUseSig() const {
-		return enumEq(kind, Kind::specUseSig);
-	}
-	inline const FunDecl* asFunDecl() const {
-		assert(isFunDecl());
-		return funDecl;
-	}
-	inline const SpecUseSig asSpecUseSig() const {
-		assert(isSpecUseSig());
-		return specUseSig;
-	}
-
-	template <typename CbFunDecl, typename CbSpecUseSig>
-	auto match(CbFunDecl cbFunDecl, CbSpecUseSig cbSpecUseSig) const {
-		switch (kind) {
-			case Kind::funDecl:
-				return cbFunDecl(funDecl);
-			case Kind::specUseSig:
-				return cbSpecUseSig(specUseSig);
-			default:
-				assert(0);
-		}
-	}
-
-	inline const Sig* sig() const {
-		return match(
-			[](const FunDecl* f) { return &f->sig; },
-			[](const SpecUseSig s) { return s.sig; });
-	}
-
-	inline const Arr<const TypeParam> typeParams() const {
-		return match(
-			[](const FunDecl* f) {
-				return f->typeParams;
-			},
-			[](const SpecUseSig) {
-				return emptyArr<const TypeParam>();
-			});
-	}
-
-	inline size_t arity() const {
-		return sig()->arity();
-	}
-
-	inline const Str name() const {
-		return match(
-			[](const FunDecl* f) { return f->name(); },
-			[](const SpecUseSig s) { return s.name(); });
-	}
-
-	inline const Type returnType() const {
-		return sig()->returnType;
-	}
-
-	inline const Arr<const Param> params() const {
-		return sig()->params;
-	}
-};
-
 struct Expr {
 	struct Bogus {};
 
 	struct Call {
-		struct Called {
-			const CalledDecl calledDecl;
-			const Arr<const Type> typeArgs;
-			// These will be in order of the sigs from the specs of the function we're calling.
-			// Note: if there is a generic spec sig, it should be matched by a generic function.
-			// Currently a non-generic spec sig can't be matched by a generic function.
-			// So, this uses CalledDecl and not Called.
-			const Arr<const CalledDecl> specImpls;
-		};
-
-		const Type concreteReturnType;
 		const Called called;
 		const Arr<const Expr> args;
-
-		inline const CalledDecl calledDecl() const {
-			return called.calledDecl;
-		}
-
-		inline const Arr<const Type> typeArgs() const {
-			return called.typeArgs;
-		}
-
-		inline const Arr<const CalledDecl> specImpls() const {
-			return called.specImpls;
-		}
 	};
 
 	struct ClosureFieldRef {

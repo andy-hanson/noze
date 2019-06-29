@@ -12,16 +12,6 @@ namespace {
 		return compareArr<const ConcreteType, compareConcreteType>(a, b);
 	}
 
-	Comparison compareFunDeclAndTypeArgs(const FunDeclAndTypeArgs a, const FunDeclAndTypeArgs b) {
-		const Comparison res = comparePointer(a.decl, b.decl);
-		return res != Comparison::equal ? res : compareConcreteTypeArr(a.typeArgs, b.typeArgs);
-	}
-
-	Comparison compareFunDeclAndTypeArgsAndSpecImpls(const FunDeclAndTypeArgsAndSpecImpls a, const FunDeclAndTypeArgsAndSpecImpls b) {
-		const Comparison res = compareFunDeclAndTypeArgs(a.funDeclAndTypeArgs, b.funDeclAndTypeArgs);
-		return res != Comparison::equal ? res : compareArr<const FunDecl*, comparePointer<const FunDecl>>(a.specImpls, b.specImpls);
-	}
-
 	const Str getConcreteStructMangledName(Arena& arena, const Str declName, const Arr<const ConcreteType> typeArgs) {
 		Writer writer { arena };
 		writeMangledName(writer, declName);
@@ -55,7 +45,7 @@ namespace {
 		const Str declName,
 		const ConcreteType returnType,
 		const Arr<const ConcreteParam> params,
-		const Arr<const FunDecl*> specImpls,
+		const Arr<const ConcreteFunInst> specImpls,
 		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs
 	) {
 		Writer writer { arena };
@@ -63,9 +53,10 @@ namespace {
 		writeConcreteTypeForMangle(writer, returnType);
 		for (const ConcreteParam param : params)
 			writeConcreteTypeForMangle(writer, param.type);
-		for (const FunDecl* si : specImpls) {
+		for (const ConcreteFunInst si : specImpls) {
+			//TODO: include *its* type args!
 			writeStatic(writer, "__");
-			writeMangledName(writer, si->name());
+			writeMangledName(writer, si.decl()->name());
 		}
 		writeSpecializeOnArgsForMangle(writer, specializeOnArgs);
 		return writer.finish();
@@ -219,7 +210,13 @@ namespace {
 		const Arr<const ConcreteParam> params = concretizeParamsAndSpecialize(ctx, decl->params(), key.specializeOnArgs, typeScope);
 		const Str mangledName = decl->isExtern()
 			? decl->name()
-			: getConcreteFunMangledName(ctx.arena, decl->name(), returnType, params, key.specImpls(), key.specializeOnArgs);
+			: getConcreteFunMangledName(
+				ctx.arena,
+				decl->name(),
+				returnType,
+				params,
+				key.specImpls(),
+				key.specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
 		// no closure for fun from decl
 		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(_not(decl->noCtx()), none<const ConcreteParam>(), sig, isCallFun(ctx, decl));
@@ -232,7 +229,7 @@ namespace {
 
 		const ConcreteFunSource source = ConcreteFunSource{
 			res,
-			key.declAndTypeArgsAndSpecImpls,
+			key.funInst,
 			key.specializeOnArgs,
 			decl->body(),
 			none<const KnownLambdaBody*>()};
@@ -348,7 +345,7 @@ namespace {
 
 		const ConcreteFunSource source = ConcreteFunSource{
 			res,
-			info.containingFunDeclAndTypeArgsAndSpecImpls,
+			info.containingFunInst,
 			specializeOnArgs,
 			FunBody{info.body},
 			some<const KnownLambdaBody*>(klb)};
@@ -365,6 +362,15 @@ namespace {
 		});
 	}
 
+	Comparison compareFunDeclAndTypeArgs(const FunDeclAndTypeArgs a, const FunDeclAndTypeArgs b) {
+		const Comparison res = comparePointer(a.decl, b.decl);
+		return res != Comparison::equal ? res : compareConcreteTypeArr(a.typeArgs, b.typeArgs);
+	}
+
+	Comparison compareConcreteFunInst(const ConcreteFunInst a, const ConcreteFunInst b) {
+		const Comparison res = compareFunDeclAndTypeArgs(a.funDeclAndTypeArgs, b.funDeclAndTypeArgs);
+		return res != Comparison::equal ? res : compareArr<const ConcreteFunInst, compareConcreteFunInst>(a.specImpls, b.specImpls);
+	}
 }
 
 Comparison compareConcreteStructKey(const ConcreteStructKey a, const ConcreteStructKey b) {
@@ -373,7 +379,7 @@ Comparison compareConcreteStructKey(const ConcreteStructKey a, const ConcreteStr
 }
 
 Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b) {
-	const Comparison res = compareFunDeclAndTypeArgsAndSpecImpls(a.declAndTypeArgsAndSpecImpls, b.declAndTypeArgsAndSpecImpls);
+	const Comparison res = compareConcreteFunInst(a.funInst, b.funInst);
 	return res != Comparison::equal
 		? res
 		: compareArr<const ConstantOrLambdaOrVariable, compareConstantOrLambdaOrVariable>(a.specializeOnArgs, b.specializeOnArgs);
@@ -413,11 +419,11 @@ const ConcreteType ConcretizeCtx::ctxPtrType() {
 
 const ConcreteFun* getOrAddNonGenericConcreteFunAndFillBody(ConcretizeCtx& ctx, const FunDecl* decl) {
 	const ConcreteFunKey key = ConcreteFunKey{
-		FunDeclAndTypeArgsAndSpecImpls{
+		ConcreteFunInst{
 			FunDeclAndTypeArgs{
 				decl,
 				emptyArr<const ConcreteType>()},
-			emptyArr<const FunDecl*>()},
+			emptyArr<const ConcreteFunInst>()},
 		allVariable(ctx.arena, decl->arity())};
 	return getOrAddConcreteFunAndFillBody(ctx, key);
 }

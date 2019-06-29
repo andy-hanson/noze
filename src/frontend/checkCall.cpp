@@ -42,20 +42,9 @@ namespace {
 			[](const ThenAst) { return False; });
 	}
 
-	const Type instantiateSpecUse(const Type declaredCandidateType, const CalledDecl called) {
-		return called.match(
-			[&](const FunDecl*) { return declaredCandidateType; },
-			[&](const CalledDecl::SpecUseSig sus) {
-				if (declaredCandidateType.isTypeParam()) {
-					const Opt<const Type*> t = tryGetTypeArg(sus.specUse->spec->typeParams, sus.specUse->typeArgs, declaredCandidateType.asTypeParam());
-					return t.has() ? *t.force() : declaredCandidateType;
-				} else
-					return declaredCandidateType;
-			});
-	}
-
 	struct Candidate {
 		const CalledDecl called;
+		// Note: this is always empty if calling a SpecSig
 		const Arr<SingleInferringType> typeArgs;
 
 		InferringTypeArgs inferringTypeArgs() const {
@@ -82,8 +71,7 @@ namespace {
 	//TODO: share more code with matchActualAndCandidateTypeForReturn?
 	//Though that handles implicit cast to union and this should not.
 	// TODO: share code with matchTypesNoDiagnostic?
-	const Bool matchActualAndCandidateTypeInner(Arena& arena, const Type fromExternal, const Type declaredCandidateType, Candidate& candidate) {
-		const Type fromCandidate = instantiateSpecUse(declaredCandidateType, candidate.called);
+	const Bool matchActualAndCandidateTypeInner(Arena& arena, const Type fromExternal, const Type fromCandidate, Candidate& candidate) {
 		return fromExternal.match(
 			[](const Type::Bogus) {
 				return todo<const Bool>("bogus");
@@ -124,7 +112,7 @@ namespace {
 		});
 	}
 
-	const Bool matchActualAndCandidateTypeForReturn(Arena& arena, const Type expectedReturnType, const Type declaredReturnType, Candidate& candidate) {
+	const Bool matchActualAndCandidateTypeForReturn(Arena& arena, const Type expectedReturnType, const Type candidateReturnType, Candidate& candidate) {
 		auto handleTypeParam = [&](const TypeParam* p) {
 			// Function returns a type parameter, and we get expect it to return <bogus> or a particular struct inst.
 			const Opt<SingleInferringType*> t = tryGetTypeArg(candidate.inferringTypeArgs(), p);
@@ -134,10 +122,9 @@ namespace {
 				return todo<const Bool>("matchActualAndCandidateTypeForReturn type param");
 		};
 
-		const Type instantiatedReturnType = instantiateSpecUse(declaredReturnType, candidate.called);
 		return expectedReturnType.match(
 			[&](const Type::Bogus) {
-				return instantiatedReturnType.match(
+				return candidateReturnType.match(
 					[](const Type::Bogus) { return True; },
 					handleTypeParam,
 					[](const StructInst*) { return True; });
@@ -145,16 +132,16 @@ namespace {
 			[&](const TypeParam*) {
 				// We expect to return a type param.
 				// It's possible that declaredReturnType is one of the candidate's type params.
-				if (declaredReturnType.isTypeParam()) {
-					const Opt<SingleInferringType*> typeArg = tryGetTypeArg(candidate.inferringTypeArgs(), declaredReturnType.asTypeParam());
+				if (candidateReturnType.isTypeParam()) {
+					const Opt<SingleInferringType*> typeArg = tryGetTypeArg(candidate.inferringTypeArgs(), candidateReturnType.asTypeParam());
 					return typeArg.has()
 						? typeArg.force()->setTypeNoDiagnostic(arena, expectedReturnType)
-						: expectedReturnType.typeEquals(instantiatedReturnType);
+						: expectedReturnType.typeEquals(candidateReturnType);
 				} else
 					return False;
 			},
 			[&](const StructInst* expectedStructInst) {
-				return instantiatedReturnType.match(
+				return candidateReturnType.match(
 					[](const Type::Bogus) {
 						return todo<const Bool>("matchActualAndCandidateTypeForReturn bogus");
 					},
@@ -183,36 +170,15 @@ namespace {
 			});
 	}
 
-	//TODO: just reuse getCandidateExpectedParameterType?
-	const Type getCallReturnType(Arena& arena, const Type declaredReturnType, const CalledDecl called, const Arr<const Type> candidateTypeArgs) {
-		const Type instantiatedDeclaredReturnType = instantiateSpecUse(declaredReturnType, called);
-		return instantiatedDeclaredReturnType.match(
-			[](const Type::Bogus) {
-				return todo<const Type>("bogus");
-			},
-			[&](const TypeParam* p) {
-				const Opt<const Type*> t = tryGetTypeArg(called.typeParams(), candidateTypeArgs, p);
-				return t.has() ? *t.force() : Type{p};
-			},
-			[&](const StructInst* i) {
-				const Arr<const Type> typeArgs = map<const Type>{}(arena, i->typeArgs, [&](const Type t) {
-					return getCallReturnType(arena, t, called, candidateTypeArgs);
-				});
-				//TODO:PERF: the map might change nothing, so don't reallocate in that situation
-				return Type{instantiateStructNeverDelay(arena, i->decl, typeArgs)};
-			});
-	}
-
-	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type declaredType) {
-		const Type specInstantiated = instantiateSpecUse(declaredType, candidate.called);
-		return specInstantiated.match(
+	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type candidateParamType) {
+		return candidateParamType.match(
 			[](const Type::Bogus) {
 				return Type{Type::Bogus{}};
 			},
 			[&](const TypeParam* p) {
 				const Opt<SingleInferringType*> sit = tryGetTypeArg(InferringTypeArgs{candidate.called.typeParams(), candidate.typeArgs}, p);
 				const Opt<const Type> inferred = sit.has() ? sit.force()->tryGetInferred() : none<const Type>();
-				return inferred.has() ? inferred.force() : specInstantiated;
+				return inferred.has() ? inferred.force() : Type{p};
 			},
 			[&](const StructInst* i) {
 				//TODO:PERF, the map might change nothing, so don't reallocate in that situation
@@ -283,135 +249,116 @@ namespace {
 			eachCorresponds(a->typeArgs, b->typeArgs, typeArgsEqual));
 	}
 
-	const Bool sigTypesEqualNoSub(const Type specType, const Type actual) {
-		return specType.match(
-			[](const Type::Bogus) {
-				return todo<const Bool>("sigTypesEqualNoSub bogus");
+	void checkCalledDeclFlags(ExprContext& ctx, const CalledDecl res, const SourceRange range) {
+		res.match(
+			[&](const FunDecl* f) {
+				checkCallFlags(ctx.checkCtx, range, f->flags, ctx.outermostFun->flags);
 			},
-			[](const TypeParam*) {
-				return unreachable<const Bool>();
-			},
-			[&](const StructInst* i) {
-				// Type args should be fully substituted now, so just use ptrEquals
-				return _and(actual.isStructInst(), ptrEquals(i, actual.asStructInst()));
+			[](const SpecSig) {
+				// For a spec, we check the flags when providing the spec impl
 			});
 	}
 
-	//TODO:MOVE
-	struct TypeParamsAndArgs {
-		const Arr<const TypeParam> typeParams;
-		const Arr<const Type> typeArgs;
-
-		const Type substitute(const TypeParam* p) const {
-			assert(ptrEquals(getPtr(typeParams, p->index), p));
-			return at(typeArgs, p->index);
-		}
-	};
-
-	// substitutedFromSpec will be the type arg to the SpecUse.
-	// This may further need to be substituted by a type arg from the candidate.
-	const Bool sigTypesEqualOneSub(const Type substitutedFromSpec, const Type actual, const TypeParamsAndArgs candidateTypeArgs) {
-		return substitutedFromSpec.match(
-			[](const Type::Bogus) {
-				return todo<const Bool>("sigtypesequalonesub bogus");
-			},
-			[&](const TypeParam* p) {
-				return sigTypesEqualNoSub(candidateTypeArgs.substitute(p), actual);
-			},
-			[&](const StructInst* i) {
-				return _and(
-					actual.isStructInst(),
-					structInstsEqual(i, actual.asStructInst(), [&](const Type specType, const Type actualType) {
-						return sigTypesEqualOneSub(specType, actualType, candidateTypeArgs);
-					}));
-			});
-	}
-
-	struct TypeArgsScope {
-		const TypeParamsAndArgs specUseTypeArgs;
-		const TypeParamsAndArgs candidateTypeArgs;
-	};
-
-	const Bool sigTypesEqual(const Type typeFromSpec, const Type actual, const TypeArgsScope typeArgs) {
-		return typeFromSpec.match(
-			[](const Type::Bogus) {
-				return todo<const Bool>("sigtypesequal bogus");
-			},
-			[&](const TypeParam* p) {
-				return sigTypesEqualOneSub(typeArgs.specUseTypeArgs.substitute(p), actual, typeArgs.candidateTypeArgs);
-			},
-			[&](const StructInst* i) {
-				return _and(
-					actual.isStructInst(),
-					structInstsEqual(i, actual.asStructInst(), [&](const Type specType, const Type actualType) {
-						return sigTypesEqual(specType, actualType, typeArgs);
-					}));
-			});
-	}
-
-	const Bool sigMatches(const Sig specSig, const Sig actual, const TypeArgsScope typeArgs) {
-		return _and(
-			sigTypesEqual(specSig.returnType, actual.returnType, typeArgs),
-			eachCorresponds(specSig.params, actual.params, [&](const Param a, const Param b) {
-				return sigTypesEqual(a.type, b.type, typeArgs);
-			}));
-	}
-
-	const Opt<const CalledDecl> findSpecSigImplementation(ExprContext& ctx, const SourceRange range, const Sig specSig, const TypeArgsScope typeArgs) {
-		Cell<const Opt<const CalledDecl>> match { none<const CalledDecl>() };
-		eachFunInScope(ctx, specSig.name, [&](const CalledDecl called) {
-			// TODO: support matching a aspec with a generic function
-			if (isEmpty(called.typeParams()) && sigMatches(specSig, *called.sig(), typeArgs)) {
-				if (match.get().has())
-					todo<void>("findSpecSigImplementation -- two sigs match");
-				match.set(some<const CalledDecl>(called));
-			}
+	void filterByReturnType(Arena& arena, MutArr<Candidate>& candidates, const Type expectedReturnType) {
+		// Filter by return type. Also does type argument inference on the candidate.
+		filterUnordered(candidates, [&](Candidate& candidate) {
+			return matchActualAndCandidateTypeForReturn(arena, expectedReturnType, candidate.called.returnType(), candidate);
 		});
+	}
 
-		if (match.get().has()) {
-			const CalledDecl res = match.get().force();
-			if (res.isFunDecl())
-				checkCallFlags(ctx.checkCtx, range, res.asFunDecl()->flags, ctx.outermostFun->flags);
-			return some<const CalledDecl>(res);
-		} else {
-			ctx.diag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
-			return none<const CalledDecl>();
+	void filterByParamType(Arena& arena, MutArr<Candidate>& candidates, const Type actualArgType, const size_t argIdx) {
+		// Remove candidates that can't accept this as a param. Also does type argument inference on the candidate.
+		filterUnordered(candidates, [&](Candidate& candidate) {
+			const Type expectedArgType = getCandidateExpectedParameterType(arena, candidate, argIdx);
+			return matchTypesNoDiagnostic(arena, expectedArgType, actualArgType, candidate.inferringTypeArgs());
+		});
+	}
+
+	const Opt<const Called> getCalledFromCandidate(ExprContext& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
+
+	const Opt<const Called> findSpecSigImplementation(ExprContext& ctx, const SourceRange range, const Sig specSig) {
+		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), specSig.arity());
+		filterByReturnType(ctx.arena(), candidates, specSig.returnType);
+		for (const size_t argIdx : Range{specSig.arity()})
+			filterByParamType(ctx.arena(), candidates, at(specSig.params, argIdx).type, argIdx);
+
+		// If any candidates left take specs -- leave as a TODO
+		const Arr<const Candidate> candidatesArr = asConst(freeze(candidates));
+		switch (candidatesArr.size) {
+			case 0:
+				ctx.diag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
+				return none<const Called>();
+			case 1:
+				return getCalledFromCandidate(ctx, range, only(candidatesArr), /*allowSpecs*/ false);
+			default:
+				todo<void>("diagnostic: multiple functions satisfy the spec");
+				return none<const Called>();
 		}
 	}
 
 	// On failure, returns none.
-	const Opt<const Arr<const CalledDecl>> checkSpecImpls(ExprContext& ctx, const SourceRange range, const CalledDecl called, const Arr<const Type> typeArgs) {
-		return called.match(
-			[&](const FunDecl* f) {
-				// We store a flat array. Calculate the size ahead of time.
-				const size_t size = [&]() {
-					size_t s = 0;
-					for (const SpecUse specUse : f->specs)
-						s += specUse.spec->sigs.size;
-					return s;
-				}();
+	const Opt<const Arr<const Called>> checkSpecImpls(ExprContext& ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
+		// We store the impls in a flat array. Calculate the size ahead of time.
+		const size_t size = [&]() {
+			size_t s = 0;
+			for (const SpecInst* specInst : called->specs)
+				s += specInst->sigs.size;
+			return s;
+		}();
 
-				MutArr<const CalledDecl> res = newUninitializedMutArr<const CalledDecl>(ctx.arena(), size);
-				size_t outI = 0;
-				for (const SpecUse specUse : f->specs) {
-					const TypeArgsScope typeArgsScope = TypeArgsScope{
-						TypeParamsAndArgs{specUse.spec->typeParams, specUse.typeArgs},
-						TypeParamsAndArgs{called.typeParams(), typeArgs}};
-					for (const Sig sig : specUse.spec->sigs) {
-						const Opt<const CalledDecl> impl = findSpecSigImplementation(ctx, range, sig, typeArgsScope);
-						if (!impl.has())
-							return none<const Arr<const CalledDecl>>();
-						setAt<const CalledDecl>(res, outI, impl.force());
-						outI++;
-					}
+		if (size != 0 && !allowSpecs) {
+			ctx.diag(range, Diag{Diag::SpecImplHasSpecs{}});
+			return none<const Arr<const Called>>();
+		} else {
+			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx.arena(), size);
+			size_t outI = 0;
+			for (const SpecInst* specInst : called->specs) {
+				// Note: specInst was instantiated potentialyl based on f's params.
+				// Meed to instantiate it again.
+				const SpecInst* specInstInstantiated = instantiateSpecInst(ctx.arena(), specInst, TypeParamsAndArgs{called->typeParams, typeArgs});
+				for (const Sig sig : specInstInstantiated->sigs) {
+					const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
+					if (!impl.has())
+						return none<const Arr<const Called>>();
+					setAt<const Called>(res, outI, impl.force());
+					outI++;
 				}
-				assert(outI == size);
-				return some<const Arr<const CalledDecl>>(freeze(res));
-			},
-			[](const CalledDecl::SpecUseSig) {
-				// Specs can't have specs
-				return some<const Arr<const CalledDecl>>(emptyArr<const CalledDecl>());
+			}
+			assert(outI == size);
+			return some<const Arr<const Called>>(freeze(res));
+		}
+	}
+
+	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprContext& ctx, const SourceRange range, const Candidate candidate) {
+		const Opt<const Arr<const Type>> res = mapOrNone<const Type>{}(
+			ctx.arena(),
+			candidate.typeArgs,
+			[](const SingleInferringType& i) {
+				return i.tryGetInferred();
 			});
+		if (!res.has())
+			ctx.diag(range, Diag{Diag::CantInferTypeArguments{}});
+		return res;
+	}
+
+	const Opt<const Called> getCalledFromCandidate(ExprContext& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
+		checkCalledDeclFlags(ctx, candidate.called, range);
+		const Opt<const Arr<const Type>> candidateTypeArgs = finishCandidateTypeArgs(ctx, range, candidate);
+		if (candidateTypeArgs.has()) {
+			const Arr<const Type> typeArgs = candidateTypeArgs.force();
+			return candidate.called.match(
+				[&](const FunDecl* f) {
+					const Opt<const Arr<const Called>> specImpls = checkSpecImpls(ctx, range, f, typeArgs, allowSpecs);
+					if (specImpls.has())
+						return some<const Called>(Called{instantiateFun(ctx.arena(), f, typeArgs, specImpls.force())});
+					else
+						return none<const Called>();
+				},
+				[&](const SpecSig s) {
+					return some<const Called>(Called{s});
+				});
+		} else
+			return none<const Called>();
 	}
 
 	const CheckedExpr checkCallAfterChoosingOverload(
@@ -421,29 +368,14 @@ namespace {
 		const Arr<const Expr> args,
 		Expected& expected
 	) {
-		if (candidate.called.isFunDecl())
-			// For a spec, we check the flags when providing the spec impl
-			checkCallFlags(ctx.checkCtx, range, candidate.called.asFunDecl()->flags, ctx.outermostFun->flags);
-		const Opt<const Arr<const Type>> candidateTypeArgs = mapOrNone<const Type>{}(
-			ctx.arena(),
-			candidate.typeArgs,
-			[](const SingleInferringType& i) {
-				return i.tryGetInferred();
-			});
-		if (candidateTypeArgs.has()) {
-			const Type callReturnType = getCallReturnType(ctx.arena(), candidate.called.returnType(), candidate.called, candidateTypeArgs.force());
+		const Opt<const Called> opCalled = getCalledFromCandidate(ctx, range, candidate, /*allowSpecs*/ true);
+		if (opCalled.has()) {
+			const Called called = opCalled.force();
 			//TODO: PERF second return type check may be unnecessary if we already filtered by return type at the beginning
-			const Opt<const Arr<const CalledDecl>> specImpls = checkSpecImpls(ctx, range, candidate.called, candidateTypeArgs.force());
-			if (specImpls.has()){
-				Expr::Call::Called called = Expr::Call::Called{candidate.called, candidateTypeArgs.force(), specImpls.force()};
-				const Expr expr = Expr{range, Expr::Call{callReturnType, called, args}};
-				return expected.check(ctx, callReturnType, expr);
-			} else
-				return expected.bogusWithType(range, callReturnType);
-		} else {
-			ctx.diag(range, Diag{Diag::CantInferTypeArguments{}});
-			return expected.bogus(range);
+			return expected.check(ctx, called.returnType(), Expr{range, Expr::Call{called, args}});
 		}
+		else
+			return expected.bogus(range);
 	}
 }
 
@@ -457,11 +389,7 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 	// TODO: may not need to be deeply instantiated to do useful filtering here
 	const Opt<const Type> expectedReturnType = expected.tryGetDeeplyInstantiatedType(ctx.arena());
 	if (expectedReturnType.has())
-		// Filter by return type. Also does type argument inference on the candidate.
-		filterUnordered(candidates, [&](Candidate& candidate) {
-			return matchActualAndCandidateTypeForReturn(
-				ctx.arena(), expectedReturnType.force(), candidate.called.returnType(), candidate);
-		});
+		filterByReturnType(ctx.arena(), candidates, expectedReturnType.force());
 
 	Cell<const Bool> someArgIsBogus { False };
 	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx.arena(), arity, [&](const size_t argIdx) {
@@ -481,16 +409,12 @@ const CheckedExpr checkCall(ExprContext& ctx, const SourceRange range, const Cal
 		// If the Inferring already came from the candidate, no need to do more work.
 		if (!common.isExpectedFromCandidate) {
 			const Type actualArgType = common.expected.inferred();
-			// Remove candidates that can't accept this as a param. Also does type argument inference on the candidate.
-			filterUnordered(candidates, [&](Candidate& candidate) {
-				const Type expectedArgType = getCandidateExpectedParameterType(ctx.arena(), candidate, argIdx);
-				return matchTypesNoDiagnostic(ctx.arena(), expectedArgType, actualArgType, candidate.inferringTypeArgs());
-			});
+			filterByParamType(ctx.arena(), candidates, actualArgType, argIdx);
 		}
 		return some<const Expr>(arg);
 	});
 
-	const Arr<Candidate> candidatesArr = freeze(candidates);
+	const Arr<const Candidate> candidatesArr = asConst(freeze(candidates));
 
 	if (someArgIsBogus.get())
 		return expected.bogus(range);

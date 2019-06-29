@@ -241,8 +241,9 @@ const CheckedExpr Expected::check(ExprContext& ctx, const Type exprType, const E
 						const Expr::ImplicitConvertToUnion toU {opU.force().asStructInst(), exprStruct, ctx.alloc(expr)};
 						return CheckedExpr{Expr{expr.range(), toU}};
 					},
-					[](const SetTypeResult::Fail) {
-						return todo<const CheckedExpr>("expected check -- settypenodiagnosticworker failed");
+					[&](const SetTypeResult::Fail) {
+						ctx.diag(expr.range(), Diag{Diag::TypeConflict{type.get().force(), exprType}});
+						return CheckedExpr{Expr{expr.range(), Expr::Bogus{}}};
 					});
 			}
 		}

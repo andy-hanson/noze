@@ -221,7 +221,7 @@ namespace {
 					[&](const FunDecl* f) {
 						funsInScopeBuilder.add(ctx.arena(), f);
 					},
-					[&](const CalledDecl::SpecUseSig) {
+					[&](const SpecSig) {
 						todo<void>("checkFunAsLambda");
 					});
 			});
@@ -492,7 +492,7 @@ namespace {
 						? some<const Local*>(
 							ctx.arena().nu<Local>()(
 								ctx.copyStr(caseAst.localName.force()),
-								Type{instantiateStructInst(ctx.arena(), member, strukt->typeParams, matchedUnion->typeArgs)}))
+								Type{instantiateStructInst(ctx.arena(), member, TypeParamsAndArgs{strukt->typeParams, matchedUnion->typeArgs})}))
 						: none<const Local*>();
 					const Expr then = expected.isBogus()
 						? expected.bogus(range).expr

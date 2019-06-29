@@ -361,9 +361,9 @@ namespace {
 
 		auto getCompareFor = [&](const ConcreteType ct) -> const ConcreteFun* {
 			const ConcreteFunKey key = ConcreteFunKey{
-				FunDeclAndTypeArgsAndSpecImpls{
+				ConcreteFunInst{
 					declAndTypeArgs.withTypeArgs(arrLiteral<const ConcreteType>(arena, ct)),
-					emptyArr<const FunDecl*>(),
+					emptyArr<const ConcreteFunInst>(),
 				},
 				allVariable(arena, fun->arityExcludingCtxAndClosure())};
 			return getOrAddConcreteFunAndFillBody(ctx, key);

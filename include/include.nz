@@ -808,7 +808,6 @@ each void(s stream ?t, f fun1 void ?t)
 each void(r range-nat64, f fun1 void nat64)
 	r.iter each-recur f
 
-| TODO: generic
 each-recur void(i iterator ?t, f fun1 void ?t)
 	match i next
 		none
@@ -816,16 +815,14 @@ each-recur void(i iterator ?t, f fun1 void ?t)
 		some s
 			f call s.value
 			| TODO: omit type arguments
-			i each-recur<?t> f
+			i each-recur f
 
-| TODO: generic
-filter stream nat64(in stream nat64, pred fun1 bool nat64)
-	| TODO: omit type arguments
-	new<stream<nat64>> \
+filter stream ?t(in stream ?t, pred fun1 bool ?t)
+	new \
 		itr = in iter
-		new<iterator<nat64>> {itr filter-helper pred}
+		new {itr filter-helper pred}
 
-filter-helper opt nat64(i iterator nat64, pred fun1 bool nat64)
+filter-helper opt ?t(i iterator ?t, pred fun1 bool ?t)
 	match i next
 		none
 			new<none>
@@ -833,10 +830,11 @@ filter-helper opt nat64(i iterator nat64, pred fun1 bool nat64)
 			v = s.value
 			when
 				pred call v
-					new<some<nat64>> v
+					new<some<?t>> v
 				else
 					| This one didn't satisfy the predicate, but keep trying until we get one or each the end
-					i filter-helper pred
+					| TODO: omit type arguments
+					i filter-helper<?t> pred
 
 
 

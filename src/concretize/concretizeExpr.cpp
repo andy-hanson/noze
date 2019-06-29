@@ -1,5 +1,6 @@
 #include "./concretizeExpr.h"
 
+#include "../instantiate.h"
 #include "../util/arrUtil.h"
 #include "./concretizeUtil.h"
 #include "./mangleName.h"
@@ -52,37 +53,48 @@ namespace {
 
 	const ConstantOrExpr concretizeExpr(ConcretizeExprCtx& ctx, const Expr expr);
 
+	const ConcreteFunInst getConcreteFunInstFromCalled(ConcretizeExprCtx& ctx, const Called called) {
+		return called.match(
+			[&](const FunInst* funInst) {
+				const Arr<const ConcreteFunInst> specImpls = map<const ConcreteFunInst>{}(ctx.arena(), funInst->specImpls, [&](const Called calledSpecImpl) {
+					return getConcreteFunInstFromCalled(ctx, calledSpecImpl);
+				});
+				return ConcreteFunInst{
+					FunDeclAndTypeArgs{funInst->decl, ctx.typesToConcreteTypes(funInst->typeArgs)},
+					specImpls,
+				};
+			},
+			[&](const SpecSig specSig) {
+				return at(ctx.concreteFunSource.containingFunInfo.specImpls, specSig.indexOverAllSpecUses);
+			});
+		unused(ctx); unused(called);
+		return todo<const ConcreteFunInst>("!!!!!");
+		//const Arr<const FunDecl*> specImpls = map<const FunDecl*>{}(ctx.arena(), e.specImpls(), [&](const CalledDecl specImpl) {
+		// return funDeclFromCalledDecl(ctx, specImpl);
+		//});
+	}
+
 	struct FunAndArgs {
 		const ConcreteFun* fun;
 		const Arr<const ConstantOrExpr> notSpecializedArgs;
 	};
 
-	const FunDecl* funDeclFromCalledDecl(ConcretizeExprCtx& ctx, const CalledDecl d) {
-		return d.match(
-			[](const FunDecl* f) {
-				return f;
-			},
-			[&](const CalledDecl::SpecUseSig s) {
-				const FunDecl* f = at(ctx.concreteFunSource.specImpls(), s.sigIndexOverAllSpecUses);
-				return f;
-			});
-	}
-
 	const ConstantOrExpr concretizeCall(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Call e) {
 		const Arr<const ConstantOrExpr> args = map<const ConstantOrExpr>{}(ctx.arena(), e.args, [&](const Expr arg) {
 			return concretizeExpr(ctx, arg);
 		});
-		const FunDecl* fDecl = funDeclFromCalledDecl(ctx, e.calledDecl());
 		const FunAndArgs funAndArgs = [&]() {
+			const ConcreteFunInst concreteCalled = getConcreteFunInstFromCalled(ctx, e.called);
 			const Opt<const KnownLambdaBody*> opKnownLambdaBody = isEmpty(args)
 				? none<const KnownLambdaBody*>()
 				: getKnownLambdaBodyFromConstantOrExpr(first(args));
 
 			// TODO: also handle isCallFunPtr
-			if (isCallFun(ctx.concretizeCtx, fDecl) && opKnownLambdaBody.has()) {
+			if (isCallFun(ctx.concretizeCtx, concreteCalled.decl()) && opKnownLambdaBody.has()) {
 				const KnownLambdaBody* klb = opKnownLambdaBody.force();
+				assert(isEmpty(concreteCalled.specImpls));
 				const Arr<const ConstantOrExpr> itsArgs = tail(args);
-				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, fDecl, itsArgs);
+				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl(), itsArgs);
 				const ConcreteFun* actualCalled = instantiateKnownLambdaBodyForDirectCall(ctx.concretizeCtx, klb, itsSpecializeOnArgs.specializeOnArgs);
 				const Arr<const ConstantOrExpr> itsNotSpecializedArgs = itsSpecializeOnArgs.notSpecializedArgs;
 				// If arg0 is a constant, completely omit it. Else pass it as the closure arg.
@@ -91,16 +103,8 @@ namespace {
 					: itsNotSpecializedArgs;
 				return FunAndArgs{actualCalled, allArgs};
 			} else {
-				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, fDecl, args);
-				const Arr<const FunDecl*> specImpls = map<const FunDecl*>{}(ctx.arena(), e.specImpls(), [&](const CalledDecl specImpl) {
-					return funDeclFromCalledDecl(ctx, specImpl);
-				});
-				const ConcreteFun* fun = getConcreteFunForCallAndFillBody(
-					ctx.concretizeCtx,
-					fDecl,
-					ctx.typesToConcreteTypes(e.typeArgs()),
-					specImpls,
-					specializeOnArgs.specializeOnArgs);
+				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl(), args);
+				const ConcreteFun* fun = getConcreteFunForCallAndFillBody(ctx.concretizeCtx, concreteCalled, specializeOnArgs.specializeOnArgs);
 				return FunAndArgs{fun, specializeOnArgs.notSpecializedArgs};
 			}
 		}();
@@ -198,11 +202,8 @@ namespace {
 		const Expr* body = arena.nu<const Expr>()(
 			range,
 			Expr::Call{
-				e.fun->returnType(),
-				Expr::Call::Called{
-					CalledDecl{e.fun},
-					emptyArr<const Type>(),
-					emptyArr<const CalledDecl>()},
+				// TODO: this should technically use the model arena and not the concrete arena?
+				Called{instantiateNonGenericFun(ctx.arena(), e.fun)},
 				args});
 		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInfo, body};
 		ctx.concretizeCtx.knownLambdaBodyToInfo.add(arena, klb, info);

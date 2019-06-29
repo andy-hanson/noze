@@ -144,31 +144,25 @@ namespace {
 		return typeParams;
 	}
 
-	void collectTypeParamsInAst(Arena& arena, const TypeAst ast, ArrBuilder<const TypeParam>& res, const Arr<const TypeParam> outerTypeParams) {
+	void collectTypeParamsInAst(Arena& arena, const TypeAst ast, ArrBuilder<const TypeParam>& res) {
 		return ast.match(
 			[&](const TypeAst::TypeParam tp) {
-				if (!exists(outerTypeParams, [&](const TypeParam it) { return strEq(it.name, tp.name); })
-					&& !exists(res.tempAsArr(), [&](const TypeParam it) { return strEq(it.name, tp.name); }))
+				if (!exists(res.tempAsArr(), [&](const TypeParam it) { return strEq(it.name, tp.name); }))
 					res.add(arena, TypeParam{tp.range, copyStr(arena, tp.name), res.size()});
 			},
 			[&](const TypeAst::InstStruct i) {
 				for (const TypeAst arg : i.typeArgs)
-					collectTypeParamsInAst(arena, arg, res, outerTypeParams);
+					collectTypeParamsInAst(arena, arg, res);
 			});
 	}
 
-	const Arr<const TypeParam> collectTypeParams(Arena& arena, const SigAst ast, const Arr<const TypeParam> outerTypeParams) {
+	const Arr<const TypeParam> collectTypeParams(Arena& arena, const SigAst ast) {
 		ArrBuilder<const TypeParam> res {};
-		collectTypeParamsInAst(arena, ast.returnType, res, outerTypeParams);
+		collectTypeParamsInAst(arena, ast.returnType, res);
 		for (const ParamAst p : ast.params)
-			collectTypeParamsInAst(arena, p.type, res, outerTypeParams);
+			collectTypeParamsInAst(arena, p.type, res);
 		return res.finish();
 	}
-
-	struct SigAndTypeParams {
-		const Sig sig;
-		const Arr<const TypeParam> typeParams;
-	};
 
 	const Arr<const Param> checkParams(
 		CheckCtx& ctx,
@@ -188,40 +182,32 @@ namespace {
 		return params;
 	}
 
-	const SigAndTypeParams checkSig(
+	const Sig checkSig(
 		CheckCtx& ctx,
-		const Arr<const TypeParamAst> explicitTypeParams,
 		const SigAst ast,
-		const Arr<const TypeParam> outerTypeParams,
+		const Arr<const TypeParam> typeParams,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		DelayStructInsts delayStructInsts
 	) {
-		const Arr<const TypeParam> typeParams = isEmpty(explicitTypeParams)
-			? collectTypeParams(ctx.arena, ast, outerTypeParams)
-			: checkTypeParams(ctx, explicitTypeParams);
-		const TypeParamsScope typeParamsScope = TypeParamsScope{typeParams, outerTypeParams};
+		const TypeParamsScope typeParamsScope = TypeParamsScope{typeParams};
 		const Arr<const Param> params = checkParams(ctx, ast.params, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 		const Type returnType = typeFromAst(ctx, ast.returnType, structsAndAliasesMap, typeParamsScope, delayStructInsts);
-		return SigAndTypeParams{Sig{ast.range, ctx.copyStr(ast.name), returnType, params}, typeParams};
+		return Sig{ast.range, ctx.copyStr(ast.name), returnType, params};
 	}
 
-	const Sig checkSigNoTypeParams(
+	const Sig checkSigNoOwnTypeParams(
 		CheckCtx& ctx,
 		const SigAst ast,
 		const Arr<const TypeParam> outerTypeParams,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		MutArr<StructInst*>& delayStructInsts
 	) {
-		const SigAndTypeParams st = checkSig(
+		return checkSig(
 			ctx,
-			emptyArr<const TypeParamAst>(),
 			ast,
 			outerTypeParams,
 			structsAndAliasesMap,
 			some<MutArr<StructInst*>*>(&delayStructInsts));
-		if (!isEmpty(st.typeParams))
-			ctx.diag(st.sig.range, Diag{Diag::ShouldNotHaveTypeParamsInIface{}});
-		return st.sig;
 	}
 
 	const Arr<const SpecDecl> checkSpecDecls(
@@ -233,7 +219,7 @@ namespace {
 		return map<const SpecDecl>{}(ctx.arena, asts, [&](const SpecDeclAst ast) {
 			const Arr<const TypeParam> typeParams = checkTypeParams(ctx, ast.typeParams);
 			const Arr<const Sig> sigs = map<const Sig>{}(ctx.arena, ast.sigs, [&](const SigAst it) {
-				return checkSigNoTypeParams(ctx, it, typeParams, structsAndAliasesMap, delayStructInsts);
+				return checkSigNoOwnTypeParams(ctx, it, typeParams, structsAndAliasesMap, delayStructInsts);
 			});
 			return SpecDecl{ast.range, ast.isPublic, ctx.copyStr(ast.name), typeParams, sigs};
 		});
@@ -338,7 +324,7 @@ namespace {
 						ctx.arena,
 						i.messages,
 						[&](const SigAst it, const size_t idx) {
-							const Sig sig = checkSigNoTypeParams(ctx, it, strukt.typeParams, structsAndAliasesMap, delayStructInsts);
+							const Sig sig = checkSigNoOwnTypeParams(ctx, it, strukt.typeParams, structsAndAliasesMap, delayStructInsts);
 							const Sig sig2 = Sig{sig.range, sig.name, makeFutType(ctx.arena, commonTypes, sig.returnType), sig.params};
 							return Message{sig2, idx};
 						});
@@ -397,31 +383,31 @@ namespace {
 		const FunsMap funsMap;
 	};
 
-	const Arr<const SpecUse> checkSpecUses(
+	const Arr<const SpecInst*> checkSpecUses(
 		CheckCtx& ctx,
 		const Arr<const SpecUseAst> asts,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const SpecsMap& specsMap,
 		const TypeParamsScope& typeParamsScope
 	) {
-		return mapOpWithIndex<const SpecUse>{}(ctx.arena, asts, [&](const SpecUseAst ast, const size_t index) {
+		return mapOp<const SpecInst*>{}(ctx.arena, asts, [&](const SpecUseAst ast) {
 			Opt<const SpecDecl*> opSpec = tryFindSpec(ctx, ast.spec, ast.range, specsMap);
 			if (opSpec.has()) {
 				const SpecDecl* spec = opSpec.force();
-				const Arr<const Type> args = typeArgsFromAsts(
+				const Arr<const Type> typeArgs = typeArgsFromAsts(
 					ctx,
 					ast.typeArgs,
 					structsAndAliasesMap,
 					typeParamsScope,
 					none<MutArr<StructInst*>*>());
-				if (args.size != spec->typeParams.size) {
-					ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, args.size}});
-					return none<const SpecUse>();
+				if (typeArgs.size != spec->typeParams.size) {
+					ctx.diag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, typeArgs.size}});
+					return none<const SpecInst*>();
 				} else
-					return some<const SpecUse>(SpecUse{spec, args, index});
+					return some<const SpecInst*>(instantiateSpec(ctx.arena, spec, typeArgs));
 			} else {
 				ctx.diag(ast.range, Diag{Diag::NameNotFound{ctx.copyStr(ast.spec), Diag::NameNotFound::Kind::spec}});
-				return none<const SpecUse>();
+				return none<const SpecInst*>();
 			}
 		});
 	}
@@ -434,17 +420,18 @@ namespace {
 		const Arr<const FunDeclAst> asts
 	) {
 		const Arr<FunDecl> funs = map<FunDecl>{}(ctx.arena, asts, [&](const FunDeclAst funAst) {
-			const SigAndTypeParams stp = checkSig(
+			const Arr<const TypeParam> typeParams = isEmpty(funAst.typeParams)
+				? collectTypeParams(ctx.arena, funAst.sig)
+				: checkTypeParams(ctx, funAst.typeParams);
+			const Sig sig = checkSig(
 				ctx,
-				funAst.typeParams,
 				funAst.sig,
-				emptyArr<const TypeParam>(),
+				typeParams,
 				structsAndAliasesMap,
 				none<MutArr<StructInst*>*>());
-			const TypeParamsScope typeParamsScope = TypeParamsScope{stp.typeParams};
-			const Arr<const SpecUse> specUses = checkSpecUses(ctx, funAst.specUses, structsAndAliasesMap, specsMap, typeParamsScope);
+			const Arr<const SpecInst*> specUses = checkSpecUses(ctx, funAst.specUses, structsAndAliasesMap, specsMap, TypeParamsScope{typeParams});
 			const FunFlags flags = FunFlags{funAst.noCtx, funAst.summon, funAst.unsafe, funAst.trusted};
-			return FunDecl{funAst.isPublic, flags, stp.sig, stp.typeParams, specUses};
+			return FunDecl{funAst.isPublic, flags, sig, typeParams, specUses};
 		});
 
 		const FunsMap funsMap = buildMultiDict<const Str, const FunDecl*, compareStr>{}(

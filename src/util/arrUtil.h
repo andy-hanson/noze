@@ -345,13 +345,13 @@ struct zipOrFail {
 };
 
 template <typename Out>
-struct mapOpWithIndex {
+struct mapOp {
 	template <typename In, typename Cb>
 	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
 		size_t out_i = 0;
 		for (const size_t in_i : Range{in.size}) {
-			Opt<Out> op = cb(at(in, in_i), in_i);
+			Opt<Out> op = cb(at(in, in_i));
 			if (op.has()) {
 				initMemory(out[out_i], op.force());
 				out_i++;
@@ -364,7 +364,7 @@ struct mapOpWithIndex {
 
 template <typename T, typename Cb>
 const Arr<T> filter(Arena& arena, const Arr<T> a, Cb cb) {
-	return mapOpWithIndex<T>{}(arena, a, [&](const T t, const size_t) {
+	return mapOp<T>{}(arena, a, [&](const T t) {
 		return cb(t) ? some<T>(t) : none<T>();
 	});
 }

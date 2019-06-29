@@ -56,9 +56,11 @@ struct FunDeclAndTypeArgs {
 	}
 };
 
-struct FunDeclAndTypeArgsAndSpecImpls {
+// Unlike FunInst, this uses ConcreteType for type args instead of Type.
+// Unlike ConcreteFun, this doesn't have specialized params yet.
+struct ConcreteFunInst {
 	const FunDeclAndTypeArgs funDeclAndTypeArgs;
-	const Arr<const FunDecl*> specImpls;
+	const Arr<const ConcreteFunInst> specImpls;
 
 	inline const FunDecl* decl() const {
 		return funDeclAndTypeArgs.decl;
@@ -67,29 +69,33 @@ struct FunDeclAndTypeArgsAndSpecImpls {
 	inline const TypeArgsScope typeArgsScope() const {
 		return funDeclAndTypeArgs.typeArgsScope();
 	}
+
+	inline size_t arity() const {
+		return decl()->arity();
+	}
 };
 
 struct ConcreteFunKey {
-	const FunDeclAndTypeArgsAndSpecImpls declAndTypeArgsAndSpecImpls;
+	const ConcreteFunInst funInst;
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs;
 
 	inline ConcreteFunKey(
-		const FunDeclAndTypeArgsAndSpecImpls _declAndTypeArgsAndSpecImpls,
+		const ConcreteFunInst _funInst,
 		const Arr<const ConstantOrLambdaOrVariable> _specializeOnArgs
-	) : declAndTypeArgsAndSpecImpls{_declAndTypeArgsAndSpecImpls}, specializeOnArgs{_specializeOnArgs} {
-		assert(declAndTypeArgsAndSpecImpls.decl()->arity() == specializeOnArgs.size);
+	) : funInst{_funInst}, specializeOnArgs{_specializeOnArgs} {
+		assert(funInst.arity() == specializeOnArgs.size);
 	}
 
 	inline const FunDecl* decl() const {
-		return declAndTypeArgsAndSpecImpls.decl();
+		return funInst.decl();
 	}
 
 	inline const TypeArgsScope typeArgsScope() const {
-		return declAndTypeArgsAndSpecImpls.typeArgsScope();
+		return funInst.typeArgsScope();
 	}
 
-	inline const Arr<const FunDecl*> specImpls() const {
-		return declAndTypeArgsAndSpecImpls.specImpls;
+	inline const Arr<const ConcreteFunInst> specImpls() const {
+		return funInst.specImpls;
 	}
 };
 
@@ -99,7 +105,7 @@ struct ConcreteFunSource {
 	const ConcreteFun* concreteFun;
 	// NOTE: for a lambda, this is for the *outermost* fun (the one with type args and spec impls).
 	// The FunDecl is needed for its TypeParam declataions.
-	const FunDeclAndTypeArgsAndSpecImpls containingFunInfo;
+	const ConcreteFunInst containingFunInfo;
 	// Specializations on the parameters of *this* fun, e.g. the lambda and not the outer fun.
 	// We don't need specializations of outer parameters because those are handled by closure specialization.
 	// Note: this does not include the closure parameter (which is always specialized anyway)
@@ -111,7 +117,7 @@ struct ConcreteFunSource {
 
 	inline ConcreteFunSource(
 		const ConcreteFun* _concreteFun,
-		const FunDeclAndTypeArgsAndSpecImpls _containingFunInfo,
+		const ConcreteFunInst _containingFunInfo,
 		const Arr<const ConstantOrLambdaOrVariable> _paramsSpecialize,
 		const FunBody _body,
 		const Opt<const KnownLambdaBody*> _knownLambdaBody
@@ -134,14 +140,14 @@ struct ConcreteFunSource {
 		return containingFunDeclAndTypeArgs().typeArgsScope();
 	}
 
-	inline const Arr<const FunDecl*> specImpls() const {
+	inline const Arr<const ConcreteFunInst> specImpls() const {
 		return containingFunInfo.specImpls;
 	}
 };
 
 // Extra information I don't want to store in KnownLambdaBody because it's only used temporarily.
 struct LambdaInfo {
-	const FunDeclAndTypeArgsAndSpecImpls containingFunDeclAndTypeArgsAndSpecImpls;
+	const ConcreteFunInst containingFunInst;
 	// For FunAsLambda, this is synthetic
 	const Expr* body;
 };
@@ -187,17 +193,10 @@ const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(ConcretizeCtx& ctx, c
 const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx& ctx, const KnownLambdaBody* klb);
 inline const ConcreteFun* getConcreteFunForCallAndFillBody(
 	ConcretizeCtx& ctx,
-	const FunDecl* decl,
-	const Arr<const ConcreteType> typeArgs,
-	const Arr<const FunDecl*> specImpls,
+	const ConcreteFunInst fun,
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs
 ) {
-	const ConcreteFunKey key = ConcreteFunKey{
-		FunDeclAndTypeArgsAndSpecImpls{
-			FunDeclAndTypeArgs{decl, typeArgs},
-			specImpls},
-		specializeOnArgs};
-	return getOrAddConcreteFunAndFillBody(ctx, key);
+	return getOrAddConcreteFunAndFillBody(ctx, ConcreteFunKey{fun, specializeOnArgs});
 }
 
 const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const StructInst* i, const TypeArgsScope typeArgsScope);

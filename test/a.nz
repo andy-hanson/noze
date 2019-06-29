@@ -5,7 +5,6 @@ main int64() trusted noctx summon
 	ctx-by-ptr call-with-ctx &other-main
 	zero
 
-
 test void() trusted summon
 	m = empty-mut-dict<nat64, nat64>
 	m add 1, 1
@@ -29,13 +28,19 @@ test void() trusted summon
 is-multiple? bool(a nat64, b nat64)
 	a mod b == 0
 
+f nat64(s stream nat64)
+	s sum
+
 | Main function normally seen by users
 other-main void() trusted summon
+	print-sync: "hello ya world"
 	rgs = (zero to 1000).to-stream<range-nat64, nat64>
+	| TODO: 'as' should be unnecessary
 	filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5} as<stream<nat64>>
 	x = filtered sum
 	assert: x == 233168
 	print-sync: x.to-str
+	pass
 	pass
 
 test void() trusted summon

@@ -4,14 +4,14 @@
 
 template <typename Cb>
 void eachFunInScope(ExprContext& ctx, const Str funName, Cb cb) {
-	size_t specSigsTotalIndex = 0;
-	for (const SpecUse* specUse : ptrsRange(ctx.outermostFun->specs)) {
-		const Arr<const Sig> sigs = specUse->spec->sigs;
+	size_t totalIndex = 0;
+	for (const SpecInst* specInst : ctx.outermostFun->specs) {
+		const Arr<const Sig> sigs = specInst->sigs;
 		//TODO:EACHWITHINDEX
 		for (const size_t i : Range{sigs.size})
 			if (strEq(at(sigs, i).name, funName))
-				cb(CalledDecl{CalledDecl::SpecUseSig{specUse, getPtr(sigs, i), specSigsTotalIndex + i}});
-		specSigsTotalIndex += sigs.size;
+				cb(CalledDecl{SpecSig{specInst, getPtr(sigs, i), totalIndex + i}});
+		totalIndex += sigs.size;
 	}
 
 	for (const FunDecl* f : ctx.funsMap.get(funName))

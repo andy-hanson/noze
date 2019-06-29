@@ -201,6 +201,11 @@ namespace {
 			[&](const Diag::ShouldNotHaveTypeParamsInIface) {
 				writeStatic(writer, "a member function of an interface should not have type parameters");
 			},
+			[&](const Diag::SpecImplHasSpecs d) {
+				writeStatic(writer, "spec implementation ");
+				writeStr(writer, d.funName);
+				writeStatic(writer, " has specs; currently this is not allowed");
+			},
 			[&](const Diag::SpecImplNotFound d) {
 				writeStatic(writer, "no implementation was found for spec signature ");
 				writeStr(writer, d.sigName);
