@@ -829,7 +829,7 @@ struct Expr {
 
 	struct ImplicitConvertToUnion {
 		const StructInst* unionType;
-		const StructInst* memberType;
+		const size_t memberIndex;
 		const Expr* inner;
 	};
 

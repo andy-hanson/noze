@@ -81,6 +81,15 @@ const Opt<T> find(Arr<T> a, Cb cb) {
 }
 
 template <typename T, typename Cb>
+const Opt<const size_t> findIndex(Arr<T> a, Cb cb) {
+	//TODO:EACHWITHRANGE
+	for (const size_t i : Range{a.size})
+		if (cb(at(a, i)))
+			return some<const size_t>(i);
+	return none<const size_t>();
+}
+
+template <typename T, typename Cb>
 const Opt<T*> findPtr(Arr<T> a, Cb cb) {
 	for (T* ptr : ptrsRange(a))
 		if (cb(ptr))
@@ -413,6 +422,13 @@ void zip(Arr<T> a, Arr<U> b, Cb cb) {
 	assert(a.size == b.size);
 	for (const size_t i : Range{a.size})
 		cb(at(a, i), at(b, i));
+}
+
+template <typename T, typename U, typename Cb>
+void zipWithIndex(Arr<T> a, Arr<U> b, Cb cb) {
+	assert(a.size == b.size);
+	for (const size_t i : Range{a.size})
+		cb(at(a, i), at(b, i), i);
 }
 
 template <typename T, typename U, typename Cb>

@@ -77,7 +77,9 @@ namespace {
 					: strEqLiteral(name, "as-non-const") ? _operator(BuiltinFunKind::asNonConst, True)
 					: no;
 			case 'c':
-				return strEqLiteral(name, "call") && isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr) : no;
+				return strEqLiteral(name, "call") && isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr)
+					: strEqLiteral(name, "compare-exchange-strong") ? special(BuiltinFunKind::compareExchangeStrong)
+					: no;
 			case 'd':
 				return strEqLiteral(name, "deref") ? _operator(BuiltinFunKind::deref) : no;
 			case 'f':
@@ -88,7 +90,7 @@ namespace {
 				return strEqLiteral(name, "hard-fail") ? special(BuiltinFunKind::hardFail) : no;
 			case 'i':
 				return strEqLiteral(name, "if") ? _operator(BuiltinFunKind::_if)
-					: strEqLiteral(name, "is-reference-type") ? constant(BuiltinFunKind::isReferenceType)
+					: strEqLiteral(name, "is-reference-type?") ? constant(BuiltinFunKind::isReferenceType)
 					: no;
 			case 'n':
 				return strEqLiteral(name, "not") ? _operator(BuiltinFunKind::_not)
@@ -105,6 +107,7 @@ namespace {
 				return strEqLiteral(name, "pass")
 						? isVoid(rt) ? constant(BuiltinFunKind::pass) : no
 					: strEqLiteral(name, "ptr-cast") ? _operator(BuiltinFunKind::ptrCast)
+					: strEqLiteral(name, "ptr-to") ? _operator(BuiltinFunKind::ptrTo)
 					: no;
 			case 'r':
 				return strEqLiteral(name, "ref-of-val") ? _operator(BuiltinFunKind::refOfVal) : no;
@@ -161,7 +164,7 @@ const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 	const Opt<const BuiltinFunInfo> res = tryGetBuiltinFunInfo(sig);
 	if (!res.has()) {
 		Arena arena {};
-		printf("%s\n", strToCStr(arena, sig.name));
+		printf("not a builtin fun: %s\n", strToCStr(arena, sig.name));
 		return todo<const BuiltinFunInfo>("not a builtin fun");
 	}
 	return res.force();

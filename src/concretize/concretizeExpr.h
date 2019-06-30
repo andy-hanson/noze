@@ -1,7 +1,7 @@
 #include "../concreteModel.h"
 #include "./concretizeCtx.h"
 
-const ConstantOrExpr doConcretizeExpr(
+const ConcreteFunBody doConcretizeExpr(
 	ConcretizeCtx& ctx,
 	const ConcreteFunSource source,
 	ConcreteFun* cf,

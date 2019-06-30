@@ -1,4 +1,44 @@
 !
+	TODO: strLiteral("-pedantic"),
+
+!
+	why is void mangling to "_voidvoid" ?
+
+	writeMangledName looks to just do it once...
+
+!
+	// TODO: strLiteral("-pedantic"),
+
+!
+	//TODO: only used for side effect
+
+!
+	//TODO:eachwithindex
+
+!
+	compiler error when I wrote:
+
+		new-linked-mut-queue by-val linked-mut-queue ?t() noctx
+			new new<none>, new<none>
+
+	should have been by-val linked-mut-queue<?t>
+
+	but compiler shouldn't crash!
+
+
+
+
+
+!
+	new_linked_mut_queue
+	used to return non-by-val
+
+	Should have been a compile error to create a by-ref type with 'noctx'!
+
+	same for new-mut-arr ...
+
+
+!
 	| TODO: should be able to infer type argument to null!
 
 !

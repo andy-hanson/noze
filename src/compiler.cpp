@@ -13,39 +13,39 @@
 #include "./util/arrUtil.h"
 
 namespace {
-	void emitProgram(const Program program, const AbsolutePath cppPath) {
+	void emitProgram(const Program program, const AbsolutePath cPath) {
 		Arena concreteArena {};
 		const ConcreteProgram concreteProgram = concretize(concreteArena, program);
 		Arena writeArena {};
 		const Str emitted = writeToC(writeArena, concreteProgram);
-		writeFileSync(cppPath, emitted);
+		writeFileSync(cPath, emitted);
 	}
 
-	void compileCpp(const AbsolutePath cppPath, const AbsolutePath exePath, const Environ environ) {
+	void compileC(const AbsolutePath cPath, const AbsolutePath exePath, const Environ environ) {
 		Arena arena {};
 		// TODO: option to use g++
-		const AbsolutePath cppCompiler = childPath(
+		const AbsolutePath cCompiler = childPath(
 			arena,
 			AbsolutePath{rootPath(arena, strLiteral("usr"))},
 			strLiteral("bin"),
-			strLiteral("c++"));
+			strLiteral("cc"));
 		const Arr<const Str> args = arrLiteral<const Str>(arena, {
 			strLiteral("-Werror"),
 			strLiteral("-Wextra"),
 			strLiteral("-Wall"),
 			strLiteral("-ansi"),
 			strLiteral("-pedantic"),
+			strLiteral("-std=c11"),
 			strLiteral("-Wno-unused-parameter"),
 			strLiteral("-Wno-unused-but-set-variable"),
 			strLiteral("-Wno-unused-variable"),
-			strLiteral("-std=c++17"),
 			// TODO: configurable whether we want debug or release
 			strLiteral("-g"),
-			pathToStr(arena, cppPath),
+			pathToStr(arena, cPath),
 			strLiteral("-o"),
 			pathToStr(arena, exePath)
 		});
-		int err = spawnAndWaitSync(cppCompiler, args, environ);
+		int err = spawnAndWaitSync(cCompiler, args, environ);
 		if (err != 0) {
 			printf("c++ compile error! Exit code: %d\n", err);
 			todo<void>("compile error");
@@ -67,10 +67,10 @@ namespace {
 		return programResult.match(
 			[&](const Program program) {
 				const AbsolutePath fullMainPath = addManyChildren(modelArena, programDir, mainPath);
-				const AbsolutePath cppPath = changeExtension(modelArena, fullMainPath, strLiteral("cpp"));
-				emitProgram(program, cppPath);
+				const AbsolutePath cPath = changeExtension(modelArena, fullMainPath, strLiteral("c"));
+				emitProgram(program, cPath);
 				const AbsolutePath exePath = removeExtension(modelArena, fullMainPath);
-				compileCpp(cppPath, exePath, environ);
+				compileC(cPath, exePath, environ);
 				return some<const AbsolutePath>(exePath);
 			},
 			[](const Diagnostics diagnostics) {

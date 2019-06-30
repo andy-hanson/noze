@@ -173,13 +173,16 @@ namespace {
 			setReferencedInType(ctx, f->closureParam.force().type);
 		setReferencedInSig(ctx, f->sig);
 		f->body().match(
+			[](const ConcreteFunBody::Bogus) {
+				unreachable<void>();
+			},
 			[](const ConcreteFunBody::Builtin) {},
 			[](const ConcreteFunBody::Extern) {},
 			[&](const Constant* c) {
 				ctx.addConstant(c);
 			},
-			[&](const ConcreteExpr* e) {
-				setReferencedInExpr(ctx, *e);
+			[&](const ConcreteFunExprBody e) {
+				setReferencedInExpr(ctx, *e.expr);
 			});
 	}
 

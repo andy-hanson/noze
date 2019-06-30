@@ -249,14 +249,16 @@ const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr 
 		const StructInst* exprStruct = exprType.asStructInst();
 		const StructBody body = expectedStruct->decl->body();
 		if (body.isUnion()) {
+			const Arr<const StructInst*> members = body.asUnion().members;
 			// This is like 't' but with the union's type parameters
-			const Opt<const StructInst*> expectedUnionMember = find(
-				body.asUnion().members,
+			const Opt<const size_t> opMemberIndex = findIndex(
+				members,
 				[&](const StructInst* it) {
 					return ptrEquals(it->decl, exprStruct->decl);
 				});
-			if (expectedUnionMember.has()) {
-				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(ctx.arena(), expectedUnionMember.force(), expectedStruct);
+			if (opMemberIndex.has()) {
+				const size_t memberIndex = opMemberIndex.force();
+				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(ctx.arena(), at(members, memberIndex), expectedStruct);
 
 				const SetTypeResult setTypeResult = setTypeNoDiagnosticWorker_forStructInst(
 					ctx.arena(),
@@ -274,7 +276,7 @@ const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr 
 						if (!opU.has())
 							return todo<const CheckedExpr>("expected check -- not deeply instantiated");
 
-						const Expr::ImplicitConvertToUnion toU {opU.force().asStructInst(), exprStruct, ctx.alloc(expr)};
+						const Expr::ImplicitConvertToUnion toU {opU.force().asStructInst(), memberIndex, ctx.alloc(expr)};
 						return CheckedExpr{Expr{expr.range(), toU}};
 					},
 					[&](const SetTypeResult::Fail) {

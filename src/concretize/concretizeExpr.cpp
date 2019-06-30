@@ -14,7 +14,11 @@ namespace {
 
 		//TODO: this should go in the ConcreteFunSource
 		const Arr<const ConcreteField> fields; // If this is inside a new iface
+
+		// Note: this dict contains only the locals that are currently in scope.
 		MutDict<const Local*, const ConcreteLocal*, comparePtr<const Local>> locals {};
+		// Contains *all* locals
+		MutArr<const ConcreteLocal*> allLocalsInThisFun {};
 
 		ConcretizeExprCtx(const ConcretizeExprCtx&) = delete;
 		ConcretizeExprCtx(ConcretizeExprCtx&&) = default;
@@ -295,9 +299,18 @@ namespace {
 			: ConstantOrExpr{ctx.allConstants().lambda(arena, klb)};
 	}
 
+	const Str chooseUniqueName(Arena& arena, const Str mangledName, const Arr<const ConcreteLocal*> allLocals) {
+		return exists(allLocals, [&](const ConcreteLocal* l) { return strEq(l->mangledName, mangledName); })
+			? chooseUniqueName(arena, cat(arena, mangledName, strLiteral("1")), allLocals)
+			: mangledName;
+	}
+
 	const ConcreteLocal* concretizeLocal(ConcretizeExprCtx& ctx, const Local* local, const ConstantOrLambdaOrVariable clv) {
 		const ConcreteType localType = ctx.getConcreteType(local->type);
-		return ctx.arena().nu<const ConcreteLocal>()(mangleName(ctx.arena(), local->name), localType, clv);
+		const Str mangledName = chooseUniqueName(ctx.arena(), mangleName(ctx.arena(), local->name), tempAsArr(ctx.allLocalsInThisFun));
+		const ConcreteLocal* res = ctx.arena().nu<const ConcreteLocal>()(mangledName, localType, clv);
+		push(ctx.arena(), ctx.allLocalsInThisFun, res);
+		return res;
 	}
 
 	const ConstantOrExpr concretizeWithLocal(ConcretizeExprCtx& ctx, const Local* modelLocal, const ConcreteLocal* concreteLocal, const Expr expr) {
@@ -553,9 +566,9 @@ namespace {
 			},
 			[&](const Expr::ImplicitConvertToUnion e) {
 				const ConcreteType unionType = ctx.getConcreteType_forStructInst(e.unionType);
-				const ConcreteType memberType = ctx.getConcreteType_forStructInst(e.memberType);
+				//const ConcreteType memberType = ctx.getConcreteType_forStructInst(e.memberType);
 				return nuExpr(arena, unionType, range, ConcreteExpr::ImplicitConvertToUnion{
-					memberType,
+					e.memberIndex,
 					makeLambdasDynamic(ctx.concretizeCtx, range, concretizeExpr(ctx, *e.inner))});
 			},
 			[&](const Expr::Lambda e) {
@@ -622,12 +635,19 @@ namespace {
 	}
 }
 
-const ConstantOrExpr doConcretizeExpr(
+const ConcreteFunBody doConcretizeExpr(
 	ConcretizeCtx& ctx,
 	const ConcreteFunSource source,
 	ConcreteFun* cf,
 	const Expr e
 ) {
 	ConcretizeExprCtx exprCtx {ctx, source, cf, emptyArr<const ConcreteField>()};
-	return concretizeExpr(exprCtx, e);
+	const ConstantOrExpr res = concretizeExpr(exprCtx, e);
+	return res.match(
+		[](const Constant* c) {
+			return ConcreteFunBody{c};
+		},
+		[&](const ConcreteExpr* e) {
+			return ConcreteFunBody{ConcreteFunExprBody{freeze(exprCtx.allLocalsInThisFun), e}};
+		});
 }

@@ -53,7 +53,7 @@ void writeEscapedChar(Writer& writer, const char c);
 
 struct WriterWithIndent {
 	Writer& writer;
-	uint _indent = 1;
+	uint _indent = 0;
 };
 
 void newline(WriterWithIndent& writer);

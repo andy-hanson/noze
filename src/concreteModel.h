@@ -29,6 +29,7 @@ enum class BuiltinFunKind {
 	as,
 	asNonConst,
 	callFunPtr,
+	compareExchangeStrong,
 	compare, // the `<=>` operator
 	deref,
 	_false,
@@ -44,6 +45,7 @@ enum class BuiltinFunKind {
 	_or,
 	pass,
 	ptrCast,
+	ptrTo,
 	refOfVal,
 	setPtr,
 	sizeOf,
@@ -310,6 +312,11 @@ struct ConcreteField {
 struct ConcreteParam {
 	const Str mangledName;
 	const ConcreteType type;
+
+	inline ConcreteParam(const Str _mangledName, const ConcreteType _type)
+		: mangledName{_mangledName}, type{_type} {
+		assert(!isEmpty(mangledName));
+	}
 
 	inline const ConcreteParam withType(const ConcreteType newType) const {
 		return ConcreteParam{mangledName, newType};
@@ -744,7 +751,19 @@ public:
 	const Opt<const ConcreteType> typeWithKnownLambdaBody() const;
 };
 
+struct ConcreteLocal {
+	const Str mangledName;
+	const ConcreteType type;
+	const ConstantOrLambdaOrVariable constantOrLambdaOrVariable;
+};
+
+struct ConcreteFunExprBody {
+	const Arr<const ConcreteLocal*> allLocals;
+	const ConcreteExpr* expr;
+};
+
 struct ConcreteFunBody {
+	struct Bogus {};
 	struct Builtin {
 		const BuiltinFunInfo builtinInfo;
 		const Arr<const ConcreteType> typeArgs;
@@ -752,24 +771,31 @@ struct ConcreteFunBody {
 	struct Extern {};
 private:
 	enum class Kind {
+		bogus,
 		builtin,
 		_extern,
 		constant,
-		concreteExpr,
+		concreteFunExprBody,
 	};
 	const Kind kind;
 	union {
+		const Bogus bogus;
 		const Builtin builtin;
 		const Extern _extern;
 		const Constant* constant;
-		const ConcreteExpr* concreteExpr;
+		const ConcreteFunExprBody concreteFunExprBody;
 	};
 public:
+	explicit inline ConcreteFunBody(const Bogus _bogus) : kind{Kind::bogus}, bogus{_bogus} {}
 	explicit inline ConcreteFunBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
 	explicit inline ConcreteFunBody(const Extern __extern) : kind{Kind::_extern}, _extern{__extern} {}
 	explicit inline ConcreteFunBody(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
-	explicit inline ConcreteFunBody(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
+	explicit inline ConcreteFunBody(const ConcreteFunExprBody _concreteFunExprBody)
+		: kind{Kind::concreteFunExprBody}, concreteFunExprBody{_concreteFunExprBody} {}
 
+	inline const Bool isBogus() const {
+		return enumEq(kind, Kind::bogus);
+	}
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
 	}
@@ -779,10 +805,14 @@ public:
 	inline const Bool isConstant() const {
 		return enumEq(kind, Kind::constant);
 	}
-	inline const Bool isConcreteExpr() const {
-		return enumEq(kind, Kind::concreteExpr);
+	inline const Bool isConcreteFunExprBody() const {
+		return enumEq(kind, Kind::concreteFunExprBody);
 	}
-	inline Builtin asBuiltin() const {
+	inline const Bogus asBogus() const {
+		assert(isBogus());
+		return bogus;
+	}
+	inline const Builtin asBuiltin() const {
 		assert(isBuiltin());
 		return builtin;
 	}
@@ -790,33 +820,39 @@ public:
 		assert(isConstant());
 		return constant;
 	}
-	inline const ConcreteExpr* asConcreteExpr() const {
-		assert(isConcreteExpr());
-		return concreteExpr;
+	inline const ConcreteFunExprBody asConcreteFunExprBody() const {
+		assert(isConcreteFunExprBody());
+		return concreteFunExprBody;
 	}
 
 
 	template <
+		typename CbBogus,
 		typename CbBuiltin,
 		typename CbExtern,
 		typename CbConstant,
-		typename CbConcreteExpr
+		typename CbConcreteFunExprBody
 	>
 	inline auto match(
+		CbBogus cbBogus,
 		CbBuiltin cbBuiltin,
 		CbExtern cbExtern,
 		CbConstant cbConstant,
-		CbConcreteExpr cbConcreteExpr
+		CbConcreteFunExprBody cbConcreteFunExprBody
 	) const {
 		switch (kind) {
+			case Kind::bogus:
+				return cbBogus(bogus);
 			case Kind::builtin:
 				return cbBuiltin(builtin);
 			case Kind::_extern:
 				return cbExtern(_extern);
 			case Kind::constant:
 				return cbConstant(constant);
-			case Kind::concreteExpr:
-				return cbConcreteExpr(concreteExpr);
+			case Kind::concreteFunExprBody:
+				return cbConcreteFunExprBody(concreteFunExprBody);
+			default:
+				assert(0);
 		}
 	}
 };
@@ -940,12 +976,6 @@ struct KnownLambdaBody {
 	}
 };
 
-struct ConcreteLocal {
-	const Str mangledName;
-	const ConcreteType type;
-	const ConstantOrLambdaOrVariable constantOrLambdaOrVariable;
-};
-
 struct ConcreteExpr {
 	// Only exists temporarily
 	struct Bogus {};
@@ -986,8 +1016,7 @@ struct ConcreteExpr {
 	};
 
 	struct ImplicitConvertToUnion {
-		// unionType comes from the ConcreteExpr
-		const ConcreteType memberType;
+		const size_t memberIndex;
 		// TODO:PERF support unions as constants; then the arg here will never be a constant
 		const ConstantOrExpr arg;
 	};
@@ -1190,10 +1219,7 @@ public:
 	}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const ImplicitConvertToUnion a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::implicitConvertToUnion}, implicitConvertToUnion{a} {
-
-		assert(exists(type.strukt->body().asUnion().members, [&](const ConcreteType ct) {
-			return ct.eq(a.memberType);
-		}));
+		assert(a.memberIndex < type.strukt->body().asUnion().members.size);
 	}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Lambda a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::lambda}, lambda{a} {}

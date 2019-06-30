@@ -17,6 +17,8 @@ by-val<?t> builtin
 | Unsafe because the ref will only be valid temporarily!
 ref-of-val ?t(b by-val ?t) noctx unsafe builtin
 
+| This forces something to be stack-allocated.
+| WARN: If '?t' is a reference type already, this is a pointer to a pointer!
 ptr-to ptr ?t(t ?t) noctx unsafe builtin
 
 | Since this fun is not marked 'noctx', it simply returns the ctx that already exists.
@@ -35,12 +37,12 @@ null ptr ?t() noctx builtin
 any-ptr alias
 	ptr byte
 
-is-reference-type<?t> bool() noctx unsafe builtin
+is-reference-type?<?t> bool() noctx unsafe builtin
 size-of<?t> nat64() noctx unsafe builtin
 
 size-or-pointer-size<?t> nat64() noctx unsafe
 	when
-		is-reference-type<?t>
+		is-reference-type?<?t>
 			size-of<ptr<void>>
 		else
 			size-of<?t>
@@ -1032,6 +1034,9 @@ vat record mut
 
 	| not protected by tasks-lock, thread-safe on its own
 	next-actor-id by-val thread-safe-counter
+
+new-actor actor-id(v vat) noctx trusted
+	v.next-actor-id.ref-of-val get-and-increment
 
 new-vat by-val vat(gctx global-ctx, id vat-id) noctx
 	new gctx, id, new-gc, new-lock, new-linked-mut-queue, new-mut-arr-by-val, zero, new-thread-safe-counter

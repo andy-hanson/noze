@@ -20,6 +20,9 @@ void writeMangledName(Writer& writer, const Str name) {
 		writeChar(writer, '_');
 		writeStr(writer, name);
 	} else
+		if (strEqLiteral(name, "atomic-bool"))
+			// avoid conflicting with c's "atomic_bool" type
+			writeChar(writer, '_');
 		for (const char c : name)
 			switch (c) {
 				case '-':

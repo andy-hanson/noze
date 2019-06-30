@@ -246,7 +246,7 @@ namespace {
 		return res;
 	}
 
-	//TODO: only used for side effect
+	//TODO: only used for side effect?
 	const ConcreteFunBody fillInConcreteFunBody(ConcretizeCtx& ctx, ConcreteFun* cf) {
 		// TODO: just assert it's not already set?
 		if (!cf->_body.isSet()) {
@@ -256,8 +256,8 @@ namespace {
 				printf("FILLING IN BODY\n");
 			}
 
-			cf->_body.set(ConcreteFunBody{
-				ctx.arena.nu<ConcreteExpr>()(cf->returnType(), SourceRange::empty(), none<const KnownLambdaBody*>(), ConcreteExpr::Bogus{})});
+			cf->_body.set(ConcreteFunBody{ConcreteFunBody::Bogus{}});
+
 			const ConcreteFunSource source = ctx.concreteFunToSource.tryDeleteAndGet(cf).force();
 			const ConcreteFunBody body = source.body.match(
 				[&](const FunBody::Builtin) {
@@ -267,7 +267,7 @@ namespace {
 					return ConcreteFunBody{ConcreteFunBody::Extern{}};
 				},
 				[&](const Expr* e) {
-					return toConcreteFunBody(doConcretizeExpr(ctx, source, cf, *e));
+					return doConcretizeExpr(ctx, source, cf, *e);
 				});
 			cf->_body.setOverwrite(body);
 
@@ -320,7 +320,7 @@ namespace {
 					const ConcreteParam closureParam = klb->closureParam.force();
 					return shouldAllocateClosureForDynamicLambda(closureParam.type) ? closureParam.withType(closureParam.type.byRef()) : closureParam;
 				} else
-					return ConcreteParam{strLiteral(""), ctx.anyPtrType()};
+					return ConcreteParam{strLiteral("__unused"), ctx.anyPtrType()};
 			}())
 			: klb->closureParam;
 
