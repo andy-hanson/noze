@@ -348,6 +348,9 @@ const Opt<const StructAndField> tryGetStructField(const Type targetType, const S
 		},
 		[&](const StructInst* targetStructInst) {
 			return targetStructInst->body().match(
+				[](const StructBody::Bogus) {
+					return none<const StructAndField>();
+				},
 				[](const StructBody::Builtin) {
 					return none<const StructAndField>();
 				},

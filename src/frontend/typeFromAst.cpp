@@ -141,7 +141,7 @@ const Bool typeIsPossiblySendable(const Type type) {
 		},
 		[](const StructInst* i) {
 			return _and(
-				i->decl->purity != Purity::nonSendable,
+				i->decl->purity != Purity::mut,
 				every(i->typeArgs, typeIsPossiblySendable));
 		});
 }

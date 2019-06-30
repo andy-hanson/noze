@@ -334,7 +334,8 @@ struct SigAst {
 
 enum class PuritySpecifier {
 	sendable,
-	nonSendable,
+	forceSendable,
+	mut,
 };
 
 struct StructAliasAst {

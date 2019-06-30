@@ -425,6 +425,13 @@ void zip(Arr<T> a, Arr<U> b, Cb cb) {
 }
 
 template <typename T, typename U, typename Cb>
+void zipPtrs(Arr<T> a, Arr<U> b, Cb cb) {
+	assert(a.size == b.size);
+	for (const size_t i : Range{a.size})
+		cb(getPtr(a, i), getPtr(b, i));
+}
+
+template <typename T, typename U, typename Cb>
 void zipWithIndex(Arr<T> a, Arr<U> b, Cb cb) {
 	assert(a.size == b.size);
 	for (const size_t i : Range{a.size})

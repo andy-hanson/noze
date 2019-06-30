@@ -22,9 +22,11 @@ namespace {
 
 	PuritySpecifier parsePurity(Lexer& lexer) {
 		if (tryTake(lexer, "mut"))
-			return PuritySpecifier::nonSendable;
+			return PuritySpecifier::mut;
 		else if (tryTake(lexer, "sendable"))
 			return PuritySpecifier::sendable;
+		else if (tryTake(lexer, "force-sendable"))
+			return PuritySpecifier::forceSendable;
 		else
 			return throwAtChar<const PuritySpecifier>(lexer, ParseDiag{ParseDiag::ExpectedPurityAfterSpace{}});
 	}

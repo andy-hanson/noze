@@ -136,6 +136,9 @@ namespace {
 		});
 
 		const ConcreteStructInfo info = i->body().match(
+			[](const StructBody::Bogus) {
+				return unreachable<const ConcreteStructInfo>();
+			},
 			[&](const StructBody::Builtin) {
 				const BuiltinStructInfo b = getBuiltinStructInfo(i->decl);
 				return ConcreteStructInfo{

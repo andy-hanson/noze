@@ -154,11 +154,21 @@ fun2<?r, ?p0, ?p1> record mut
 	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
 	closure any-ptr
 
-| TODO: not builtin
-remote-fun0<?r> builtin mut
-remote-fun1<?r, ?p0> builtin mut
-remote-fun2<?r, ?p0, ?p1> builtin mut
+| A normal fun is non-sendable, a remote-fun becomes sendable by storing the vat/actor that will provide its ctx.
+remote-fun0<?r> record force-sendable
+	actor vat-and-actor-id
+	fun-ptr fun-ptr2 ?r ctx any-ptr
+	closure any-ptr
+remote-fun1<?r, ?p0> record force-sendable
+	actor vat-and-actor-id
+	fun-ptr fun-ptr3 ?r ctx any-ptr ?p0
+	closure any-ptr
+remote-fun2<?r, ?p0, ?p1> record force-sendable
+	actor vat-and-actor-id
+	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
+	closure any-ptr
 
+| calling a fun-ptr is a primitive operatio
 call ?r(f fun-ptr0 ?r) noctx builtin
 call ?r(f fun-ptr1 ?r ?p0, p0 ?p0) noctx builtin
 call ?r(f fun-ptr2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx builtin
@@ -170,22 +180,28 @@ call ?r(f fun-ptr4 ?r ?p0 ?p1 ?p2 ?p3, p0 ?p0, p1 ?p1, p2 ?p2, p3 ?p3) noctx bui
 call ?r(f fun0 ?r) trusted
 	get-ctx call-with-ctx f
 
-call-with-ctx ?r(c ctx, f fun0 ?r) noctx trusted
+call-with-ctx ?r(c ctx, f fun0 ?r) noctx
 	f.fun-ptr call c, f.closure
 
 call ?r(f fun1 ?r ?p0, p0 ?p0) trusted
 	get-ctx call-with-ctx f, p0
 
-call-with-ctx ?r(c ctx, f fun1 ?r ?p0, p0 ?p0) noctx trusted
+call-with-ctx ?r(c ctx, f fun1 ?r ?p0, p0 ?p0) noctx
 	f.fun-ptr call c, f.closure, p0
 
 call ?r(f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
 	get-ctx call-with-ctx f, p0, p1
 
-call-with-ctx ?r(c ctx, f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx trusted
+call-with-ctx ?r(c ctx, f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx
 	f.fun-ptr call c, f.closure, p0, p1
 
 call fut ?r(f remote-fun0 ?r)
+	| Use getctx to get ctx
+	| Use f.actor to get vat and actor IDs
+	| Get the actual vat from ctx
+	| Create a future
+	| Put the task on the vat, that will write to the future
+	| Return the future
 	todo
 
 call fut ?r(f remote-fun1 ?r ?p0, p0 ?p0)
@@ -483,11 +499,75 @@ as-non-const ?t(value ?t) noctx builtin
 
 region fut
 
-fut<?t> builtin sendable
+| Each 'then'
+fut-callback-node<?t> record sendable
+	cb remote-fun1 void ?t
+	next-node opt fut-callback-node<?t>
+
+fut-state-callbacks<?t> record sendable
+	head opt fut-callback-node<?t>
+
+fut-state-resolved<?t> record
+	value ?t
+
+fut-state<?t> union sendable
+	fut-state-callbacks<?t>
+	fut-state-resolved<?t>
+
+fut<?t> record sendable
+	lk by-val lock
+	state mut fut-state ?t
+
+| Considered unsafe because normally it should not be possible to never resolve a fut
+new-unresolved-fut fut ?t() unsafe
+	new new-lock, new<fut-state-callbacks<?t>> new<none>
+
 resolved fut ?t(value ?t)
-	todo
-then fut ?out(a fut ?in, cb remote-fun1 ?out ?in)
-	todo
+	new new-lock, new<fut-state-resolved<?t>> value
+
+resolve void(f fut ?t, value ?t) unsafe
+	f.lk.ref-of-val acquire-lock
+	match f.state
+		fut-state-callbacks cbs
+			cbs.head resolve-recur value
+		else
+			hard-fail: "resolving an already-resolved fut"
+	f.state := new<fut-state-resolved<?t>> value
+	f.lk.ref-of-val release-lock
+
+resolve-recur void(node opt fut-callback-node<?t>, value ?t)
+	match node
+		none
+			pass
+		some s
+			| the remote-fun will return a fut<void>, just ignore it
+			drop: s.value.cb call value
+			s.value.next-node resolve-recur value
+
+| Note: we will not check the eventual result of the remote-fun!
+then-void void(f fut ?t, cb remote-fun1 void ?t) trusted
+	f.lk.ref-of-val acquire-lock
+	res = match f.state
+		fut-state-callbacks cbs
+			| create a new callback
+			f.state := new<fut-state-callbacks<?t>> new<some<fut-callback-node<?t>>> new cb, cbs.head
+		fut-state-resolved r
+			drop: cb call r.value
+	f.lk.ref-of-val release-lock
+	res
+
+forward-to void(from fut ?t, to fut ?t) unsafe
+	from then-void \value
+		to resolve value
+		pass
+
+then fut ?out(f fut ?in, cb remote-fun1 ?out ?in) trusted
+	res = new-unresolved-fut<?out>
+	f then-void \value
+		cb call value forward-to res
+		pass
+	res
+
 join fut ?out(a fut ?in0, b fut ?in1, cb remote-fun2 ?out ?in0 ?in1)
 	todo
 
@@ -993,6 +1073,9 @@ vat-id alias
 actor-id alias
 	nat64
 
+vat-and-actor-id record
+	vat vat-id
+	actor actor-id
 
 gc record mut
 	lk by-val lock
@@ -1041,10 +1124,10 @@ new-actor actor-id(v vat) noctx trusted
 new-vat by-val vat(gctx global-ctx, id vat-id) noctx
 	new gctx, id, new-gc, new-lock, new-linked-mut-queue, new-mut-arr-by-val, zero, new-thread-safe-counter
 
-| This will be a large struct
 ctx record mut
 	vt vat
 	actor-id opt actor-id
+	| TODO: GC allocation context
 	| TODO: exception context
 
 new-ctx by-val ctx(vat vat, actor-id opt actor-id) noctx

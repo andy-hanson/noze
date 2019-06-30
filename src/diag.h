@@ -6,6 +6,7 @@ struct ParseDiag {
 	struct ExpectedCharacter {
 		const char ch;
 	};
+	struct ExpectedDedent {};
 	struct ExpectedIndent {};
 	struct ExpectedPurityAfterSpace {};
 	struct LeadingSpace {};
@@ -23,6 +24,7 @@ struct ParseDiag {
 private:
 	enum class Kind {
 		expectedCharacter,
+		expectedDedent,
 		expectedIndent,
 		expectedPurityAfterSpace,
 		leadingSpace,
@@ -38,6 +40,7 @@ private:
 	const Kind kind;
 	union {
 		const ExpectedCharacter expectedCharacter;
+		const ExpectedDedent expectedDedent;
 		const ExpectedIndent expectedIndent;
 		const ExpectedPurityAfterSpace expectedPurityAfterSpace;
 		const LeadingSpace leadingSpace;
@@ -53,6 +56,7 @@ private:
 
 public:
 	explicit inline ParseDiag(const ExpectedCharacter d) : kind{Kind::expectedCharacter}, expectedCharacter{d} {}
+	explicit inline ParseDiag(const ExpectedDedent d) : kind{Kind::expectedDedent}, expectedDedent{d} {}
 	explicit inline ParseDiag(const ExpectedIndent d) : kind{Kind::expectedIndent}, expectedIndent{d} {}
 	explicit inline ParseDiag(const ExpectedPurityAfterSpace d) : kind{Kind::expectedPurityAfterSpace}, expectedPurityAfterSpace{d} {}
 	explicit inline ParseDiag(const LeadingSpace d) : kind{Kind::leadingSpace}, leadingSpace{d} {}
@@ -67,6 +71,7 @@ public:
 
 	template <
 		typename CbExpectedCharacter,
+		typename CbExpectedDedent,
 		typename CbExpectedIndent,
 		typename CbExpectedPurityAfterSpace,
 		typename CbLeadingSpace,
@@ -80,6 +85,7 @@ public:
 		typename CbWhenMustHaveElse
 	> inline auto match(
 		CbExpectedCharacter cbExpectedCharacter,
+		CbExpectedDedent cbExpectedDedent,
 		CbExpectedIndent cbExpectedIndent,
 		CbExpectedPurityAfterSpace cbExpectedPurityAfterSpace,
 		CbLeadingSpace cbLeadingSpace,
@@ -95,6 +101,8 @@ public:
 		switch (kind) {
 			case Kind::expectedCharacter:
 				return cbExpectedCharacter(expectedCharacter);
+			case Kind::expectedDedent:
+				return cbExpectedDedent(expectedDedent);
 			case Kind::expectedIndent:
 				return cbExpectedIndent(expectedIndent);
 			case Kind::expectedPurityAfterSpace:
@@ -147,8 +155,8 @@ struct Diag {
 		const Opt<const Type> expectedType;
 	};
 	struct FieldPurityWorseThanStructPurity {
-		const Purity fieldPurity;
-		const Purity structPurity;
+		const StructDecl* strukt;
+		const Type fieldType;
 	};
 	struct FileDoesNotExist {};
 	struct MatchCaseStructNamesDoNotMatch {
@@ -181,6 +189,9 @@ struct Diag {
 		};
 		const Kind kind;
 	};
+	struct RemoteFunDoesNotReturnFut {
+		const Type actualReturnType;
+	};
 	struct SpecImplNotFound {
 		const Str sigName;
 	};
@@ -192,6 +203,9 @@ struct Diag {
 		const Type actual;
 	};
 	struct TypeNotSendable {};
+	struct WriteToNonMutableField {
+		const StructField* field;
+	};
 	struct WrongNumberNewStructArgs {
 		const StructDecl* decl;
 		const size_t nExpectedArgs;
@@ -228,10 +242,12 @@ private:
 		noSuchFunction,
 		paramShadowsPrevious,
 		parseDiag,
+		remoteFunDoesNotReturnFut,
 		specImplHasSpecs,
 		specImplNotFound,
 		typeConflict,
 		typeNotSendable,
+		writeToNonMutableField,
 		wrongNumberNewStructArgs,
 		wrongNumberTypeArgsForSpec,
 		wrongNumberTypeArgsForStruct,
@@ -256,10 +272,12 @@ private:
 		const NoSuchFunction noSuchFunction;
 		const ParamShadowsPrevious paramShadowsPrevious;
 		const ParseDiag parseDiag;
+		const RemoteFunDoesNotReturnFut remoteFunDoesNotReturnFut;
 		const SpecImplHasSpecs specImplHasSpecs;
 		const SpecImplNotFound specImplNotFound;
 		const TypeConflict typeConflict;
 		const TypeNotSendable typeNotSendable;
+		const WriteToNonMutableField writeToNonMutableField;
 		const WrongNumberNewStructArgs wrongNumberNewStructArgs;
 		const WrongNumberTypeArgsForSpec wrongNumberTypeArgsForSpec;
 		const WrongNumberTypeArgsForStruct wrongNumberTypeArgsForStruct;
@@ -284,10 +302,12 @@ public:
 	explicit inline Diag(const NoSuchFunction d) : kind{Kind::noSuchFunction}, noSuchFunction{d} {}
 	explicit inline Diag(const ParamShadowsPrevious d) : kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
 	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
+	explicit inline Diag(const RemoteFunDoesNotReturnFut d) : kind{Kind::remoteFunDoesNotReturnFut}, remoteFunDoesNotReturnFut{d} {}
 	explicit inline Diag(const SpecImplHasSpecs d) : kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
 	explicit inline Diag(const SpecImplNotFound d) : kind{Kind::specImplNotFound}, specImplNotFound{d} {}
 	explicit inline Diag(const TypeConflict d) : kind{Kind::typeConflict}, typeConflict{d} {}
 	explicit inline Diag(const TypeNotSendable d) : kind{Kind::typeNotSendable}, typeNotSendable{d} {}
+	explicit inline Diag(const WriteToNonMutableField d) : kind{Kind::writeToNonMutableField}, writeToNonMutableField{d} {}
 	explicit inline Diag(const WrongNumberNewStructArgs d) : kind{Kind::wrongNumberNewStructArgs}, wrongNumberNewStructArgs{d} {}
 	explicit inline Diag(const WrongNumberTypeArgsForSpec d) : kind{Kind::wrongNumberTypeArgsForSpec}, wrongNumberTypeArgsForSpec{d} {}
 	explicit inline Diag(const WrongNumberTypeArgsForStruct d) : kind{Kind::wrongNumberTypeArgsForStruct}, wrongNumberTypeArgsForStruct{d} {}
@@ -315,10 +335,12 @@ public:
 		typename CbNoSuchFunction,
 		typename CbParamShadowsPrevious,
 		typename CbParseDiag,
+		typename CbRemoteFunDoesNotReturnFut,
 		typename CbSpecImplHasSpecs,
 		typename CbSpecImplNotFound,
 		typename CbTypeConflict,
 		typename CbTypeNotSendable,
+		typename CbWriteToNonMutableField,
 		typename CbWrongNumberNewStructArgs,
 		typename CbWrongNumberTypeArgsForSpec,
 		typename CbWrongNumberTypeArgsForStruct
@@ -341,10 +363,12 @@ public:
 		CbNoSuchFunction cbNoSuchFunction,
 		CbParamShadowsPrevious cbParamShadowsPrevious,
 		CbParseDiag cbParseDiag,
+		CbRemoteFunDoesNotReturnFut cbRemoteFunDoesNotReturnFut,
 		CbSpecImplHasSpecs cbSpecImplHasSpecs,
 		CbSpecImplNotFound cbSpecImplNotFound,
 		CbTypeConflict cbTypeConflict,
 		CbTypeNotSendable cbTypeNotSendable,
+		CbWriteToNonMutableField cbWriteToNonMutableField,
 		CbWrongNumberNewStructArgs cbWrongNumberNewStructArgs,
 		CbWrongNumberTypeArgsForSpec cbWrongNumberTypeArgsForSpec,
 		CbWrongNumberTypeArgsForStruct cbWrongNumberTypeArgsForStruct
@@ -386,6 +410,8 @@ public:
 				return cbParamShadowsPrevious(paramShadowsPrevious);
 			case Kind::parseDiag:
 				return cbParseDiag(parseDiag);
+			case Kind::remoteFunDoesNotReturnFut:
+				return cbRemoteFunDoesNotReturnFut(remoteFunDoesNotReturnFut);
 			case Kind::specImplHasSpecs:
 				return cbSpecImplHasSpecs(specImplHasSpecs);
 			case Kind::specImplNotFound:
@@ -394,6 +420,8 @@ public:
 				return cbTypeConflict(typeConflict);
 			case Kind::typeNotSendable:
 				return cbTypeNotSendable(typeNotSendable);
+			case Kind::writeToNonMutableField:
+				return cbWriteToNonMutableField(writeToNonMutableField);
 			case Kind::wrongNumberNewStructArgs:
 				return cbWrongNumberNewStructArgs(wrongNumberNewStructArgs);
 			case Kind::wrongNumberTypeArgsForSpec:

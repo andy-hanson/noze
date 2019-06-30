@@ -50,6 +50,9 @@ namespace {
 			[&](const ParseDiag::ExpectedCharacter) {
 				todo<void>("expectedcharacter");
 			},
+			[&](const ParseDiag::ExpectedDedent) {
+				writeStatic(writer, "expected a dedent");
+			},
 			[&](const ParseDiag::ExpectedIndent) {
 				writeStatic(writer, "expected an indent");
 			},
@@ -96,7 +99,7 @@ namespace {
 			case Purity::sendable:
 				writeStatic(writer, "sendable");
 				break;
-			case Purity::nonSendable:
+			case Purity::mut:
 				writeStatic(writer, "mut");
 				break;
 			default:
@@ -160,10 +163,14 @@ namespace {
 					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");
 			},
 			[&](const Diag::FieldPurityWorseThanStructPurity d) {
-				writeStatic(writer, "struct has purity '");
-				writePurity(writer, d.structPurity);
-				writeStatic(writer, "', but field has purity '");
-				writePurity(writer, d.fieldPurity);
+				writeStatic(writer, "struct '");
+				writeStr(writer, d.strukt->name);
+				writeStatic(writer, "' has purity '");
+				writePurity(writer, d.strukt->purity);
+				writeStatic(writer, "', but field type ");
+				writeType(writer, d.fieldType);
+				writeStatic(writer, " has purity '");
+				writePurity(writer, d.fieldType.purity());
 				writeStatic(writer, "'");
 			},
 			[&](const Diag::FileDoesNotExist) {
@@ -218,6 +225,10 @@ namespace {
 			[&](const ParseDiag pd) {
 				writeParseDiag(writer, pd);
 			},
+			[&](const Diag::RemoteFunDoesNotReturnFut d) {
+				writeStatic(writer, "remote-fun should return a fut, but returns ");
+				writeType(writer, d.actualReturnType);
+			},
 			[&](const Diag::SpecImplHasSpecs d) {
 				writeStatic(writer, "spec implementation ");
 				writeStr(writer, d.funName);
@@ -228,13 +239,18 @@ namespace {
 				writeStr(writer, d.sigName);
 			},
 			[&](const Diag::TypeConflict d) {
-				writeStatic(writer, "the type of the expression conflicts with its expected type.\nexpected: ");
+				writeStatic(writer, "the type of the expression conflicts with its expected type.\n\texpected: ");
 				writeType(writer, d.expected);
-				writeStatic(writer, "\nactual: ");
+				writeStatic(writer, "\n\tactual: ");
 				writeType(writer, d.actual);
 			},
 			[&](const Diag::TypeNotSendable) {
 				writeStatic(writer, "this type is not sendable and should not appear in an interface");
+			},
+			[&](const Diag::WriteToNonMutableField d) {
+				writeStatic(writer, "field ");
+				writeStr(writer, d.field->name);
+				writeStatic(writer, " is not mutable");
 			},
 			[&](const Diag::WrongNumberNewStructArgs d) {
 				writeStatic(writer, "struct initializer expected to get ");

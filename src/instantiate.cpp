@@ -56,6 +56,9 @@ const FunInst* instantiateFun(Arena& arena, const FunDecl* decl, const Arr<const
 const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
 	const TypeParamsAndArgs typeParamsAndArgs = TypeParamsAndArgs{decl->typeParams, typeArgs};
 	return decl->body().match(
+		[](const StructBody::Bogus) {
+			return StructBody{StructBody::Bogus{}};
+		},
 		[](const StructBody::Builtin) {
 			return StructBody{StructBody::Builtin{}};
 		},

@@ -114,25 +114,6 @@ namespace {
 		}
 	}
 
-	Purity getPurityFromAst(const StructDeclAst it) {
-		// Note: purity is taken for granted here, and verified later when we check the body.
-		if (it.body.isIface()) {
-			if (it.purity.has())
-				todo<void>("iface should not have explicit purity, is always sendable");
-			return Purity::sendable;
-		} else if (it.purity.has())
-			switch (it.purity.force()) {
-				case PuritySpecifier::sendable:
-					return Purity::sendable;
-				case PuritySpecifier::nonSendable:
-					return Purity::nonSendable;
-				default:
-					return unreachable<Purity>();
-			}
-		else
-			return Purity::data;
-	}
-
 	const Arr<const TypeParam> checkTypeParams(CheckCtx& ctx, const Arr<const TypeParamAst> asts) {
 		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(ctx.arena, asts, [&](const TypeParamAst& ast, const size_t i) {
 			return TypeParam{ast.range, ctx.copyStr(ast.name), i};
@@ -231,9 +212,36 @@ namespace {
 		});
 	}
 
+	struct PurityAndForceSendable {
+		const Purity purity;
+		const Bool forceSendable;
+	};
+
+	const PurityAndForceSendable getPurityFromAst(const StructDeclAst ast) {
+		// Note: purity is taken for granted here, and verified later when we check the body.
+		if (ast.body.isIface()) {
+			if (ast.purity.has())
+				todo<void>("iface should not have explicit purity, is always sendable");
+			return PurityAndForceSendable{Purity::sendable, False};
+		} else if (ast.purity.has())
+			switch (ast.purity.force()) {
+				case PuritySpecifier::sendable:
+					return PurityAndForceSendable{Purity::sendable, False};
+				case PuritySpecifier::forceSendable:
+					return PurityAndForceSendable{Purity::sendable, True};
+				case PuritySpecifier::mut:
+					return PurityAndForceSendable{Purity::mut, False};
+				default:
+					return unreachable<const PurityAndForceSendable>();
+			}
+		else
+			return PurityAndForceSendable{Purity::data, False};
+	}
+
 	const Arr<StructDecl> checkStructsInitial(CheckCtx& ctx, const Arr<const StructDeclAst> asts) {
 		return map<StructDecl>{}(ctx.arena, asts, [&](const StructDeclAst ast) {
-			return StructDecl{ast.range, ast.isPublic, ctx.copyStr(ast.name), checkTypeParams(ctx, ast.typeParams), getPurityFromAst(ast)};
+			const PurityAndForceSendable p = getPurityFromAst(ast);
+			return StructDecl{ast.range, ast.isPublic, ctx.copyStr(ast.name), checkTypeParams(ctx, ast.typeParams), p.purity, p.forceSendable};
 		});
 	}
 
@@ -295,7 +303,7 @@ namespace {
 	const StructBody checkFields(
 		CheckCtx& ctx,
 		const StructsAndAliasesMap& structsAndAliasesMap,
-		const StructDecl& strukt,
+		const StructDecl* strukt,
 		const StructDeclAst::Body::Fields f,
 		MutArr<StructInst*>& delayStructInsts
 	) {
@@ -303,9 +311,12 @@ namespace {
 			ctx.arena,
 			f.fields,
 			[&](const StructDeclAst::Body::Fields::Field field, const size_t index) {
-				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt.typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
-				if (isPurityWorse(fieldType.purity(), strukt.purity))
-					ctx.addDiag(field.range, Diag{Diag::FieldPurityWorseThanStructPurity{fieldType.purity(), strukt.purity}});
+				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
+				if (isPurityWorse(fieldType.purity(), strukt->purity)) {
+					if (!strukt->forceSendable) {
+						ctx.addDiag(field.range, Diag{Diag::FieldPurityWorseThanStructPurity{strukt, fieldType}});
+					}
+				}
 				return StructField{field.range, field.isMutable, ctx.copyStr(field.name), fieldType, index};
 			});
 		everyPair(fields, [&](const StructField a, const StructField b) {
@@ -324,8 +335,8 @@ namespace {
 		MutArr<StructInst*>& delayStructInsts
 	) {
 		DelayStructInsts delay = some<MutArr<StructInst*>*>(&delayStructInsts);
-		zip(structs, asts, [&](StructDecl& strukt, const StructDeclAst& ast) {
-			const StructBody body = ast.body.match(
+		zipPtrs(structs, asts, [&](StructDecl* strukt, const StructDeclAst* ast) {
+			const StructBody body = ast->body.match(
 				[](const StructDeclAst::Body::Builtin) {
 					return StructBody{StructBody::Builtin{}};
 				},
@@ -333,37 +344,39 @@ namespace {
 					return checkFields(ctx, structsAndAliasesMap, strukt, f, delayStructInsts);
 				},
 				[&](const StructDeclAst::Body::Union un) {
-					const Arr<const StructInst*> members = map<const StructInst*>{}(ctx.arena, un.members, [&](const TypeAst::InstStruct it) {
-						const Opt<const StructInst*> res = instStructFromAst(ctx, it, structsAndAliasesMap, TypeParamsScope{strukt.typeParams}, delay);
-						if (!res.has())
-							todo<void>("union member not found");
-						if (isPurityWorse(res.force()->purity, strukt.purity))
+					const Opt<const Arr<const StructInst*>> members = mapOrNone<const StructInst*>{}(ctx.arena, un.members, [&](const TypeAst::InstStruct it) {
+						const Opt<const StructInst*> res = instStructFromAst(ctx, it, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, delay);
+						if (res.has() && isPurityWorse(res.force()->purity, strukt->purity))
 							todo<void>("union member purity worse than union purity");
-						return res.force();
+						return res;
 					});
-					everyPairWithIndex(members, [&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
-						if (ptrEquals(a->decl, b->decl))
-							ctx.addDiag(at(un.members, bIndex).range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::unionMember, a->decl->name}});
-					});
-					return StructBody{StructBody::Union{members}};
+					if (members.has()) {
+						everyPairWithIndex(members.force(), [&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
+							if (ptrEquals(a->decl, b->decl))
+								ctx.addDiag(at(un.members, bIndex).range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::unionMember, a->decl->name}});
+						});
+						return StructBody{StructBody::Union{members.force()}};
+					} else
+						return StructBody{StructBody::Bogus{}};
 				},
 				[&](const StructDeclAst::Body::Iface i) {
 					const Arr<const Message> messages = mapWithIndex<const Message>{}(
 						ctx.arena,
 						i.messages,
 						[&](const SigAst it, const size_t idx) {
-							const Sig sig = checkSigNoOwnTypeParams(ctx, it, strukt.typeParams, structsAndAliasesMap, delayStructInsts);
+							const Sig sig = checkSigNoOwnTypeParams(ctx, it, strukt->typeParams, structsAndAliasesMap, delayStructInsts);
 							const Sig sig2 = Sig{sig.range, sig.name, makeFutType(ctx.arena, commonTypes, sig.returnType), sig.params};
 							return Message{sig2, idx};
 						});
 					// TODO: check no two messages have the same name
 					return StructBody{StructBody::Iface{messages}};
 				});
-			strukt.setBody(body);
+			strukt->setBody(body);
 		});
 
 		for (const StructDecl& strukt : structs) {
 			strukt.body().match(
+				[](const StructBody::Bogus) {},
 				[](const StructBody::Builtin) {},
 				[](const StructBody::Fields) {},
 				[](const StructBody::Union u) {

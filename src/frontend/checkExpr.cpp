@@ -124,6 +124,9 @@ namespace {
 		const StructDecl* decl = si->decl;
 
 		const Opt<const StructBody::Fields> opFields = decl->body().match(
+			[](const StructBody::Bogus) {
+				return none<const StructBody::Fields>();
+			},
 			[&](const StructBody::Builtin) {
 				const StructDecl* byVal = ctx.commonTypes.byVal;
 				if (ptrEquals(decl, byVal)) {
@@ -416,31 +419,36 @@ namespace {
 		});
 
 		const Type actualPossiblyFutReturnType = returnTypeInferrer.inferred();
-		const Type actualNonFutReturnType = [&]() {
+		const Opt<const Type> actualNonFutReturnType = [&]() {
 			if (et.isRemoteFun) {
-				if (!actualPossiblyFutReturnType.isStructInst())
-					todo<void>("checkLambdaWorker actualReturnType");
-				const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
-				if (!ptrEquals(ap->decl, ctx.commonTypes.fut))
-					todo<void>("checkLambdaWorker actualReturnType");
-				return only(ap->typeArgs);
+				if (actualPossiblyFutReturnType.isStructInst()) {
+					const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
+					return ptrEquals(ap->decl, ctx.commonTypes.fut)
+						? some<const Type>(only(ap->typeArgs))
+						: none<const Type>();
+				} else
+					return none<const Type>();
 			} else
-				return actualPossiblyFutReturnType;
+				return some<const Type>(actualPossiblyFutReturnType);
 		}();
+		if (!actualNonFutReturnType.has()) {
+			ctx.addDiag(range, Diag{Diag::RemoteFunDoesNotReturnFut{actualPossiblyFutReturnType}});
+			return expected.bogus(range);
+		} else {
+			const StructInst* instFunStruct = instantiateStructNeverDelay(
+				arena, et.funStruct, prepend<const Type>(arena, actualNonFutReturnType.force(), et.paramTypes));
 
-		const StructInst* instFunStruct = instantiateStructNeverDelay(
-			arena, et.funStruct, prepend<const Type>(arena, actualNonFutReturnType, et.paramTypes));
+			const Expr::Lambda lambda = Expr::Lambda{
+				params,
+				body,
+				freeze(info.closureFields),
+				instFunStruct,
+				et.nonRemoteFunStruct,
+				et.isRemoteFun,
+				actualPossiblyFutReturnType};
 
-		const Expr::Lambda lambda = Expr::Lambda{
-			params,
-			body,
-			freeze(info.closureFields),
-			instFunStruct,
-			et.nonRemoteFunStruct,
-			et.isRemoteFun,
-			actualPossiblyFutReturnType};
-
-		return CheckedExpr{Expr{range, lambda}};
+			return CheckedExpr{Expr{range, lambda}};
+		}
 	}
 
 	const CheckedExpr checkLambda(ExprCtx& ctx, const SourceRange range, const LambdaAst ast, Expected& expected) {
@@ -460,46 +468,58 @@ namespace {
 			: checkExpr(ctx, ast, expected);
 	}
 
+	struct UnionAndMembers {
+		const StructInst* matchedUnion;
+		const Arr<const StructInst*> members;
+	};
+
+	const Opt<const UnionAndMembers> getUnionBody(const Type t) {
+		if (t.isStructInst()) {
+			const StructInst* matchedUnion = t.asStructInst();
+			const StructBody body = matchedUnion->body();
+			return body.isUnion()
+				? some<const UnionAndMembers>(UnionAndMembers{matchedUnion, body.asUnion().members})
+				: none<const UnionAndMembers>();
+		} else
+			return none<const UnionAndMembers>();
+	}
+
 	const CheckedExpr checkMatch(ExprCtx& ctx, const SourceRange range, const MatchAst ast, Expected& expected) {
 		const ExprAndType matchedAndType = checkAndInfer(ctx, *ast.matched);
-		if (!matchedAndType.type.isStructInst()) {
+		const Opt<const UnionAndMembers> unionAndMembers = getUnionBody(matchedAndType.type);
+		if (!unionAndMembers.has()) {
 			if (!matchedAndType.type.isBogus())
 				ctx.addDiag(ast.matched->range, Diag{Diag::MatchOnNonUnion{matchedAndType.type}});
 			return expected.bogus(ast.matched->range);
-		}
-		const StructInst* matchedUnion = matchedAndType.type.asStructInst();
-		const StructDecl* strukt = matchedUnion->decl;
-		const StructBody body = strukt->body();
-		if (!body.isUnion())
-			todo<void>("not a union");
-		const Arr<const StructInst*> members = body.asUnion().members;
-
-		const Bool badCases = _or(
-			members.size != ast.cases.size,
-			zipSome(members, ast.cases, [&](const StructInst* member, const MatchAst::CaseAst caseAst) {
-				return !strEq(member->decl->name, caseAst.structName);
-			}));
-		if (badCases) {
-			ctx.addDiag(range, Diag{Diag::MatchCaseStructNamesDoNotMatch{members}});
-			return expected.bogus(range);
 		} else {
-			const Arr<const Expr::Match::Case> cases = mapZip<const Expr::Match::Case>{}(
-				ctx.arena(),
-				members,
-				ast.cases,
-				[&](const StructInst* member, const MatchAst::CaseAst caseAst) {
-					const Opt<const Local*> local = caseAst.localName.has()
-						? some<const Local*>(
-							ctx.arena().nu<Local>()(
-								ctx.copyStr(caseAst.localName.force()),
-								Type{instantiateStructInst(ctx.arena(), member, TypeParamsAndArgs{strukt->typeParams, matchedUnion->typeArgs})}))
-						: none<const Local*>();
-					const Expr then = expected.isBogus()
-						? expected.bogus(range).expr
-						: checkWithOptLocal(ctx, local, *caseAst.then, expected);
-					return Expr::Match::Case{local, ctx.alloc(then)};
-				});
-			return CheckedExpr{Expr{range, Expr::Match{ctx.alloc(matchedAndType.expr), matchedUnion, cases, expected.inferred()}}};
+			const StructInst* matchedUnion = unionAndMembers.force().matchedUnion;
+			const Arr<const StructInst*> members = unionAndMembers.force().members;
+
+			const Bool badCases = _or(
+				members.size != ast.cases.size,
+				zipSome(members, ast.cases, [&](const StructInst* member, const MatchAst::CaseAst caseAst) {
+					return !strEq(member->decl->name, caseAst.structName);
+				}));
+			if (badCases) {
+				ctx.addDiag(range, Diag{Diag::MatchCaseStructNamesDoNotMatch{members}});
+				return expected.bogus(range);
+			} else {
+				const Arr<const Expr::Match::Case> cases = mapZip<const Expr::Match::Case>{}(
+					ctx.arena(),
+					members,
+					ast.cases,
+					[&](const StructInst* member, const MatchAst::CaseAst caseAst) {
+						const Opt<const Local*> local = caseAst.localName.has()
+							? some<const Local*>(
+								ctx.arena().nu<Local>()(ctx.copyStr(caseAst.localName.force()), Type{member}))
+							: none<const Local*>();
+						const Expr then = expected.isBogus()
+							? expected.bogus(range).expr
+							: checkWithOptLocal(ctx, local, *caseAst.then, expected);
+						return Expr::Match::Case{local, ctx.alloc(then)};
+					});
+				return CheckedExpr{Expr{range, Expr::Match{ctx.alloc(matchedAndType.expr), matchedUnion, cases, expected.inferred()}}};
+			}
 		}
 	}
 
@@ -581,11 +601,16 @@ namespace {
 		const Opt<const StructAndField> opStructAndField = tryGetStructField(target.type, ast.fieldName);
 		if (opStructAndField.has()) {
 			const StructAndField structAndField = opStructAndField.force();
-			if (!structAndField.field->isMutable)
-				todo<void>("diagnostic: trying to write to non-mutable field");
-			const Expr value = checkAndExpect(ctx, ast.value, structAndField.field->type);
-			const Expr::StructFieldSet sfs = Expr::StructFieldSet{ctx.alloc(target.expr), structAndField.structInst, structAndField.field, ctx.alloc(value)};
-			return expected.check(ctx, Type{ctx.commonTypes._void}, Expr{range, sfs});
+			const StructInst* structInst = structAndField.structInst;
+			const StructField* field = structAndField.field;
+			if (!field->isMutable) {
+				ctx.addDiag(range, Diag{Diag::WriteToNonMutableField{field}});
+				return expected.bogusWithType(range, Type{ctx.commonTypes._void});
+			} else {
+				const Expr value = checkAndExpect(ctx, ast.value, field->type);
+				const Expr::StructFieldSet sfs = Expr::StructFieldSet{ctx.alloc(target.expr), structInst, field, ctx.alloc(value)};
+				return expected.check(ctx, Type{ctx.commonTypes._void}, Expr{range, sfs});
+			}
 		} else
 			return todo<const CheckedExpr>("checkStructFieldSet -- no such field");
 	}

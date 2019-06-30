@@ -280,7 +280,7 @@ void takeIndent(Lexer& lexer) {
 void takeDedent(Lexer& lexer)  {
 	const int delta = skipLinesAndGetIndentDelta(lexer);
 	if (delta != -1)
-		todo<void>("diagnostic: expected to take a dedent");
+		throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedDedent{}});
 }
 
 const Bool tryTakeIndent(Lexer& lexer)  {

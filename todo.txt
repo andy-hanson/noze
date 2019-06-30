@@ -1,4 +1,54 @@
 !
+	Just like 'fut', 'remote-fun0' should be 'sendable', regardless of what's in it.
+	IDEA:
+		Add a keyword 'protects-state' that allows a struct to have mutable internals.
+
+!
+	document:
+		The model should contain enough information to get the AST back.
+
+!
+	verify: can't add 'mut' field to non-'mut' struct
+
+!
+	test that RemoteFunDoesNotReturnFut diagnostic works
+
+!
+	Document how to write generic types
+
+	it's `arr opt<?t>` for example, not `arr opt ?t`
+
+!
+	"the type of the expression conflicts with its expected type":
+		indent the expected and actual t
+
+!
+	remove this TODO from the github repo
+
+!
+	write document describing compiler internals
+
+	Describe 'bogus' -- we will only get bogus if there was an error, so we don't add any more errors
+
+!
+TODO
+`next fut-callback-node<?t>` was wrong (remove the `<>`), but error message was confusing
+
+!
+	terminology: showDiag or writeDiag?
+	(see also writeParseDiag)
+
+!
+need to document purity
+
+!
+need to document 'summon', 'unsafe' 'noctx'
+
+!
+need to document the runtime -- what are vats?
+
+
+!
 	//TODO: only do 'init' for structs that will be allocated
 	//TODO: only do 'fail' for structs returned from a match by value
 
@@ -11,15 +61,9 @@
 	and kill asStatement
 
 !
-	TODO: strLiteral("-pedantic"),
-
-!
 	why is void mangling to "_voidvoid" ?
 
 	writeMangledName looks to just do it once...
-
-!
-	// TODO: strLiteral("-pedantic"),
 
 !
 	//TODO: only used for side effect

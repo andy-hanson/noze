@@ -31,7 +31,7 @@ using Identifier = Str;
 enum class Purity {
 	data,
 	sendable,
-	nonSendable,
+	mut,
 };
 
 inline const Bool isPurityWorse(const Purity a, const Purity b) {
@@ -173,6 +173,7 @@ enum class ForcedByValOrRef {
 };
 
 struct StructBody {
+	struct Bogus {};
 	struct Builtin {};
 	struct Fields {
 		const Opt<const ForcedByValOrRef> forcedByValOrRef;
@@ -187,6 +188,7 @@ struct StructBody {
 
 private:
 	enum class Kind {
+		bogus,
 		builtin,
 		fields,
 		_union,
@@ -194,6 +196,7 @@ private:
 	};
 	const Kind kind;
 	union {
+		const Bogus bogus;
 		const Builtin builtin;
 		const Fields fields;
 		const Union _union;
@@ -201,6 +204,8 @@ private:
 	};
 
 public:
+	explicit inline StructBody(const Bogus _bogus)
+		: kind{Kind::bogus}, bogus{_bogus} {}
 	explicit inline StructBody(const Builtin _builtin)
 		: kind{Kind::builtin}, builtin{_builtin} {}
 	explicit inline StructBody(const Fields _fields)
@@ -236,18 +241,22 @@ public:
 	}
 
 	template <
+		typename CbBogus,
 		typename CbBuiltin,
 		typename CbFields,
 		typename CbUnion,
 		typename CbIface
 	>
 	inline auto match(
+		CbBogus cbBogus,
 		CbBuiltin cbBuiltin,
 		CbFields cbFields,
 		CbUnion cbUnion,
 		CbIface cbIface
 	) const {
 		switch (kind) {
+			case Kind::bogus:
+				return cbBogus(bogus);
 			case Kind::builtin:
 				return cbBuiltin(builtin);
 			case Kind::fields:
@@ -288,6 +297,7 @@ struct StructDecl {
 	const Arr<const TypeParam> typeParams;
 	// Note: purity on the decl does not take type args into account
 	const Purity purity;
+	const Bool forceSendable;
 	mutable MutArr<const StructInst*> insts {};
 private:
 	Late<const StructBody> _body {};
@@ -304,8 +314,9 @@ public:
 		_body.set(value);
 	}
 
-	inline StructDecl(const SourceRange _range, const Bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams, const Purity _purity)
-		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams}, purity{_purity} {}
+	// TODO: why do I need to specify a constructor here?
+	inline StructDecl(const SourceRange _range, const Bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams, const Purity _purity, const Bool _forceSendable)
+		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams}, purity{_purity}, forceSendable{_forceSendable} {}
 };
 
 struct StructInst {
