@@ -39,6 +39,7 @@ namespace {
 			strLiteral("-Wno-unused-parameter"),
 			strLiteral("-Wno-unused-but-set-variable"),
 			strLiteral("-Wno-unused-variable"),
+			strLiteral("-Wno-unused-value"),
 			// TODO: configurable whether we want debug or release
 			strLiteral("-g"),
 			pathToStr(arena, cPath),

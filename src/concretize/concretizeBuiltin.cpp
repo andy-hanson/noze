@@ -345,7 +345,8 @@ namespace {
 			/*less*/ caseUseFirst,
 			/*equal*/ caseUseSecond,
 			/*greater*/ caseUseFirst);
-		const ConcreteExpr* then = genExpr(arena, comparisonType, ConcreteExpr::Match{cmpFirst, comparisonType.mustBeNonPointer(), cases});
+		const ConcreteLocal* matchedLocal = arena.nu<const ConcreteLocal>()(strLiteral("matched"), comparisonType, ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+		const ConcreteExpr* then = genExpr(arena, comparisonType, ConcreteExpr::Match{matchedLocal, cmpFirst, cases});
 		const ConcreteExpr* res = genExpr(arena, comparisonType, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
 		return LocalAndExpr{cmpFirstLocal, res};
 	}

@@ -139,7 +139,7 @@ namespace {
 			},
 			[](const ConcreteExpr::LocalRef) {},
 			[&](const ConcreteExpr::Match e) {
-				setReferencedInExpr(ctx, *e.matched);
+				setReferencedInExpr(ctx, *e.matchedValue);
 				for (const ConcreteExpr::Match::Case kase : e.cases)
 					setReferencedInConstantOrExpr(ctx, kase.then);
 			},

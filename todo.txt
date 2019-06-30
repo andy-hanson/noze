@@ -1,4 +1,16 @@
 !
+	//TODO: only do 'init' for structs that will be allocated
+	//TODO: only do 'fail' for structs returned from a match by value
+
+!
+	// TODO: for safety, hard-fail if the union kind is wrong
+	(requires generating fail functions for every type returned form a match!)
+
+!
+	writeFooAsExpr: just writeFoo
+	and kill asStatement
+
+!
 	TODO: strLiteral("-pedantic"),
 
 !

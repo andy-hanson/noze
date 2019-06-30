@@ -305,12 +305,19 @@ namespace {
 			: mangledName;
 	}
 
-	const ConcreteLocal* concretizeLocal(ConcretizeExprCtx& ctx, const Local* local, const ConstantOrLambdaOrVariable clv) {
-		const ConcreteType localType = ctx.getConcreteType(local->type);
-		const Str mangledName = chooseUniqueName(ctx.arena(), mangleName(ctx.arena(), local->name), tempAsArr(ctx.allLocalsInThisFun));
-		const ConcreteLocal* res = ctx.arena().nu<const ConcreteLocal>()(mangledName, localType, clv);
+	const ConcreteLocal* makeLocalWorker(ConcretizeExprCtx& ctx, const Str name, const ConcreteType type, const ConstantOrLambdaOrVariable clv) {
+		const Str mangledName = chooseUniqueName(ctx.arena(), mangleName(ctx.arena(), name), tempAsArr(ctx.allLocalsInThisFun));
+		const ConcreteLocal* res = ctx.arena().nu<const ConcreteLocal>()(mangledName, type, clv);
 		push(ctx.arena(), ctx.allLocalsInThisFun, res);
 		return res;
+	}
+
+	const ConcreteLocal* concretizeLocal(ConcretizeExprCtx& ctx, const Local* local, const ConstantOrLambdaOrVariable clv) {
+		return makeLocalWorker(ctx, local->name, ctx.getConcreteType(local->type), clv);
+	}
+
+	const ConcreteLocal* getMatchedLocal(ConcretizeExprCtx& ctx, const ConcreteStruct* matchedUnion) {
+		return makeLocalWorker(ctx, strLiteral("matched"), ConcreteType::value(matchedUnion), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 	}
 
 	const ConstantOrExpr concretizeWithLocal(ConcretizeExprCtx& ctx, const Local* modelLocal, const ConcreteLocal* concreteLocal, const Expr expr) {
@@ -361,7 +368,7 @@ namespace {
 					} else
 						return ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), concretizeExpr(ctx, *kase.then)};
 				});
-				return ConstantOrExpr{nuExpr(arena, type, range, ConcreteExpr::Match{matchedExpr, matchedUnion, cases})};
+				return ConstantOrExpr{nuExpr(arena, type, range, ConcreteExpr::Match{getMatchedLocal(ctx, matchedUnion), matchedExpr, cases})};
 			});
 	}
 

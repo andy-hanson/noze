@@ -470,184 +470,87 @@ namespace {
 		todo<void>("writeNewIfaceImpl");
 	}
 
-	void writeConcreteExprAsStatement(WriterWithIndent& writer, const ConcreteExpr ex, const Bool isReturn);
-	void writeConcreteExprAsExpr(WriterWithIndent& writer, const ConcreteExpr ex);
+	void writeConcreteExpr(WriterWithIndent& writer, const ConcreteExpr ex);
 
-	void writeConstantOrExprAsStatement(WriterWithIndent& writer, const ConstantOrExpr ce, const Bool isReturn) {
-		return ce.match(
-			[&](const Constant* c) {
-				if (isReturn) {
-					writeStatic(writer, "return ");
-					writeConstantReference(writer.writer, c);
-					writeChar(writer, ';');
-				}
-			},
-			[&](const ConcreteExpr* e) {
-				writeConcreteExprAsStatement(writer, *e, isReturn);
-			});
-	}
-
-	void writeConstantOrExprAsExpr(WriterWithIndent& writer, const ConstantOrExpr ce) {
+	void writeConstantOrExpr(WriterWithIndent& writer, const ConstantOrExpr ce) {
 		ce.match(
 			[&](const Constant* c) {
 				writeConstantReference(writer.writer, c);
 			},
 			[&](const ConcreteExpr* e) {
-				writeConcreteExprAsExpr(writer, *e);
+				writeConcreteExpr(writer, *e);
 			});
+	}
+
+	void writeLocalRef(Writer& writer, const ConcreteLocal* local) {
+		writeStr(writer, local->mangledName);
 	}
 
 	void writeLocalDeclaration(WriterWithIndent& writer, const ConcreteLocal* local) {
 		writeType(writer.writer, local->type);
 		writeStatic(writer, " ");
-		writeStr(writer, local->mangledName);
+		writeLocalRef(writer.writer, local);
 		writeStatic(writer, ";");
 		newline(writer);
 	}
 
 	void writeLocalAssignment(Writer& writer, const ConcreteLocal* local) {
-		writeStr(writer, local->mangledName);
+		writeLocalRef(writer, local);
 		writeStatic(writer, " = ");
 	}
 
-	void writeMatchAsStatement(WriterWithIndent& writer, const ConcreteExpr::Match e, const Bool isReturn) {
-		writeValueType(writer.writer, e.matchedUnion);
-		writeStatic(writer, " matched = ");
-		writeConcreteExprAsExpr(writer, *e.matched);
-		writeChar(writer, ';');
-		newline(writer);
-		writeStatic(writer, "switch (matched.kind) {");
+	void writeFailForType(Writer& writer, const ConcreteType type) {
+		writeStatic(writer, "_fail");
+		if (type.isPointer)
+			writeStatic(writer, "VoidPtr");
+		else
+			writeStr(writer, type.strukt->mangledName);
+		writeStatic(writer, "()");
+	}
+
+	void writeMatch(WriterWithIndent& writer, const ConcreteExpr ce, const ConcreteExpr::Match e) {
+		// matched1 = bar(foo),
+		// (matched1.kind == 0 ? 42 : (s = matched1.as_some, s.value))
+		// TODO: for safety, hard-fail if the union kind is wrong
+		const ConcreteLocal* matchedLocal = e.matchedLocal;
+		writeLocalAssignment(writer.writer, matchedLocal);
+		writeConcreteExpr(writer, *e.matchedValue);
+		writeChar(writer, ',');
 		indent(writer);
 		zipWithIndex(e.matchedUnionMembers(), e.cases, [&](const ConcreteType member, const ConcreteExpr::Match::Case kase, const size_t i) {
 			const Str memberName = member.strukt->mangledName;
-			writeStatic(writer, "case ");
+			writeLocalRef(writer.writer, matchedLocal);
+			writeStatic(writer, ".kind == ");
 			writeNat(writer.writer, i);
-			writeStatic(writer, ": {");
-			indent(writer);
+			newline(writer);
+			writeStatic(writer, "? ");
 			if (kase.local.has()) {
+				writeStatic(writer, "(");
 				writeLocalAssignment(writer.writer, kase.local.force());
 				writeStatic(writer, "matched.as_");
 				writeStr(writer, memberName);
-				writeStatic(writer, ";");
+				writeStatic(writer, ",");
 				newline(writer);
 			}
-			writeConstantOrExprAsStatement(writer, kase.then, isReturn);
-			dedent(writer);
-			writeStatic(writer, "}");
+			writeConstantOrExpr(writer, kase.then);
 			newline(writer);
+			if (kase.local.has())
+				writeStatic(writer, ")");
+			writeStatic(writer, ": ");
 		});
-		writeStatic(writer, "default: assert(0);");
-		dedent(writer);
-		writeStatic(writer, "}");
+		writeFailForType(writer.writer, ce.typeWithoutKnownLambdaBody());
+		decrIndent(writer);
 	}
 
 	void writeFieldAccess(WriterWithIndent& writer, const Bool targetIsPointer, const ConstantOrExpr target, const ConcreteField* field) {
-		writeConstantOrExprAsExpr(writer, target);
+		writeConstantOrExpr(writer, target);
 		writeStatic(writer, targetIsPointer ? "->" : ".");
 		writeStr(writer, field->mangledName);
 	}
 
-	void writeConcreteExprAsStatement(WriterWithIndent& writer, const ConcreteExpr ex, const Bool isReturn) {
-		auto expr = [&]() -> void {
-			if (isReturn)
-				writeStatic(writer, "return ");
-			writeConcreteExprAsExpr(writer, ex);
-			writeStatic(writer, ";");
-		};
-		ex.match(
-			[](const ConcreteExpr::Bogus) {
-				unreachable<void>();
-			},
-			[&](const ConcreteExpr::Alloc) {
-				expr();
-			},
-			[&](const ConcreteExpr::Call) {
-				expr();
-			},
-			[&](const ConcreteExpr::Cond e) {
-				writeStatic(writer, "if (");
-				writeConcreteExprAsExpr(writer, *e.cond);
-				writeStatic(writer, ") {");
-				indent(writer);
-				writeConstantOrExprAsStatement(writer, e.then, isReturn);
-				dedent(writer);
-				// To be pretty, use 'else if' for nested cond
-				const Bool elseIf = _and(e.elze.isConcreteExpr(), e.elze.asConcreteExpr()->isCond());
-				if (elseIf)
-					writeStatic(writer, "} else ");
-				else {
-					writeStatic(writer, "} else {");
-					indent(writer);
-				}
-				writeConstantOrExprAsStatement(writer, e.elze, isReturn);
-				if (!elseIf) {
-					dedent(writer);
-					writeStatic(writer, "}");
-				}
-			},
-			[&](const ConcreteExpr::CreateArr) {
-				expr();
-			},
-			[&](const ConcreteExpr::CreateRecord) {
-				expr();
-			},
-			[&](const ConcreteExpr::ImplicitConvertToUnion) {
-				expr();
-			},
-			[&](const ConcreteExpr::Lambda) {
-				expr();
-			},
-			[&](const ConcreteExpr::LambdaToDynamic) {
-				expr();
-			},
-			[&](const ConcreteExpr::Let e) {
-				writeLocalAssignment(writer.writer, e.local);
-				writeConcreteExprAsExpr(writer, *e.value);
-				writeStatic(writer, ";");
-				newline(writer);
-				writeConstantOrExprAsStatement(writer, e.then, isReturn);
-			},
-			[&](const ConcreteExpr::LocalRef) {
-				expr();
-			},
-			[&](const ConcreteExpr::Match e) {
-				writeMatchAsStatement(writer, e, isReturn);
-			},
-			[&](const ConcreteExpr::MessageSend) {
-				expr();
-			},
-			[&](const ConcreteExpr::NewIfaceImpl) {
-				expr();
-			},
-			[&](const ConcreteExpr::ParamRef) {
-				expr();
-			},
-			[&](const ConcreteExpr::Seq e) {
-				writeConcreteExprAsStatement(writer, *e.first, /*isReturn*/ False);
-				newline(writer);
-				writeConstantOrExprAsStatement(writer, e.then, isReturn);
-			},
-			[&](const ConcreteExpr::SpecialBinary) {
-				expr();
-			},
-			[&](const ConcreteExpr::StructFieldAccess) {
-				expr();
-			},
-			[&](const ConcreteExpr::StructFieldSet e) {
-				writeFieldAccess(writer, e.targetIsPointer, ConstantOrExpr{e.target}, e.field);
-				writeStatic(writer, " = ");
-				writeConstantOrExprAsExpr(writer, e.value);
-				writeStatic(writer, ";");
-				if (isReturn) {
-					newline(writer);
-					writeStatic(writer, "return 0;");
-				}
-			});
-	}
-
 	void writeCallOperator(WriterWithIndent& writer, const BuiltinFunInfo bf, __attribute__((unused)) const Arr<const ConcreteType> typeArgs, const ConcreteExpr ce, const ConcreteExpr::Call e) {
 		auto writeArg = [&](const size_t index) -> void {
-			writeConstantOrExprAsExpr(writer, at(e.args, index));
+			writeConstantOrExpr(writer, at(e.args, index));
 		};
 
 		auto binaryOperatorWorker = [&](const Str _operator) -> void {
@@ -783,14 +686,14 @@ namespace {
 	void writeArgsWithCtx(WriterWithIndent& writer, const Arr<const ConstantOrExpr> args) {
 		writeStatic(writer, "(ctx");
 		writeWithCommas(writer.writer, args, /*leadingComma*/ True, [&](const ConstantOrExpr e) {
-			writeConstantOrExprAsExpr(writer, e);
+			writeConstantOrExpr(writer, e);
 		});
 		writeStatic(writer, ")");
 	}
 
 	void writeArgsNoCtxNoParens(WriterWithIndent& writer, const Arr<const ConstantOrExpr> args) {
 		writeWithCommas(writer.writer, args, /*leadingComma*/ False, [&](const ConstantOrExpr e) {
-			writeConstantOrExprAsExpr(writer, e);
+			writeConstantOrExpr(writer, e);
 		});
 	}
 
@@ -813,7 +716,7 @@ namespace {
 			writeArgsNoCtx(writer, args);
 	}
 
-	void writeCallAsExpr(WriterWithIndent& writer, const ConcreteExpr ce, const ConcreteExpr::Call e) {
+	void writeCall(WriterWithIndent& writer, const ConcreteExpr ce, const ConcreteExpr::Call e) {
 		auto call = [&]() -> void {
 			writeStr(writer, e.called->mangledName());
 			writeArgsWithOptionalCtx(writer, e.called->needsCtx, e.args);
@@ -840,9 +743,9 @@ namespace {
 			call();
 	}
 
-	void writeNewIfaceImplAsExpr(WriterWithIndent& writer, const ConcreteExpr::NewIfaceImpl e) {
+	void writeNewIfaceImpl(WriterWithIndent& writer, const ConcreteExpr::NewIfaceImpl e) {
 		unused(writer, e);
-		todo<void>("writenewifaceimplasexpr");
+		todo<void>("writenewifaceimpl");
 	}
 
 	//TODO:MOVE?
@@ -850,15 +753,7 @@ namespace {
 		return at(ce.typeWithoutKnownLambdaBody().strukt->body().asUnion().members, e.memberIndex);
 	}
 
-	void writeConcreteExprAsExpr(WriterWithIndent& writer, const ConcreteExpr ce) {
-		auto iife = [&]() -> void {
-			writeStatic(writer, "[&]() {");
-			indent(writer);
-			writeConcreteExprAsStatement(writer, ce, /*isReturn*/ True);
-			dedent(writer);
-			writeStatic(writer, "}()");
-		};
-
+	void writeConcreteExpr(WriterWithIndent& writer, const ConcreteExpr ce) {
 		const ConcreteType type = ce.typeWithKnownLambdaBody().force();
 
 		ce.match(
@@ -875,18 +770,21 @@ namespace {
 				writeStatic(writer, "(ctx, ");
 				writeNat(writer.writer, type.mustBePointer()->sizeBytes());
 				writeStatic(writer, "), ");
-				writeConcreteExprAsExpr(writer, *e.inner);
+				writeConcreteExpr(writer, *e.inner);
 				writeStatic(writer, ")");
 			},
 			[&](const ConcreteExpr::Call e) {
-				writeCallAsExpr(writer, ce, e);
+				writeCall(writer, ce, e);
 			},
 			[&](const ConcreteExpr::Cond e) {
-				writeConcreteExprAsExpr(writer, *e.cond);
-				writeStatic(writer, " ? ");
-				writeConstantOrExprAsExpr(writer, e.then);
-				writeStatic(writer, " : ");
-				writeConstantOrExprAsExpr(writer, e.elze);
+				writeConcreteExpr(writer, *e.cond);
+				indent(writer);
+				writeStatic(writer, "? ");
+				writeConstantOrExpr(writer, e.then);
+				newline(writer);
+				writeStatic(writer, ": ");
+				writeConstantOrExpr(writer, e.elze);
+				decrIndent(writer);
 			},
 			[&](const ConcreteExpr::CreateArr) {
 				todo<void>("how to alloc array?");
@@ -907,7 +805,7 @@ namespace {
 				writeStatic(writer, ", .as_");
 				writeStr(writer, getMemberType(ce, e).strukt->mangledName);
 				writeStatic(writer, " = ");
-				writeConstantOrExprAsExpr(writer, e.arg);
+				writeConstantOrExpr(writer, e.arg);
 				writeStatic(writer, " }");
 			},
 			[&](const ConcreteExpr::Lambda e) {
@@ -928,36 +826,51 @@ namespace {
 				writeStr(writer, e.fun->mangledName());
 				writeStatic(writer, ", ");
 				writeCastToType(writer.writer, dataPtrField.type);
-				writeConstantOrExprAsExpr(writer, e.closure);
+				writeConstantOrExpr(writer, e.closure);
 				writeStatic(writer, " }");
 			},
-			[&](const ConcreteExpr::Let) {
-				iife();
+			[&](const ConcreteExpr::Let e) {
+				// ((x = value),
+				// then)
+				writeStatic(writer, "((");
+				writeLocalAssignment(writer.writer, e.local);
+				writeConcreteExpr(writer, *e.value);
+				writeStatic(writer, "),");
+				newline(writer);
+				writeConstantOrExpr(writer, e.then);
+				writeStatic(writer, ")");
 			},
 			[&](const ConcreteExpr::LocalRef e) {
-				writeStr(writer, e.local->mangledName);
+				writeLocalRef(writer.writer, e.local);
 			},
-			[&](const ConcreteExpr::Match) {
-				iife();
+			[&](const ConcreteExpr::Match e) {
+				writeMatch(writer, ce, e);
 			},
 			[&](const ConcreteExpr::MessageSend e) {
-				writeConstantOrExprAsExpr(writer, e.target);
+				writeConstantOrExpr(writer, e.target);
 				writeStatic(writer, ".");
 				writeStr(writer, e.message->mangledName);
 				writeArgsWithCtx(writer, e.args);
 			},
 			[&](const ConcreteExpr::NewIfaceImpl e) {
-				writeNewIfaceImplAsExpr(writer, e);
+				writeNewIfaceImpl(writer, e);
 			},
 			[&](const ConcreteExpr::ParamRef e) {
 				writeStr(writer, e.param->mangledName);
 			},
-			[&](const ConcreteExpr::Seq) {
-				iife();
+			[&](const ConcreteExpr::Seq e) {
+				// (a,
+				// b)
+				writeStatic(writer, "(");
+				writeConcreteExpr(writer, *e.first);
+				writeStatic(writer, ",");
+				newline(writer);
+				writeConstantOrExpr(writer, e.then);
+				writeStatic(writer, ")");
 			},
 			[&](const ConcreteExpr::SpecialBinary e) {
 				writeStatic(writer, "(");
-				writeConstantOrExprAsExpr(writer, e.left);
+				writeConstantOrExpr(writer, e.left);
 				using Kind = ConcreteExpr::SpecialBinary::Kind;
 				switch (e.kind) {
 					case Kind::less:
@@ -969,15 +882,19 @@ namespace {
 					default:
 						assert(0);
 				}
-				writeConstantOrExprAsExpr(writer, e.right);
+				writeConstantOrExpr(writer, e.right);
 				writeStatic(writer, ")");
 			},
 			[&](const ConcreteExpr::StructFieldAccess e) {
 				writeFieldAccess(writer, e.targetIsPointer, e.target, e.field);
 			},
 			[&](const ConcreteExpr::StructFieldSet e) {
-				unused(e);
-				todo<void>("structfieldset as expr -- use IIFE");
+				// (s.x = v), 0
+				writeStatic(writer, "(");
+				writeFieldAccess(writer, e.targetIsPointer, ConstantOrExpr{e.target}, e.field);
+				writeStatic(writer, " = ");
+				writeConstantOrExpr(writer, e.value);
+				writeStatic(writer, "), 0");
 			});
 	}
 
@@ -1035,7 +952,9 @@ namespace {
 		writeFunWithBodyWorker(writer, fun, [&]() {
 			WriterWithIndent writerWithIndent { writer, 1 };
 			declareLocals(writerWithIndent, body.allLocals);
-			writeConcreteExprAsStatement(writerWithIndent, *body.expr, /*isReturn*/ True);
+			writeStatic(writer, "return ");
+			writeConcreteExpr(writerWithIndent, *body.expr);
+			writeStatic(writer, ";");
 		});
 	}
 
@@ -1102,7 +1021,9 @@ namespace {
 			});
 	}
 
-	void writeInitFuns(Writer& writer, const Arr<const ConcreteStruct*> allStructs) {
+	void writeInitAndFailFuns(Writer& writer, const Arr<const ConcreteStruct*> allStructs) {
+		//TODO: only do 'init' for structs that will be allocated
+		//TODO: only do 'fail' for structs returned from a match by value
 		for (const ConcreteStruct* strukt : allStructs) {
 			auto writeType = [&]() -> void {
 				writeValueType(writer, strukt);
@@ -1117,8 +1038,15 @@ namespace {
 			writeType();
 			writeStatic(writer, "* res = (");
 			writeType();
-			writeStatic(writer, "*) out;\n\t*res = value;\n\treturn res;\n}\n\n");
+			writeStatic(writer, "*) out;\n\t*res = value;\n\treturn res;\n}\n");
+
+			writeType();
+			writeStatic(writer, " _fail");
+			writeStr(writer, strukt->mangledName);
+			writeStatic(writer, "() {\n\tassert(0);\n}\n\n");
 		}
+
+		writeStatic(writer, "void* _failVoidPtr() { assert(0); }");
 	}
 
 	void writeMain(Writer& writer, const Arr<const ConcreteStruct*> allStructs) {
@@ -1130,7 +1058,7 @@ namespace {
 			writeNat(writer, strukt->sizeBytes());
 			writeStatic(writer, ");");
 		}
-		writeStatic(writer,"\n\treturn (int) main__int64(); }\n");
+		writeStatic(writer,"\n\treturn (int) main__int64();\n}\n");
 	}
 }
 
@@ -1148,8 +1076,7 @@ const Str writeToC(Arena& arena, const ConcreteProgram program) {
 	for (const Constant* c : program.allConstants)
 		writeConstantDecl(writer, c);
 
-	//TODO: only do this for structs that will be allocated
-	writeInitFuns(writer, program.allStructs);
+	writeInitAndFailFuns(writer, program.allStructs);
 
 	for (const ConcreteExpr::NewIfaceImpl impl : program.allNewIfaceImpls)
 		writeNewIfaceImpl(writer, impl);

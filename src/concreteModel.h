@@ -1053,17 +1053,17 @@ struct ConcreteExpr {
 			const ConstantOrExpr then;
 		};
 
-		const ConcreteExpr* matched;
-		const ConcreteStruct* matchedUnion;
+		const ConcreteLocal* matchedLocal;
+		const ConcreteExpr* matchedValue;
 		const Arr<const Case> cases;
 
-		inline Match(const ConcreteExpr* _matched, const ConcreteStruct* _matchedUnion, const Arr<const Case> _cases)
-			: matched{_matched}, matchedUnion{_matchedUnion}, cases{_cases} {
+		inline Match(const ConcreteLocal* _matchedLocal, const ConcreteExpr* _matchedValue, const Arr<const Case> _cases)
+			: matchedLocal{_matchedLocal}, matchedValue{_matchedValue}, cases{_cases} {
 			assert(matchedUnionMembers().size == cases.size);
 		}
 
 		inline const Arr<const ConcreteType> matchedUnionMembers() const {
-			return matchedUnion->body().asUnion().members;
+			return matchedLocal->type.mustBeNonPointer()->body().asUnion().members;
 		}
 	};
 
