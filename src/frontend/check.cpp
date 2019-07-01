@@ -312,11 +312,8 @@ namespace {
 			f.fields,
 			[&](const StructDeclAst::Body::Fields::Field field, const size_t index) {
 				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
-				if (isPurityWorse(fieldType.purity(), strukt->purity)) {
-					if (!strukt->forceSendable) {
-						ctx.addDiag(field.range, Diag{Diag::FieldPurityWorseThanStructPurity{strukt, fieldType}});
-					}
-				}
+				if (isPurityWorse(fieldType.purity(), strukt->purity) && !strukt->forceSendable)
+					ctx.addDiag(field.range, Diag{Diag::PurityOfFieldWorseThanRecord{strukt, fieldType}});
 				return StructField{field.range, field.isMutable, ctx.copyStr(field.name), fieldType, index};
 			});
 		everyPair(fields, [&](const StructField a, const StructField b) {
@@ -347,7 +344,7 @@ namespace {
 					const Opt<const Arr<const StructInst*>> members = mapOrNone<const StructInst*>{}(ctx.arena, un.members, [&](const TypeAst::InstStruct it) {
 						const Opt<const StructInst*> res = instStructFromAst(ctx, it, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, delay);
 						if (res.has() && isPurityWorse(res.force()->purity, strukt->purity))
-							todo<void>("union member purity worse than union purity");
+							ctx.addDiag(it.range, Diag{Diag::PurityOfMemberWorseThanUnion{strukt, res.force()}});
 						return res;
 					});
 					if (members.has()) {

@@ -150,7 +150,7 @@ An interface is a set of signatures which may be implemented by an interface imp
 
 ```
 stdout-printer printer() summon
-	new-actor
+	actor
 		print(s)
 			s print-sync
 ```

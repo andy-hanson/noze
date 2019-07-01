@@ -70,7 +70,6 @@ const NameAndRange takeNameAndRange(Lexer& lexer);
 
 struct ExpressionToken {
 	enum class Kind {
-		actor,
 		ampersand,
 		lambda,
 		lbrace,
@@ -79,6 +78,7 @@ struct ExpressionToken {
 		match,
 		nameAndRange,
 		_new,
+		newActor,
 		newArr,
 		when
 	};

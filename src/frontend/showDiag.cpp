@@ -92,6 +92,7 @@ namespace {
 
 	//TODO:MOVE
 	void writePurity(Writer& writer, const Purity p) {
+		writeChar(writer, '\'');
 		switch (p) {
 			case Purity::data:
 				writeStatic(writer, "data");
@@ -105,6 +106,13 @@ namespace {
 			default:
 				assert(0);
 		}
+		writeChar(writer, '\'');
+	}
+
+	void writeName(Writer& writer, const Str name) {
+		writeChar(writer, '\'');
+		writeStr(writer, name);
+		writeChar(writer, '\'');
 	}
 
 	void writeDiag(Writer& writer, const Diag d) {
@@ -120,7 +128,7 @@ namespace {
 			},
 			[&](const Diag::CantCreateNonRecordStruct d) {
 				writeStatic(writer, "non-record struct ");
-				writeStr(writer, d.strukt->name);
+				writeName(writer, d.strukt->name);
 				writeStatic(writer, " can't be constructed");
 			},
 			[&](const Diag::CantInferTypeArguments) {
@@ -150,9 +158,8 @@ namespace {
 					default:
 						assert(0);
 				}
-				writeStatic(writer, " '");
-				writeStr(writer, d.name);
-				writeChar(writer, '\'');
+				writeChar(writer, ' ');
+				writeName(writer, d.name);
 			},
 			[&](const Diag::ExpectedTypeIsNotALambda d) {
 				if (d.expectedType.has()) {
@@ -162,17 +169,6 @@ namespace {
 				} else
 					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");
 			},
-			[&](const Diag::FieldPurityWorseThanStructPurity d) {
-				writeStatic(writer, "struct '");
-				writeStr(writer, d.strukt->name);
-				writeStatic(writer, "' has purity '");
-				writePurity(writer, d.strukt->purity);
-				writeStatic(writer, "', but field type ");
-				writeType(writer, d.fieldType);
-				writeStatic(writer, " has purity '");
-				writePurity(writer, d.fieldType.purity());
-				writeStatic(writer, "'");
-			},
 			[&](const Diag::FileDoesNotExist) {
 				// We handle this specially
 				unreachable<void>();
@@ -180,7 +176,7 @@ namespace {
 			[&](const Diag::MatchCaseStructNamesDoNotMatch d) {
 				writeStatic(writer, "expected the case names to be: ");
 				writeWithCommas(writer, d.unionMembers, [&](const StructInst* i) {
-					writeStr(writer, i->decl->name);
+					writeName(writer, i->decl->name);
 				});
 			},
 			[&](const Diag::MatchOnNonUnion d) {
@@ -192,7 +188,7 @@ namespace {
 				for (const size_t i : Range{d.candidates.size}) {
 					if (i != 0)
 						writeStatic(writer, ", ");
-					writeStr(writer, at(d.candidates, i).name());
+					writeName(writer, at(d.candidates, i).name());
 				}
 			},
 			[&](const Diag::NameNotFound d) {
@@ -212,12 +208,12 @@ namespace {
 				}();
 				writeStatic(writer, kind);
 				writeStatic(writer, " name not found: ");
-				writeStr(writer, d.name);
+				writeName(writer, d.name);
 			},
 			[&](const Diag::NoSuchFunction d) {
-				writeStatic(writer, "no such function '");
-				writeStr(writer, d.name);
-				writeStatic(writer, "' exists with those argument types and return type");
+				writeStatic(writer, "no such function ");
+				writeName(writer, d.name);
+				writeStatic(writer, " exists with those argument types and return type");
 			},
 			[&](const Diag::ParamShadowsPrevious) {
 				todo<void>("print paramshadowsprevious");
@@ -225,18 +221,38 @@ namespace {
 			[&](const ParseDiag pd) {
 				writeParseDiag(writer, pd);
 			},
+			[&](const Diag::PurityOfFieldWorseThanRecord d) {
+				writeStatic(writer, "struct ");
+				writeName(writer, d.strukt->name);
+				writeStatic(writer, " has purity ");
+				writePurity(writer, d.strukt->purity);
+				writeStatic(writer, ", but field type ");
+				writeType(writer, d.fieldType);
+				writeStatic(writer, " has purity ");
+				writePurity(writer, d.fieldType.purity());
+			},
+			[&](const Diag::PurityOfMemberWorseThanUnion d) {
+				writeStatic(writer, "union ");
+				writeName(writer, d.strukt->name);
+				writeStatic(writer, " has purity ");
+				writePurity(writer, d.strukt->purity);
+				writeStatic(writer, ", but member type ");
+				writeStructInst(writer, d.member);
+				writeStatic(writer, " has purity ");
+				writePurity(writer, d.member->purity);
+			},
 			[&](const Diag::RemoteFunDoesNotReturnFut d) {
 				writeStatic(writer, "remote-fun should return a fut, but returns ");
 				writeType(writer, d.actualReturnType);
 			},
 			[&](const Diag::SpecImplHasSpecs d) {
 				writeStatic(writer, "spec implementation ");
-				writeStr(writer, d.funName);
-				writeStatic(writer, " has specs; currently this is not allowed");
+				writeName(writer, d.funName);
+				writeStatic(writer, " has specs itself; currently this is not allowed");
 			},
 			[&](const Diag::SpecImplNotFound d) {
 				writeStatic(writer, "no implementation was found for spec signature ");
-				writeStr(writer, d.sigName);
+				writeName(writer, d.sigName);
 			},
 			[&](const Diag::TypeConflict d) {
 				writeStatic(writer, "the type of the expression conflicts with its expected type.\n\texpected: ");
@@ -247,9 +263,15 @@ namespace {
 			[&](const Diag::TypeNotSendable) {
 				writeStatic(writer, "this type is not sendable and should not appear in an interface");
 			},
+			[&](const Diag::WriteToNonExistentField d) {
+				writeStatic(writer, "type ");
+				writeType(writer, d.targetType);
+				writeStatic(writer, " has no field ");
+				writeName(writer, d.fieldName);
+			},
 			[&](const Diag::WriteToNonMutableField d) {
 				writeStatic(writer, "field ");
-				writeStr(writer, d.field->name);
+				writeName(writer, d.field->name);
 				writeStatic(writer, " is not mutable");
 			},
 			[&](const Diag::WrongNumberNewStructArgs d) {
@@ -259,15 +281,15 @@ namespace {
 				writeNat(writer, d.nActualArgs);
 			},
 			[&](const Diag::WrongNumberTypeArgsForSpec d) {
-				writeStr(writer, d.decl->name);
-				writeStatic(writer, ": expected to get ");
+				writeName(writer, d.decl->name);
+				writeStatic(writer, " expected to get ");
 				writeNat(writer, d.nExpectedTypeArgs);
 				writeStatic(writer, " type args, but got ");
 				writeNat(writer, d.nActualTypeArgs);
 			},
 			[&](const Diag::WrongNumberTypeArgsForStruct d) {
-				writeStr(writer, d.decl.name());
-				writeStatic(writer, ": expected to get ");
+				writeName(writer, d.decl.name());
+				writeStatic(writer, " expected to get ");
 				writeNat(writer, d.nExpectedTypeArgs);
 				writeStatic(writer, " type args, but got ");
 				writeNat(writer, d.nActualTypeArgs);

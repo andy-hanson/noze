@@ -154,10 +154,6 @@ struct Diag {
 	struct ExpectedTypeIsNotALambda {
 		const Opt<const Type> expectedType;
 	};
-	struct FieldPurityWorseThanStructPurity {
-		const StructDecl* strukt;
-		const Type fieldType;
-	};
 	struct FileDoesNotExist {};
 	struct MatchCaseStructNamesDoNotMatch {
 		const Arr<const StructInst*> unionMembers;
@@ -189,6 +185,14 @@ struct Diag {
 		};
 		const Kind kind;
 	};
+	struct PurityOfFieldWorseThanRecord {
+		const StructDecl* strukt;
+		const Type fieldType;
+	};
+	struct PurityOfMemberWorseThanUnion {
+		const StructDecl* strukt;
+		const StructInst* member;
+	};
 	struct RemoteFunDoesNotReturnFut {
 		const Type actualReturnType;
 	};
@@ -203,6 +207,12 @@ struct Diag {
 		const Type actual;
 	};
 	struct TypeNotSendable {};
+	struct WriteToNonExistentField {
+		// Type of `x` in `x.y := z`
+		const Type targetType;
+		// `y` in `x.y := z`
+		const Str fieldName;
+	};
 	struct WriteToNonMutableField {
 		const StructField* field;
 	};
@@ -233,7 +243,6 @@ private:
 		commonTypesMissing,
 		duplicateDeclaration,
 		expectedTypeIsNotALambda,
-		fieldPurityWorseThanStructPurity,
 		fileDoesNotExist,
 		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
@@ -242,11 +251,14 @@ private:
 		noSuchFunction,
 		paramShadowsPrevious,
 		parseDiag,
+		purityOfFieldWorseThanRecord,
+		purityOfMemberWorseThanUnion,
 		remoteFunDoesNotReturnFut,
 		specImplHasSpecs,
 		specImplNotFound,
 		typeConflict,
 		typeNotSendable,
+		writeToNonExistentField,
 		writeToNonMutableField,
 		wrongNumberNewStructArgs,
 		wrongNumberTypeArgsForSpec,
@@ -263,7 +275,6 @@ private:
 		const CommonTypesMissing commonTypesMissing;
 		const DuplicateDeclaration duplicateDeclaration;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
-		const FieldPurityWorseThanStructPurity fieldPurityWorseThanStructPurity;
 		const FileDoesNotExist fileDoesNotExist;
 		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
@@ -272,11 +283,14 @@ private:
 		const NoSuchFunction noSuchFunction;
 		const ParamShadowsPrevious paramShadowsPrevious;
 		const ParseDiag parseDiag;
+		const PurityOfFieldWorseThanRecord purityOfFieldWorseThanRecord;
+		const PurityOfMemberWorseThanUnion purityOfMemberWorseThanUnion;
 		const RemoteFunDoesNotReturnFut remoteFunDoesNotReturnFut;
 		const SpecImplHasSpecs specImplHasSpecs;
 		const SpecImplNotFound specImplNotFound;
 		const TypeConflict typeConflict;
 		const TypeNotSendable typeNotSendable;
+		const WriteToNonExistentField writeToNonExistentField;
 		const WriteToNonMutableField writeToNonMutableField;
 		const WrongNumberNewStructArgs wrongNumberNewStructArgs;
 		const WrongNumberTypeArgsForSpec wrongNumberTypeArgsForSpec;
@@ -293,7 +307,6 @@ public:
 	explicit inline Diag(const CommonTypesMissing d) : kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
 	explicit inline Diag(const DuplicateDeclaration d) : kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
 	explicit inline Diag(const ExpectedTypeIsNotALambda d) : kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
-	explicit inline Diag(const FieldPurityWorseThanStructPurity d) : kind{Kind::fieldPurityWorseThanStructPurity}, fieldPurityWorseThanStructPurity{d} {}
 	explicit inline Diag(const FileDoesNotExist d) : kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
 	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d) : kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
 	explicit inline Diag(const MatchOnNonUnion d) : kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
@@ -302,11 +315,14 @@ public:
 	explicit inline Diag(const NoSuchFunction d) : kind{Kind::noSuchFunction}, noSuchFunction{d} {}
 	explicit inline Diag(const ParamShadowsPrevious d) : kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
 	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
+	explicit inline Diag(const PurityOfFieldWorseThanRecord d) : kind{Kind::purityOfFieldWorseThanRecord}, purityOfFieldWorseThanRecord{d} {}
+	explicit inline Diag(const PurityOfMemberWorseThanUnion d) : kind{Kind::purityOfMemberWorseThanUnion}, purityOfMemberWorseThanUnion{d} {}
 	explicit inline Diag(const RemoteFunDoesNotReturnFut d) : kind{Kind::remoteFunDoesNotReturnFut}, remoteFunDoesNotReturnFut{d} {}
 	explicit inline Diag(const SpecImplHasSpecs d) : kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
 	explicit inline Diag(const SpecImplNotFound d) : kind{Kind::specImplNotFound}, specImplNotFound{d} {}
 	explicit inline Diag(const TypeConflict d) : kind{Kind::typeConflict}, typeConflict{d} {}
 	explicit inline Diag(const TypeNotSendable d) : kind{Kind::typeNotSendable}, typeNotSendable{d} {}
+	explicit inline Diag(const WriteToNonExistentField d) : kind{Kind::writeToNonExistentField}, writeToNonExistentField{d} {}
 	explicit inline Diag(const WriteToNonMutableField d) : kind{Kind::writeToNonMutableField}, writeToNonMutableField{d} {}
 	explicit inline Diag(const WrongNumberNewStructArgs d) : kind{Kind::wrongNumberNewStructArgs}, wrongNumberNewStructArgs{d} {}
 	explicit inline Diag(const WrongNumberTypeArgsForSpec d) : kind{Kind::wrongNumberTypeArgsForSpec}, wrongNumberTypeArgsForSpec{d} {}
@@ -326,7 +342,6 @@ public:
 		typename CbCommonTypesMissing,
 		typename CbDuplicateDeclaration,
 		typename CbExpectedTypeIsNotALambda,
-		typename CbFieldPurityWorseThanStructPurity,
 		typename CbFileDoesNotExist,
 		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
@@ -335,11 +350,14 @@ public:
 		typename CbNoSuchFunction,
 		typename CbParamShadowsPrevious,
 		typename CbParseDiag,
+		typename CbPurityOfFieldWorseThanRecord,
+		typename CbPurityOfMemberWorseThanUnion,
 		typename CbRemoteFunDoesNotReturnFut,
 		typename CbSpecImplHasSpecs,
 		typename CbSpecImplNotFound,
 		typename CbTypeConflict,
 		typename CbTypeNotSendable,
+		typename CbWriteToNonExistentField,
 		typename CbWriteToNonMutableField,
 		typename CbWrongNumberNewStructArgs,
 		typename CbWrongNumberTypeArgsForSpec,
@@ -354,7 +372,6 @@ public:
 		CbCommonTypesMissing cbCommonTypesMissing,
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
-		CbFieldPurityWorseThanStructPurity cbFieldPurityWorseThanStructPurity,
 		CbFileDoesNotExist cbFileDoesNotExist,
 		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
@@ -363,11 +380,14 @@ public:
 		CbNoSuchFunction cbNoSuchFunction,
 		CbParamShadowsPrevious cbParamShadowsPrevious,
 		CbParseDiag cbParseDiag,
+		CbPurityOfFieldWorseThanRecord cbPurityOfFieldWorseThanRecord,
+		CbPurityOfMemberWorseThanUnion cbPurityOfMemberWorseThanUnion,
 		CbRemoteFunDoesNotReturnFut cbRemoteFunDoesNotReturnFut,
 		CbSpecImplHasSpecs cbSpecImplHasSpecs,
 		CbSpecImplNotFound cbSpecImplNotFound,
 		CbTypeConflict cbTypeConflict,
 		CbTypeNotSendable cbTypeNotSendable,
+		CbWriteToNonExistentField cbWriteToNonExistentField,
 		CbWriteToNonMutableField cbWriteToNonMutableField,
 		CbWrongNumberNewStructArgs cbWrongNumberNewStructArgs,
 		CbWrongNumberTypeArgsForSpec cbWrongNumberTypeArgsForSpec,
@@ -392,8 +412,6 @@ public:
 				return cbDuplicateDeclaration(duplicateDeclaration);
 			case Kind::expectedTypeIsNotALambda:
 				return cbExpectedTypeIsNotALambda(expectedTypeIsNotALambda);
-			case Kind::fieldPurityWorseThanStructPurity:
-				return cbFieldPurityWorseThanStructPurity(fieldPurityWorseThanStructPurity);
 			case Kind::fileDoesNotExist:
 				return cbFileDoesNotExist(fileDoesNotExist);
 			case Kind::matchCaseStructNamesDoNotMatch:
@@ -410,6 +428,10 @@ public:
 				return cbParamShadowsPrevious(paramShadowsPrevious);
 			case Kind::parseDiag:
 				return cbParseDiag(parseDiag);
+			case Kind::purityOfFieldWorseThanRecord:
+				return cbPurityOfFieldWorseThanRecord(purityOfFieldWorseThanRecord);
+			case Kind::purityOfMemberWorseThanUnion:
+				return cbPurityOfMemberWorseThanUnion(purityOfMemberWorseThanUnion);
 			case Kind::remoteFunDoesNotReturnFut:
 				return cbRemoteFunDoesNotReturnFut(remoteFunDoesNotReturnFut);
 			case Kind::specImplHasSpecs:
@@ -420,6 +442,8 @@ public:
 				return cbTypeConflict(typeConflict);
 			case Kind::typeNotSendable:
 				return cbTypeNotSendable(typeNotSendable);
+			case Kind::writeToNonExistentField:
+				return cbWriteToNonExistentField(writeToNonExistentField);
 			case Kind::writeToNonMutableField:
 				return cbWriteToNonMutableField(writeToNonMutableField);
 			case Kind::wrongNumberNewStructArgs:

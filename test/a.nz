@@ -14,7 +14,7 @@ main int64() trusted noctx summon
 
 	| actor-id = new<some<actor-id>> vat new-actor
 	actor-id = new<some<actor-id>> zero
-	ctx-by-val = new-ctx: vat, actor-id
+	ctx-by-val = new-ctx: gctx, vat, actor-id
 	ctx = ctx-by-val ref-of-val
 	ctx call-with-ctx &other-main
 	| TODO: catch exceptions and return 1 on error

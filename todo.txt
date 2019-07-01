@@ -1,14 +1,41 @@
 !
-	Just like 'fut', 'remote-fun0' should be 'sendable', regardless of what's in it.
-	IDEA:
-		Add a keyword 'protects-state' that allows a struct to have mutable internals.
+	`zero new-therad-safe-counter`
+
+	Error message complains about 'zero', but the real problem is 'new-therad-safe-counter' doesn't exist!
+
+
+!
+	document:
+	an unsafe function is one that cannot go wrong, no matter how it is called.
+	Example: must check array bounds.
+	Example: must resolve / reject every fut eventually
+
+!
+	verify: can't add 'mut' field to non-'mut' struct
+
+!
+	Improve Diag::NoSuchFunction:
+
+		Get the initial candidates a second time and print them all out.
+		Also print out the expected return type and inferred parameter types.
+
+!
+	check that force-sendable is highlighted correctly
+
+!
+	/a.nz 18:11-18:21 the type of the expression conflicts with its expected type.
+		expected: by-val<?t>
+		actual: <<bogus>>
+
+	This should never happen, bogus should always work...
+
+
+
 
 !
 	document:
 		The model should contain enough information to get the AST back.
 
-!
-	verify: can't add 'mut' field to non-'mut' struct
 
 !
 	test that RemoteFunDoesNotReturnFut diagnostic works

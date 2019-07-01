@@ -128,29 +128,24 @@ namespace {
 				return none<const StructBody::Fields>();
 			},
 			[&](const StructBody::Builtin) {
-				const StructDecl* byVal = ctx.commonTypes.byVal;
-				if (ptrEquals(decl, byVal)) {
+				if (ptrEquals(decl, ctx.commonTypes.byVal)) {
 					// We know this will be deeply instantiated since we did that at the beginning of this function
-					const StructInst* inner = only<const Type>(si->typeArgs).asStructInst();
-					const StructBody& body = inner->body();
-					if (body.isFields())
-						return some<const StructBody::Fields>(body.asFields());
-					else
-						return todo<const Opt<const StructBody::Fields>>("byval of non-record, -- I guess just cantcreatenonrecordstruct");
-				} else {
-					ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
-					return none<const StructBody::Fields>();
+					const Type inner = only<const Type>(si->typeArgs);
+					if (inner.isStructInst()) {
+						const StructBody& body = inner.asStructInst()->body();
+						if (body.isFields())
+							return some<const StructBody::Fields>(body.asFields());
+					}
 				}
-			},
-			[&](const StructBody::Fields f) {
-				return some<const StructBody::Fields>(f);
-			},
-			[&](const StructBody::Union) {
-				ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
 				return none<const StructBody::Fields>();
 			},
-			[&](const StructBody::Iface) {
-				ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
+			[](const StructBody::Fields f) {
+				return some<const StructBody::Fields>(f);
+			},
+			[](const StructBody::Union) {
+				return none<const StructBody::Fields>();
+			},
+			[](const StructBody::Iface) {
 				return none<const StructBody::Fields>();
 			});
 
@@ -168,8 +163,11 @@ namespace {
 				const Expr expr = Expr{range, Expr::CreateRecord{si, args}};
 				return typeIsFromExpected.get() ? CheckedExpr{expr} : expected.check(ctx, Type(si), expr);
 			}
-		} else
+		} else {
+			if (!decl->body().isBogus())
+				ctx.addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
 			return typeIsFromExpected.get() ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
+		}
 	}
 
 	struct ExpectedLambdaType {
@@ -611,8 +609,10 @@ namespace {
 				const Expr::StructFieldSet sfs = Expr::StructFieldSet{ctx.alloc(target.expr), structInst, field, ctx.alloc(value)};
 				return expected.check(ctx, Type{ctx.commonTypes._void}, Expr{range, sfs});
 			}
-		} else
-			return todo<const CheckedExpr>("checkStructFieldSet -- no such field");
+		} else {
+			ctx.addDiag(range, Diag{Diag::WriteToNonExistentField{target.type, ast.fieldName}});
+			return expected.bogusWithType(range, Type{ctx.commonTypes._void});
+		}
 	}
 
 	const CheckedExpr checkThen(ExprCtx& ctx, const SourceRange range, const ThenAst ast, Expected& expected) {

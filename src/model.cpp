@@ -183,6 +183,19 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 		});
 }
 
+void writeStructInst(Writer& writer, const StructInst* s) {
+	writeStr(writer, s->decl->name);
+	if (!isEmpty(s->typeArgs)) {
+		Cell<const Bool> first { True };
+		for (const Type t : s->typeArgs) {
+			writeChar(writer, first.get() ? '<' : ' ');
+			writeType(writer, t);
+			first.set(False);
+		}
+		writeChar(writer, '>');
+	}
+}
+
 void writeType(Writer& writer, const Type type) {
 	type.match(
 		[&](const Type::Bogus) {
@@ -193,16 +206,7 @@ void writeType(Writer& writer, const Type type) {
 			writeStr(writer, p->name);
 		},
 		[&](const StructInst* s) {
-			writeStr(writer, s->decl->name);
-			if (!isEmpty(s->typeArgs)) {
-				Cell<const Bool> first { True };
-				for (const Type t : s->typeArgs) {
-					writeChar(writer, first.get() ? '<' : ' ');
-					writeType(writer, t);
-					first.set(False);
-				}
-				writeChar(writer, '>');
-			}
+			writeStructInst(writer, s);
 		});
 }
 

@@ -324,9 +324,6 @@ namespace {
 
 		using Kind = ExpressionToken::Kind;
 		switch (et.kind) {
-			case Kind::actor:
-				checkBlockAllowed();
-				return parseActor(lexer, start);
 			case Kind::ampersand: {
 				const Str funName = takeName(lexer);
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
@@ -374,6 +371,9 @@ namespace {
 					return noDedent(tryParseDots(lexer, expr));
 				}
 			}
+			case Kind::newActor:
+				checkBlockAllowed();
+				return parseActor(lexer, start);
 			case Kind::_new:
 			case Kind::newArr:{
 				const Opt<const TypeAst> type = tryParseTypeArg(lexer);

@@ -235,14 +235,14 @@ const ExpressionToken takeExpressionToken(Lexer& lexer)  {
 				return takeOperator(lexer, begin);
 			else if (isLowerCaseLetter(c)) {
 				const Str name = takeNameRest(lexer, begin);
-				return strEqLiteral(name, "actor")
-					? ExpressionToken{ExpressionToken::Kind::actor}
-					: strEqLiteral(name, "match")
+				return strEqLiteral(name, "match")
 					? ExpressionToken{ExpressionToken::Kind::match}
 					: strEqLiteral(name, "new")
 					? ExpressionToken{ExpressionToken::Kind::_new}
+					: strEqLiteral(name, "new-actor")
+					? ExpressionToken{ExpressionToken::Kind::newActor}
 					: strEqLiteral(name, "new-arr")
-					 ? ExpressionToken{ExpressionToken::Kind::newArr}
+					? ExpressionToken{ExpressionToken::Kind::newArr}
 					: strEqLiteral(name, "when")
 					? ExpressionToken{ExpressionToken::Kind::when}
 					: ExpressionToken{NameAndRange{range(lexer, begin), name}};

@@ -215,6 +215,9 @@ public:
 	explicit inline StructBody(const Iface _iface)
 		: kind{Kind::iface}, iface{_iface} {}
 
+	inline const Bool isBogus() const {
+		return enumEq(kind, Kind::bogus);
+	}
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
 	}
@@ -1162,6 +1165,7 @@ public:
 	const Type getType(Arena& arena, const CommonTypes& commonTypes) const;
 };
 
+void writeStructInst(Writer& writer, const StructInst* s);
 void writeType(Writer& writer, const Type type);
 void writeExpr(Writer& writer, const Expr expr);
 

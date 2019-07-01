@@ -54,7 +54,7 @@
         <key>name</key>
         <string>keyword</string>
         <key>match</key>
-        <string>(alias|builtin|by-ref|by-val|else|extern|force-sendable|import|iface|it|match|mut|new|new-arr|noctx|record|sendable|spec|summon|trusted|union|unsafe|when)(?=$|&lt;|\,|\s|\})</string>
+        <string>(alias|builtin|by-ref|by-val|else|extern|force-sendable|import|iface|it|match|mut|new|new-actor|new-arr|noctx|record|sendable|spec|summon|trusted|union|unsafe|when)(?=$|&lt;|\,|\s|\})</string>
       </dict>
       <dict>
         <key>name</key>
