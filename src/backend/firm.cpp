@@ -28,7 +28,7 @@ namespace {
 			[](const ConcreteStructBody::Builtin) {
 				return todo<ir_type*>("BUILTIN");
 			},
-			[&](const ConcreteStructBody::Fields) {
+			[&](const ConcreteStructBody::Record) {
 				return new_type_struct(id);
 			},
 			[](const ConcreteStructBody::Union) {
@@ -45,7 +45,7 @@ namespace {
 			[](const ConcreteStructBody::Builtin) {
 				todo<void>("BUILTIN");
 			},
-			[](const ConcreteStructBody::Fields) {
+			[](const ConcreteStructBody::Record) {
 				todo<void>("FIELDS");
 			},
 			[](const ConcreteStructBody::Union) {

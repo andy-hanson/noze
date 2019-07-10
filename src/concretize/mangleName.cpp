@@ -19,7 +19,7 @@ void writeMangledName(Writer& writer, const Str name) {
 	if (needsEscape(name)) {
 		writeChar(writer, '_');
 		writeStr(writer, name);
-	} else
+	} else {
 		if (strEqLiteral(name, "atomic-bool"))
 			// avoid conflicting with c's "atomic_bool" type
 			writeChar(writer, '_');
@@ -53,5 +53,6 @@ void writeMangledName(Writer& writer, const Str name) {
 					writeChar(writer, c);
 					break;
 			}
+	}
 }
 

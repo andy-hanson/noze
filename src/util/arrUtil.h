@@ -20,9 +20,9 @@ inline T only(const Arr<T> a) {
 
 template <typename T>
 struct PtrsIter {
-	const T* ptr;
+	T* ptr;
 
-	const T* operator*() {
+	T* operator*() {
 		return ptr;
 	}
 
@@ -37,8 +37,8 @@ struct PtrsIter {
 
 template <typename T>
 struct PtrsRange {
-	const T* _begin;
-	const T* _end;
+	T* const _begin;
+	T* const _end;
 
 	inline PtrsIter<T> begin() const {
 		return PtrsIter<T>{_begin};
@@ -50,7 +50,7 @@ struct PtrsRange {
 };
 
 template <typename T>
-PtrsRange<T> ptrsRange(const Arr<T> a) {
+PtrsRange<T> ptrsRange(Arr<T> a) {
 	return PtrsRange<T>{a.begin(), a.end()};
 }
 
@@ -98,7 +98,7 @@ const Opt<T*> findPtr(Arr<T> a, Cb cb) {
 }
 
 template <typename T>
-inline const Arr<const T> asConst(const Arr<T> a) {
+inline const Arr<const T> asConstArr(const Arr<T> a) {
 	return Arr<const T>{a._begin, a.size};
 }
 

@@ -132,6 +132,23 @@ public:
 };
 
 struct Diag {
+	// Note: this error is issued *before* resolving specs.
+	// We don't exclude a candidate based on not having specs.
+	struct CallMultipleMatches {
+		const Str funName;
+		// Unlike CallNoMatch, these are only the ones that match
+		const Arr<const CalledDecl> matches;
+	};
+	struct CallNoMatch {
+		const Str funName;
+		const Opt<const Type> expectedReturnType;
+		const size_t actualArity;
+		// NOTE: we may have given up early and this may not be as much as actualArity
+		const Arr<const Type> actualArgTypes;
+		// All candidates, including those with wrong arity
+		const Arr<const CalledDecl> allCandidates;
+	};
+
 	struct CantCallNonNoCtx {};
 	struct CantCallSummon {};
 	struct CantCallUnsafe {};
@@ -141,6 +158,9 @@ struct Diag {
 	struct CantInferTypeArguments {};
 	struct CircularImport {};
 	struct CommonTypesMissing {};
+	struct CreateRecordByRefNoCtx {
+		const StructDecl* strukt;
+	};
 	struct DuplicateDeclaration {
 		enum class Kind {
 			structOrAlias,
@@ -161,9 +181,7 @@ struct Diag {
 	struct MatchOnNonUnion {
 		const Type type;
 	};
-	struct MultipleFunctionCandidates {
-		const Arr<const CalledDecl> candidates;
-	};
+	struct MutFieldInNonMutRecord {};
 	struct NameNotFound {
 		enum class Kind {
 			strukt,
@@ -174,9 +192,6 @@ struct Diag {
 
 		const Str name;
 		const Kind kind;
-	};
-	struct NoSuchFunction {
-		const Str name;
 	};
 	struct ParamShadowsPrevious {
 		enum class Kind {
@@ -234,6 +249,8 @@ struct Diag {
 
 private:
 	enum class Kind {
+		callMultipleMatches,
+		callNoMatch,
 		cantCallNonNoCtx,
 		cantCallSummon,
 		cantCallUnsafe,
@@ -241,14 +258,14 @@ private:
 		cantInferTypeArguments,
 		circularImport,
 		commonTypesMissing,
+		createRecordByRefNoCtx,
 		duplicateDeclaration,
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
 		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
-		multipleFunctionCandidates,
+		mutFieldInNonMutRecord,
 		nameNotFound,
-		noSuchFunction,
 		paramShadowsPrevious,
 		parseDiag,
 		purityOfFieldWorseThanRecord,
@@ -266,6 +283,8 @@ private:
 	};
 	const Kind kind;
 	union {
+		const CallMultipleMatches callMultipleMatches;
+		const CallNoMatch callNoMatch;
 		const CantCallNonNoCtx cantCallNonNoCtx;
 		const CantCallSummon cantCallSummon;
 		const CantCallUnsafe cantCallUnsafe;
@@ -273,14 +292,14 @@ private:
 		const CantInferTypeArguments cantInferTypeArguments;
 		const CircularImport circularImport;
 		const CommonTypesMissing commonTypesMissing;
+		const CreateRecordByRefNoCtx createRecordByRefNoCtx;
 		const DuplicateDeclaration duplicateDeclaration;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
 		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
-		const MultipleFunctionCandidates multipleFunctionCandidates;
+		const MutFieldInNonMutRecord mutFieldInNonMutRecord;
 		const NameNotFound nameNotFound;
-		const NoSuchFunction noSuchFunction;
 		const ParamShadowsPrevious paramShadowsPrevious;
 		const ParseDiag parseDiag;
 		const PurityOfFieldWorseThanRecord purityOfFieldWorseThanRecord;
@@ -298,6 +317,8 @@ private:
 	};
 
 public:
+	explicit inline Diag(const CallMultipleMatches d) : kind{Kind::callMultipleMatches}, callMultipleMatches{d} {}
+	explicit inline Diag(const CallNoMatch d) : kind{Kind::callNoMatch}, callNoMatch{d} {}
 	explicit inline Diag(const CantCallNonNoCtx d) : kind{Kind::cantCallNonNoCtx}, cantCallNonNoCtx{d} {}
 	explicit inline Diag(const CantCallSummon d) : kind{Kind::cantCallSummon}, cantCallSummon{d} {}
 	explicit inline Diag(const CantCallUnsafe d) : kind{Kind::cantCallUnsafe}, cantCallUnsafe{d} {}
@@ -305,14 +326,14 @@ public:
 	explicit inline Diag(const CantInferTypeArguments d) : kind{Kind::cantInferTypeArguments}, cantInferTypeArguments{d} {}
 	explicit inline Diag(const CircularImport d) : kind{Kind::circularImport}, circularImport{d} {}
 	explicit inline Diag(const CommonTypesMissing d) : kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
+	explicit inline Diag(const CreateRecordByRefNoCtx d) : kind{Kind::createRecordByRefNoCtx}, createRecordByRefNoCtx{d} {}
 	explicit inline Diag(const DuplicateDeclaration d) : kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
 	explicit inline Diag(const ExpectedTypeIsNotALambda d) : kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
 	explicit inline Diag(const FileDoesNotExist d) : kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
 	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d) : kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
 	explicit inline Diag(const MatchOnNonUnion d) : kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
-	explicit inline Diag(const MultipleFunctionCandidates d) : kind{Kind::multipleFunctionCandidates}, multipleFunctionCandidates{d} {}
+	explicit inline Diag(const MutFieldInNonMutRecord d) : kind{Kind::mutFieldInNonMutRecord}, mutFieldInNonMutRecord{d} {}
 	explicit inline Diag(const NameNotFound d) : kind{Kind::nameNotFound}, nameNotFound{d} {}
-	explicit inline Diag(const NoSuchFunction d) : kind{Kind::noSuchFunction}, noSuchFunction{d} {}
 	explicit inline Diag(const ParamShadowsPrevious d) : kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
 	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
 	explicit inline Diag(const PurityOfFieldWorseThanRecord d) : kind{Kind::purityOfFieldWorseThanRecord}, purityOfFieldWorseThanRecord{d} {}
@@ -333,6 +354,8 @@ public:
 	}
 
 	template <
+		typename CbCallMultipleMatches,
+		typename CbCallNoMatch,
 		typename CbCantCallNonNoCtx,
 		typename CbCantCallSummon,
 		typename CbCantCallUnsafe,
@@ -340,14 +363,14 @@ public:
 		typename CbCantInferTypeArguments,
 		typename CbCircularImport,
 		typename CbCommonTypesMissing,
+		typename CbCreateRecordByRefNoCtx,
 		typename CbDuplicateDeclaration,
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
 		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
-		typename CbMultipleFunctionCandidates,
+		typename CbMutFieldInNonMutRecord,
 		typename CbNameNotFound,
-		typename CbNoSuchFunction,
 		typename CbParamShadowsPrevious,
 		typename CbParseDiag,
 		typename CbPurityOfFieldWorseThanRecord,
@@ -363,6 +386,8 @@ public:
 		typename CbWrongNumberTypeArgsForSpec,
 		typename CbWrongNumberTypeArgsForStruct
 	> inline auto match(
+		CbCallMultipleMatches cbCallMultipleMatches,
+		CbCallNoMatch cbCallNoMatch,
 		CbCantCallNonNoCtx cbCantCallNonNoCtx,
 		CbCantCallSummon cbCantCallSummon,
 		CbCantCallUnsafe cbCantCallUnsafe,
@@ -370,14 +395,14 @@ public:
 		CbCantInferTypeArguments cbCantInferTypeArguments,
 		CbCircularImport cbCircularImport,
 		CbCommonTypesMissing cbCommonTypesMissing,
+		CbCreateRecordByRefNoCtx cbCreateRecordByRefNoCtx,
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
 		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
-		CbMultipleFunctionCandidates cbMultipleFunctionCandidates,
+		CbMutFieldInNonMutRecord cbMutFieldInNonMutRecord,
 		CbNameNotFound cbNameNotFound,
-		CbNoSuchFunction cbNoSuchFunction,
 		CbParamShadowsPrevious cbParamShadowsPrevious,
 		CbParseDiag cbParseDiag,
 		CbPurityOfFieldWorseThanRecord cbPurityOfFieldWorseThanRecord,
@@ -394,6 +419,10 @@ public:
 		CbWrongNumberTypeArgsForStruct cbWrongNumberTypeArgsForStruct
 	) const {
 		switch (kind) {
+			case Kind::callMultipleMatches:
+				return cbCallMultipleMatches(callMultipleMatches);
+			case Kind::callNoMatch:
+				return cbCallNoMatch(callNoMatch);
 			case Kind::cantCallNonNoCtx:
 				return cbCantCallNonNoCtx(cantCallNonNoCtx);
 			case Kind::cantCallSummon:
@@ -408,6 +437,8 @@ public:
 				return cbCircularImport(circularImport);
 			case Kind::commonTypesMissing:
 				return cbCommonTypesMissing(commonTypesMissing);
+			case Kind::createRecordByRefNoCtx:
+				return cbCreateRecordByRefNoCtx(createRecordByRefNoCtx);
 			case Kind::duplicateDeclaration:
 				return cbDuplicateDeclaration(duplicateDeclaration);
 			case Kind::expectedTypeIsNotALambda:
@@ -418,12 +449,10 @@ public:
 				return cbMatchCaseStructNamesDoNotMatch(matchCaseStructNamesDoNotMatch);
 			case Kind::matchOnNonUnion:
 				return cbMatchOnNonUnion(matchOnNonUnion);
-			case Kind::multipleFunctionCandidates:
-				return cbMultipleFunctionCandidates(multipleFunctionCandidates);
+			case Kind::mutFieldInNonMutRecord:
+				return cbMutFieldInNonMutRecord(mutFieldInNonMutRecord);
 			case Kind::nameNotFound:
 				return cbNameNotFound(nameNotFound);
-			case Kind::noSuchFunction:
-				return cbNoSuchFunction(noSuchFunction);
 			case Kind::paramShadowsPrevious:
 				return cbParamShadowsPrevious(paramShadowsPrevious);
 			case Kind::parseDiag:
@@ -464,12 +493,17 @@ struct Diagnostic {
 	const Diag diag;
 };
 
+struct FilesInfo {
+	const AbsolutePathsGetter absolutePathsGetter;
+	const LineAndColumnGetters lineAndColumnGetters;
+};
+
 struct Diagnostics {
 	const Arr<const Diagnostic> diagnostics;
-	const LineAndColumnGetters lineAndColumnGetters;
+	const FilesInfo filesInfo;
 
-	inline Diagnostics(const Arr<const Diagnostic> _diagnostics, const LineAndColumnGetters _lineAndColumnGetters)
-		: diagnostics{_diagnostics}, lineAndColumnGetters{_lineAndColumnGetters} {
+	inline Diagnostics(const Arr<const Diagnostic> _diagnostics, const FilesInfo _filesInfo)
+		: diagnostics{_diagnostics}, filesInfo{_filesInfo} {
 		assert(!isEmpty(diagnostics));
 	}
 };

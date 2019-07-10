@@ -354,7 +354,7 @@ enum class ExplicitByValOrRef {
 struct StructDeclAst {
 	struct Body {
 		struct Builtin {};
-		struct Fields {
+		struct Record {
 			struct Field {
 				const SourceRange range;
 				const Bool isMutable;
@@ -373,7 +373,7 @@ struct StructDeclAst {
 
 		enum class Kind {
 			builtin,
-			fields,
+			record,
 			_union,
 			iface
 		};
@@ -381,19 +381,19 @@ struct StructDeclAst {
 		const Kind kind;
 		union {
 			const Builtin builtin;
-			const Fields fields;
+			const Record record;
 			const Union _union;
 			const Iface iface;
 		};
 
 	public:
 		explicit inline Body(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-		explicit inline Body(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
+		explicit inline Body(const Record _record) : kind{Kind::record}, record{_record} {}
 		explicit inline Body(const Union _union) : kind{Kind::_union}, _union{_union} {}
 		explicit inline Body(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
-		inline const Bool isFields() const {
-			return enumEq(kind, Kind::fields);
+		inline const Bool isRecord() const {
+			return enumEq(kind, Kind::record);
 		}
 		inline const Bool isUnion() const {
 			return enumEq(kind, Kind::_union);
@@ -402,13 +402,13 @@ struct StructDeclAst {
 			return enumEq(kind, Kind::iface);
 		}
 
-		template <typename CbBuiltin, typename CbFields, typename CbUnion, typename CbIface>
-		inline auto match(CbBuiltin cbBuiltin, CbFields cbFields, CbUnion cbUnion, CbIface cbIface) const {
+		template <typename CbBuiltin, typename CbRecord, typename CbUnion, typename CbIface>
+		inline auto match(CbBuiltin cbBuiltin, CbRecord cbRecord, CbUnion cbUnion, CbIface cbIface) const {
 			switch (kind) {
 				case Kind::builtin:
 					return cbBuiltin(builtin);
-				case Kind::fields:
-					return cbFields(fields);
+				case Kind::record:
+					return cbRecord(record);
 				case Kind::_union:
 					return cbUnion(_union);
 				case Kind::iface:

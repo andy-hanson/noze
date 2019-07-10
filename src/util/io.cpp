@@ -13,8 +13,7 @@
 namespace {
 	int tryOpen(const AbsolutePath path, const int flags, const int moreFlags) {
 		Arena tempArena;
-		const NulTerminatedStr s = pathToNulTerminatedStr(tempArena, path);
-		const int fd = open(s.asCStr(), flags, moreFlags);
+		const int fd = open(pathToCStr(tempArena, path), flags, moreFlags);
 		if (fd == -1)
 			todo<void>("Can't write to file");
 		return fd;
@@ -35,9 +34,8 @@ namespace {
 
 const Bool fileExists(const AbsolutePath path) {
 	Arena tempArena;
-	const NulTerminatedStr n = pathToNulTerminatedStr(tempArena, path);
 	struct stat s;
-	const int res = stat(n.asCStr(), &s);
+	const int res = stat(pathToCStr(tempArena, path), &s);
 	if (res == 0)
 		return True;
 	else if (res == ENOENT)
@@ -50,14 +48,13 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const AbsolutePath p
 	using Ret = const Opt<const NulTerminatedStr>;
 
 	Arena tempArena;
-	const NulTerminatedStr n = pathToNulTerminatedStr(tempArena, path);
-
-	const int fd = open(n.asCStr(), O_RDONLY);
+	const CStr pathCStr = pathToCStr(tempArena, path);
+	const int fd = open(pathCStr, O_RDONLY);
 	if (fd == -1) {
 		if (errno == ENOENT)
 			return none<const NulTerminatedStr>();
 		else {
-			printf("Failed to open file %s\n", n.asCStr());
+			printf("Failed to open file %s\n", pathCStr);
 			return todo<Ret>("fail");
 		}
 	}
@@ -184,7 +181,7 @@ namespace {
 
 int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, const Environ environ) {
 	Arena arena {};
-	const CStr executableCStr = pathToNulTerminatedStr(arena, executable).asCStr();
+	const CStr executableCStr = pathToCStr(arena, executable);
 
 	CStr const* const cArgs = [&]() {
 		ArrBuilder<const CStr> cArgs {};

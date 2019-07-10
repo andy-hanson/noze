@@ -431,7 +431,7 @@ namespace {
 	}
 
 	const ConcreteField* getMatchingField(const ConcreteType type, const size_t fieldIndex) {
-		return getPtr(type.strukt->body().asFields().fields, fieldIndex);
+		return getPtr(type.strukt->body().asRecord().fields, fieldIndex);
 	}
 
 	const ConcreteField* getMatchingField(ConcretizeExprCtx& ctx, const StructInst* targetType, const StructField* field) {

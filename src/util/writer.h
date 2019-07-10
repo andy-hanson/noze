@@ -51,6 +51,22 @@ void writeWithCommas(Writer& writer, const Arr<T> a, const Bool leadingComma, Cb
 
 void writeEscapedChar(Writer& writer, const char c);
 
+inline void writeBold(Writer& writer) {
+	// https://en.wikipedia.org/wiki/ANSI_escape_code
+	writeStatic(writer, "\x1b[1m");
+}
+
+inline void writeRed(Writer& writer) {
+	writeStatic(writer, "\x1b[31m");
+}
+
+// Undo bold, color, etc
+inline void writeReset(Writer& writer) {
+	writeStatic(writer, "\x1b[m");
+}
+
+void writeHyperlink(Writer& writer, const Str url, const Str text);
+
 struct WriterWithIndent {
 	Writer& writer;
 	uint _indent = 0;
@@ -88,3 +104,4 @@ inline void writeStatic(WriterWithIndent& writer, const CStr text) {
 inline void writeStr(WriterWithIndent& writer, const Str s) {
 	writeStr(writer.writer, s);
 }
+

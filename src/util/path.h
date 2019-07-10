@@ -145,6 +145,9 @@ inline const Str pathToStr(Arena& arena, const AbsolutePath path) {
 inline const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const AbsolutePath path) {
 	return pathToNulTerminatedStr(arena, path.path);
 }
+inline CStr pathToCStr(Arena& arena, const AbsolutePath path) {
+	return pathToNulTerminatedStr(arena, path).asCStr();
+}
 
 // NOTE: this does *not* do a copy, original str must be kept alive!
 const Path* parsePath(Arena& arena, const Str str);

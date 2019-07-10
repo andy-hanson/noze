@@ -18,14 +18,35 @@ namespace {
 		writeNat(writer, lc.column + 1);
 	}
 
-	void showPos(Writer& writer, const LineAndColumnGetter lc, const Pos pos) {
+	void writePos(Writer& writer, const LineAndColumnGetter lc, const Pos pos) {
 		writeLineAndColumn(writer, lineAndColumnAtPos(lc, pos));
 	}
 
-	void showRange(Writer& writer, const LineAndColumnGetter lc, const SourceRange range) {
-		showPos(writer, lc, range.start);
+	void writeRange(Writer& writer, const LineAndColumnGetter lc, const SourceRange range) {
+		writePos(writer, lc, range.start);
 		writeChar(writer, '-');
-		showPos(writer, lc, range.end);
+		writePos(writer, lc, range.end);
+	}
+
+	void writeWhere(Writer& writer, const FilesInfo fi, const PathAndStorageKind where, const SourceRange range) {
+		writeBold(writer);
+		Arena temp {};
+		writeHyperlink(writer, pathToStr(temp, fi.absolutePathsGetter.getAbsolutePath(temp, where)), pathToStr(temp, where.path));
+		writeChar(writer, ' ');
+		writeRed(writer);
+		writeRange(writer, fi.lineAndColumnGetters.mustGet(where), range);
+		writeReset(writer);
+	}
+
+	void writeLineNumber(Writer& writer, const FilesInfo fi, const Module* module, const SourceRange range) {
+		// TODO
+		const PathAndStorageKind where = module->pathAndStorageKind;
+		writeBold(writer);
+		writePath(writer, where.path);
+		writeReset(writer);
+		writeStatic(writer, " line ");
+		const size_t line = lineAndColumnAtPos(fi.lineAndColumnGetters.mustGet(where), range.start).line;
+		writeNat(writer, line + 1);
 	}
 
 	void showChar(Writer& writer, char c) {
@@ -115,8 +136,107 @@ namespace {
 		writeChar(writer, '\'');
 	}
 
-	void writeDiag(Writer& writer, const Diag d) {
+	void writeSigJustTypes(Writer& writer, const Sig s) {
+		writeType(writer, s.returnType);
+		writeChar(writer, '(');
+		writeWithCommas(writer, s.params, [&](const Param p) {
+			writeType(writer, p.type);
+		});
+		writeChar(writer, ')');
+	}
+
+	void writeCalledDecl(Writer& writer, const FilesInfo fi, const CalledDecl c) {
+		writeSigJustTypes(writer, c.sig());
+		return c.match(
+			[&](const FunDecl* funDecl) {
+				// TODO: write the module it's from
+				writeStatic(writer, " (from ");
+				writeLineNumber(writer, fi, funDecl->containingModule(), funDecl->range());
+				writeChar(writer, ')');
+			},
+			[&](const SpecSig specSig) {
+				writeStatic(writer, " (from spec ");
+				specSig.specInst->name();
+				writeChar(writer, ')');
+			});
+	}
+
+	template <typename Filter>
+	void writeCalledDecls(Writer& writer, const FilesInfo fi, const Arr<const CalledDecl> cs, Filter flt) {
+		for (const CalledDecl c : cs)
+			if (flt(c)) {
+				writeChar(writer, '\n');
+				writeCalledDecl(writer, fi, c);
+			}
+	}
+
+	void writeCalledDecls(Writer& writer, const FilesInfo fi, const Arr<const CalledDecl> cs) {
+		writeCalledDecls(writer, fi, cs, [](const CalledDecl) {
+			return True;
+		});
+	}
+
+	void writeCallNoMatch(Writer& writer, const FilesInfo fi, const Diag::CallNoMatch d) {
+		const Bool someCandidateHasCorrectArity = exists(d.allCandidates, [&](const CalledDecl c) {
+			return eq(arity(c), d.actualArity);
+		});
+
+		if (isEmpty(d.allCandidates)) {
+			// Note: If it was not a local variable we try a call,
+			// but message shoudl reflect that the user might not have wanted a call.
+			writeStatic(writer, "there is no function or variable named ");
+			writeName(writer, d.funName);
+		} else if (!someCandidateHasCorrectArity) {
+			writeStatic(writer, "there are functions named ");
+			writeName(writer, d.funName);
+			writeStatic(writer, ", but none takes ");
+			writeNat(writer, d.actualArity);
+			writeStatic(writer, " arguments. candidates:");
+			writeCalledDecls(writer, fi, d.allCandidates);
+		} else {
+			writeStatic(writer, "there are functions named ");
+			writeName(writer, d.funName);
+			writeStatic(writer, ", but they do not match the ");
+			const Bool hasRet = d.expectedReturnType.has();
+			const Bool hasArgs = _not(isEmpty(d.actualArgTypes));
+			assert(hasRet || hasArgs); // we have a candidate with the correct arity so there must be some type error
+			const char* descr = hasRet
+				? hasArgs ? "expected return type and actual argument types" : "expected return type"
+				: "actual argument types";
+			writeStatic(writer, descr);
+			writeStatic(writer, ".");
+			if (hasRet) {
+				writeStatic(writer, "\nexpected return type: ");
+				writeType(writer, d.expectedReturnType.force());
+			}
+			if (hasArgs) {
+				writeStatic(writer, "\nactual argument types: ");
+				writeWithCommas(writer, d.actualArgTypes, [&](const Type t) {
+					writeType(writer, t);
+				});
+				if (d.actualArgTypes.size < d.actualArity)
+					writeStatic(writer, " (other arguments not checked, gave up early)");
+			}
+			writeStatic(writer, "\ncandidates (with ");
+			writeNat(writer, d.actualArity);
+			writeStatic(writer, " arguments):");
+			writeCalledDecls(writer, fi, d.allCandidates, [&](const CalledDecl c) {
+				return arity(c) == d.actualArity;
+			});
+		}
+	}
+
+	void writeDiag(Writer& writer, const FilesInfo fi, const Diag d) {
 		d.match(
+			[&](const Diag::CallMultipleMatches d) {
+				writeStatic(writer, "cannot choose an overload of ");
+				writeName(writer, d.funName);
+				writeStatic(writer, ". multiple functions match:");
+				writeCalledDecls(writer, fi, d.matches);
+			},
+			[&](const Diag::CallNoMatch d) {
+				writeCallNoMatch(writer, fi, d);
+			},
 			[&](const Diag::CantCallNonNoCtx) {
 				writeStatic(writer, "a 'noctx' fun can't call a non-'noctx' fun.");
 			},
@@ -139,6 +259,11 @@ namespace {
 			},
 			[&](const Diag::CommonTypesMissing) {
 				writeStatic(writer, "common types are missing from 'include.nz'");
+			},
+			[&](const Diag::CreateRecordByRefNoCtx d) {
+				writeStatic(writer, "the current function is 'noctx' and record ");
+				writeName(writer, d.strukt->name);
+				writeStatic(writer, " is not marked 'by-val'; can't allocate");
 			},
 			[&](const Diag::DuplicateDeclaration d) {
 				writeStatic(writer, "duplicate ");
@@ -183,13 +308,8 @@ namespace {
 				writeType(writer, d.type);
 				writeStatic(writer, " is not a union type");
 			},
-			[&](const Diag::MultipleFunctionCandidates d) {
-				writeStatic(writer, "multiple fun candidates match: ");
-				for (const size_t i : Range{d.candidates.size}) {
-					if (i != 0)
-						writeStatic(writer, ", ");
-					writeName(writer, at(d.candidates, i).name());
-				}
+			[&](const Diag::MutFieldInNonMutRecord) {
+				writeStatic(writer, "field is mut, but containing record was not marked mut");
 			},
 			[&](const Diag::NameNotFound d) {
 				const CStr kind = [&]() {
@@ -209,11 +329,6 @@ namespace {
 				writeStatic(writer, kind);
 				writeStatic(writer, " name not found: ");
 				writeName(writer, d.name);
-			},
-			[&](const Diag::NoSuchFunction d) {
-				writeStatic(writer, "no such function ");
-				writeName(writer, d.name);
-				writeStatic(writer, " exists with those argument types and return type");
 			},
 			[&](const Diag::ParamShadowsPrevious) {
 				todo<void>("print paramshadowsprevious");
@@ -296,12 +411,10 @@ namespace {
 			});
 	}
 
-	void showDiagnostic(Writer& writer, const LineAndColumnGetter lc, const Diagnostic d) {
-		writePath(writer, d.where.path);
+	void showDiagnostic(Writer& writer, const FilesInfo fi, const Diagnostic d) {
+		writeWhere(writer, fi, d.where, d.range);
 		writeChar(writer, ' ');
-		showRange(writer, lc, d.range);
-		writeChar(writer, ' ');
-		writeDiag(writer, d.diag);
+		writeDiag(writer, fi, d.diag);
 		writeChar(writer, '\n');
 	}
 }
@@ -319,12 +432,9 @@ void printDiagnostics(const Diagnostics diagnostics) {
 			assert(group.size == 1);
 			writePath(writer, only(group).where.path);
 			writeStatic(writer, ": file does not exist\n");
-		} else {
-			for (const Diagnostic d : group) {
-				const LineAndColumnGetter lc = diagnostics.lineAndColumnGetters.mustGet(d.where);
-				showDiagnostic(writer, lc, d);
-			}
-		}
+		} else
+			for (const Diagnostic d : group)
+				showDiagnostic(writer, diagnostics.filesInfo, d);
 	}
 
 	printf("%s\n", finishWriterToCStr(writer));

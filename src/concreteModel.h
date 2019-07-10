@@ -92,7 +92,7 @@ struct ConcreteStructBody {
 		const Arr<const ConcreteType> typeArgs;
 	};
 
-	struct Fields {
+	struct Record {
 		const Arr<const ConcreteField> fields;
 	};
 
@@ -108,7 +108,7 @@ private:
 	enum class Kind {
 		bogus,
 		builtin,
-		fields,
+		record,
 		_union,
 		iface,
 	};
@@ -116,7 +116,7 @@ private:
 	union {
 		const Bogus bogus;
 		const Builtin builtin;
-		const Fields fields;
+		const Record record;
 		const Union _union;
 		const Iface iface;
 	};
@@ -124,15 +124,15 @@ private:
 public:
 	explicit inline ConcreteStructBody(const Bogus _bogus) : kind{Kind::bogus}, bogus{_bogus} {}
 	explicit inline ConcreteStructBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
-	explicit inline ConcreteStructBody(const Fields _fields) : kind{Kind::fields}, fields{_fields} {}
+	explicit inline ConcreteStructBody(const Record _record) : kind{Kind::record}, record{_record} {}
 	explicit inline ConcreteStructBody(const Union __union) : kind{Kind::_union}, _union{__union} {}
 	explicit inline ConcreteStructBody(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
 	}
-	inline const Bool isFields() const {
-		return enumEq(kind, Kind::fields);
+	inline const Bool isRecord() const {
+		return enumEq(kind, Kind::record);
 	}
 	inline const Bool isUnion() const {
 		return enumEq(kind, Kind::_union);
@@ -144,9 +144,9 @@ public:
 		assert(isBuiltin());
 		return builtin;
 	}
-	inline const Fields asFields() const {
-		assert(isFields());
-		return fields;
+	inline const Record asRecord() const {
+		assert(isRecord());
+		return record;
 	}
 	inline const Union asUnion() const {
 		assert(isUnion());
@@ -159,13 +159,13 @@ public:
 
 	template <
 		typename CbBuiltin,
-		typename CbFields,
+		typename CbRecord,
 		typename CbUnion,
 		typename CbIface
 	>
 	inline auto match(
 		CbBuiltin cbBuiltin,
-		CbFields cbFields,
+		CbRecord cbRecord,
 		CbUnion cbUnion,
 		CbIface cbIface
 	) const {
@@ -174,8 +174,8 @@ public:
 				assert(0);
 			case Kind::builtin:
 				return cbBuiltin(builtin);
-			case Kind::fields:
-				return cbFields(fields);
+			case Kind::record:
+				return cbRecord(record);
 			case Kind::_union:
 				return cbUnion(_union);
 			case Kind::iface:
@@ -230,7 +230,7 @@ struct ConcreteStruct {
 	}
 
 	inline const Bool isRecord() const {
-		return body().isFields();
+		return body().isRecord();
 	}
 
 	inline const Bool isUnion() const {
@@ -971,7 +971,7 @@ struct KnownLambdaBody {
 
 	inline const Arr<const ConcreteField> closureFields() {
 		return closureParam.has()
-			? closureParam.force().type.strukt->body().asFields().fields
+			? closureParam.force().type.strukt->body().asRecord().fields
 			: emptyArr<const ConcreteField>();
 	}
 };
@@ -1094,7 +1094,7 @@ struct ConcreteExpr {
 		) : iface{_iface}, fieldsStruct{_fieldsStruct}, fieldInitializers{_fieldInitializers}, messageImpls{_messageImpls} {
 			if (fieldsStruct.has()) {
 				const ConcreteStruct* strukt = fieldsStruct.force().strukt;
-				assert(strukt->body().asFields().fields.size == fieldInitializers.size);
+				assert(strukt->body().asRecord().fields.size == fieldInitializers.size);
 			} else
 				assert(isEmpty(fieldInitializers));
 

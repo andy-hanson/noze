@@ -136,7 +136,10 @@ namespace {
 		return ::tryGetTypeArg<SingleInferringType>(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
 	}
 	inline Opt<const SingleInferringType*> tryGetTypeArg(const InferringTypeArgs& inferringTypeArgs, const TypeParam* typeParam) {
-		return ::tryGetTypeArg<const SingleInferringType>(inferringTypeArgs.params, asConst(inferringTypeArgs.args), typeParam);
+		return ::tryGetTypeArg<const SingleInferringType>(
+			inferringTypeArgs.params,
+			asConstArr<SingleInferringType>(inferringTypeArgs.args),
+			typeParam);
 	}
 
 	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena& arena, const Type t, const InferringTypeArgs& inferringTypeArgs) {
@@ -354,8 +357,8 @@ const Opt<const StructAndField> tryGetStructField(const Type targetType, const S
 				[](const StructBody::Builtin) {
 					return none<const StructAndField>();
 				},
-				[&](const StructBody::Fields f) {
-					const Opt<const StructField*> field = findPtr(f.fields, [&](const StructField* f) {
+				[&](const StructBody::Record r) {
+					const Opt<const StructField*> field = findPtr(r.fields, [&](const StructField* f) {
 						return strEq(f->name, fieldName);
 					});
 					return field.has()

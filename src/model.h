@@ -24,6 +24,26 @@ inline Comparison comparePathAndStorageKind(const PathAndStorageKind a, const Pa
 	return res != Comparison::equal ? res : comparePath(a.path, b.path);
 }
 
+struct AbsolutePathsGetter {
+	const AbsolutePath globalPath;
+	const AbsolutePath localPath;
+
+	inline const AbsolutePath getBasePath(const StorageKind sk) const {
+		switch (sk) {
+			case StorageKind::global:
+				return globalPath;
+			case StorageKind::local:
+				return localPath;
+			default:
+				assert(0);
+		}
+	}
+
+	inline const AbsolutePath getAbsolutePath(Arena& arena, const PathAndStorageKind p) const {
+		return addManyChildren(arena, getBasePath(p.storageKind), p.path);
+	}
+};
+
 using LineAndColumnGetters = Dict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;
 
 using Identifier = Str;
@@ -144,11 +164,11 @@ struct Sig {
 	const Identifier name;
 	const Type returnType;
 	const Arr<const Param> params;
-
-	inline size_t arity() const {
-		return params.size;
-	}
 };
+
+inline size_t arity(const Sig s) {
+	return s.params.size;
+}
 
 struct Message {
 	Sig sig;
@@ -175,7 +195,7 @@ enum class ForcedByValOrRef {
 struct StructBody {
 	struct Bogus {};
 	struct Builtin {};
-	struct Fields {
+	struct Record {
 		const Opt<const ForcedByValOrRef> forcedByValOrRef;
 		const Arr<const StructField> fields;
 	};
@@ -190,7 +210,7 @@ private:
 	enum class Kind {
 		bogus,
 		builtin,
-		fields,
+		record,
 		_union,
 		iface,
 	};
@@ -198,7 +218,7 @@ private:
 	union {
 		const Bogus bogus;
 		const Builtin builtin;
-		const Fields fields;
+		const Record record;
 		const Union _union;
 		const Iface iface;
 	};
@@ -208,8 +228,8 @@ public:
 		: kind{Kind::bogus}, bogus{_bogus} {}
 	explicit inline StructBody(const Builtin _builtin)
 		: kind{Kind::builtin}, builtin{_builtin} {}
-	explicit inline StructBody(const Fields _fields)
-		: kind{Kind::fields}, fields{_fields} {}
+	explicit inline StructBody(const Record _record)
+		: kind{Kind::record}, record{_record} {}
 	explicit inline StructBody(const Union __union)
 		: kind{Kind::_union}, _union{__union} {}
 	explicit inline StructBody(const Iface _iface)
@@ -221,12 +241,12 @@ public:
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
 	}
-	inline const Bool isFields() const {
-		return enumEq(kind, Kind::fields);
+	inline const Bool isRecord() const {
+		return enumEq(kind, Kind::record);
 	}
-	inline const Fields asFields() const {
-		assert(isFields());
-		return fields;
+	inline const Record asRecord() const {
+		assert(isRecord());
+		return record;
 	}
 	inline const Bool isUnion() const {
 		return enumEq(kind, Kind::_union);
@@ -246,14 +266,14 @@ public:
 	template <
 		typename CbBogus,
 		typename CbBuiltin,
-		typename CbFields,
+		typename CbRecord,
 		typename CbUnion,
 		typename CbIface
 	>
 	inline auto match(
 		CbBogus cbBogus,
 		CbBuiltin cbBuiltin,
-		CbFields cbFields,
+		CbRecord cbRecord,
 		CbUnion cbUnion,
 		CbIface cbIface
 	) const {
@@ -262,8 +282,8 @@ public:
 				return cbBogus(bogus);
 			case Kind::builtin:
 				return cbBuiltin(builtin);
-			case Kind::fields:
-				return cbFields(fields);
+			case Kind::record:
+				return cbRecord(record);
 			case Kind::_union:
 				return cbUnion(_union);
 			case Kind::iface:
@@ -358,6 +378,10 @@ struct SpecInst {
 	const Arr<const Type> typeArgs;
 	// Instantiated signatures
 	const Arr<const Sig> sigs;
+
+	inline const Str name() const {
+		return decl->name;
+	}
 };
 
 struct Expr;
@@ -420,6 +444,8 @@ struct FunFlags {
 
 struct FunInst;
 
+struct Module;
+
 struct FunDecl {
 	const Bool isPublic;
 	const FunFlags flags;
@@ -427,6 +453,7 @@ struct FunDecl {
 	const Arr<const TypeParam> typeParams;
 	const Arr<const SpecInst*> specs;
 	Late<FunBody> _body {};
+	Late<const Module*> _containingModule {};
 	mutable MutArr<const FunInst*> insts {};
 
 	inline const FunBody body() const {
@@ -434,6 +461,17 @@ struct FunDecl {
 	}
 	inline void setBody(const FunBody body) {
 		_body.set(body);
+	}
+
+	inline const Module* containingModule() const {
+		return _containingModule.get();
+	}
+	inline void setContainingModule(const Module* m) {
+		_containingModule.set(m);
+	}
+
+	inline const SourceRange range() const {
+		return sig.range;
 	}
 
 	inline const Bool isBuiltin() const {
@@ -460,10 +498,6 @@ struct FunDecl {
 		return sig.params;
 	}
 
-	inline size_t arity() const {
-		return sig.arity();
-	}
-
 	inline size_t nSpecImpls() const {
 		size_t n = 0;
 		for (const SpecInst* s : specs)
@@ -479,6 +513,10 @@ struct FunDecl {
 		return flags.summon;
 	}
 };
+
+inline size_t arity(const FunDecl* f) {
+	return arity(f->sig);
+}
 
 struct Called;
 
@@ -499,11 +537,11 @@ struct FunInst {
 	inline const Str name() const {
 		return decl->name();
 	}
-
-	inline size_t arity() const {
-		return decl->arity();
-	}
 };
+
+inline size_t arity(const FunInst* f) {
+	return arity(f->decl);
+}
 
 struct SpecSig {
 	const SpecInst* specInst;
@@ -545,30 +583,26 @@ public:
 		}
 	}
 
-	inline const Sig* sig() const {
+	inline const Sig sig() const {
 		return match(
 			[](const FunDecl* f) {
-				return &f->sig;
+				return f->sig;
 			},
 			[](const SpecSig s) {
-				return s.sig;
+				return *s.sig;
 			});
 	}
 
 	inline const Str name() const {
-		return sig()->name;
+		return sig().name;
 	}
 
 	inline const Type returnType() const {
-		return sig()->returnType;
+		return sig().returnType;
 	}
 
 	inline const Arr<const Param> params() const {
-		return sig()->params;
-	}
-
-	inline size_t arity() const {
-		return sig()->arity();
+		return sig().params;
 	}
 
 	inline const Arr<const TypeParam> typeParams() const {
@@ -581,6 +615,10 @@ public:
 			});
 	}
 };
+
+inline size_t arity(const CalledDecl c) {
+	return arity(c.sig());
+}
 
 struct Called {
 private:
@@ -625,18 +663,14 @@ public:
 		}
 	}
 
-	inline const Sig* sig() const {
+	inline const Sig sig() const {
 		return match(
 			[](const FunInst* f) {
-				return &f->sig;
+				return f->sig;
 			},
 			[](const SpecSig s) {
-				return s.sig;
+				return *s.sig;
 			});
-	}
-
-	inline size_t arity() const {
-		return sig()->arity();
 	}
 
 	inline const Str name() const {
@@ -646,13 +680,17 @@ public:
 	}
 
 	inline const Type returnType() const {
-		return sig()->returnType;
+		return sig().returnType;
 	}
 
 	inline const Arr<const Param> params() const {
-		return sig()->params;
+		return sig().params;
 	}
 };
+
+inline size_t arity(const Called c) {
+	return arity(c.sig());
+}
 
 struct StructOrAlias {
 private:

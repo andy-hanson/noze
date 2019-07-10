@@ -48,11 +48,11 @@ namespace {
 		}
 	};
 
-	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Str funName, const Arr<const Type> explicitTypeArgs, const size_t arity) {
+	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Str funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
 		MutArr<Candidate> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			const size_t nTypeParams = called.typeParams().size;
-			if (called.arity() == arity &&
+			if (arity(called) == actualArity &&
 				(isEmpty(explicitTypeArgs) || nTypeParams == explicitTypeArgs.size)) {
 				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx.arena(), nTypeParams, [&](const size_t i) {
 					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
@@ -62,6 +62,14 @@ namespace {
 			}
 		});
 		return res;
+	}
+
+	const Arr<const CalledDecl> getAllCandidatesAsCalledDecls(ExprCtx& ctx, const Str funName) {
+		ArrBuilder<const CalledDecl> res {};
+		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
+			res.add(ctx.arena(), called);
+		});
+		return res.finish();
 	}
 
 	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type candidateParamType) {
@@ -176,13 +184,13 @@ namespace {
 	const Opt<const Called> getCalledFromCandidate(ExprCtx& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
 
 	const Opt<const Called> findSpecSigImplementation(ExprCtx& ctx, const SourceRange range, const Sig specSig) {
-		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), specSig.arity());
+		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), arity(specSig));
 		filterByReturnType(ctx.arena(), candidates, specSig.returnType);
-		for (const size_t argIdx : Range{specSig.arity()})
+		for (const size_t argIdx : Range{arity(specSig)})
 			filterByParamType(ctx.arena(), candidates, at(specSig.params, argIdx).type, argIdx);
 
 		// If any candidates left take specs -- leave as a TODO
-		const Arr<const Candidate> candidatesArr = asConst(freeze(candidates));
+		const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(candidates));
 		switch (candidatesArr.size) {
 			case 0:
 				ctx.addDiag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
@@ -290,6 +298,8 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 	if (expectedReturnType.has())
 		filterByReturnType(ctx.arena(), candidates, expectedReturnType.force());
 
+	ArrBuilder<const Type> actualArgTypes;
+
 	Cell<const Bool> someArgIsBogus { False };
 	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx.arena(), arity, [&](const size_t argIdx) {
 		if (isEmpty(candidates) && !mightBePropertyAccess)
@@ -305,18 +315,18 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 			return none<const Expr>();
 		}
 
+		const Type actualArgType = common.expected.inferred();
+		actualArgTypes.add(ctx.arena(), actualArgType);
 		// If the Inferring already came from the candidate, no need to do more work.
-		if (!common.isExpectedFromCandidate) {
-			const Type actualArgType = common.expected.inferred();
+		if (!common.isExpectedFromCandidate)
 			filterByParamType(ctx.arena(), candidates, actualArgType, argIdx);
-		}
 		return some<const Expr>(arg);
 	});
 
-	const Arr<const Candidate> candidatesArr = asConst(freeze(candidates));
-
 	if (someArgIsBogus.get())
 		return expected.bogus(range);
+
+	const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(candidates));
 
 	if (mightBePropertyAccess && arity == 1 && args.has()) {
 		// Might be a struct field access
@@ -329,14 +339,16 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 	}
 
 	if (!args.has() || candidatesArr.size != 1) {
-		if (isEmpty(candidatesArr))
-			ctx.addDiag(range, Diag{Diag::NoSuchFunction{ctx.checkCtx.copyStr(ast.funName)}});
-		else {
-			const Arr<const CalledDecl> calledDecls = map<const CalledDecl>{}(
+		const Str funName = ctx.checkCtx.copyStr(ast.funName);
+		if (isEmpty(candidatesArr)) {
+			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
+			ctx.addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, actualArgTypes.finish(), allCandidates}});
+		} else {
+			const Arr<const CalledDecl> matches = map<const CalledDecl>{}(
 				ctx.arena(),
 				candidatesArr,
 				[](const Candidate c) { return c.called; });
-			ctx.addDiag(range, Diag{Diag::MultipleFunctionCandidates{calledDecls}});
+			ctx.addDiag(range, Diag{Diag::CallMultipleMatches{funName, matches}});
 		}
 		return expected.bogus(range);
 	} else

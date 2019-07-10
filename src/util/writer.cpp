@@ -48,3 +48,19 @@ void newline(WriterWithIndent& writer) {
 	for (__attribute__((unused)) const size_t _ : Range{writer._indent})
 		writeChar(writer, '\t');
 }
+
+void writeHyperlink(Writer& writer, const Str url, const Str text) {
+	// documentation: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+	// https://purpleidea.com/blog/2018/06/29/hyperlinks-in-gnome-terminal/
+	// TODO: I haven't got this to work on any terminal emulator I have installed. :(
+	Arena temp {};
+	if (false) {
+		writeStatic(writer, "\x1b]8;;");
+		writeStr(writer, url);
+		writeStatic(writer, "\x1b\\");
+		writeStr(writer, text);
+		writeStatic(writer, "\x1b]8;;\x1b\\");
+	} else {
+		writeStr(writer, text);
+	}
+}

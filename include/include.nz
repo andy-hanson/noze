@@ -38,9 +38,9 @@ any-ptr alias
 	ptr byte
 
 is-reference-type?<?t> bool() noctx unsafe builtin
-size-of<?t> nat64() noctx unsafe builtin
+size-of<?t> nat() noctx unsafe builtin
 
-size-or-pointer-size<?t> nat64() noctx unsafe
+size-or-pointer-size<?t> nat() noctx unsafe
 	when
 		is-reference-type?<?t>
 			size-of<ptr<void>>
@@ -49,12 +49,12 @@ size-or-pointer-size<?t> nat64() noctx unsafe
 
 ptr-cast ptr ?out(p ptr ?in) noctx unsafe builtin
 
-+ ptr ?t(p ptr ?t, offset nat64) noctx unsafe builtin
-- ptr ?t(p ptr ?t, offset nat64) noctx unsafe builtin
++ ptr ?t(p ptr ?t, offset nat) noctx unsafe builtin
+- ptr ?t(p ptr ?t, offset nat) noctx unsafe builtin
 
-malloc any-ptr(size nat64) unsafe extern
+malloc any-ptr(size nat) unsafe extern
 
-allocate-bytes any-ptr(size nat64) unsafe
+allocate-bytes any-ptr(size nat) unsafe
 	| TODO: Allocate from ctx (Use 'get-ctx' builtin fun)
 	| Note: malloc always returns aligned memory (max_align_t)
 	malloc: size
@@ -215,106 +215,107 @@ call fut ?r(f remote-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1)
 
 region Arithmetic
 
-nat64 builtin
-int64 builtin
-float64 builtin
+| All are 64-bits, even on 32-bit systems
+nat builtin
+int builtin
+float builtin
 
 | UB for negative numbers
-unsafe-to-nat64 nat64(i int64) noctx builtin
+unsafe-to-nat nat(i int) noctx builtin
 
 | UB for positive numbers >= 2 ** 63
-unsafe-to-int64 int64(n nat64) noctx builtin
+unsafe-to-int int(n nat) noctx builtin
 
-wrapping-add nat64(a nat64, b nat64) noctx builtin
-wrapping-sub nat64(a nat64, b nat64) noctx builtin
-wrapping-mul nat64(a nat64, b nat64) noctx builtin
-unsafe-div nat64(a nat64, b nat64) noctx unsafe builtin
-unsafe-mod nat64(a nat64, b nat64) noctx unsafe builtin
-zero nat64() noctx builtin
-one nat64() noctx builtin
-two nat64() noctx
+wrapping-add nat(a nat, b nat) noctx builtin
+wrapping-sub nat(a nat, b nat) noctx builtin
+wrapping-mul nat(a nat, b nat) noctx builtin
+unsafe-div nat(a nat, b nat) noctx unsafe builtin
+unsafe-mod nat(a nat, b nat) noctx unsafe builtin
+zero nat() noctx builtin
+one nat() noctx builtin
+two nat() noctx
 	one incr
-three nat64() noctx
+three nat() noctx
 	two incr
-four nat64() noctx
+four nat() noctx
 	three incr
-five nat64() noctx
+five nat() noctx
 	four incr
-six nat64() noctx
+six nat() noctx
 	five incr
-seven nat64() noctx
+seven nat() noctx
 	six incr
-eight nat64() noctx
+eight nat() noctx
 	seven incr
-nine nat64() noctx
+nine nat() noctx
 	eight incr
-ten nat64() noctx
+ten nat() noctx
 	nine incr
-hundred nat64() noctx
+hundred nat() noctx
 	ten wrapping-mul ten
-thousand nat64() noctx
+thousand nat() noctx
 	hundred wrapping-mul ten
 
-wrapping-add int64(a int64, b int64) noctx builtin
-wrapping-sub int64(a int64, b int64) noctx builtin
-wrapping-mul int64(a int64, b int64) noctx builtin
-unsafe-div int64(a int64, b int64) noctx unsafe builtin
-zero int64() noctx builtin
-one int64() noctx builtin
-neg-one int64() noctx
+wrapping-add int(a int, b int) noctx builtin
+wrapping-sub int(a int, b int) noctx builtin
+wrapping-mul int(a int, b int) noctx builtin
+unsafe-div int(a int, b int) noctx unsafe builtin
+zero int() noctx builtin
+one int() noctx builtin
+neg-one int() noctx
 	zero wrapping-sub one
-two int64() noctx
+two int() noctx
 	one incr
-three int64() noctx
+three int() noctx
 	two incr
-four int64() noctx
+four int() noctx
 	three incr
-five int64() noctx
+five int() noctx
 	four incr
-six int64() noctx
+six int() noctx
 	five incr
-seven int64() noctx
+seven int() noctx
 	six incr
-eight int64() noctx
+eight int() noctx
 	seven incr
-nine int64() noctx
+nine int() noctx
 	eight incr
-ten int64() noctx
+ten int() noctx
 	nine incr
 
-incr nat64(n nat64) noctx
+incr nat(n nat) noctx
 	| TODO: assert: n != max-value
 	n wrapping-add one
 
-incr int64(i int64) noctx
+incr int(i int) noctx
 	| TODO: assert: i != max-value
 	i wrapping-add one
 
 incr ptr ?t(p ptr ?t) noctx unsafe
 	p + one
 
-decr-noctx nat64(n nat64) noctx unsafe
+decr-noctx nat(n nat) noctx unsafe
 	hard-forbid: n == zero
 	n wrapping-sub one
 
-decr nat64(n nat64)
+decr nat(n nat)
 	forbid: n == zero
 	n wrapping-sub one
 
-| decr int64(i int64)
+| decr int(i int)
 |	i - 1
 
 decr ptr ?t(p ptr ?t) noctx unsafe
 	p - one
 
-+ nat64(a nat64, b nat64)
++ nat(a nat, b nat)
 	res = a wrapping-add b
 	assert: res >= a and: res >= b
 	res
-- nat64(a nat64, b nat64)
+- nat(a nat, b nat)
 	assert: a > b
 	a wrapping-sub b
-* nat64(a nat64, b nat64)
+* nat(a nat, b nat)
 	| TODO: better safety check
 	when
 		a == zero or: b == zero
@@ -324,7 +325,7 @@ decr ptr ?t(p ptr ?t) noctx unsafe
 			assert: res / b == a
 			assert: res / a == b
 			res
-/ nat64(a nat64, b nat64) trusted
+/ nat(a nat, b nat) trusted
 	forbid: b == zero
 	| TODO: doing this silly thing to avoid evaluating a / b as a constant
 	when
@@ -333,11 +334,11 @@ decr ptr ?t(p ptr ?t) noctx unsafe
 		else
 			a unsafe-div b
 
-mod nat64(a nat64, b nat64) trusted
+mod nat(a nat, b nat) trusted
 	forbid: b == zero
 	a unsafe-mod b
 
-+ int64(a int64, b int64)
++ int(a int, b int)
 	| TODO: better safety check
 	assert: a > -999
 	assert: a < 999
@@ -345,65 +346,65 @@ mod nat64(a nat64, b nat64) trusted
 	assert: b < 999
 	a wrapping-add b
 
-- int64(a int64, b int64)
+- int(a int, b int)
 	| TODO: better safety check
 	assert: a > -999
 	assert: a < 999
 	assert: b > -999
 	assert: b < 999
 	a wrapping-sub b
-* int64(a int64, b int64)
+* int(a int, b int)
 	assert: a > -999
 	assert: a < 999
 	assert: b > -999
 	assert: b < 999
 	a wrapping-mul b
-/ int64(a int64, b int64) trusted
+/ int(a int, b int) trusted
 	forbid: b == zero
 	| If a is the smallest int and b is -1, result is UB
 	| TODO: better safety check
 	assert: a > -999
 	a unsafe-div b
 
-to-int64 int64(n nat64)
+to-int int(n nat)
 	| assert: n < (32 pow2)
 	assert: n < 9999
-	n unsafe-to-int64
+	n unsafe-to-int
 
-to-nat64 nat64(i int64)
+to-nat nat(i int)
 	forbid: i.negative?
-	i unsafe-to-nat64
+	i unsafe-to-nat
 
-negative? bool(i int64)
+negative? bool(i int)
 	i < zero
 
-neg int64(i int64)
+neg int(i int)
 	i * neg-one
 
-neg int64(n nat64)
-	n.to-int64 neg
+neg int(n nat)
+	n.to-int neg
 
-abs nat64(i int64)
+abs nat(i int)
 	i-abs = i.negative? if i.neg, i
-	i-abs to-nat64
+	i-abs to-nat
 
-mod nat64(a int64, b nat64)
+mod nat(a int, b nat)
 	forbid: b == zero
 	when
 		a negative?
 			x = a.abs mod b
 			x == b if 0, b - x
 		else
-			a.to-nat64 mod b
+			a.to-nat mod b
 
-+ float64(a float64, b float64) noctx builtin
-- float64(a float64, b float64) noctx builtin
-* float64(a float64, b float64) noctx builtin
-unsafe-div float64(a float64, b float64) noctx unsafe builtin
-zero float64() noctx builtin
-one float64() noctx builtin
++ float(a float, b float) noctx builtin
+- float(a float, b float) noctx builtin
+* float(a float, b float) noctx builtin
+unsafe-div float(a float, b float) noctx unsafe builtin
+zero float() noctx builtin
+one float() noctx builtin
 
-char-to-nat64 nat64(c char) noctx
+char-to-nat nat(c char) noctx
 	when
 		c == "0"
 			zero
@@ -428,24 +429,24 @@ char-to-nat64 nat64(c char) noctx
 		else
 			todo
 
-literal nat64(s str)
+literal nat(s str)
 	when
 		s empty?
 			zero
 		else
-			higher-digits = s.rtail.literal as<nat64>
-			higher-digits * ten + (char-to-nat64: s last)
+			higher-digits = s.rtail.literal as<nat>
+			higher-digits * ten + (char-to-nat: s last)
 
-literal int64(s str)
+literal int(s str)
 	fst = s at zero
 	when
 		fst == "-"
-			n = as<nat64>: s.tail.literal
+			n = as<nat>: s.tail.literal
 			n neg
 		fst == "+"
-			s.tail.literal.as<nat64> to-int64
+			s.tail.literal.as<nat> to-int
 		else
-			s.literal.as<nat64> to-int64
+			s.literal.as<nat> to-int
 
 region Util
 
@@ -481,6 +482,7 @@ assert-unreachable ?t()
 	"should be unreachable" fail
 
 some<?t> record
+	by-val
 	value ?t
 none record
 opt<?t> union
@@ -607,7 +609,8 @@ region arr
 
 | NOTE: this is not a normal record, compiler treats it specially
 arr<?t> record
-	size nat64
+	by-val
+	size nat
 	data ptr ?t
 
 empty-arr arr ?t() noctx trusted
@@ -617,11 +620,11 @@ empty-arr arr ?t() noctx trusted
 empty? bool(a arr ?t)
 	a.size == zero
 
-slice arr ?t(a arr ?t, begin nat64, size nat64) trusted
+slice arr ?t(a arr ?t, begin nat, size nat) trusted
 	assert: begin + size <= a.size
 	new size, a.data + begin
 
-slice arr ?t(a arr ?t, begin nat64)
+slice arr ?t(a arr ?t, begin nat)
 	assert: begin <= a.size
 	a slice: begin, a.size - begin
 
@@ -641,11 +644,11 @@ rtail arr ?t(a arr ?t)
 	forbid: a empty?
 	a slice zero, a.size.decr
 
-noctx-at ?t(a arr ?t, index nat64) trusted noctx
+noctx-at ?t(a arr ?t, index nat) trusted noctx
 	hard-assert: index < a.size
 	a.data + index deref
 
-at ?t(a arr ?t, index nat64) trusted
+at ?t(a arr ?t, index nat) trusted
 	assert: index < a.size
 	a.data + index deref
 
@@ -658,19 +661,19 @@ cat arr ?t(a arr ?t, b arr ?t) trusted
 	m freeze
 
 | NOTE: this is not a normal record, compiler treats it specially
-mut-arr<?t> record
+mut-arr<?t> record mut
 	frozen mut bool
 	| Number of *initialized* elements.
 	| But 'uninitialized-mut-arr' sets 'size' and doesn't initialize!
-	size mut nat64
-	capacity mut nat64
+	size mut nat
+	capacity mut nat
 	data mut ptr ?t
 
-uninitialized-data ptr ?t(size nat64) unsafe
+uninitialized-data ptr ?t(size nat) unsafe
 	bptr = allocate-bytes: size wrapping-mul size-of<?t>
 	bptr ptr-cast<?t, byte>
 
-uninitialized-mut-arr mut-arr ?t(size nat64) unsafe
+uninitialized-mut-arr mut-arr ?t(size nat) unsafe
 	new false, size, size, uninitialized-data<?t>: size
 
 new-mut-arr mut-arr ?t() trusted
@@ -679,7 +682,7 @@ new-mut-arr mut-arr ?t() trusted
 new-mut-arr-by-val by-val mut-arr<?t>() noctx trusted
 	new false, zero, zero, null
 
-set-at void(a mut-arr ?t, index nat64, value ?t) trusted
+set-at void(a mut-arr ?t, index nat, value ?t) trusted
 	assert: index < a.size
 	(a.data + index) set value
 
@@ -691,14 +694,14 @@ freeze arr ?t(a mut-arr ?t) noctx trusted
 	a.frozen := true
 	a unsafe-as-arr
 
-at ?t(a mut-arr ?t, index nat64) trusted
+at ?t(a mut-arr ?t, index nat) trusted
 	when
 		index < a.size
 			a.data + index deref
 		else
 			fail: "bad mut-arr index"
 
-copy-data-from void(to ptr ?t, from ptr ?t, len nat64) unsafe
+copy-data-from void(to ptr ?t, from ptr ?t, len nat) unsafe
 	when
 		len == zero
 			pass
@@ -721,10 +724,10 @@ add void(a mut-arr ?t, value ?t) trusted
 	(a.data + a.size) set value
 	a.size := a.size incr
 
-make-arr arr ?t(size nat64, f fun1 ?t nat64)
+make-arr arr ?t(size nat, f fun1 ?t nat)
 	size make-mut-arr f freeze
 
-make-mut-arr mut-arr ?t(size nat64, f fun1 ?t nat64) trusted
+make-mut-arr mut-arr ?t(size nat, f fun1 ?t nat) trusted
 	res = uninitialized-mut-arr<?t>: size
 	zero to size each \i
 		res set-at: i, f call i
@@ -736,7 +739,7 @@ to-mut-arr mut-arr ?t(a arr ?t)
 
 | Currently only used to implement print-sync, so don't worry about varargs
 | TODO: 'summon'
-printf void(format c-str, sz nat64, data ptr char) unsafe extern
+printf void(format c-str, sz nat, data ptr char) unsafe extern
 
 print-sync void(s str) summon trusted noctx
 	printf: "%.*s\n\0".data, s.size, s.data
@@ -751,7 +754,7 @@ delay fut void() noctx
 to-str str(b bool)
 	b if "true", "false"
 
-to-str str(n nat64)
+to-str str(n nat)
 	when
 		n == 0
 			"0"
@@ -778,7 +781,7 @@ to-str str(n nat64)
 			lo = to-str: n mod ten
 			hi cat lo
 
-to-str str(i int64)
+to-str str(i int)
 	a = i.abs to-str
 	| TODO: string interpolation
 	i.negative? if ("-" cat a), a
@@ -797,7 +800,7 @@ empty-dict dict ?k ?v()
 	| TODO: should be able to infer type arguments
 	new empty-arr<?k>, empty-arr<?v>
 
-mut-dict<?k, ?v> record
+mut-dict<?k, ?v> record mut
 	keys mut-arr ?k
 	values mut-arr ?v
 
@@ -811,7 +814,7 @@ unsafe-as-dict dict ?k ?v(m mut-dict ?k ?v) unsafe
 freeze dict ?k ?v(m mut-dict ?k ?v)
 	new m.keys.freeze, m.values.freeze
 
-get-recursive<?k, ?v> opt ?v(keys arr ?k, values arr ?v, idx nat64, key ?k)
+get-recursive<?k, ?v> opt ?v(keys arr ?k, values arr ?v, idx nat, key ?k)
 	when
 		idx == keys.size
 			new<none>
@@ -872,7 +875,8 @@ get ?t(c cell ?t)
 set void(c cell ?t, v ?t)
 	c.value := v
 
-get-and-incr nat64(c cell nat64)
+| TODO: GENERIC
+get-and-incr nat(c cell nat)
 	res = c get
 	c set: res incr
 	res
@@ -901,35 +905,35 @@ to-stream<?t, ?e> stream ?e(t ?t) iter<?t, ?e>
 
 region range
 
-range-nat64 record
+range-nat record
 	| lo inclusive, hi exclusive
-	lo nat64
-	hi nat64
+	lo nat
+	hi nat
 
-iter iterator nat64(r range-nat64)
-	n = new<cell<nat64>> r.lo
+iter iterator nat(r range-nat)
+	n = new<cell<nat>> r.lo
 	new \
 		when
 			n.get == r.hi
 				new<none>
 			else
-				new<some<nat64>> n get-and-incr
+				new<some<nat>> n get-and-incr
 
-to range-nat64(lo nat64, hi nat64)
+to range-nat(lo nat, hi nat)
 	lo <= hi assert
 	new lo, hi
 
-empty? bool(r range-nat64)
+empty? bool(r range-nat)
 	r.lo == r.hi
 
-tail range-nat64(r range-nat64)
+tail range-nat(r range-nat)
 	r.empty? forbid
 	r.lo.incr to r.hi
 
 each void(s stream ?t, f fun1 void ?t)
 	s.iter each-recur f
 
-each void(r range-nat64, f fun1 void nat64)
+each void(r range-nat, f fun1 void nat)
 	r.iter each-recur f
 
 each-recur void(i iterator ?t, f fun1 void ?t)
@@ -958,10 +962,11 @@ filter-helper opt ?t(i iterator ?t, pred fun1 bool ?t)
 					| This one didn't satisfy the predicate, but keep trying until we get one or each the end
 					i filter-helper pred
 
-sum nat64(t ?t) iter<?t, nat64>
+| TODO: GENERIC
+sum nat(t ?t) iter<?t, nat>
 	t.iter sum-helper
 
-sum-helper nat64(i iterator nat64)
+sum-helper nat(i iterator nat)
 	match i.next
 		none
 			zero
@@ -971,7 +976,7 @@ sum-helper nat64(i iterator nat64)
 
 region atomic
 
-atomic-bool record
+atomic-bool record force-sendable
 	value mut bool
 
 new-atomic-bool by-val atomic-bool() noctx
@@ -993,7 +998,7 @@ must-unset void(a atomic-bool) noctx unsafe
 	did-unset = a try-unset
 	did-unset hard-assert
 
-lock record
+lock record sendable
 	by-ref
 	| Storing this by-val to avoid needing allocations.
 	| User should prefer to store the lock by-val too, and only pass by-ref
@@ -1008,7 +1013,7 @@ try-acquire-lock bool(l lock) noctx trusted
 acquire-lock void(l lock) noctx unsafe
 	l acquire-lock-recur zero
 
-acquire-lock-recur void(l lock, n-tries nat64) noctx unsafe
+acquire-lock-recur void(l lock, n-tries nat) noctx unsafe
 	when
 		l.try-acquire-lock
 			pass
@@ -1026,9 +1031,9 @@ with-lock ?t(l lock, f fun0 ?t) trusted
 	l release-lock
 	res
 
-condition record
+condition record mut
 	lk by-val lock
-	value mut nat64
+	value mut nat
 
 new-condition by-val condition() noctx
 	new new-lock, zero
@@ -1037,17 +1042,17 @@ broadcast void(c condition) trusted
 	c.lk.ref-of-val with-lock \
 		c.value := c.value incr
 
-get-last-checked nat64(c condition) noctx
+get-last-checked nat(c condition) noctx
 	c.value
 
-usleep void(micro-seconds nat64) extern
+usleep void(micro-seconds nat) extern
 
 | TODO:MOVE
-sleep-ms-sync void(ms nat64) noctx
+sleep-ms-sync void(ms nat) noctx
 	| TODO: wrapping-mul is unsafe
 	ms wrapping-mul thousand usleep
 
-wait-on void(c condition, last-checked nat64) noctx
+wait-on void(c condition, last-checked nat) noctx
 	when
 		c.value == last-checked
 			pass
@@ -1056,20 +1061,20 @@ wait-on void(c condition, last-checked nat64) noctx
 
 
 | TODO: use atomic operations for this
-thread-safe-counter record
+thread-safe-counter record mut
 	lk by-val lock
-	value mut nat64
+	value mut nat
 
 new-thread-safe-counter by-val thread-safe-counter() noctx
 	zero new-thread-safe-counter
 
-new-thread-safe-counter by-val thread-safe-counter(init nat64) noctx
+new-thread-safe-counter by-val thread-safe-counter(init nat) noctx
 	new new-lock, init
 
 increment void(t thread-safe-counter) noctx
 	t.get-and-increment drop
 
-get-and-increment nat64(t thread-safe-counter) noctx trusted
+get-and-increment nat(t thread-safe-counter) noctx trusted
 	l = t.lk.ref-of-val
 	l acquire-lock
 	res = t.value
@@ -1081,7 +1086,7 @@ get-and-increment nat64(t thread-safe-counter) noctx trusted
 decrement bool(t thread-safe-counter) noctx
 	t.get-and-decrement == zero
 
-get-and-decrement nat64(t thread-safe-counter) noctx trusted
+get-and-decrement nat(t thread-safe-counter) noctx trusted
 	l = t.lk.ref-of-val
 	l acquire-lock
 	res = t.value
@@ -1096,7 +1101,7 @@ global-ctx record mut
 	lk by-val lock
 	| TODO: mut-arr
 	vats mut arr vat
-	n-live-threads mut nat64
+	n-live-threads mut nat
 	may-be-work-to-do by-val condition
 	is-shut-down mut bool
 
@@ -1104,9 +1109,9 @@ new-global-ctx by-val global-ctx() noctx
 	new new-lock, empty-arr<vat>, zero, new-condition, false
 
 vat-id alias
-	nat64
+	nat
 actor-id alias
-	nat64
+	nat
 
 vat-and-actor-id record
 	vat vat-id
@@ -1133,7 +1138,7 @@ region mut-bag
 
 | NOTE: currently this is a linked list, but we actually want to pseudorandomly take out nodes.
 
-mut-bag-node<?t> record
+mut-bag-node<?t> record mut
 	value ?t
 	next mut opt mut-bag-node<?t>
 
@@ -1166,7 +1171,7 @@ vat record mut
 	tasks by-val mut-bag<task>
 	| TODO: mut-set
 	currently-running-actors by-val mut-arr<actor-id>
-	n-threads-running nat64
+	n-threads-running nat
 
 	| not protected by tasks-lock, thread-safe on its own
 	next-actor-id by-val thread-safe-counter

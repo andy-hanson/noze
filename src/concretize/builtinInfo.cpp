@@ -6,15 +6,15 @@ namespace {
 	}
 
 	const Bool isFloat64(const Type t) {
-		return isNamed(t, "float64");
+		return isNamed(t, "float");
 	}
 
 	const Bool isInt64(const Type t) {
-		return isNamed(t, "int64");
+		return isNamed(t, "int");
 	}
 
 	const Bool isNat64(const Type t) {
-		return isNamed(t, "nat64");
+		return isNamed(t, "nat");
 	}
 
 	const Bool isPtr(const Type t) {
@@ -175,15 +175,15 @@ const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {
 	return strEqLiteral(name, "bool") ? BuiltinStructInfo{BuiltinStructKind::_bool, sizeof(Bool)}
 		: strEqLiteral(name, "byte") ? BuiltinStructInfo{BuiltinStructKind::byte, sizeof(byte)}
 		: strEqLiteral(name, "char") ? BuiltinStructInfo{BuiltinStructKind::_char, sizeof(char)}
-		: strEqLiteral(name, "float64") ? BuiltinStructInfo{BuiltinStructKind::float64, sizeof(Float64)}
+		: strEqLiteral(name, "float") ? BuiltinStructInfo{BuiltinStructKind::float64, sizeof(Float64)}
 		: strEqLiteral(name, "fun-ptr0")
 			|| strEqLiteral(name, "fun-ptr1")
 			|| strEqLiteral(name, "fun-ptr2")
 			|| strEqLiteral(name, "fun-ptr3")
 			|| strEqLiteral(name, "fun-ptr4")
 			? BuiltinStructInfo{BuiltinStructKind::funPtrN, sizeof(void(*))}
-		: strEqLiteral(name, "int64") ? BuiltinStructInfo{BuiltinStructKind::int64, sizeof(Int64)}
-		: strEqLiteral(name, "nat64") ? BuiltinStructInfo{BuiltinStructKind::nat64, sizeof(Nat64)}
+		: strEqLiteral(name, "int") ? BuiltinStructInfo{BuiltinStructKind::int64, sizeof(Int64)}
+		: strEqLiteral(name, "nat") ? BuiltinStructInfo{BuiltinStructKind::nat64, sizeof(Nat64)}
 		: strEqLiteral(name, "ptr") ? BuiltinStructInfo{BuiltinStructKind::ptr, sizeof(void*)}
 		: strEqLiteral(name, "void") ? BuiltinStructInfo{BuiltinStructKind::_void, sizeof(byte)}
 		: todo<const BuiltinStructInfo>("not a recognized builtin struct");

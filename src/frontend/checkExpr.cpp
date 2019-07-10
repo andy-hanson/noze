@@ -105,6 +105,12 @@ namespace {
 			: expected.check(ctx, Type{aet.arrType}, expr);
 	}
 
+	struct RecordAndIsBuiltinByVal {
+		const StructBody::Record record;
+		// True if this is the 'by-val' type. (Not if it's another type that happens to be by-val.)
+		const Bool isBuiltinByVal;
+	};
+
 	const CheckedExpr checkCreateRecord(ExprCtx& ctx, const SourceRange range, const CreateRecordAst ast, Expected& expected) {
 		Cell<const Bool> typeIsFromExpected { False };
 		const Type t = [&]() {
@@ -123,9 +129,9 @@ namespace {
 		const StructInst* si = t.asStructInst();
 		const StructDecl* decl = si->decl;
 
-		const Opt<const StructBody::Fields> opFields = decl->body().match(
+		const Opt<const RecordAndIsBuiltinByVal> opRecord = decl->body().match(
 			[](const StructBody::Bogus) {
-				return none<const StructBody::Fields>();
+				return none<const RecordAndIsBuiltinByVal>();
 			},
 			[&](const StructBody::Builtin) {
 				if (ptrEquals(decl, ctx.commonTypes.byVal)) {
@@ -133,34 +139,44 @@ namespace {
 					const Type inner = only<const Type>(si->typeArgs);
 					if (inner.isStructInst()) {
 						const StructBody& body = inner.asStructInst()->body();
-						if (body.isFields())
-							return some<const StructBody::Fields>(body.asFields());
+						if (body.isRecord())
+							return some<const RecordAndIsBuiltinByVal>(RecordAndIsBuiltinByVal{body.asRecord(), True});
 					}
 				}
-				return none<const StructBody::Fields>();
+				return none<const RecordAndIsBuiltinByVal>();
 			},
-			[](const StructBody::Fields f) {
-				return some<const StructBody::Fields>(f);
+			[](const StructBody::Record r) {
+				return some<const RecordAndIsBuiltinByVal>(RecordAndIsBuiltinByVal{r, False});
 			},
 			[](const StructBody::Union) {
-				return none<const StructBody::Fields>();
+				return none<const RecordAndIsBuiltinByVal>();
 			},
 			[](const StructBody::Iface) {
-				return none<const StructBody::Fields>();
+				return none<const RecordAndIsBuiltinByVal>();
 			});
 
-		if (opFields.has()) {
-			const Arr<const StructField> fields = opFields.force().fields;
+		if (opRecord.has()) {
+			const RecordAndIsBuiltinByVal record = opRecord.force();
+			const Arr<const StructField> fields = record.record.fields;
 			if (ast.args.size != fields.size) {
 				ctx.addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, fields.size, ast.args.size}});
 				return typeIsFromExpected.get() ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
 			} else {
-				//TODO: mapzip
-				const Arr<const Expr> args = fillArr<const Expr>{}(ctx.arena(), fields.size, [&](const size_t i) {
-					const Type expectedType = instantiateType(ctx.arena(), at(fields, i).type, si);
-					return checkAndExpect(ctx, at(ast.args, i), expectedType);
+				const Arr<const Expr> args = mapZip<const Expr>{}(ctx.arena(), fields, ast.args, [&](const StructField field, const ExprAst arg) {
+					const Type expectedType = instantiateType(ctx.arena(), field.type, si);
+					return checkAndExpect(ctx, arg, expectedType);
 				});
 				const Expr expr = Expr{range, Expr::CreateRecord{si, args}};
+
+				if (ctx.outermostFun->noCtx() && !record.isBuiltinByVal) {
+					const Opt<const ForcedByValOrRef> forcedByValOrRef = record.record.forcedByValOrRef;
+					const Bool isAlwaysByVal = _or(
+						fields.size == 0,
+						(forcedByValOrRef.has() && forcedByValOrRef.force() == ForcedByValOrRef::byVal));
+					if (!isAlwaysByVal)
+						ctx.addDiag(range, Diag{Diag::CreateRecordByRefNoCtx{decl}});
+				}
+
 				return typeIsFromExpected.get() ? CheckedExpr{expr} : expected.check(ctx, Type(si), expr);
 			}
 		} else {
@@ -547,7 +563,7 @@ namespace {
 				if (!opMessage.has()) todo<void>("checkMessageSend");
 				const Message* message = opMessage.force();
 				const Sig& messageSig = message->sig;
-				if (ast.args.size != messageSig.arity())
+				if (ast.args.size != arity(messageSig))
 					todo<void>("checkMessageSend");
 				const Arr<const Expr> args = mapZip<const Expr>{}(ctx.arena(), ast.args, messageSig.params, [&](const ExprAst argAst, const Param& param) {
 					return checkAndExpect(ctx, argAst, instantiateType(ctx.arena(), param.type, instIface));

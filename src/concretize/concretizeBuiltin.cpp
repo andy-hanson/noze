@@ -417,10 +417,10 @@ namespace {
 						assert(0);
 				}
 			},
-			[&](const ConcreteStructBody::Fields fields) {
+			[&](const ConcreteStructBody::Record r) {
 				ArrBuilder<const ConcreteLocal*> locals {};
 				Cell<const Opt<const ConcreteExpr*>> accum { none<const ConcreteExpr*>() };
-				for (const ConcreteField* field : ptrsRange(fields.fields)) {
+				for (const ConcreteField* field : ptrsRange(r.fields)) {
 					// for a struct {x, y}, we emit:
 					// switch (a.x <=> b.x) { case less: || a.y <=> b.y
 					// `||` will short-circuit on any non-zero value.

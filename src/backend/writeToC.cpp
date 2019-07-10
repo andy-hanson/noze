@@ -254,10 +254,10 @@ namespace {
 				} else
 					return none<const StructState>();
 			},
-			[&](const ConcreteStructBody::Fields f) {
-				if (every(f.fields, [&](const ConcreteField f) { return canReferenceType(f.type, structStates); })) {
+			[&](const ConcreteStructBody::Record r) {
+				if (every(r.fields, [&](const ConcreteField f) { return canReferenceType(f.type, structStates); })) {
 					declare();
-					writeFieldsStruct(writer, strukt->mangledName, f.fields);
+					writeFieldsStruct(writer, strukt->mangledName, r.fields);
 					return defined;
 				} else
 					return declare();
@@ -814,7 +814,7 @@ namespace {
 				writeArgsNoCtxWithBraces(writer, e.closureInit);
 			},
 			[&](const ConcreteExpr::LambdaToDynamic e) {
-				const Arr<const ConcreteField> fields = type.strukt->body().asFields().fields;
+				const Arr<const ConcreteField> fields = type.strukt->body().asRecord().fields;
 				assert(fields.size == 2);
 				const ConcreteField funPtrField = at(fields, 0);
 				const ConcreteField dataPtrField = at(fields, 1);
@@ -1058,7 +1058,7 @@ namespace {
 			writeNat(writer, strukt->sizeBytes());
 			writeStatic(writer, ");");
 		}
-		writeStatic(writer,"\n\treturn (int) main__int64();\n}\n");
+		writeStatic(writer,"\n\treturn (int) main___int();\n}\n");
 	}
 }
 

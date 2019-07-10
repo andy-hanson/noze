@@ -64,8 +64,8 @@ namespace {
 				for (const ConcreteType s : b.typeArgs)
 					setReferencedInType(ctx, s);
 			},
-			[&](const ConcreteStructBody::Fields f) {
-				for (const ConcreteField field : f.fields)
+			[&](const ConcreteStructBody::Record r) {
+				for (const ConcreteField field : r.fields)
 					setReferencedInType(ctx, field.type);
 			},
 			[&](const ConcreteStructBody::Union u) {

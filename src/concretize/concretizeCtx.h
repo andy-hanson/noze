@@ -55,14 +55,14 @@ struct ConcreteFunInst {
 		return TypeArgsScope{decl->typeParams, typeArgs};
 	}
 
-	inline size_t arity() const {
-		return decl->arity();
-	}
-
 	inline const ConcreteFunInst withTypeArgs(const Arr<const ConcreteType> newTypeArgs) const {
 		return ConcreteFunInst{decl, newTypeArgs, specImpls};
 	}
 };
+
+inline size_t arity(const ConcreteFunInst c) {
+	return arity(c.decl);
+}
 
 struct ConcreteFunKey {
 	const ConcreteFunInst funInst;
@@ -72,7 +72,7 @@ struct ConcreteFunKey {
 		const ConcreteFunInst _funInst,
 		const Arr<const ConstantOrLambdaOrVariable> _specializeOnArgs
 	) : funInst{_funInst}, specializeOnArgs{_specializeOnArgs} {
-		assert(funInst.arity() == specializeOnArgs.size);
+		assert(arity(funInst) == specializeOnArgs.size);
 	}
 
 	inline const FunDecl* decl() const {

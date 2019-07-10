@@ -111,7 +111,7 @@ namespace {
 			return fld.isMutable;
 		});
 		return ConcreteStructInfo{
-			ConcreteStructBody{ConcreteStructBody::Fields{fields}},
+			ConcreteStructBody{ConcreteStructBody::Record{fields}},
 			sizeBytes,
 			isSelfMutable,
 			getDefaultIsPointerForFields(forcedByValOrRef, sizeBytes, isSelfMutable),
@@ -148,11 +148,11 @@ namespace {
 					/*defaultIsPointer*/ False
 				};
 			},
-			[&](const StructBody::Fields f) {
-				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(ctx.arena, f.fields, [&](const StructField f) {
+			[&](const StructBody::Record r) {
+				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(ctx.arena, r.fields, [&](const StructField f) {
 					return ConcreteField{f.isMutable, mangleName(ctx.arena, f.name), getConcreteType(ctx, f.type, typeArgsScope)};
 				});
-				return getConcreteStructInfoForFields(f.forcedByValOrRef, fields);
+				return getConcreteStructInfoForFields(r.forcedByValOrRef, fields);
 			},
 			[&](const StructBody::Union u) {
 				const Arr<const ConcreteType> members = map<const ConcreteType>{}(ctx.arena, u.members, [&](const StructInst* si) {
@@ -413,7 +413,7 @@ const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx& ctx,
 			decl,
 			emptyArr<const ConcreteType>(),
 			emptyArr<const ConcreteFunInst>()},
-		allVariable(ctx.arena, decl->arity())};
+		allVariable(ctx.arena, arity(decl))};
 	return getOrAddConcreteFunAndFillBody(ctx, key);
 }
 

@@ -61,7 +61,7 @@ namespace {
 		};
 		const Opt<const StructInst*>
 			_bool = ng("bool"),
-			int64 = ng("int64"),
+			int64 = ng("int"),
 			_char = ng("char"),
 			_ctx = ng("ctx"),
 			str = ng("str"),
@@ -300,27 +300,29 @@ namespace {
 			return none<const ForcedByValOrRef>();
 	}
 
-	const StructBody checkFields(
+	const StructBody checkRecord(
 		CheckCtx& ctx,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const StructDecl* strukt,
-		const StructDeclAst::Body::Fields f,
+		const StructDeclAst::Body::Record r,
 		MutArr<StructInst*>& delayStructInsts
 	) {
 		const Arr<const StructField> fields = mapWithIndex<const StructField>{}(
 			ctx.arena,
-			f.fields,
-			[&](const StructDeclAst::Body::Fields::Field field, const size_t index) {
+			r.fields,
+			[&](const StructDeclAst::Body::Record::Field field, const size_t index) {
 				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
 				if (isPurityWorse(fieldType.purity(), strukt->purity) && !strukt->forceSendable)
 					ctx.addDiag(field.range, Diag{Diag::PurityOfFieldWorseThanRecord{strukt, fieldType}});
+				if (field.isMutable && strukt->purity != Purity::mut && !strukt->forceSendable)
+					ctx.addDiag(field.range, Diag{Diag::MutFieldInNonMutRecord{}});
 				return StructField{field.range, field.isMutable, ctx.copyStr(field.name), fieldType, index};
 			});
 		everyPair(fields, [&](const StructField a, const StructField b) {
 			if (strEq(a.name, b.name))
 				ctx.addDiag(b.range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::field, a.name}});
 		});
-		return StructBody{StructBody::Fields{getForcedByValOrRef(f.explicitByValOrRef), fields}};
+		return StructBody{StructBody::Record{getForcedByValOrRef(r.explicitByValOrRef), fields}};
 	}
 
 	void checkStructBodies(
@@ -337,8 +339,8 @@ namespace {
 				[](const StructDeclAst::Body::Builtin) {
 					return StructBody{StructBody::Builtin{}};
 				},
-				[&](const StructDeclAst::Body::Fields f) {
-					return checkFields(ctx, structsAndAliasesMap, strukt, f, delayStructInsts);
+				[&](const StructDeclAst::Body::Record r) {
+					return checkRecord(ctx, structsAndAliasesMap, strukt, r, delayStructInsts);
 				},
 				[&](const StructDeclAst::Body::Union un) {
 					const Opt<const Arr<const StructInst*>> members = mapOrNone<const StructInst*>{}(ctx.arena, un.members, [&](const TypeAst::InstStruct it) {
@@ -375,7 +377,7 @@ namespace {
 			strukt.body().match(
 				[](const StructBody::Bogus) {},
 				[](const StructBody::Builtin) {},
-				[](const StructBody::Fields) {},
+				[](const StructBody::Record) {},
 				[](const StructBody::Union u) {
 					for (const StructInst* member : u.members)
 						if (member->decl->body().isUnion())
@@ -417,7 +419,7 @@ namespace {
 	}
 
 	struct FunsAndMap {
-		const Arr<const FunDecl> funs;
+		const Arr<FunDecl> funs;
 		const FunsMap funsMap;
 	};
 
@@ -492,7 +494,7 @@ namespace {
 				}));
 		});
 
-		return FunsAndMap{asConst(funs), funsMap};
+		return FunsAndMap{funs, funsMap};
 	}
 
 	template <typename GetCommonTypes>
@@ -529,20 +531,24 @@ namespace {
 				for (StructInst* i : freeze(delayStructInsts))
 					i->setBody(instantiateStructBody(arena, i->decl, i->typeArgs));
 				const FunsAndMap funsAndMap = checkFuns(ctx, commonTypes, specsMap, structsAndAliasesMap, ast.funs);
-				if (ctx.hasDiags())
-					return failure<const IncludeCheck, const Arr<const Diagnostic>>(ctx.diags());
-				else {
-					const Module* mod = arena.nu<const Module>()(
-						path,
-						imports,
-						asConst(structs),
-						specs,
-						funsAndMap.funs,
-						structsAndAliasesMap,
-						specsMap,
-						funsAndMap.funsMap);
-					return success<const IncludeCheck, const Arr<const Diagnostic>>(IncludeCheck{mod, commonTypes});
-				}
+
+				// Create a module unconditionally so every function will always have containingModule set, even in failure case
+				const Module* mod = arena.nu<const Module>()(
+					path,
+					imports,
+					asConstArr<StructDecl>(structs),
+					specs,
+					asConstArr<FunDecl>(funsAndMap.funs),
+					structsAndAliasesMap,
+					specsMap,
+					funsAndMap.funsMap);
+
+				for (FunDecl* f : ptrsRange(funsAndMap.funs))
+					f->setContainingModule(mod);
+
+				return ctx.hasDiags()
+					? failure<const IncludeCheck, const Arr<const Diagnostic>>(ctx.diags())
+					: success<const IncludeCheck, const Arr<const Diagnostic>>(IncludeCheck{mod, commonTypes});
 			});
 		}
 	}

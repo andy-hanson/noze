@@ -189,6 +189,6 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	});
 
 	return mapFailure<const Diagnostics>{}(res, [&](const Arr<const Diagnostic> d) {
-		return Diagnostics{d, lineAndColumnGetters.finishShouldBeNoConflict()};
+		return Diagnostics{d, FilesInfo{storages.absolutePathsGetter(), lineAndColumnGetters.finishShouldBeNoConflict()}};
 	});
 }

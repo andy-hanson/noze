@@ -16,6 +16,10 @@ struct ReadOnlyStorages {
 	const ReadOnlyStorage include;
 	const ReadOnlyStorage user;
 
+	const AbsolutePathsGetter absolutePathsGetter() const {
+		return AbsolutePathsGetter{include.root, user.root};
+	}
+
 	inline const ReadOnlyStorage choose(const StorageKind storageKind) const {
 		switch (storageKind) {
 			case StorageKind::global:

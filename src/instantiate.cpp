@@ -62,11 +62,11 @@ const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, con
 		[](const StructBody::Builtin) {
 			return StructBody{StructBody::Builtin{}};
 		},
-		[&](const StructBody::Fields f) {
-			const Arr<const StructField> fields = map<const StructField>{}(arena, f.fields, [&](const StructField f) {
+		[&](const StructBody::Record r) {
+			const Arr<const StructField> fields = map<const StructField>{}(arena, r.fields, [&](const StructField f) {
 				return f.withType(instantiateType(arena, f.type, typeParamsAndArgs));
 			});
-			return StructBody{StructBody::Fields{f.forcedByValOrRef, fields}};
+			return StructBody{StructBody::Record{r.forcedByValOrRef, fields}};
 		},
 		[&](const StructBody::Union u) {
 			const Arr<const StructInst*> members = map<const StructInst*>{}(arena, u.members, [&](const StructInst* i) {
