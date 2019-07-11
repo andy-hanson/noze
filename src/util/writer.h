@@ -9,17 +9,17 @@ struct Writer {
 };
 
 inline const Str finishWriter(Writer& writer) {
-	return writer.res.finish();
+	return finishArr(&writer.res);
 }
 
 inline CStr finishWriterToCStr(Writer& writer) {
-	writer.res.add(writer.arena, '\0');
-	return writer.res.finish().begin();
+	add<const char>(writer.arena, &writer.res, '\0');
+	return finishArr(&writer.res).begin();
 }
 
 //TODO:KILL
 inline void writeChar(Writer& writer, const char c) {
-	writer.res.add(writer.arena, c);
+	add<const char>(writer.arena, &writer.res, c);
 }
 void writeStr(Writer& writer, const Str s);
 inline void writeStatic(Writer& writer, const char* c) {

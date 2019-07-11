@@ -14,11 +14,11 @@ void eachFunInScope(ExprCtx& ctx, const Str funName, Cb cb) {
 		totalIndex += sigs.size;
 	}
 
-	for (const FunDecl* f : ctx.funsMap.get(funName))
+	for (const FunDecl* f : multiDictGetAt<Str, const FunDecl*, compareStr>(ctx.funsMap, funName))
 		cb(CalledDecl{f});
 
 	for (const Module* m : ctx.checkCtx.includeAndImportsRange())
-		for (const FunDecl* f : m->funsMap.get(funName))
+		for (const FunDecl* f : multiDictGetAt<Str, const FunDecl*, compareStr>(m->funsMap, funName))
 			if (f->isPublic)
 				cb(CalledDecl{f});
 }

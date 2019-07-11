@@ -49,10 +49,10 @@ namespace {
 			ArrBuilder<const ExprAst> args {};
 			do {
 				const ExprAndMaybeDedent ad = parseExprArg(lexer, ctx);
-				args.add(lexer.arena, ad.expr);
+				add<const ExprAst>(lexer.arena, &args, ad.expr);
 				cellSet<const Opt<const size_t>>(&dedents, ad.dedents);
 			} while (!has(cellGet(&dedents)) && tryTake(lexer, ", "));
-			return ArgsAndMaybeDedent{args.finish(), cellGet(&dedents)};
+			return ArgsAndMaybeDedent{finishArr(&args), cellGet(&dedents)};
 		}
 	}
 
@@ -209,12 +209,12 @@ namespace {
 						return some<const Str>(localName);
 					}();
 				const ExprAndDedent ed = parseStatementsAndDedent(lexer);
-				cases.add(lexer.arena, MatchAst::CaseAst{range(lexer, startCase), structName, localName, alloc(lexer, ed.expr)});
+				add<const MatchAst::CaseAst>(lexer.arena, &cases, MatchAst::CaseAst{range(lexer, startCase), structName, localName, alloc(lexer, ed.expr)});
 				if (ed.dedents != 0)
 					return ed.dedents - 1;
 			}
 		}();
-		const MatchAst match = MatchAst{matched, cases.finish()};
+		const MatchAst match = MatchAst{matched, finishArr(&cases)};
 		return ExprAndMaybeDedent{
 			ExprAst{range(lexer, start), ExprAstKind{match}},
 			some<const size_t>(matchDedents)};
@@ -258,10 +258,10 @@ namespace {
 					if (!tryTake(lexer, " = "))
 						todo<void>("parseNew");
 					const ExprAst init = parseExprNoBlock(lexer);
-					res.add(lexer.arena, NewActorAst::Field{isMutable, name, alloc(lexer, init)});
+					add<const NewActorAst::Field>(lexer.arena, &res, NewActorAst::Field{isMutable, name, alloc(lexer, init)});
 				} while (tryTake(lexer, ", "));
 				take(lexer, ')');
-				return res.finish();
+				return finishArr(&res);
 			}
 		}();
 
@@ -276,22 +276,22 @@ namespace {
 						return emptyArr<const NameAndRange>();
 					else {
 						ArrBuilder<const NameAndRange> res {};
-						res.add(lexer.arena, takeNameAndRange(lexer));
+						add<const NameAndRange>(lexer.arena, &res, takeNameAndRange(lexer));
 						while (tryTake(lexer, ", "))
-							res.add(lexer.arena, takeNameAndRange(lexer));
+							add<const NameAndRange>(lexer.arena, &res, takeNameAndRange(lexer));
 						take(lexer, ')');
-						return res.finish();
+						return finishArr(&res);
 					}
 				}();
 				takeIndent(lexer);
 				const ExprAndDedent bodyAndDedent = parseStatementsAndDedent(lexer);
-				messages.add(lexer.arena, NewActorAst::MessageImpl{messageName, paramNames, alloc(lexer, bodyAndDedent.expr)});
+				add<const NewActorAst::MessageImpl>(lexer.arena, &messages, NewActorAst::MessageImpl{messageName, paramNames, alloc(lexer, bodyAndDedent.expr)});
 				if (bodyAndDedent.dedents != 0)
 					return bodyAndDedent.dedents - 1;
 			}
 		}();
 
-		const NewActorAst newActor = NewActorAst{fields, messages.finish()};
+		const NewActorAst newActor = NewActorAst{fields, finishArr(&messages)};
 		return ExprAndMaybeDedent{
 			ExprAst{range(lexer, start), ExprAstKind{newActor}},
 			some<const size_t>(extraDedents)};
@@ -306,10 +306,10 @@ namespace {
 			else
 				take(lexer, ' ');
 			const NameAndRange nr = takeNameAndRange(lexer);
-			parameters.add(lexer.arena, LambdaAst::Param{nr.range, nr.name});
+			add<const LambdaAst::Param>(lexer.arena, &parameters, LambdaAst::Param{nr.range, nr.name});
 		}
 		const ExprAndDedent bodyAndDedent = parseStatementsAndDedent(lexer);
-		const LambdaAst lambda = LambdaAst{parameters.finish(), alloc(lexer, bodyAndDedent.expr)};
+		const LambdaAst lambda = LambdaAst{finishArr(&parameters), alloc(lexer, bodyAndDedent.expr)};
 		return ExprAndMaybeDedent{
 			ExprAst{range(lexer, start), ExprAstKind{lambda}},
 			some<const size_t>(bodyAndDedent.dedents)};

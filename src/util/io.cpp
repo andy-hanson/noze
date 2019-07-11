@@ -185,19 +185,19 @@ int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, c
 
 	CStr const* const cArgs = [&]() {
 		ArrBuilder<const CStr> cArgs {};
-		cArgs.add(arena, executableCStr);
+		add<const CStr>(arena, &cArgs, executableCStr);
 		for (const Str arg : args)
-			cArgs.add(arena, strToCStr(arena, arg));
-		cArgs.add(arena, nullptr);
-		return cArgs.finish().begin();
+			add<const CStr>(arena, &cArgs, strToCStr(arena, arg));
+		add<const CStr>(arena, &cArgs, nullptr);
+		return finishArr(&cArgs).begin();
 	}();
 
 	CStr const* const cEnviron = [&]() {
 		ArrBuilder<const CStr> cEnviron {};
 		for (const KeyValuePair<const Str, const Str> pair : environ)
-			cEnviron.add(arena, strToCStr(arena, cat(arena, pair.key, strLiteral("="), pair.value)));
-		cEnviron.add(arena, nullptr);
-		return cEnviron.finish().begin();
+			add<const CStr>(arena, &cEnviron, strToCStr(arena, cat(arena, pair.key, strLiteral("="), pair.value)));
+		add<const CStr>(arena, &cEnviron, nullptr);
+		return finishArr(&cEnviron).begin();
 	}();
 
 	return spawnAndWaitSync(executableCStr, cArgs, cEnviron);
@@ -216,6 +216,6 @@ const CommandLineArgs parseArgs(Arena& arena, const int argc, CStr const* const 
 const Environ getEnviron(Arena& arena) {
 	ArrBuilder<const KeyValuePair<const Str, const Str>> res {};
 	for (CStr const* env = environ; *env != nullptr; env++)
-		res.add(arena, parseEnvironEntry(*env));
-	return res.finish();
+		add<const KeyValuePair<const Str, const Str>>(arena, &res, parseEnvironEntry(*env));
+	return finishArr(&res);
 }

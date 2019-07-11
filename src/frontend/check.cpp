@@ -14,7 +14,7 @@ namespace {
 		const Str name,
 		const size_t expectedTypeParams
 	) {
-		const Opt<const StructOrAlias> res = structsAndAliasesMap.get(name);
+		const Opt<const StructOrAlias> res = getAt<const Str, const StructOrAlias, compareStr>(structsAndAliasesMap, name);
 		if (has(res)) {
 			// may fail -- builtin Template should not be an alias
 			const StructDecl* decl = force(res).asDecl();
@@ -31,7 +31,7 @@ namespace {
 		const Str name,
 		MutArr<StructInst*>& delayedStructInsts
 	) {
-		const Opt<const StructOrAlias> opStructOrAlias = structsAndAliasesMap.get(name);
+		const Opt<const StructOrAlias> opStructOrAlias = getAt<const Str, const StructOrAlias, compareStr>(structsAndAliasesMap, name);
 		if (!has(opStructOrAlias))
 			return none<const StructInst*>();
 		else {
@@ -125,11 +125,11 @@ namespace {
 		return typeParams;
 	}
 
-	void collectTypeParamsInAst(Arena& arena, const TypeAst ast, ArrBuilder<const TypeParam>& res) {
+	void collectTypeParamsInAst(Arena& arena, const TypeAst ast, ArrBuilder<const TypeParam>* res) {
 		return ast.match(
 			[&](const TypeAst::TypeParam tp) {
-				if (!exists(res.tempAsArr(), [&](const TypeParam it) { return strEq(it.name, tp.name); }))
-					res.add(arena, TypeParam{tp.range, copyStr(arena, tp.name), res.size()});
+				if (!exists(res->tempAsArr(), [&](const TypeParam it) { return strEq(it.name, tp.name); }))
+					add<const TypeParam>(arena, res, TypeParam{tp.range, copyStr(arena, tp.name), res->size()});
 			},
 			[&](const TypeAst::InstStruct i) {
 				for (const TypeAst arg : i.typeArgs)
@@ -139,10 +139,10 @@ namespace {
 
 	const Arr<const TypeParam> collectTypeParams(Arena& arena, const SigAst ast) {
 		ArrBuilder<const TypeParam> res {};
-		collectTypeParamsInAst(arena, ast.returnType, res);
+		collectTypeParamsInAst(arena, ast.returnType, &res);
 		for (const ParamAst p : ast.params)
-			collectTypeParamsInAst(arena, p.type, res);
-		return res.finish();
+			collectTypeParamsInAst(arena, p.type, &res);
+		return finishArr(&res);
 	}
 
 	const Arr<const Param> checkParams(
@@ -397,10 +397,10 @@ namespace {
 	const StructsAndAliasesMap buildStructsAndAliasesDict(CheckCtx& ctx, const Arr<StructDecl> structs, const Arr<StructAlias> aliases) {
 		DictBuilder<const Str, const StructOrAlias, compareStr> d {};
 		for (const StructDecl* decl : ptrsRange(structs))
-			d.add(ctx.arena, decl->name, StructOrAlias{decl});
+			addToDict<const Str, const StructOrAlias, compareStr>(ctx.arena, &d, decl->name, StructOrAlias{decl});
 		for (const StructAlias* a : ptrsRange(aliases))
-			d.add(ctx.arena, a->name, StructOrAlias{a});
-		return d.finish(ctx.arena, [&](const Str name, const StructOrAlias, const StructOrAlias b) {
+			addToDict<const Str, const StructOrAlias, compareStr>(ctx.arena, &d, a->name, StructOrAlias{a});
+		return finishDict<const Str, const StructOrAlias, compareStr>(ctx.arena, &d, [&](const Str name, const StructOrAlias, const StructOrAlias b) {
 			ctx.addDiag(b.range(), Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::structOrAlias, name}});
 		});
 	}

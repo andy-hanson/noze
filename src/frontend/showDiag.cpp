@@ -34,7 +34,7 @@ namespace {
 		writeHyperlink(writer, pathToStr(temp, fi.absolutePathsGetter.getAbsolutePath(temp, where)), pathToStr(temp, where.path));
 		writeChar(writer, ' ');
 		writeRed(writer);
-		writeRange(writer, fi.lineAndColumnGetters.mustGet(where), range);
+		writeRange(writer, mustGetAt<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(fi.lineAndColumnGetters, where), range);
 		writeReset(writer);
 	}
 
@@ -45,7 +45,7 @@ namespace {
 		writePath(writer, where.path);
 		writeReset(writer);
 		writeStatic(writer, " line ");
-		const size_t line = lineAndColumnAtPos(fi.lineAndColumnGetters.mustGet(where), range.start).line;
+		const size_t line = lineAndColumnAtPos(mustGetAt<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(fi.lineAndColumnGetters, where), range.start).line;
 		writeNat(writer, line + 1);
 	}
 

@@ -23,7 +23,7 @@ struct ConstantsForUnion {
 
 const Constant* AllConstants::_nuConstant(Arena& arena, const ConcreteType type, const ConstantKind kind, const size_t id) {
 	const Constant* res = arena.nu<const Constant>()(type, kind, id);
-	all.add(arena, res);
+	add(arena, &all, res);
 	return res;
 }
 

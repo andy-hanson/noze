@@ -12,10 +12,10 @@ namespace {
 				const Pos start = curPos(lexer);
 				take(lexer, '?');
 				const Str name = takeName(lexer);
-				res.add(lexer.arena, TypeParamAst{range(lexer, start), name});
+				add<const TypeParamAst>(lexer.arena, &res, TypeParamAst{range(lexer, start), name});
 			} while(tryTake(lexer, ", "));
 			take(lexer, '>');
-			return res.finish();
+			return finishArr(&res);
 		} else
 			return emptyArr<const TypeParamAst>();
 	}
@@ -55,12 +55,12 @@ namespace {
 				const Str name = takeName(lexer);
 				take(lexer, ' ');
 				const TypeAst type = parseType(lexer);
-				res.add(lexer.arena, ParamAst{range(lexer, start), name, type});
+				add<const ParamAst>(lexer.arena, &res, ParamAst{range(lexer, start), name, type});
 				if (tryTake(lexer, ')'))
 					break;
 				take(lexer, ", ");
 			}
-			return res.finish();
+			return finishArr(&res);
 		}
 	}
 
@@ -78,20 +78,20 @@ namespace {
 	}
 
 	const Arr<const ImportAst> parseImports(Lexer& lexer) {
-		ArrBuilder<const ImportAst> imports {};
+		ArrBuilder<const ImportAst> res {};
 		do {
-			imports.add(lexer.arena, parseSingleImport(lexer));
+			add<const ImportAst>(lexer.arena, &res, parseSingleImport(lexer));
 		} while (tryTake(lexer, ' '));
 		take(lexer, '\n');
-		return imports.finish();
+		return finishArr(&res);
 	}
 
 	const Arr<const SigAst> parseIndentedSigs(Lexer& lexer) {
 		ArrBuilder<const SigAst> res {};
 		do {
-			res.add(lexer.arena, parseSig(lexer));
+			add<const SigAst>(lexer.arena, &res, parseSig(lexer));
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
-		return res.finish();
+		return finishArr(&res);
 	}
 
 	enum class SpaceOrNewlineOrIndent {
@@ -172,11 +172,11 @@ namespace {
 				take(lexer, ' ');
 				const Bool isMutable = tryTake(lexer, "mut ");
 				const TypeAst type = parseType(lexer);
-				res.add(lexer.arena, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
+				add<const StructDeclAst::Body::Record::Field>(lexer.arena, &res, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
 			}
 			cellSet<const Bool>(&isFirstLine, False);
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
-		return StructDeclAst::Body::Record{cellGet(&explicitByValOrRef), res.finish()};
+		return StructDeclAst::Body::Record{cellGet(&explicitByValOrRef), finishArr(&res)};
 	}
 
 	const Arr<const TypeAst::InstStruct> parseUnionMembers(Lexer& lexer) {
@@ -185,9 +185,9 @@ namespace {
 			const Pos start = curPos(lexer);
 			const Str name = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-			res.add(lexer.arena, TypeAst::InstStruct{range(lexer, start), name, typeArgs});
+			add<const TypeAst::InstStruct>(lexer.arena, &res, TypeAst::InstStruct{range(lexer, start), name, typeArgs});
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
-		return res.finish();
+		return finishArr(&res);
 	}
 
 	struct SpecUsesAndSigFlagsAndKwBody {
@@ -233,7 +233,7 @@ namespace {
 				break;
 			} else {
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-				specUses.add(lexer.arena, SpecUseAst{range(lexer, start), name, typeArgs});
+				add<const SpecUseAst>(lexer.arena, &specUses, SpecUseAst{range(lexer, start), name, typeArgs});
 			}
 		}
 
@@ -252,7 +252,13 @@ namespace {
 		Opt<const FunBodyAst> body = cellGet(&builtin) ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
 			: cellGet(&_extern) ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
 			: none<const FunBodyAst>();
-		return SpecUsesAndSigFlagsAndKwBody{specUses.finish(), cellGet(&noCtx), cellGet(&summon), cellGet(&unsafe), cellGet(&trusted), body};
+		return SpecUsesAndSigFlagsAndKwBody{
+			finishArr(&specUses),
+			cellGet(&noCtx),
+			cellGet(&summon),
+			cellGet(&unsafe),
+			cellGet(&trusted),
+			body};
 	}
 
 	const FunDeclAst parseFun(
@@ -271,10 +277,10 @@ namespace {
 	void parseSpecOrStructOrFun(
 		Lexer& lexer,
 		const Bool isPublic,
-		ArrBuilder<const SpecDeclAst>& specs,
-		ArrBuilder<const StructAliasAst>& structAliases,
-		ArrBuilder<const StructDeclAst>& structs,
-		ArrBuilder<const FunDeclAst>& funs
+		ArrBuilder<const SpecDeclAst>* specs,
+		ArrBuilder<const StructAliasAst>* structAliases,
+		ArrBuilder<const StructDeclAst>* structs,
+		ArrBuilder<const FunDeclAst>* funs
 	) {
 		const Pos start = curPos(lexer);
 		const Str name = takeName(lexer);
@@ -310,14 +316,14 @@ namespace {
 					todo<void>("alias shouldn't have purity");
 				const TypeAst::InstStruct target = parseStructType(lexer);
 				takeDedent(lexer);
-				structAliases.add(lexer.arena, StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
+				add<const StructAliasAst>(lexer.arena, structAliases, StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
 			} else if (kw == NonFunKeyword::spec) {
 				if (!tookIndent)
 					todo<void>("always indent spec");
 				if (has(purity))
 					todo<void>("spec shouldn't have purity");
 				const Arr<const SigAst> sigs = parseIndentedSigs(lexer);
-				specs.add(lexer.arena, SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
+				add<const SpecDeclAst>(lexer.arena, specs, SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
 			} else {
 				using Body = StructDeclAst::Body;
 				const Body body = [&]() {
@@ -344,10 +350,10 @@ namespace {
 							return unreachable<const Body>();
 					}
 				}();
-				structs.add(lexer.arena, StructDeclAst{range(lexer, start), isPublic, name, typeParams, purity, body});
+				add<const StructDeclAst>(lexer.arena, structs, StructDeclAst{range(lexer, start), isPublic, name, typeParams, purity, body});
 			}
 		} else
-			funs.add(lexer.arena, parseFun(lexer, isPublic, start, name, typeParams));
+			add<const FunDeclAst>(lexer.arena, funs, parseFun(lexer, isPublic, start, name, typeParams));
 	}
 
 	const FileAst parseFileMayThrow(Lexer& lexer) {
@@ -372,10 +378,10 @@ namespace {
 				isPublic = False;
 				skipBlankLines(lexer);
 			}
-			parseSpecOrStructOrFun(lexer, isPublic, specs, structAliases, structs, funs);
+			parseSpecOrStructOrFun(lexer, isPublic, &specs, &structAliases, &structs, &funs);
 		}
 
-		return FileAst{imports, specs.finish(), structAliases.finish(), structs.finish(), funs.finish()};
+		return FileAst{imports, finishArr(&specs), finishArr(&structAliases), finishArr(&structs), finishArr(&funs)};
 	}
 }
 

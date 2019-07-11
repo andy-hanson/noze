@@ -237,13 +237,13 @@ namespace {
 			eachFunInScope(ctx, ast.funName, [&](const CalledDecl called) {
 				called.match(
 					[&](const FunDecl* f) {
-						funsInScopeBuilder.add(ctx.arena(), f);
+						add(ctx.arena(), &funsInScopeBuilder, f);
 					},
 					[&](const SpecSig) {
 						todo<void>("checkFunAsLambda");
 					});
 			});
-			return funsInScopeBuilder.finish();
+			return finishArr(&funsInScopeBuilder);
 		}();
 
 		if (funsInScope.size != 1)

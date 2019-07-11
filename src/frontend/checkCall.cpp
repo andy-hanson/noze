@@ -67,9 +67,9 @@ namespace {
 	const Arr<const CalledDecl> getAllCandidatesAsCalledDecls(ExprCtx& ctx, const Str funName) {
 		ArrBuilder<const CalledDecl> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
-			res.add(ctx.arena(), called);
+			add<const CalledDecl>(ctx.arena(), &res, called);
 		});
-		return res.finish();
+		return finishArr(&res);
 	}
 
 	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type candidateParamType) {
@@ -316,7 +316,7 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		}
 
 		const Type actualArgType = common.expected.inferred();
-		actualArgTypes.add(ctx.arena(), actualArgType);
+		add<const Type>(ctx.arena(), &actualArgTypes, actualArgType);
 		// If the Inferring already came from the candidate, no need to do more work.
 		if (!common.isExpectedFromCandidate)
 			filterByParamType(ctx.arena(), candidates, actualArgType, argIdx);
@@ -342,7 +342,7 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		const Str funName = ctx.checkCtx.copyStr(ast.funName);
 		if (isEmpty(candidatesArr)) {
 			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
-			ctx.addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, actualArgTypes.finish(), allCandidates}});
+			ctx.addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, finishArr(&actualArgTypes), allCandidates}});
 		} else {
 			const Arr<const CalledDecl> matches = map<const CalledDecl>{}(
 				ctx.arena(),

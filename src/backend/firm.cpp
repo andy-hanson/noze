@@ -64,12 +64,12 @@ namespace {
 				ir_type* valueType = initValueType(s);
 				ir_type* pointerType = new_type_pointer(valueType);
 				set_pointer_points_to_type(pointerType, valueType);
-				allTypes.add(arena, s, TypesForStruct{valueType, pointerType});
+				addToDict<const ConcreteStruct*, const TypesForStruct, comparePtr<const ConcreteStruct>>(arena, &allTypes, s, TypesForStruct{valueType, pointerType});
 			}
-			return allTypes.finishShouldBeNoConflict();
+			return finishDictShouldBeNoConflict(&allTypes);
 		}();
 		for (const ConcreteStruct* s : allStructs)
-			fillInType(s, typesDict.mustGet(s).valueType, typesDict);
+			fillInType(s, mustGetAt(typesDict, s).valueType, typesDict);
 		return typesDict;
 	}
 
@@ -107,7 +107,7 @@ namespace {
 		Arena arena {};
 		const TypesDict typesDict = getTypesDict(arena, program.allStructs);
 
-		ir_type* ctxType = typesDict.mustGet(program.ctxType).pointerType;
+		ir_type* ctxType = mustGetAt(typesDict, program.ctxType).pointerType;
 
 		for (const ConcreteFun* cf : program.allFuns) {
 			createProtoForFun(cf, typesDict, ctxType);

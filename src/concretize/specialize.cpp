@@ -46,21 +46,21 @@ namespace {
 						// Still specialize on lambda constants
 						return ConstantOrLambdaOrVariable{c};
 					else {
-						nonOmittedArgs.add(ctx.arena, ConstantOrExpr{c});
+						add<const ConstantOrExpr>(ctx.arena, &nonOmittedArgs, ConstantOrExpr{c});
 						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
 					}
 				},
 				[&](const ConcreteExpr* e) {
 					if (has(e->knownLambdaBody())) {
-						nonOmittedArgs.add(ctx.arena, ConstantOrExpr{e});
+						add<const ConstantOrExpr>(ctx.arena, &nonOmittedArgs, ConstantOrExpr{e});
 						return ConstantOrLambdaOrVariable{force(e->knownLambdaBody())};
 					} else {
-						nonOmittedArgs.add(ctx.arena, makeLambdasDynamic_forExpr(ctx, range, e));
+						add<const ConstantOrExpr>(ctx.arena, &nonOmittedArgs, makeLambdasDynamic_forExpr(ctx, range, e));
 						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
 					}
 				});
 		});
-		return SpecializeOnArgs{specializeOnArgs, nonOmittedArgs.finish()};
+		return SpecializeOnArgs{specializeOnArgs, finishArr(&nonOmittedArgs)};
 	}
 
 	const SpecializeOnArgs dontSpecialize(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args) {
@@ -132,9 +132,9 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 			return getConcreteType(ctx, c->type, typeArgsScope);
 		});
 		if (has(t))
-			res.add(ctx.arena, ConcreteField{/*isMutable*/ False, copyStr(ctx.arena, c->name), force(t)});
+			add<const ConcreteField>(ctx.arena, &res, ConcreteField{/*isMutable*/ False, copyStr(ctx.arena, c->name), force(t)});
 	}
-	return res.finish();
+	return finishArr(&res);
 }
 
 const Arr<const ConcreteParam> concretizeParamsAndSpecialize(
@@ -152,9 +152,9 @@ const Arr<const ConcreteParam> concretizeParamsAndSpecialize(
 			return getConcreteType(ctx, p.type, typeArgsScope);
 		});
 		if (has(t))
-			res.add(ctx.arena, ConcreteParam{mangleName(ctx.arena, p.name), force(t)});
+			add<const ConcreteParam>(ctx.arena, &res, ConcreteParam{mangleName(ctx.arena, p.name), force(t)});
 	}
-	return res.finish();
+	return finishArr(&res);
 }
 
 // This is for instantiating a KnownLambdaBody.
@@ -169,9 +169,9 @@ const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
 		const ConcreteParam p = at(nonSpecializedParams, i);
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() { return p.type; });
 		if (has(t))
-			res.add(ctx.arena, ConcreteParam{p.mangledName, force(t)});
+			add<const ConcreteParam>(ctx.arena, &res, ConcreteParam{p.mangledName, force(t)});
 	}
-	return res.finish();
+	return finishArr(&res);
 }
 
 const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx& ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope) {

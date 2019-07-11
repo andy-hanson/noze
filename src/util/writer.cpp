@@ -2,7 +2,7 @@
 
 void writeStr(Writer& writer, const Str s) {
 	for (const char c : s)
-		writer.res.add(writer.arena, c);
+		add<const char>(writer.arena, &writer.res, c);
 }
 
 void writeNat(Writer& writer, const size_t s) {

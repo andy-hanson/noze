@@ -10,14 +10,14 @@ namespace {
 			for (;;) {
 				if (!isInner && !tryTake(lexer, ' '))
 					break;
-				res.add(lexer.arena, parseTypeWorker(lexer, /*isInner*/ True));
+				add<const TypeAst>(lexer.arena, &res, parseTypeWorker(lexer, /*isInner*/ True));
 				if (isInner && !tryTake(lexer, ", "))
 					break;
 			}
 			if (isInner)
 				take(lexer, '>');
 		}
-		return res.finish();
+		return finishArr(&res);
 	}
 
 	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner) {

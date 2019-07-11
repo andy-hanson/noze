@@ -47,7 +47,7 @@ struct CheckCtx {
 	CheckCtx(const CheckCtx&) = delete;
 
 	inline void addDiag(const SourceRange range, const Diag diag) {
-		diagsBuilder.add(arena, Diagnostic{path, range, diag});
+		add<const Diagnostic>(arena, &diagsBuilder, Diagnostic{path, range, diag});
 	}
 
 	inline const Bool hasDiags() const {
@@ -55,7 +55,7 @@ struct CheckCtx {
 	}
 
 	inline const Arr<const Diagnostic> diags() {
-		return diagsBuilder.finish();
+		return finishArr(&diagsBuilder);
 	}
 
 	inline IncludeAndImportsRange includeAndImportsRange() const {

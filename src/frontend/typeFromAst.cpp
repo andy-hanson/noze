@@ -24,10 +24,10 @@ namespace {
 		Diag::NameNotFound::Kind kind,
 		GetTMap getTMap
 	) {
-		Cell<const Opt<TDecl>> res = Cell<const Opt<TDecl>>{dict.get(name)};
+		Cell<const Opt<TDecl>> res = Cell<const Opt<TDecl>>{getAt<const Str, TDecl, compareStr>(dict, name)};
 
 		for (const Module* m : ctx.includeAndImportsRange()) {
-			const Opt<TDecl> fromModule = getTMap(m).get(name);
+			const Opt<TDecl> fromModule = getAt<const Str, TDecl, compareStr>(getTMap(m), name);
 			if (has(fromModule)) {
 				if (has(cellGet(&res)))
 					todo<void>("Duplicate imports from different modules");

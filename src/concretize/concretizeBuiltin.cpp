@@ -432,13 +432,13 @@ namespace {
 					const ConcreteExpr* newAccum = has(cellGet(&accum))
 						? [&]() {
 							const LocalAndExpr le = combineCompares(arena, force(cellGet(&accum)), compareThisField, types.comparison);
-							locals.add(arena, le.local);
+							add(arena, &locals, le.local);
 							return le.expr;
 						}()
 						: compareThisField;
 					cellSet<const Opt<const ConcreteExpr*>>(&accum, some<const ConcreteExpr*>(newAccum));
 				}
-				return ConcreteFunExprBody{locals.finish(), force(cellGet(&accum))};
+				return ConcreteFunExprBody{finishArr(&locals), force(cellGet(&accum))};
 			},
 			[&](const ConcreteStructBody::Union) {
 				return todo<const ConcreteFunExprBody>("compare union");

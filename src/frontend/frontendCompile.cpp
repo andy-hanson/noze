@@ -28,13 +28,13 @@ namespace {
 		Arena& astsArena,
 		const PathAndStorageKind where,
 		const ReadOnlyStorages storages,
-		LineAndColumnGettersBuilder& lineAndColumnGetters
+		LineAndColumnGettersBuilder* lineAndColumnGetters
 	) {
 		// File content must go in astsArena because we refer to strings without copying
 		const Opt<const NulTerminatedStr> opFileContent = getFile(astsArena, where, storages);
 		if (has(opFileContent)) {
 			const NulTerminatedStr text = force(opFileContent);
-			lineAndColumnGetters.add(modelArena, where, lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
+			addToDict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(modelArena, lineAndColumnGetters, where, lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
 			return mapFailure<const Arr<const Diagnostic>>{}(
 				parseFile(astsArena, text),
 				[&](const ParseDiagnostic p) { return parseDiagnostics(modelArena, where, p); });
@@ -72,7 +72,7 @@ namespace {
 		Arena& astsArena,
 		const Path* mainPath,
 		ReadOnlyStorages storages,
-		LineAndColumnGettersBuilder& lineAndColumnGetters
+		LineAndColumnGettersBuilder* lineAndColumnGetters
 	) {
 		Arena tempArena;
 
@@ -95,7 +95,7 @@ namespace {
 			if (!parseResult.isSuccess())
 				return failure<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(parseResult.asFailure());
 
-			res.add(astsArena, PathAndAst{path, parseResult.asSuccess()});
+			add<const PathAndAst>(astsArena, &res, PathAndAst{path, parseResult.asSuccess()});
 
 			for (const ImportAst i : parseResult.asSuccess().imports) {
 				const Opt<const PathAndStorageKind> opDependencyPath = resolveImport(modelArena, path, i);
@@ -107,7 +107,7 @@ namespace {
 			}
 		}
 
-		return success<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(res.finish());
+		return success<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(finishArr(&res));
 	}
 
 	const Result<const Arr<const Module*>, const Arr<const Diagnostic>> getImports(
@@ -143,7 +143,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	const PathAndStorageKind inclPath = includePath(modelArena);
 
 	const Result<const IncludeCheck, const Arr<const Diagnostic>> include = flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(
-		parseSingle(modelArena, astsArena, inclPath, storages, lineAndColumnGetters),
+		parseSingle(modelArena, astsArena, inclPath, storages, &lineAndColumnGetters),
 		[&](const FileAst ast) {
 			return checkIncludeNz(modelArena, ast, inclPath);
 		});
@@ -152,7 +152,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 		include,
 		[&](const IncludeCheck includeCheck) {
 			return mapSuccess<const IncludeAndPathAndAsts>{}(
-				parseEverything(modelArena, astsArena, mainPath, storages, lineAndColumnGetters),
+				parseEverything(modelArena, astsArena, mainPath, storages, &lineAndColumnGetters),
 				[&](const Arr<const PathAndAst> everything) {
 					return IncludeAndPathAndAsts{includeCheck, everything};
 				});
@@ -183,12 +183,12 @@ const Result<const Program, const Diagnostics> frontendCompile(
 
 		return mapSuccess<const Program>{}(modules, [&](const Arr<const Module*> modules) {
 			const Arr<const Module*> allModules = prepend<const Module*>(modelArena, includeCheck.module, modules);
-			const LineAndColumnGetters lc = lineAndColumnGetters.finishShouldBeNoConflict();
+			const LineAndColumnGetters lc = finishDictShouldBeNoConflict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(&lineAndColumnGetters);
 			return Program{includeCheck.module, last(modules), allModules, includeCheck.commonTypes, lc};
 		});
 	});
 
 	return mapFailure<const Diagnostics>{}(res, [&](const Arr<const Diagnostic> d) {
-		return Diagnostics{d, FilesInfo{storages.absolutePathsGetter(), lineAndColumnGetters.finishShouldBeNoConflict()}};
+		return Diagnostics{d, FilesInfo{storages.absolutePathsGetter(), finishDictShouldBeNoConflict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(&lineAndColumnGetters)}};
 	});
 }

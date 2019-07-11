@@ -37,12 +37,12 @@ namespace {
 
 const LineAndColumnGetter lineAndColumnGetterForText(Arena& arena, const Str text) {
 	ArrBuilder<const Pos> res {};
-	res.add(arena, 0);
+	add<const Pos>(arena, &res, 0);
 	// TODO:EACHWITHINDEX
 	for (const size_t i : Range{text.size})
 		if (at(text, i) == '\n')
-			res.add(arena, safeSizeTToUint(i + 1));
-	return LineAndColumnGetter{copyStr(arena, text), res.finish()};
+			add<const Pos>(arena, &res, safeSizeTToUint(i + 1));
+	return LineAndColumnGetter{copyStr(arena, text), finishArr(&res)};
 }
 
 const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos pos) {
