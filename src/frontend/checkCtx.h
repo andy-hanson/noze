@@ -12,7 +12,7 @@ struct IncludeAndImportsIter {
 	ssize_t index;
 
 	inline const Module* operator*() const {
-		return index == -1 ? include.force() : at(imports, index);
+		return index == -1 ? force(include) : at(imports, index);
 	}
 
 	inline void operator++() {
@@ -29,7 +29,7 @@ struct IncludeAndImportsRange {
 	const Arr<const Module*> imports;
 
 	inline IncludeAndImportsIter begin() const {
-		return IncludeAndImportsIter{include, imports, include.has() ? -1 : 0};
+		return IncludeAndImportsIter{include, imports, has(include) ? -1 : 0};
 	}
 
 	inline IncludeAndImportsIter end() {

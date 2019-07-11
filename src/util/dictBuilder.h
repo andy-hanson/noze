@@ -23,11 +23,11 @@ public:
 			for (const size_t j : Range{res.size()}) {
 				if (cmp(at(allPairs, i).key, at(res, j).key) == Comparison::equal) {
 					cbConflict(at(allPairs, i).key, at(res, j).value, at(allPairs, i).value);
-					isConflict.set(True);
+					cellSet<const Bool>(&isConflict, True);
 					break;
 				}
 			}
-			if (!isConflict.get())
+			if (!cellGet(&isConflict))
 				push(arena, res, at(allPairs, i));
 		}
 		return Dict<K, V, cmp>{freeze(res)};

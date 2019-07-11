@@ -7,7 +7,7 @@ const Type instantiateType(Arena& arena, const Type type, const TypeParamsAndArg
 		},
 		[&](const TypeParam* p) {
 			const Opt<const Type> op = tryGetTypeArg(typeParamsAndArgs, p);
-			return op.has() ? op.force() : type;
+			return has(op) ? force(op) : type;
 		},
 		[&](const StructInst* i) {
 			return Type{instantiateStructInst(arena, i, typeParamsAndArgs)};
@@ -110,7 +110,7 @@ const StructInst* instantiateStruct(
 		res->setBody(instantiateStructBody(arena, decl, typeArgs));
 	else
 		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
-		push(arena, *delayStructInsts.force(), res);
+		push(arena, *force(delayStructInsts), res);
 	return res;
 }
 

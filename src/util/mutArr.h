@@ -78,7 +78,7 @@ const Opt<T> pop(MutArr<T>& m) {
 
 template <typename T>
 inline const T mustPop(MutArr<T>& m) {
-	return pop(m).force();
+	return force(pop(m));
 }
 
 template <typename T>
@@ -90,7 +90,7 @@ inline const Opt<T> peek(const MutArr<T>& m) {
 
 template <typename T>
 inline const T mustPeek(const MutArr<T>& m) {
-	return peek(m).force();
+	return force(peek(m));
 }
 
 template <typename T>

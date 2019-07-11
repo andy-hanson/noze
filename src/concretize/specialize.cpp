@@ -9,7 +9,7 @@ namespace {
 		if (c->kind.isLambda()) {
 			const KnownLambdaBody* klb = c->kind.asLambda().knownLambdaBody;
 			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);
-			const ConcreteType closureType = fun->closureType().force();
+			const ConcreteType closureType = force(fun->closureType());
 			const ConstantOrExpr closure = ConstantOrExpr{ctx.allConstants._null(ctx.arena, closureType)};
 			const ConcreteExpr::LambdaToDynamic ld = ConcreteExpr::LambdaToDynamic{fun, closure};
 			return nuExpr(ctx.arena, klb->dynamicType, range, ld);
@@ -19,10 +19,10 @@ namespace {
 	}
 
 	const ConstantOrExpr makeLambdasDynamic_forExpr(ConcretizeCtx& ctx, const SourceRange range, const ConcreteExpr* e) {
-		if (e->knownLambdaBody().has()) {
-			const KnownLambdaBody* klb = e->knownLambdaBody().force();
+		if (has(e->knownLambdaBody())) {
+			const KnownLambdaBody* klb = force(e->knownLambdaBody());
 			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);
-			const ConcreteType closureType = klb->closureType().force();
+			const ConcreteType closureType = force(klb->closureType());
 			const ConstantOrExpr closure = shouldAllocateClosureForDynamicLambda(closureType)
 				? nuExpr(
 					ctx.arena,
@@ -51,9 +51,9 @@ namespace {
 					}
 				},
 				[&](const ConcreteExpr* e) {
-					if (e->knownLambdaBody().has()) {
+					if (has(e->knownLambdaBody())) {
 						nonOmittedArgs.add(ctx.arena, ConstantOrExpr{e});
-						return ConstantOrLambdaOrVariable{e->knownLambdaBody().force()};
+						return ConstantOrLambdaOrVariable{force(e->knownLambdaBody())};
 					} else {
 						nonOmittedArgs.add(ctx.arena, makeLambdasDynamic_forExpr(ctx, range, e));
 						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
@@ -76,18 +76,18 @@ const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(ConcretizeCtx& ctx, cons
 	Cell<const Bool> allConstant { True };
 	Cell<const Bool> someFun { False };
 	for (const ConstantOrExpr c : args) {
-		if (getKnownLambdaBodyFromConstantOrExpr(c).has())
-			someFun.set(True);
+		if (has(getKnownLambdaBodyFromConstantOrExpr(c)))
+			cellSet<const Bool>(&someFun, True);
 		if (!c.isConstant())
-			allConstant.set(False);
+			cellSet<const Bool>(&allConstant, False);
 	}
 
 	// Specialize on funs with all-constant parameters that are non-'summon' as these will likely evaluate to constants.
 	// TODO: also require return type to be immutable
-	const Bool isConstant = _and(allConstant.get(), !isSummon);
+	const Bool isConstant = _and(cellGet(&allConstant), !isSummon);
 
 	// Always specialize on a fun, even if fun is summon
-	return isConstant || someFun.get()
+	return isConstant || cellGet(&someFun)
 		? yesSpecialize(ctx, range, args, isConstant)
 		: dontSpecialize(ctx, range, args);
 }
@@ -131,8 +131,8 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(closureSpecialize, i), [&]() {
 			return getConcreteType(ctx, c->type, typeArgsScope);
 		});
-		if (t.has())
-			res.add(ctx.arena, ConcreteField{/*isMutable*/ False, copyStr(ctx.arena, c->name), t.force()});
+		if (has(t))
+			res.add(ctx.arena, ConcreteField{/*isMutable*/ False, copyStr(ctx.arena, c->name), force(t)});
 	}
 	return res.finish();
 }
@@ -151,8 +151,8 @@ const Arr<const ConcreteParam> concretizeParamsAndSpecialize(
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() {
 			return getConcreteType(ctx, p.type, typeArgsScope);
 		});
-		if (t.has())
-			res.add(ctx.arena, ConcreteParam{mangleName(ctx.arena, p.name), t.force()});
+		if (has(t))
+			res.add(ctx.arena, ConcreteParam{mangleName(ctx.arena, p.name), force(t)});
 	}
 	return res.finish();
 }
@@ -168,8 +168,8 @@ const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
 	for (const size_t i : Range{nonSpecializedParams.size}) {
 		const ConcreteParam p = at(nonSpecializedParams, i);
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() { return p.type; });
-		if (t.has())
-			res.add(ctx.arena, ConcreteParam{p.mangledName, t.force()});
+		if (has(t))
+			res.add(ctx.arena, ConcreteParam{p.mangledName, force(t)});
 	}
 	return res.finish();
 }

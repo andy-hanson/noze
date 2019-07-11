@@ -40,8 +40,8 @@ inline const Opt<const KnownLambdaBody*> getKnownLambdaBodyFromConstantOrLambdaO
 }
 
 inline const ConstantOrLambdaOrVariable constantOrLambdaOrVariableFromConcreteExpr(const ConcreteExpr e) {
-	return e.knownLambdaBody().has()
-		? ConstantOrLambdaOrVariable{e.knownLambdaBody().force()}
+	return has(e.knownLambdaBody())
+		? ConstantOrLambdaOrVariable{force(e.knownLambdaBody())}
 		: ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
 }
 

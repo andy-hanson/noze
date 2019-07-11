@@ -188,9 +188,9 @@ void writeStructInst(Writer& writer, const StructInst* s) {
 	if (!isEmpty(s->typeArgs)) {
 		Cell<const Bool> first { True };
 		for (const Type t : s->typeArgs) {
-			writeChar(writer, first.get() ? '<' : ' ');
+			writeChar(writer, cellGet(&first) ? '<' : ' ');
 			writeType(writer, t);
-			first.set(False);
+			cellSet<const Bool>(&first, False);
 		}
 		writeChar(writer, '>');
 	}

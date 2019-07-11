@@ -88,7 +88,7 @@ int build(
 	const Environ environ
 ) {
 	const Opt<const AbsolutePath> b = buildWorker(nozeDir, programDir, mainPath, environ);
-	return b.has() ? 0 : 1;
+	return has(b) ? 0 : 1;
 }
 
 int buildAndRun(
@@ -99,8 +99,7 @@ int buildAndRun(
 	const Environ environ
 ) {
 	const Opt<const AbsolutePath> exePath = buildWorker(nozeDir, programDir, mainPath, environ);
-	if (exePath.has())
-		return spawnAndWaitSync(exePath.force(), programArgs, environ);
-	else
-		return 1;
+	return has(exePath)
+		? spawnAndWaitSync(force(exePath), programArgs, environ)
+		: 1;
 }

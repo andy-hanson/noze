@@ -27,7 +27,7 @@ inline Opt<T*> tryGetTypeArg(const Arr<const TypeParam> typeParams, const Arr<T>
 
 inline const Opt<const Type> tryGetTypeArg(const TypeParamsAndArgs typeParamsAndArgs, const TypeParam* typeParam) {
 	const Opt<const Type*> t = tryGetTypeArg(typeParamsAndArgs.typeParams, typeParamsAndArgs.typeArgs, typeParam);
-	return t.has() ? some<const Type>(*t.force()) : none<const Type>();
+	return has(t) ? some<const Type>(*force(t)) : none<const Type>();
 }
 
 using DelayStructInsts = const Opt<MutArr<StructInst*>*>;

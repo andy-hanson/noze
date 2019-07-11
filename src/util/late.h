@@ -18,22 +18,22 @@ public:
 	inline Late(const T _value) : _isSet{True}, value{_value} {}
 
 	inline const Bool isSet() const {
-		return _isSet.get();
+		return cellGet(&_isSet);
 	}
 
 	inline const T& get() const {
-		assert(_isSet.get());
+		assert(cellGet(&_isSet));
 		return value;
 	}
 
 	inline void set(T v) {
-		assert(!_isSet.get());
+		assert(!cellGet(&_isSet));
 		initMemory(value, v);
-		_isSet.set(True);
+		cellSet<const Bool>(&_isSet, True);
 	}
 
 	inline void setOverwrite(T v) {
-		assert(_isSet.get());
+		assert(cellGet(&_isSet));
 		overwriteConst(value, v);
 	}
 };

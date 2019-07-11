@@ -11,10 +11,10 @@ struct buildDict {
 			for (const size_t i : Range{res.size()})
 				if (cmp(at(res, i).key, pair.key) == Comparison::equal) {
 					onConflict(pair.key, at(res, i).value, pair.value);
-					wasConflict.set(True);
+					cellSet<const Bool>(&wasConflict, True);
 					break;
 				}
-			if (!wasConflict.get())
+			if (!cellGet(&wasConflict))
 				push(arena, res, pair);
 		}
 		return Dict<K, V, cmp>{freeze(res)};
@@ -32,10 +32,10 @@ struct buildMultiDict {
 			for (const size_t i : Range{res.size()})
 				if (cmp(at(res, i).key, pair.key) == Comparison::equal) {
 					push(arena, at(res, i).value, pair.value);
-					didAdd.set(True);
+					cellSet<const Bool>(&didAdd, True);
 					break;
 				}
-			if (!didAdd.get())
+			if (!cellGet(&didAdd))
 				push(arena, res, KeyValuePair<K, MutArr<V>>{pair.key, MutArr<V>{arena, pair.value}});
 		}
 		const Arr<KeyValuePair<K, MutArr<V>>> arr = freeze(res);

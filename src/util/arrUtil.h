@@ -226,8 +226,8 @@ struct fillArrOrFail {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
 		for (const size_t i : Range{size}) {
 			const Opt<Out> op = cb(i);
-			if (op.has())
-				initMemory(out[i], op.force());
+			if (has(op))
+				initMemory(out[i], force(op));
 			else
 				return none<const Arr<Out>>();
 		}
@@ -275,8 +275,8 @@ struct mapOrNone {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
 		for (const size_t i : Range{in.size}) {
 			const Opt<Out> o = cb(at(in, i));
-			if (o.has())
-				initMemory(out[i], o.force());
+			if (has(o))
+				initMemory(out[i], force(o));
 			else
 				return none<const Arr<Out>>();
 		}
@@ -344,8 +344,8 @@ struct zipOrFail {
 		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
 		for (const size_t i : Range{size}) {
 			const Opt<Out> o = cb(at(in0, i), at(in1, i));
-			if (o.has())
-				initMemory(out[i], o.force());
+			if (has(o))
+				initMemory(out[i], force(o));
 			else
 				return none<const Arr<Out>>();
 		}
@@ -361,8 +361,8 @@ struct mapOp {
 		size_t out_i = 0;
 		for (const size_t in_i : Range{in.size}) {
 			Opt<Out> op = cb(at(in, in_i));
-			if (op.has()) {
-				initMemory(out[out_i], op.force());
+			if (has(op)) {
+				initMemory(out[out_i], force(op));
 				out_i++;
 			}
 		}

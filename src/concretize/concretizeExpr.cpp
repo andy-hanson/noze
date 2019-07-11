@@ -97,8 +97,8 @@ namespace {
 				: getKnownLambdaBodyFromConstantOrExpr(first(args));
 
 			// TODO: also handle isCallFunPtr
-			if (isCallFun(ctx.concretizeCtx, concreteCalled.decl) && opKnownLambdaBody.has()) {
-				const KnownLambdaBody* klb = opKnownLambdaBody.force();
+			if (isCallFun(ctx.concretizeCtx, concreteCalled.decl) && has(opKnownLambdaBody)) {
+				const KnownLambdaBody* klb = force(opKnownLambdaBody);
 				assert(isEmpty(concreteCalled.specImpls));
 				const Arr<const ConstantOrExpr> itsArgs = tail(args);
 				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(ctx.concretizeCtx, range, concreteCalled.decl, itsArgs);
@@ -127,16 +127,15 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeClosureFieldRef(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::ClosureFieldRef e) {
-		const KnownLambdaBody* klb = ctx.concreteFunSource.knownLambdaBody.force();
+		const KnownLambdaBody* klb = force(ctx.concreteFunSource.knownLambdaBody);
 		const size_t index = e.index();
 		const Arr<const ClosureSingleSpecialize> specialize = klb->closureSpecialize;
 		const ClosureSingleSpecialize specialized = at(specialize, index);
 		if (specialized.clv.isConstant())
 			return ConstantOrExpr{specialized.clv.asConstant()};
 		else {
-			const ConcreteField* field = specialized.field.force();
-			// WRONG! klb->closureParam is by-value every time. Want the one on the currentconcretefun.
-			const ConcreteParam* closureParam = &ctx.currentConcreteFun->closureParam.force();
+			const ConcreteField* field = force(specialized.field);
+			const ConcreteParam* closureParam = forcePtr(&ctx.currentConcreteFun->closureParam);
 			const ConstantOrExpr closureParamRef = nuExpr(ctx.arena(), closureParam->type, range, ConcreteExpr::ParamRef{closureParam});
 			const Opt<const KnownLambdaBody*> itsKlb = getKnownLambdaBodyFromConstantOrLambdaOrVariable(specialized.clv);
 			return nuExpr(ctx.arena(), field->type, range, itsKlb, ConcreteExpr::StructFieldAccess{closureParam->type.isPointer, closureParamRef, field});
@@ -241,8 +240,8 @@ namespace {
 
 		const Str typeMangledName = cat(arena, mangledName, strLiteral("___closure"));
 		const Opt<const ConcreteType> closureType = concreteTypeFromFields_neverPointer(arena, closureFields, typeMangledName);
-		const Opt<const ConcreteParam> closureParam = closureType.has()
-			? some<const ConcreteParam>(ConcreteParam{strLiteral("_closure"), closureType.force()})
+		const Opt<const ConcreteParam> closureParam = has(closureType)
+			? some<const ConcreteParam>(ConcreteParam{strLiteral("_closure"), force(closureType)})
 			: none<const ConcreteParam>();
 
 		size_t fieldI = 0;
@@ -294,7 +293,7 @@ namespace {
 
 		ctx.concretizeCtx.knownLambdaBodyToInfo.add(arena, klb, info);
 
-		return closureSpecialize.closureParam.has()
+		return has(closureSpecialize.closureParam)
 			? nuExpr(arena, klb->dynamicType, range, some<const KnownLambdaBody*>(klb), ConcreteExpr::Lambda{closureSpecialize.nonConstantArgs})
 			: ConstantOrExpr{ctx.allConstants().lambda(arena, klb)};
 	}
@@ -352,18 +351,18 @@ namespace {
 				const ConstantKind::Union u = c->kind.asUnion();
 				assert(u.unionType == matchedUnion);
 				const Expr::Match::Case kase = at(e.cases, u.memberIndex);
-				if (kase.local.has()) {
-					const ConcreteLocal* local = concretizeLocal(ctx, kase.local.force(), ConstantOrLambdaOrVariable{u.member});
-					return concretizeWithLocal(ctx, kase.local.force(), local, *kase.then);
+				if (has(kase.local)) {
+					const ConcreteLocal* local = concretizeLocal(ctx, force(kase.local), ConstantOrLambdaOrVariable{u.member});
+					return concretizeWithLocal(ctx, force(kase.local), local, *kase.then);
 				} else
 					return concretizeExpr(ctx, *kase.then);
 			},
 			[&](const ConcreteExpr* matchedExpr) {
 				const Arr<const ConcreteExpr::Match::Case> cases = map<const ConcreteExpr::Match::Case>{}(arena, e.cases, [&](const Expr::Match::Case kase) {
-					if (kase.local.has()) {
-						const ConcreteLocal* local = concretizeLocal(ctx, kase.local.force(), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+					if (has(kase.local)) {
+						const ConcreteLocal* local = concretizeLocal(ctx, force(kase.local), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 						// Since there are many cases, no one KnownLambdaBody can win
-						const ConstantOrExpr then = makeLambdasDynamic(ctx.concretizeCtx, range, concretizeWithLocal(ctx, kase.local.force(), local, *kase.then));
+						const ConstantOrExpr then = makeLambdasDynamic(ctx.concretizeCtx, range, concretizeWithLocal(ctx, force(kase.local), local, *kase.then));
 						return ConcreteExpr::Match::Case{some<const ConcreteLocal*>(local), then};
 					} else
 						return ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), concretizeExpr(ctx, *kase.then)};

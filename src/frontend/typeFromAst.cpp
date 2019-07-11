@@ -28,16 +28,16 @@ namespace {
 
 		for (const Module* m : ctx.includeAndImportsRange()) {
 			const Opt<TDecl> fromModule = getTMap(m).get(name);
-			if (fromModule.has()) {
-				if (res.get().has())
+			if (has(fromModule)) {
+				if (has(cellGet(&res)))
 					todo<void>("Duplicate imports from different modules");
 				else
-					res.set(fromModule);
+					cellSet<const Opt<TDecl>>(&res, fromModule);
 			}
 		}
 
-		const Opt<TDecl> r = res.get();
-		if (!r.has())
+		const Opt<TDecl> r = cellGet(&res);
+		if (!has(r))
 			ctx.addDiag(range, Diag{Diag::NameNotFound{ctx.copyStr(name), kind}});
 		return r;
 	}
@@ -56,10 +56,10 @@ const Opt<const StructInst*> instStructFromAst(
 		structsAndAliasesMap,
 		Diag::NameNotFound::Kind::strukt,
 		[](const Module* m) { return m->structsAndAliasesMap; });
-	if (!opDecl.has())
+	if (!has(opDecl))
 		return none<const StructInst*>();
 
-	const StructOrAlias sOrA = opDecl.force();
+	const StructOrAlias sOrA = force(opDecl);
 	const size_t nExpectedTypeArgs = sOrA.typeParams().size;
 	const Arr<const Type> typeArgs = [&]() {
 		const size_t nActualTypeArgs = ast.typeArgs.size;
@@ -97,8 +97,8 @@ const Type typeFromAst(
 			const Opt<const TypeParam*> found = findPtr(typeParamsScope.innerTypeParams, [&](const TypeParam* it) {
 				return strEq(it->name, p.name);
 			});
-			if (found.has())
-				return Type{found.force()};
+			if (has(found))
+				return Type{force(found)};
 			else {
 				ctx.addDiag(p.range, Diag{Diag::NameNotFound{ctx.copyStr(p.name), Diag::NameNotFound::Kind::typeParam}});
 				return Type{Type::Bogus{}};
@@ -106,7 +106,7 @@ const Type typeFromAst(
 		},
 		[&](const TypeAst::InstStruct iAst) {
 			const Opt<const StructInst*> i = instStructFromAst(ctx, iAst, structsAndAliasesMap, typeParamsScope, delayStructInsts);
-			return i.has() ? Type{i.force()} : Type{Type::Bogus{}};
+			return has(i) ? Type{force(i)} : Type{Type::Bogus{}};
 		});
 }
 

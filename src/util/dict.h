@@ -21,7 +21,7 @@ struct Dict {
 	}
 
 	inline const V mustGet(const K key) const {
-		return get(key).force();
+		return force(get(key));
 	}
 };
 
@@ -31,6 +31,6 @@ struct MultiDict {
 
 	const Arr<V> get(const K key) const {
 		const Opt<const Arr<V>> res = inner.get(key);
-		return res.has() ? res.force() : emptyArr<V>();
+		return has(res) ? force(res) : emptyArr<V>();
 	}
 };

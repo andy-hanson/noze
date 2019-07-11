@@ -162,12 +162,12 @@ namespace {
 
 const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 	const Opt<const BuiltinFunInfo> res = tryGetBuiltinFunInfo(sig);
-	if (!res.has()) {
+	if (!has(res)) {
 		Arena arena {};
 		printf("not a builtin fun: %s\n", strToCStr(arena, sig.name));
 		return todo<const BuiltinFunInfo>("not a builtin fun");
 	}
-	return res.force();
+	return force(res);
 }
 
 const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {

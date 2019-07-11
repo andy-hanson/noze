@@ -7,9 +7,9 @@ namespace {
 	static void walkPathBackwards(const Path* p, Cb cb) {
 		for (;;) {
 			cb(p->baseName);
-			if (!p->parent.has())
+			if (!has(p->parent))
 				break;
-			p = p->parent.force();
+			p = force(p->parent);
 		}
 	}
 
@@ -56,8 +56,8 @@ namespace {
 }
 
 const Path* addManyChildren(Arena& arena, const Path* a, const Path* b) {
-	const Path* p = b->parent.has()
-		? addManyChildren(arena, a, b->parent.force())
+	const Path* p = has(b->parent)
+		? addManyChildren(arena, a, force(b->parent))
 		: a;
 	return childPath(arena, p, b->baseName);
 }
@@ -77,11 +77,11 @@ const Path* changeExtension(Arena& arena, const Path* path, const Str extension)
 const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath) {
 	Path const* cur = path;
 	for (uint i = 0; i < relPath.nParents; i++) {
-		if (!cur->parent.has())
+		if (!has(cur->parent))
 			return i == relPath.nParents - 1
 				? some<const Path*>(relPath.path)
 				: none<const Path*>();
-		cur = cur->parent.force();
+		cur = force(cur->parent);
 	}
 	return some<const Path*>(addManyChildren(arena, cur, relPath.path));
 }
@@ -163,6 +163,6 @@ const AbsolutePath parseAbsolutePath(Arena& arena, const Str str) {
 
 const Path* copyPath(Arena& arena, const Path* path) {
 	return arena.nu<const Path>()(
-		path->parent.has() ? some<const Path*>(copyPath(arena, path->parent.force())) : none<const Path*>(),
+		has(path->parent) ? some<const Path*>(copyPath(arena, force(path->parent))) : none<const Path*>(),
 		copyStr(arena, path->baseName));
 }

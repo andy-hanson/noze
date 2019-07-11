@@ -119,7 +119,7 @@ namespace {
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
 			[&](const ConcreteExpr::CreateRecord e) {
-				const ConcreteType type = ce.typeWithKnownLambdaBody().force();
+				const ConcreteType type = force(ce.typeWithKnownLambdaBody());
 				setReferencedInType(ctx, type);
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
@@ -169,8 +169,8 @@ namespace {
 	}
 
 	void setReferencedInFun(SetReferencedCtx& ctx, const ConcreteFun* f) {
-		if (f->closureParam.has())
-			setReferencedInType(ctx, f->closureParam.force().type);
+		if (has(f->closureParam))
+			setReferencedInType(ctx, force(f->closureParam).type);
 		setReferencedInSig(ctx, f->sig);
 		f->body().match(
 			[](const ConcreteFunBody::Bogus) {
@@ -188,8 +188,8 @@ namespace {
 
 	void setReferencedInNewIfaceImpl(SetReferencedCtx& ctx, const ConcreteExpr::NewIfaceImpl impl) {
 		ctx.addStruct(impl.iface);
-		if (impl.fieldsStruct.has())
-			setReferencedInType(ctx, impl.fieldsStruct.force());
+		if (has(impl.fieldsStruct))
+			setReferencedInType(ctx, force(impl.fieldsStruct));
 		for (const ConstantOrExpr ce : impl.fieldInitializers)
 			setReferencedInConstantOrExpr(ctx, ce);
 		for (const ConcreteExpr::NewIfaceImpl::MessageImpl m : impl.messageImpls)

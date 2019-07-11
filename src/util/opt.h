@@ -6,53 +6,57 @@
 
 template <typename T>
 struct Opt {
-private:
 	const Bool _has;
 	union {
-		const T value;
+		const Bool ignore;
+		const T _value;
 	};
-
-public:
-	inline Opt() : _has{False} {}
-	inline Opt(T v) : _has{True}, value{v} {}
-
-	inline const Bool has() const {
-		return _has;
-	}
-
-	inline const T& force() const {
-		assert(has());
-		return value;
-	}
 };
 
 template <typename T>
 inline Opt<T> none() {
-	return Opt<T>{};
+	return Opt<T>{False, {False}};
 }
 
 template <typename T>
 inline Opt<T> some(T value) {
-	return Opt<T>{value};
+	return Opt<T>{True, {._value = value}};
+}
+
+template <typename T>
+inline const Bool has(const Opt<T> o) {
+	return o._has;
+}
+
+template <typename T>
+inline const T force(const Opt<T> o) {
+	assert(has(o));
+	return o._value;
+}
+
+template <typename T>
+inline const T* forcePtr(const Opt<T>* o) {
+	assert(has(*o));
+	return &o->_value;
 }
 
 template <typename T>
 inline T forceOrTodo(const Opt<T> opt) {
-	if (opt.has())
-		return opt.force();
+	if (has(opt))
+		return force(opt);
 	else
 		assert(0);
 }
 
 template <typename T, Cmp<T> cmpValues>
 Comparison compareOpt(const Opt<T> a, const Opt<T> b) {
-	return a.has()
-		? b.has()
+	return has(a)
+		? has(b)
 			// some <=> some
-			? cmpValues(a.force(), b.force())
+			? cmpValues(force(a), force(b))
 			// some > none
 			: Comparison::greater
-		: b.has()
+		: has(b)
 			// none < some
 			? Comparison::less
 			// none == none

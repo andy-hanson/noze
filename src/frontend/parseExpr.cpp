@@ -50,9 +50,9 @@ namespace {
 			do {
 				const ExprAndMaybeDedent ad = parseExprArg(lexer, ctx);
 				args.add(lexer.arena, ad.expr);
-				dedents.set(ad.dedents);
-			} while (!dedents.get().has() && tryTake(lexer, ", "));
-			return ArgsAndMaybeDedent{args.finish(), dedents.get()};
+				cellSet<const Opt<const size_t>>(&dedents, ad.dedents);
+			} while (!has(cellGet(&dedents)) && tryTake(lexer, ", "));
+			return ArgsAndMaybeDedent{args.finish(), cellGet(&dedents)};
 		}
 	}
 
@@ -93,7 +93,7 @@ namespace {
 	}
 
 	const ExprAndMaybeDedent parseCallsAndStructFieldSets(Lexer& lexer, const Pos start, const ExprAndMaybeDedent ed, const Bool allowBlock) {
-		if (ed.dedents.has())
+		if (has(ed.dedents))
 			return ed;
 		else if (tryTake(lexer, " := ")) {
 			const ExprAst expr = ed.expr;
@@ -301,8 +301,8 @@ namespace {
 		ArrBuilder<const LambdaAst::Param> parameters {};
 		Cell<const Bool> isFirst { True };
 		while (!tryTakeIndent(lexer)) {
-			if (isFirst.get())
-				isFirst.set(False);
+			if (cellGet(&isFirst))
+				cellSet<const Bool>(&isFirst, False);
 			else
 				take(lexer, ' ');
 			const NameAndRange nr = takeNameAndRange(lexer);
@@ -400,7 +400,7 @@ namespace {
 		const Pos start = curPos(lexer);
 		const ExpressionToken et = takeExpressionToken(lexer);
 		const ExprAndMaybeDedent ed = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ False, /*allowCall*/ True});
-		assert(!ed.dedents.has());
+		assert(!has(ed.dedents));
 		return ed.expr;
 	}
 
@@ -412,7 +412,7 @@ namespace {
 
 	const ExprAndDedent parseExprNoLet(Lexer& lexer, const Pos start, const ExpressionToken et) {
 		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ True, /*allowCall*/ True});
-		const size_t dedents = e.dedents.has() ? e.dedents.force() : takeNewlineOrDedentAmount(lexer);
+		const size_t dedents = has(e.dedents) ? force(e.dedents) : takeNewlineOrDedentAmount(lexer);
 		return ExprAndDedent{e.expr, dedents};
 	}
 
@@ -430,8 +430,8 @@ namespace {
 				tryTake(lexer, " = ") ? some<const Bool>(False)
 				: tryTake(lexer, " <- ") ? some<const Bool>(True)
 				: none<const Bool>();
-			if (isThen.has())
-				return parseLetOrThen(lexer, start, nr, isThen.force());
+			if (has(isThen))
+				return parseLetOrThen(lexer, start, nr, force(isThen));
 		}
 		return parseExprNoLet(lexer, start, et);
 	}
@@ -442,13 +442,13 @@ namespace {
 		const ExprAndDedent ed = parseSingleStatementLine(lexer);
 		auto expr = Cell<const ExprAst>(ed.expr);
 		auto dedents = Cell<const size_t>(ed.dedents);
-		while (dedents.get() == 0) {
+		while (cellGet(&dedents) == 0) {
 			const ExprAndDedent ed2 = parseSingleStatementLine(lexer);
-			const SeqAst seq = SeqAst{alloc(lexer, expr.get()), alloc(lexer, ed2.expr)};
-			expr.set(ExprAst{range(lexer, start), ExprAstKind{seq}});
-			dedents.set(ed2.dedents);
+			const SeqAst seq = SeqAst{alloc(lexer, cellGet(&expr)), alloc(lexer, ed2.expr)};
+			cellSet<const ExprAst>(&expr, ExprAst{range(lexer, start), ExprAstKind{seq}});
+			cellSet<const size_t>(&dedents, ed2.dedents);
 		}
-		return ExprAndDedent{expr.get(), dedents.get() - 1};
+		return ExprAndDedent{cellGet(&expr), cellGet(&dedents) - 1};
 	}
 }
 

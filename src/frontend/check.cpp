@@ -15,9 +15,9 @@ namespace {
 		const size_t expectedTypeParams
 	) {
 		const Opt<const StructOrAlias> res = structsAndAliasesMap.get(name);
-		if (res.has()) {
+		if (has(res)) {
 			// may fail -- builtin Template should not be an alias
-			const StructDecl* decl = res.force().asDecl();
+			const StructDecl* decl = force(res).asDecl();
 			if (decl->typeParams.size != expectedTypeParams)
 				todo<void>("getCommonTemplateType");
 			return some<const StructDecl*>(decl);
@@ -32,10 +32,10 @@ namespace {
 		MutArr<StructInst*>& delayedStructInsts
 	) {
 		const Opt<const StructOrAlias> opStructOrAlias = structsAndAliasesMap.get(name);
-		if (!opStructOrAlias.has())
+		if (!has(opStructOrAlias))
 			return none<const StructInst*>();
 		else {
-			const StructOrAlias structOrAlias = opStructOrAlias.force();
+			const StructOrAlias structOrAlias = force(opStructOrAlias);
 			assert(isEmpty(structOrAlias.typeParams()));
 			return some<const StructInst*>(structOrAlias.match(
 				[](const StructAlias* a) { return a->target(); },
@@ -87,27 +87,27 @@ namespace {
 			remoteFun1 = com("remote-fun1", 2),
 			remoteFun2 = com("remote-fun2", 3);
 
-		if (_bool.has() && _char.has() && int64.has() && str.has() && _void.has() && anyPtr.has() &&
-			opt.has() && some.has() && none.has() &&
-			byVal.has() && arr.has() && fut.has() &&
-			fun0.has() && fun1.has() && fun2.has() &&
-			remoteFun0.has() && remoteFun1.has() && remoteFun2.has())
+		if (has(_bool) && has(_char) && has(int64) && has(str) && has(_void) && has(anyPtr) &&
+			has(opt) && has(some) && has(none) &&
+			has(byVal) && has(arr) && has(fut) &&
+			has(fun0) && has(fun1) && has(fun2) &&
+			has(remoteFun0) && has(remoteFun1) && has(remoteFun2))
 			return success<const CommonTypes, const Arr<const Diagnostic>>(
 				CommonTypes{
-					_bool.force(),
-					_char.force(),
-					_ctx.force(),
-					int64.force(),
-					str.force(),
-					_void.force(),
-					anyPtr.force(),
-					arrLiteral<const StructDecl*>(ctx.arena, opt.force(), some.force(), none.force()),
-					byVal.force(),
-					arr.force(),
-					mutArr.force(),
-					fut.force(),
-					arrLiteral<const StructDecl*>(ctx.arena, fun0.force(), fun1.force(), fun2.force()),
-					arrLiteral<const StructDecl*>(ctx.arena, remoteFun0.force(), remoteFun1.force(), remoteFun2.force())});
+					force(_bool),
+					force(_char),
+					force(_ctx),
+					force(int64),
+					force(str),
+					force(_void),
+					force(anyPtr),
+					arrLiteral<const StructDecl*>(ctx.arena, force(opt), force(some), force(none)),
+					force(byVal),
+					force(arr),
+					force(mutArr),
+					force(fut),
+					arrLiteral<const StructDecl*>(ctx.arena, force(fun0), force(fun1), force(fun2)),
+					arrLiteral<const StructDecl*>(ctx.arena, force(remoteFun0), force(remoteFun1), force(remoteFun2))});
 		else {
 			const Diagnostic diag = Diagnostic{path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
 			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx.arena, diag));
@@ -220,11 +220,11 @@ namespace {
 	const PurityAndForceSendable getPurityFromAst(const StructDeclAst ast) {
 		// Note: purity is taken for granted here, and verified later when we check the body.
 		if (ast.body.isIface()) {
-			if (ast.purity.has())
+			if (has(ast.purity))
 				todo<void>("iface should not have explicit purity, is always sendable");
 			return PurityAndForceSendable{Purity::sendable, False};
-		} else if (ast.purity.has())
-			switch (ast.purity.force()) {
+		} else if (has(ast.purity))
+			switch (force(ast.purity)) {
 				case PuritySpecifier::sendable:
 					return PurityAndForceSendable{Purity::sendable, False};
 				case PuritySpecifier::forceSendable:
@@ -259,9 +259,9 @@ namespace {
 				structsAndAliasesMap,
 				TypeParamsScope{structAlias.typeParams},
 				some<MutArr<StructInst*>*>(&delayStructInsts));
-			if (!inst.has())
+			if (!has(inst))
 				todo<void>("handle invalid alias");
-			structAlias.setTarget(inst.force());
+			structAlias.setTarget(force(inst));
 		});
 	}
 
@@ -287,8 +287,8 @@ namespace {
 	}
 
 	const Opt<const ForcedByValOrRef> getForcedByValOrRef(const Opt<const ExplicitByValOrRef> e) {
-		if (e.has())
-			switch (e.force()) {
+		if (has(e))
+			switch (force(e)) {
 				case ExplicitByValOrRef::byVal:
 					return some<const ForcedByValOrRef>(ForcedByValOrRef::byVal);
 				case ExplicitByValOrRef::byRef:
@@ -345,16 +345,16 @@ namespace {
 				[&](const StructDeclAst::Body::Union un) {
 					const Opt<const Arr<const StructInst*>> members = mapOrNone<const StructInst*>{}(ctx.arena, un.members, [&](const TypeAst::InstStruct it) {
 						const Opt<const StructInst*> res = instStructFromAst(ctx, it, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, delay);
-						if (res.has() && isPurityWorse(res.force()->purity, strukt->purity))
-							ctx.addDiag(it.range, Diag{Diag::PurityOfMemberWorseThanUnion{strukt, res.force()}});
+						if (has(res) && isPurityWorse(force(res)->purity, strukt->purity))
+							ctx.addDiag(it.range, Diag{Diag::PurityOfMemberWorseThanUnion{strukt, force(res)}});
 						return res;
 					});
-					if (members.has()) {
-						everyPairWithIndex(members.force(), [&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
+					if (has(members)) {
+						everyPairWithIndex(force(members), [&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
 							if (ptrEquals(a->decl, b->decl))
 								ctx.addDiag(at(un.members, bIndex).range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::unionMember, a->decl->name}});
 						});
-						return StructBody{StructBody::Union{members.force()}};
+						return StructBody{StructBody::Union{force(members)}};
 					} else
 						return StructBody{StructBody::Bogus{}};
 				},
@@ -432,8 +432,8 @@ namespace {
 	) {
 		return mapOp<const SpecInst*>{}(ctx.arena, asts, [&](const SpecUseAst ast) {
 			Opt<const SpecDecl*> opSpec = tryFindSpec(ctx, ast.spec, ast.range, specsMap);
-			if (opSpec.has()) {
-				const SpecDecl* spec = opSpec.force();
+			if (has(opSpec)) {
+				const SpecDecl* spec = force(opSpec);
 				const Arr<const Type> typeArgs = typeArgsFromAsts(
 					ctx,
 					ast.typeArgs,

@@ -384,7 +384,7 @@ namespace {
 		if (types.t.isPointer != types.t.strukt->defaultIsPointer())
 			todo<void>("compare by value -- just take a ref and compare by ref");
 
-		if (types.t.strukt->special.has())
+		if (has(types.t.strukt->special))
 			todo<void>("compare special");
 
 		return types.t.strukt->body().match(
@@ -429,16 +429,16 @@ namespace {
 					const ConcreteExpr* bx = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{bIsPointer, ConstantOrExpr(b), field});
 					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(arena, ConstantOrExpr{ax}, ConstantOrExpr{bx});
 					const ConcreteExpr* compareThisField = genExpr(arena, types.comparison, ConcreteExpr::Call{getCompareFor(field->type), args});
-					const ConcreteExpr* newAccum = accum.get().has()
+					const ConcreteExpr* newAccum = has(cellGet(&accum))
 						? [&]() {
-							const LocalAndExpr le = combineCompares(arena, accum.get().force(), compareThisField, types.comparison);
+							const LocalAndExpr le = combineCompares(arena, force(cellGet(&accum)), compareThisField, types.comparison);
 							locals.add(arena, le.local);
 							return le.expr;
 						}()
 						: compareThisField;
-					accum.set(some<const ConcreteExpr*>(newAccum));
+					cellSet<const Opt<const ConcreteExpr*>>(&accum, some<const ConcreteExpr*>(newAccum));
 				}
-				return ConcreteFunExprBody{locals.finish(), accum.get().force()};
+				return ConcreteFunExprBody{locals.finish(), force(cellGet(&accum))};
 			},
 			[&](const ConcreteStructBody::Union) {
 				return todo<const ConcreteFunExprBody>("compare union");
@@ -453,15 +453,15 @@ const ConcreteFunBody getBuiltinFunBody(ConcretizeCtx& ctx, const ConcreteFunSou
 	const BuiltinFunInfo info = getBuiltinFunInfo(source.containingFunDecl()->sig);
 	const Arr<const ConcreteType> typeArgs = source.typeArgs();
 	const Opt<const Arr<const Constant*>> allConstant = tryGetAllConstant(ctx.arena, source.paramsSpecialize);
-	if (allConstant.has()) {
+	if (has(allConstant)) {
 		const Opt<const Constant*> c = tryEvalBuiltinAsConst(
 			ctx.arena,
 			ctx.allConstants,
 			info,
 			typeArgs,
-			allConstant.force(),
+			force(allConstant),
 			cf->returnType());
-		return c.has() ? ConcreteFunBody{c.force()} : ConcreteFunBody{ConcreteFunBody::Builtin{info, typeArgs}};
+		return has(c) ? ConcreteFunBody{force(c)} : ConcreteFunBody{ConcreteFunBody::Builtin{info, typeArgs}};
 	} else
 		switch (info.kind) {
 			case BuiltinFunKind::compare:

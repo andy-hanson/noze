@@ -79,8 +79,8 @@ namespace {
 			},
 			[&](const TypeParam* p) {
 				const Opt<SingleInferringType*> sit = tryGetTypeArg(InferringTypeArgs{candidate.called.typeParams(), candidate.typeArgs}, p);
-				const Opt<const Type> inferred = sit.has() ? sit.force()->tryGetInferred() : none<const Type>();
-				return inferred.has() ? inferred.force() : Type{p};
+				const Opt<const Type> inferred = has(sit) ? force(sit)->tryGetInferred() : none<const Type>();
+				return has(inferred) ? force(inferred) : Type{p};
 			},
 			[&](const StructInst* i) {
 				//TODO:PERF, the map might change nothing, so don't reallocate in that situation
@@ -115,23 +115,23 @@ namespace {
 				for (const Candidate& candidate : candidates) {
 					// If we get a template candidate and haven't inferred this param type yet, no expected type.
 					const Type paramType = getCandidateExpectedParameterType(arena, candidate, argIdx);
-					if (expected.get().has()) {
-						if (!typeEquals(paramType, expected.get().force()))
+					if (has(cellGet(&expected))) {
+						if (!typeEquals(paramType, force(cellGet(&expected))))
 							// Only get an expected type if all candidates expect it.
 							return CommonOverloadExpected{Expected::infer(), False};
 					} else
-						expected.set(some<const Type>(paramType));
+						cellSet<const Opt<const Type>>(&expected, some<const Type>(paramType));
 				}
 				// Can't be inferring type arguments for candidates if there's more than one.
 				// (Handle that *after* getting the arg type.)
-				return CommonOverloadExpected{Expected{expected.get()}, False};
+				return CommonOverloadExpected{Expected{cellGet(&expected)}, False};
 		}
 	}
 
 	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx& ctx, const Str funName, const Expr arg) {
 		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx.arena(), ctx.commonTypes), funName);
-		return field.has()
-			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), field.force().structInst, field.force().field})
+		return has(field)
+			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), force(field).structInst, force(field).field})
 			: none<const Expr::StructFieldAccess>();
 	}
 
@@ -225,9 +225,9 @@ namespace {
 				const SpecInst* specInstInstantiated = instantiateSpecInst(ctx.arena(), specInst, TypeParamsAndArgs{called->typeParams, typeArgs});
 				for (const Sig sig : specInstInstantiated->sigs) {
 					const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
-					if (!impl.has())
+					if (!has(impl))
 						return none<const Arr<const Called>>();
-					setAt<const Called>(res, outI, impl.force());
+					setAt<const Called>(res, outI, force(impl));
 					outI++;
 				}
 			}
@@ -243,7 +243,7 @@ namespace {
 			[](const SingleInferringType& i) {
 				return i.tryGetInferred();
 			});
-		if (!res.has())
+		if (!has(res))
 			ctx.addDiag(range, Diag{Diag::CantInferTypeArguments{}});
 		return res;
 	}
@@ -251,13 +251,13 @@ namespace {
 	const Opt<const Called> getCalledFromCandidate(ExprCtx& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
 		checkCalledDeclFlags(ctx, candidate.called, range);
 		const Opt<const Arr<const Type>> candidateTypeArgs = finishCandidateTypeArgs(ctx, range, candidate);
-		if (candidateTypeArgs.has()) {
-			const Arr<const Type> typeArgs = candidateTypeArgs.force();
+		if (has(candidateTypeArgs)) {
+			const Arr<const Type> typeArgs = force(candidateTypeArgs);
 			return candidate.called.match(
 				[&](const FunDecl* f) {
 					const Opt<const Arr<const Called>> specImpls = checkSpecImpls(ctx, range, f, typeArgs, allowSpecs);
-					if (specImpls.has())
-						return some<const Called>(Called{instantiateFun(ctx.arena(), f, typeArgs, specImpls.force())});
+					if (has(specImpls))
+						return some<const Called>(Called{instantiateFun(ctx.arena(), f, typeArgs, force(specImpls))});
 					else
 						return none<const Called>();
 				},
@@ -276,8 +276,8 @@ namespace {
 		Expected& expected
 	) {
 		const Opt<const Called> opCalled = getCalledFromCandidate(ctx, range, candidate, /*allowSpecs*/ true);
-		if (opCalled.has()) {
-			const Called called = opCalled.force();
+		if (has(opCalled)) {
+			const Called called = force(opCalled);
 			//TODO: PERF second return type check may be unnecessary if we already filtered by return type at the beginning
 			return expected.check(ctx, called.returnType(), Expr{range, Expr::Call{called, args}});
 		}
@@ -295,8 +295,8 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 	MutArr<Candidate> candidates = getInitialCandidates(ctx, ast.funName, explicitTypeArgs, arity);
 	// TODO: may not need to be deeply instantiated to do useful filtering here
 	const Opt<const Type> expectedReturnType = expected.tryGetDeeplyInstantiatedType(ctx.arena());
-	if (expectedReturnType.has())
-		filterByReturnType(ctx.arena(), candidates, expectedReturnType.force());
+	if (has(expectedReturnType))
+		filterByReturnType(ctx.arena(), candidates, force(expectedReturnType));
 
 	ArrBuilder<const Type> actualArgTypes;
 
@@ -311,7 +311,7 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 
 		// If it failed to check, don't continue, just stop there.
 		if (arg.typeIsBogus(ctx.arena())) {
-			someArgIsBogus.set(True);
+			cellSet<const Bool>(&someArgIsBogus, True);
 			return none<const Expr>();
 		}
 
@@ -323,22 +323,22 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		return some<const Expr>(arg);
 	});
 
-	if (someArgIsBogus.get())
+	if (cellGet(&someArgIsBogus))
 		return expected.bogus(range);
 
 	const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(candidates));
 
-	if (mightBePropertyAccess && arity == 1 && args.has()) {
+	if (mightBePropertyAccess && arity == 1 && has(args)) {
 		// Might be a struct field access
-		const Opt<const Expr::StructFieldAccess> sfa = tryGetStructFieldAccess(ctx, ast.funName, only(args.force()));
-		if (sfa.has()) {
+		const Opt<const Expr::StructFieldAccess> sfa = tryGetStructFieldAccess(ctx, ast.funName, only(force(args)));
+		if (has(sfa)) {
 			if (!isEmpty(candidatesArr))
 				todo<void>("ambiguous call vs property access");
-			return expected.check(ctx, sfa.force().accessedFieldType(), Expr{range, sfa.force()});
+			return expected.check(ctx, force(sfa).accessedFieldType(), Expr{range, force(sfa)});
 		}
 	}
 
-	if (!args.has() || candidatesArr.size != 1) {
+	if (!has(args) || candidatesArr.size != 1) {
 		const Str funName = ctx.checkCtx.copyStr(ast.funName);
 		if (isEmpty(candidatesArr)) {
 			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
@@ -352,5 +352,5 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		}
 		return expected.bogus(range);
 	} else
-		return checkCallAfterChoosingOverload(ctx, only(candidatesArr), range, args.force(), expected);
+		return checkCallAfterChoosingOverload(ctx, only(candidatesArr), range, force(args), expected);
 }

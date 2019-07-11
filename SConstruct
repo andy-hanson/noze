@@ -13,4 +13,4 @@ env.Program(
 	Glob("src/*.cpp") + Glob("src/**/*.cpp"),
 	LIBS=[File("libfirm/build/debug/libfirm.so")],
 	CPPPATH=["libfirm/include", "libfirm/build/gen/include/libfirm"],
-	CPPFLAGS=Split("-Werror -Wextra -Wall -ansi -pedantic -std=c++17 -g"))
+	CPPFLAGS=Split("-Werror -Wextra -Wall -ansi -pedantic -Wno-c99-extensions -std=c++17 -g"))

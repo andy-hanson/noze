@@ -894,11 +894,13 @@ struct ConcreteFun {
 	}
 
 	inline const Bool hasClosure() const {
-		return closureParam.has();
+		return has(closureParam);
 	}
 
 	inline const Opt<const ConcreteType> closureType() const {
-		return closureParam.has() ? closureParam.force().type : none<const ConcreteType>();
+		return has(closureParam)
+			? some<const ConcreteType>(force(closureParam).type)
+			: none<const ConcreteType>();
 	}
 
 	inline size_t arityExcludingCtxAndClosure() const {
@@ -906,7 +908,7 @@ struct ConcreteFun {
 	}
 
 	inline size_t arityExcludingCtxIncludingClosure() const {
-		return (closureParam.has() ? 1 : 0) + arityExcludingCtxAndClosure();
+		return (has(closureParam) ? 1 : 0) + arityExcludingCtxAndClosure();
 	}
 
 	inline size_t arityIncludingCtxAndClosure() const {
@@ -920,7 +922,7 @@ struct ClosureSingleSpecialize {
 
 	inline ClosureSingleSpecialize(const ConstantOrLambdaOrVariable _clv, const Opt<const ConcreteField*> _field)
 		: clv{_clv}, field{_field} {
-		assert(clv.isConstant() != field.has());
+		assert(clv.isConstant() != has(field));
 	}
 };
 
@@ -959,19 +961,19 @@ struct KnownLambdaBody {
 	KnownLambdaBody(const KnownLambdaBody&) = delete;
 
 	inline const Bool hasClosure() const {
-		return closureParam.has();
+		return has(closureParam);
 	}
 
 	// WARN: closureType is non-pointer by default, but a ConcreteFun for a dynamically-called lambda should take it by pointer.
 	inline const Opt<const ConcreteType> closureType() const {
-		return closureParam.has()
-			? some<const ConcreteType>(closureParam.force().type)
+		return has(closureParam)
+			? some<const ConcreteType>(force(closureParam).type)
 			: none<const ConcreteType>();
 	}
 
 	inline const Arr<const ConcreteField> closureFields() {
-		return closureParam.has()
-			? closureParam.force().type.strukt->body().asRecord().fields
+		return has(closureParam)
+			? force(closureParam).type.strukt->body().asRecord().fields
 			: emptyArr<const ConcreteField>();
 	}
 };
@@ -1092,8 +1094,8 @@ struct ConcreteExpr {
 			const Arr<const ConstantOrExpr> _fieldInitializers,
 			const Arr<const MessageImpl> _messageImpls
 		) : iface{_iface}, fieldsStruct{_fieldsStruct}, fieldInitializers{_fieldInitializers}, messageImpls{_messageImpls} {
-			if (fieldsStruct.has()) {
-				const ConcreteStruct* strukt = fieldsStruct.force().strukt;
+			if (has(fieldsStruct)) {
+				const ConcreteStruct* strukt = force(fieldsStruct).strukt;
 				assert(strukt->body().asRecord().fields.size == fieldInitializers.size);
 			} else
 				assert(isEmpty(fieldInitializers));
@@ -1204,8 +1206,8 @@ public:
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::alloc}, alloc{a} {
 		assert(type.isPointer);
 		// We never alloc a lambda, unless we're making the lambda dynamic (in which case klb is thrown away)
-		assert(!klb.has());
-		assert(!a.inner->typeWithKnownLambdaBody().force().isPointer);
+		assert(!has(klb));
+		assert(!force(a.inner->typeWithKnownLambdaBody()).isPointer);
 	}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Call a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::call}, call{a} {}
@@ -1255,10 +1257,10 @@ public:
 	}
 
 	inline const Opt<const ConcreteType> typeWithKnownLambdaBody() const {
-		if (_knownLambdaBody.has())
-			return _knownLambdaBody.force()->closureType();
+		if (has(_knownLambdaBody))
+			return force(_knownLambdaBody)->closureType();
 		else
-			return typeWithoutKnownLambdaBody();
+			return some<const ConcreteType>(typeWithoutKnownLambdaBody());
 	}
 
 	inline const SourceRange range() const {

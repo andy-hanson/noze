@@ -91,8 +91,8 @@ namespace {
 	}
 
 	const Bool getDefaultIsPointerForFields(const Opt<const ForcedByValOrRef> forcedByValOrRef, const size_t sizeBytes, const Bool isSelfMutable) {
-		if (forcedByValOrRef.has())
-			switch (forcedByValOrRef.force()) {
+		if (has(forcedByValOrRef))
+			switch (force(forcedByValOrRef)) {
 				case ForcedByValOrRef::byVal:
 					assert(!isSelfMutable);
 					return False;
@@ -261,7 +261,7 @@ namespace {
 
 			cf->_body.set(ConcreteFunBody{ConcreteFunBody::Bogus{}});
 
-			const ConcreteFunSource source = ctx.concreteFunToSource.tryDeleteAndGet(cf).force();
+			const ConcreteFunSource source = force(ctx.concreteFunToSource.tryDeleteAndGet(cf));
 			const ConcreteFunBody body = source.body.match(
 				[&](const FunBody::Builtin) {
 					return getBuiltinFunBody(ctx, source, cf);
@@ -320,7 +320,7 @@ namespace {
 		const Opt<const ConcreteParam> closure = isForDynamic
 			? some<const ConcreteParam>([&]() {
 				if (klb->hasClosure()) {
-					const ConcreteParam closureParam = klb->closureParam.force();
+					const ConcreteParam closureParam = force(klb->closureParam);
 					return shouldAllocateClosureForDynamicLambda(closureParam.type) ? closureParam.withType(closureParam.type.byRef()) : closureParam;
 				} else
 					return ConcreteParam{strLiteral("__unused"), ctx.anyPtrType()};
@@ -447,12 +447,12 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 		Cell<const Bool> didAdd { False };
 		// Note: we can't do anything in this callback that would call getOrAddConcreteStruct again.
 		ConcreteStruct* res = ctx.allConcreteStructs.getOrAdd(ctx.arena, key, [&]() {
-			didAdd.set(True);
+			cellSet<const Bool>(&didAdd, True);
 			return ctx.arena.nu<ConcreteStruct>()(
 				getConcreteStructMangledName(ctx.arena, i->decl->name, key.typeArgs),
 				getSpecialStructKind(i, ctx.commonTypes));
 		});
-		if (didAdd.get())
+		if (cellGet(&didAdd))
 			initializeConcreteStruct(ctx, typeArgs, i, res, typeArgsScope);
 		return ConcreteType::fromStruct(res);
 	}

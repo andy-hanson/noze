@@ -161,22 +161,22 @@ namespace {
 			const Pos start = curPos(lexer);
 			const Str name = takeName(lexer);
 			if (strEqLiteral(name, "by-val")) {
-				if (!isFirstLine.get())
+				if (!cellGet(&isFirstLine))
 					todo<void>("by-val on later line");
-				explicitByValOrRef.set(some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
+				cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
 			} else if (strEqLiteral(name, "by-ref")) {
-				if (!isFirstLine.get())
+				if (!cellGet(&isFirstLine))
 					todo<void>("by-ref on later line");
-				explicitByValOrRef.set(some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
+				cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
 			} else {
 				take(lexer, ' ');
 				const Bool isMutable = tryTake(lexer, "mut ");
 				const TypeAst type = parseType(lexer);
 				res.add(lexer.arena, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
 			}
-			isFirstLine.set(False);
+			cellSet<const Bool>(&isFirstLine, False);
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
-		return StructDeclAst::Body::Record{explicitByValOrRef.get(), res.finish()};
+		return StructDeclAst::Body::Record{cellGet(&explicitByValOrRef), res.finish()};
 	}
 
 	const Arr<const TypeAst::InstStruct> parseUnionMembers(Lexer& lexer) {
@@ -208,28 +208,28 @@ namespace {
 		Cell<const Bool> builtin { False };
 		Cell<const Bool> _extern { False };
 
-		auto setIt = [](Cell<const Bool>& b) -> void {
-			if (b.get())
+		auto setIt = [](Cell<const Bool>* b) -> void {
+			if (cellGet(b))
 				todo<void>("duplicate");
-			b.set(True);
+			cellSet<const Bool>(b, True);
 		};
 
 		while (tryTake(lexer, ' ')) {
 			const Pos start = curPos(lexer);
 			const Str name = takeName(lexer);
 			if (strEqLiteral(name, "noctx"))
-				setIt(noCtx);
+				setIt(&noCtx);
 			else if (strEqLiteral(name, "summon"))
-				setIt(summon);
+				setIt(&summon);
 			else if (strEqLiteral(name, "unsafe"))
-				setIt(unsafe);
+				setIt(&unsafe);
 			else if (strEqLiteral(name, "trusted"))
-				setIt(trusted);
+				setIt(&trusted);
 			else if (strEqLiteral(name, "builtin")) {
-				builtin.set(True);
+				cellSet<const Bool>(&builtin, True);
 				break;
 			} else if (strEqLiteral(name, "extern")) {
-				_extern.set(True);
+				cellSet<const Bool>(&_extern, True);
 				break;
 			} else {
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
@@ -237,22 +237,22 @@ namespace {
 			}
 		}
 
-		if (unsafe.get() && trusted.get())
+		if (cellGet(&unsafe) && cellGet(&trusted))
 			todo<void>("'unsafe trusted' is redundant");
-		if (builtin.get() && trusted.get())
+		if (cellGet(&builtin) && cellGet(&trusted))
 			todo<void>("'builtin trusted' is silly as builtin fun has no body");
-		if (_extern.get() && trusted.get())
+		if (cellGet(&_extern) && cellGet(&trusted))
 			todo<void>("'extern trusted' is silly as extern fun has no body");
-		if (_extern.get()) {
-			if (noCtx.get())
+		if (cellGet(&_extern)) {
+			if (cellGet(&noCtx))
 				todo<void>("'noctx extern' is redundant");
-			noCtx.set(True);
+			cellSet<const Bool>(&noCtx, True);
 		}
 
-		Opt<const FunBodyAst> body = builtin.get() ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
-			: _extern.get() ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
+		Opt<const FunBodyAst> body = cellGet(&builtin) ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
+			: cellGet(&_extern) ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
 			: none<const FunBodyAst>();
-		return SpecUsesAndSigFlagsAndKwBody{specUses.finish(), noCtx.get(), summon.get(), unsafe.get(), trusted.get(), body};
+		return SpecUsesAndSigFlagsAndKwBody{specUses.finish(), cellGet(&noCtx), cellGet(&summon), cellGet(&unsafe), cellGet(&trusted), body};
 	}
 
 	const FunDeclAst parseFun(
@@ -264,7 +264,7 @@ namespace {
 	) {
 		const SigAst sig = parseSigAfterNameAndSpace(lexer, start, name);
 		const SpecUsesAndSigFlagsAndKwBody extra = parseSpecUsesAndSigFlagsAndKwBody(lexer);
-		const FunBodyAst body = extra.body.has() ? extra.body.force() : FunBodyAst(parseFunExprBody(lexer));
+		const FunBodyAst body = has(extra.body) ? force(extra.body) : FunBodyAst(parseFunExprBody(lexer));
 		return FunDeclAst{isPublic, typeParams, sig, extra.specUses, extra.noCtx, extra.summon, extra.unsafe, extra.trusted, body};
 	}
 
@@ -282,8 +282,8 @@ namespace {
 		take(lexer, ' ');
 
 		const Opt<const NonFunKeywordAndIndent> opKwAndIndent = parseNonFunKeyword(lexer);
-		if (opKwAndIndent.has()) {
-			const NonFunKeywordAndIndent kwAndIndent = opKwAndIndent.force();
+		if (has(opKwAndIndent)) {
+			const NonFunKeywordAndIndent kwAndIndent = force(opKwAndIndent);
 			const NonFunKeyword kw = kwAndIndent.keyword;
 			const SpaceOrNewlineOrIndent after = kwAndIndent.after;
 			const Opt<const PuritySpecifier> purity = after == SpaceOrNewlineOrIndent::space
@@ -306,7 +306,7 @@ namespace {
 			if (kw == NonFunKeyword::alias) {
 				if (!tookIndent)
 					todo<void>("always indent alias");
-				if (purity.has())
+				if (has(purity))
 					todo<void>("alias shouldn't have purity");
 				const TypeAst::InstStruct target = parseStructType(lexer);
 				takeDedent(lexer);
@@ -314,7 +314,7 @@ namespace {
 			} else if (kw == NonFunKeyword::spec) {
 				if (!tookIndent)
 					todo<void>("always indent spec");
-				if (purity.has())
+				if (has(purity))
 					todo<void>("spec shouldn't have purity");
 				const Arr<const SigAst> sigs = parseIndentedSigs(lexer);
 				specs.add(lexer.arena, SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});

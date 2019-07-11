@@ -162,8 +162,8 @@ namespace {
 		const Opt<const AbsolutePath> par = parent(p);
 		if (strEqLiteral(baseName(p), "noze"))
 			return p;
-		else if (par.has())
-			return climbUpToNoze(par.force());
+		else if (has(par))
+			return climbUpToNoze(force(par));
 		else
 			return todo<const AbsolutePath>("no 'noze' directory in path");
 	}
@@ -201,39 +201,35 @@ namespace {
 	int go(const CommandLineArgs args) {
 		Arena arena {};
 		const AbsolutePath nozeDir = getNozeDirectory(args.pathToThisExecutable);
-		const Opt<const Command> command = parseCommand(arena, args.cwd, args.args);
-		if (command.has())
-			return command.force().match(
-				[&](const Command::Build b) {
-					return build(nozeDir, b.programDirAndMain.programDir, b.programDirAndMain.mainPath, args.environ);
-				},
-				[&](const Command::Help) {
-					return help();
-				},
-				[&](const Command::HelpBuild) {
-					return helpBuild();
-				},
-				[&](const Command::HelpRun) {
-					return helpRun();
-				},
-				[&](const Command::Run r) {
-					return buildAndRun(nozeDir, r.programDirAndMain.programDir, r.programDirAndMain.mainPath, r.programArgs, args.environ);
-				},
-				[&](const Command::Test) {
-					return buildAndRun(
-						nozeDir,
-						childPath(arena, nozeDir, strLiteral("test")),
-						rootPath(arena, strLiteral("a.nz")),
-						emptyArr<const Str>(),
-						args.environ);
-				},
-				[&](const Command::Version) {
-					printf("Approximately 0.000\n");
-					return 0;
-				});
-		else
-			// Failed to parse command
-			return 1;
+		const Command command = parseCommand(arena, args.cwd, args.args);
+		return command.match(
+			[&](const Command::Build b) {
+				return build(nozeDir, b.programDirAndMain.programDir, b.programDirAndMain.mainPath, args.environ);
+			},
+			[&](const Command::Help) {
+				return help();
+			},
+			[&](const Command::HelpBuild) {
+				return helpBuild();
+			},
+			[&](const Command::HelpRun) {
+				return helpRun();
+			},
+			[&](const Command::Run r) {
+				return buildAndRun(nozeDir, r.programDirAndMain.programDir, r.programDirAndMain.mainPath, r.programArgs, args.environ);
+			},
+			[&](const Command::Test) {
+				return buildAndRun(
+					nozeDir,
+					childPath(arena, nozeDir, strLiteral("test")),
+					rootPath(arena, strLiteral("a.nz")),
+					emptyArr<const Str>(),
+					args.environ);
+			},
+			[&](const Command::Version) {
+				printf("Approximately 0.000\n");
+				return 0;
+			});
 	}
 }
 

@@ -41,10 +41,10 @@ namespace {
 	void writeJustParams(Writer& writer, const Bool wroteFirst, const Arr<const ConcreteParam> params) {
 		Cell<const Bool> didWriteFirst { wroteFirst };
 		for (const ConcreteParam p : params) {
-			if (didWriteFirst.get())
+			if (cellGet(&didWriteFirst))
 				writeStatic(writer, ", ");
 			else
-				didWriteFirst.set(True);
+				cellSet<const Bool>(&didWriteFirst, True);
 			doWriteParam(writer, p);
 		}
 		writeChar(writer, ')');
@@ -206,8 +206,8 @@ namespace {
 
 	const Bool canReferenceType(const ConcreteType t, const StructStates& structStates) {
 		const Opt<const StructState> state = structStates.get(t.strukt);
-		if (state.has())
-			switch (state.force()) {
+		if (has(state))
+			switch (force(state)) {
 				case StructState::declared:
 					return t.isPointer;
 				case StructState::defined:
@@ -288,17 +288,17 @@ namespace {
 			Cell<const Bool> someIncomplete { False };
 			for (const ConcreteStruct* strukt : allStructs) {
 				const Opt<const StructState> curState = structStates.get(strukt);
-				if (!curState.has() || curState.force() != StructState::defined) {
+				if (!has(curState) || force(curState) != StructState::defined) {
 					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, structStates);
-					if (didWork.has()) {
-						structStates.set(tempArena, strukt, didWork.force());
-						madeProgress.set(True);
+					if (has(didWork)) {
+						structStates.set(tempArena, strukt, force(didWork));
+						cellSet<const Bool>(&madeProgress, True);
 					} else
-						someIncomplete.set(True);
+						cellSet<const Bool>(&someIncomplete, True);
 				}
 			}
-			if (someIncomplete.get())
-				assert(madeProgress.get());
+			if (cellGet(&someIncomplete))
+				assert(cellGet(&madeProgress));
 			else
 				break;
 		}
@@ -524,9 +524,9 @@ namespace {
 			writeNat(writer.writer, i);
 			newline(writer);
 			writeStatic(writer, "? ");
-			if (kase.local.has()) {
+			if (has(kase.local)) {
 				writeStatic(writer, "(");
-				writeLocalAssignment(writer.writer, kase.local.force());
+				writeLocalAssignment(writer.writer, force(kase.local));
 				writeStatic(writer, "matched.as_");
 				writeStr(writer, memberName);
 				writeStatic(writer, ",");
@@ -534,7 +534,7 @@ namespace {
 			}
 			writeConstantOrExpr(writer, kase.then);
 			newline(writer);
-			if (kase.local.has())
+			if (has(kase.local))
 				writeStatic(writer, ")");
 			writeStatic(writer, ": ");
 		});
@@ -754,7 +754,7 @@ namespace {
 	}
 
 	void writeConcreteExpr(WriterWithIndent& writer, const ConcreteExpr ce) {
-		const ConcreteType type = ce.typeWithKnownLambdaBody().force();
+		const ConcreteType type = force(ce.typeWithKnownLambdaBody());
 
 		ce.match(
 			[](const ConcreteExpr::Bogus) {
@@ -809,8 +809,8 @@ namespace {
 				writeStatic(writer, " }");
 			},
 			[&](const ConcreteExpr::Lambda e) {
-				const KnownLambdaBody* klb = ce.knownLambdaBody().force();
-				writeCastToType(writer.writer, klb->closureType().force());
+				const KnownLambdaBody* klb = force(ce.knownLambdaBody());
+				writeCastToType(writer.writer, force(klb->closureType()));
 				writeArgsNoCtxWithBraces(writer, e.closureInit);
 			},
 			[&](const ConcreteExpr::LambdaToDynamic e) {
@@ -902,12 +902,12 @@ namespace {
 		writeChar(writer, '(');
 		if (needsCtx)
 			writeStatic(writer, "ctx* ctx");
-		if (closure.has()) {
+		if (has(closure)) {
 			if (needsCtx)
 				writeStatic(writer, ", ");
-			doWriteParam(writer, closure.force());
+			doWriteParam(writer, force(closure));
 		}
-		writeJustParams(writer, _or(needsCtx, closure.has()), params);
+		writeJustParams(writer, _or(needsCtx, has(closure)), params);
 	}
 
 	void writeFunReturnTypeNameAndParams(Writer& writer, const ConcreteFun* fun) {

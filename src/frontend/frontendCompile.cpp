@@ -32,8 +32,8 @@ namespace {
 	) {
 		// File content must go in astsArena because we refer to strings without copying
 		const Opt<const NulTerminatedStr> opFileContent = getFile(astsArena, where, storages);
-		if (opFileContent.has()) {
-			const NulTerminatedStr text = opFileContent.force();
+		if (has(opFileContent)) {
+			const NulTerminatedStr text = force(opFileContent);
 			lineAndColumnGetters.add(modelArena, where, lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
 			return mapFailure<const Arr<const Diagnostic>>{}(
 				parseFile(astsArena, text),
@@ -61,8 +61,8 @@ namespace {
 			return some<const PathAndStorageKind>(PathAndStorageKind{path, StorageKind::global});
 		else {
 			const Opt<const Path*> rel = resolvePath(modelArena, from.path, RelPath{ast.nDots - 1, path});
-			return rel.has()
-				? some<const PathAndStorageKind>(PathAndStorageKind{rel.force(), from.storageKind})
+			return has(rel)
+				? some<const PathAndStorageKind>(PathAndStorageKind{force(rel), from.storageKind})
 				: none<const PathAndStorageKind>();
 		}
 	}
@@ -87,10 +87,10 @@ namespace {
 
 		for (;;) {
 			const Opt<const PathAndStorageKind> opPath = pop(toParse);
-			if (!opPath.has())
+			if (!has(opPath))
 				break;
 
-			const PathAndStorageKind path = opPath.force();
+			const PathAndStorageKind path = force(opPath);
 			const Result<const FileAst, const Arr<const Diagnostic>> parseResult = parseSingle(modelArena, astsArena, path, storages, lineAndColumnGetters);
 			if (!parseResult.isSuccess())
 				return failure<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(parseResult.asFailure());
@@ -99,9 +99,9 @@ namespace {
 
 			for (const ImportAst i : parseResult.asSuccess().imports) {
 				const Opt<const PathAndStorageKind> opDependencyPath = resolveImport(modelArena, path, i);
-				if (!opDependencyPath.has())
+				if (!has(opDependencyPath))
 					todo<void>("diagnostic: import resolution failed");
-				const PathAndStorageKind dependencyPath = opDependencyPath.force();
+				const PathAndStorageKind dependencyPath = force(opDependencyPath);
 				if (seenSet.tryAdd(tempArena, dependencyPath))
 					push<const PathAndStorageKind>(tempArena, toParse, dependencyPath);
 			}
@@ -118,10 +118,10 @@ namespace {
 	) {
 		return mapOrFail<const Module*, const Arr<const Diagnostic>>{}(modelArena, imports, [&](const ImportAst ast) {
 			// resolveImport should succeed because we already did this in parseEverything. (TODO: then keep it around with the ast?)
-			const PathAndStorageKind importPath = resolveImport(modelArena, curPath, ast).force();
+			const PathAndStorageKind importPath = force(resolveImport(modelArena, curPath, ast));
 			const Opt<const Module*> i = compiled.get(importPath);
-			if (i.has())
-				return success<const Module*, const Arr<const Diagnostic>>(i.force());
+			if (has(i))
+				return success<const Module*, const Arr<const Diagnostic>>(force(i));
 			else {
 				const Diagnostic diag = Diagnostic{curPath, ast.range, Diag{Diag::CircularImport{}}};
 				return failure<const Module*, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(modelArena, diag));

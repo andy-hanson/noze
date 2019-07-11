@@ -5,8 +5,8 @@
 namespace {
 	//TODO:MOVE
 	void writePath(Writer& writer, const Path* p) {
-		if (p->parent.has())
-			writePath(writer, p->parent.force());
+		if (has(p->parent))
+			writePath(writer, force(p->parent));
 		writeChar(writer, '/');
 		writeStr(writer, p->baseName);
 	}
@@ -182,9 +182,14 @@ namespace {
 		});
 
 		if (isEmpty(d.allCandidates)) {
-			// Note: If it was not a local variable we try a call,
-			// but message shoudl reflect that the user might not have wanted a call.
-			writeStatic(writer, "there is no function or variable named ");
+			writeStatic(writer, "there is no function ");
+			if (d.actualArity == 0)
+				// If there is no local variable by that name we try a call,
+				// but message should reflect that the user might not have wanted a call.
+				writeStatic(writer, "or variable ");
+			else if (d.actualArity == 1)
+				writeStatic(writer, "or field ");
+			writeStatic(writer, "named ");
 			writeName(writer, d.funName);
 		} else if (!someCandidateHasCorrectArity) {
 			writeStatic(writer, "there are functions named ");
@@ -197,7 +202,7 @@ namespace {
 			writeStatic(writer, "there are functions named ");
 			writeName(writer, d.funName);
 			writeStatic(writer, ", but they do not match the ");
-			const Bool hasRet = d.expectedReturnType.has();
+			const Bool hasRet = has(d.expectedReturnType);
 			const Bool hasArgs = _not(isEmpty(d.actualArgTypes));
 			assert(hasRet || hasArgs); // we have a candidate with the correct arity so there must be some type error
 			const char* descr = hasRet
@@ -207,7 +212,7 @@ namespace {
 			writeStatic(writer, ".");
 			if (hasRet) {
 				writeStatic(writer, "\nexpected return type: ");
-				writeType(writer, d.expectedReturnType.force());
+				writeType(writer, force(d.expectedReturnType));
 			}
 			if (hasArgs) {
 				writeStatic(writer, "\nactual argument types: ");
@@ -287,9 +292,9 @@ namespace {
 				writeName(writer, d.name);
 			},
 			[&](const Diag::ExpectedTypeIsNotALambda d) {
-				if (d.expectedType.has()) {
+				if (has(d.expectedType)) {
 					writeStatic(writer, "the expected type at the lambda is ");
-					writeType(writer, d.expectedType.force());
+					writeType(writer, force(d.expectedType));
 					writeStatic(writer, ", which is not a lambda type");
 				} else
 					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");

@@ -12,15 +12,15 @@ ConstantKind::Lambda::Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} 
 ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a) : called{c}, args{a} {
 	assert(called->arityExcludingCtxIncludingClosure() == args.size);
 
-	if (called->closureParam.has()) {
-		assert(concreteTypeEq(at(args, 0).typeWithKnownLambdaBody().force(), called->closureParam.force().type));
+	if (has(called->closureParam)) {
+		assert(concreteTypeEq(force(at(args, 0).typeWithKnownLambdaBody()), force(called->closureParam).type));
 	}
 	for (const size_t i : Range{called->paramsExcludingCtxAndClosure().size}) {
 		const ConcreteParam param = at(called->paramsExcludingCtxAndClosure(), i);
 		// If the arg has a knownlambdabody but no closure, we shouldn't bother passing it.
-		const ConstantOrExpr arg = at(args, i + boolToNat(called->closureParam.has()));
+		const ConstantOrExpr arg = at(args, i + boolToNat(has(called->closureParam)));
 		const Opt<const ConcreteType> argType = arg.typeWithKnownLambdaBody();
-		if (!argType.has() || !concreteTypeEq(argType.force(), param.type)) {
+		if (!has(argType) || !concreteTypeEq(force(argType), param.type)) {
 			Arena arena {};
 			Writer writer { arena };
 			writeStatic(writer, "Call argument type mismatch for ");
@@ -28,8 +28,8 @@ ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a
 			writeStatic(writer, "\nExpected: ");
 			writeConcreteType(writer, param.type);
 			writeStatic(writer, "\nActual: ");
-			if (argType.has())
-				writeConcreteType(writer, argType.force());
+			if (has(argType))
+				writeConcreteType(writer, force(argType));
 			else
 				writeStatic(writer, "<<none>>");
 			writeChar(writer, '\n');
@@ -42,7 +42,7 @@ ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a
 ConcreteExpr::Cond::Cond(const ConcreteExpr* _cond, const ConstantOrExpr _then, const ConstantOrExpr _elze)
 	: cond{_cond}, then{_then}, elze{_elze} {
 	// Can't specialize with KnownLambdaBody when there are different branches
-	assert(!getKnownLambdaBodyFromConstantOrExpr(then).has() && !getKnownLambdaBodyFromConstantOrExpr(elze).has());
+	assert(!has(getKnownLambdaBodyFromConstantOrExpr(then)) && !has(getKnownLambdaBodyFromConstantOrExpr(elze)));
 }
 
 ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const ConstantOrExpr _closure)
@@ -50,13 +50,13 @@ ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const Co
 	assert(fun->hasClosure()); // All dynamic funs take a closure, even if it's just void*
 	const ConcreteType closureType = closure.typeWithoutKnownLambdaBody();
 	assert(closureType.sizeOrPointerSizeBytes() == sizeof(void*));
-	assert(concreteTypeEq(closureType, fun->closureType().force()));
+	assert(concreteTypeEq(closureType, force(fun->closureType())));
 	closure.match(
 		[&](const Constant* c) {
 			assert(c->kind.isNull());
 		},
 		[&](const ConcreteExpr*) {
-			// assert(e->knownLambdaBody().has()); // Not true for Alloc
+			// assert(has(e->knownLambdaBody())); // Not true for Alloc
 		});
 }
 

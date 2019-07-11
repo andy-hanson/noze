@@ -8,7 +8,7 @@ struct MutDict {
 	MutArr<KeyValuePair<K, V>> pairs;
 
 	inline const Bool has(const K key) const {
-		return get(key).has();
+		return ::has(get(key));
 	}
 
 	const Opt<V> get(const K key) const {
@@ -19,7 +19,7 @@ struct MutDict {
 	}
 
 	inline const V mustGet(const K key) const {
-		return get(key).force();
+		return force(get(key));
 	}
 
 	void set(Arena& arena, const K key, const V value) {
@@ -58,7 +58,7 @@ struct MutDict {
 	}
 
 	const V mustDelete(const K key) {
-		return tryDeleteAndGet(key).force();
+		return force(tryDeleteAndGet(key));
 	}
 };
 

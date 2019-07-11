@@ -33,7 +33,7 @@ struct AbsolutePath {
 
 inline const Opt<const AbsolutePath> parent(const AbsolutePath a) {
 	const Opt<const Path*> parent = a.path->parent;
-	return parent.has() ? some<const AbsolutePath>(AbsolutePath{parent.force()}) : none<const AbsolutePath>();
+	return has(parent) ? some<const AbsolutePath>(AbsolutePath{force(parent)}) : none<const AbsolutePath>();
 }
 
 inline const Str baseName(const AbsolutePath a) {
@@ -89,7 +89,7 @@ const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath
 
 inline const Opt<const AbsolutePath> resolvePath(Arena& arena, const AbsolutePath path, const RelPath relPath) {
 	const Opt<const Path*> p = resolvePath(arena, path.path, relPath);
-	return p.has() ? some<const AbsolutePath>(AbsolutePath{p.force()}) : none<const AbsolutePath>();
+	return has(p) ? some<const AbsolutePath>(AbsolutePath{force(p)}) : none<const AbsolutePath>();
 }
 
 struct AbsoluteOrRelPath {

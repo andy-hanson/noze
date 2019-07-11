@@ -68,7 +68,7 @@ struct SingleInferringType {
 	inline SingleInferringType(const Opt<const Type> t) : type{t} {}
 
 	inline const Opt<const Type> tryGetInferred() const {
-		return type.get();
+		return cellGet(&type);
 	}
 
 	// Note: this may infer type parameters.
@@ -117,7 +117,8 @@ public:
 
 	// TODO: if we have a bogus expected type we should probably not be doing any more checking at all?
 	inline const Bool isBogus() const {
-		return _and(type.get().has(), type.get().force().isBogus());
+		const Opt<const Type> t = tryGetInferred();
+		return _and(has(t), force(t).isBogus());
 	}
 
 	static inline Expected infer() {
@@ -130,12 +131,15 @@ public:
 
 	const Opt<const Type> shallowInstantiateType() const;
 	inline const Opt<const Type> tryGetDeeplyInstantiatedType(Arena& arena) const {
-		return type.get().has() ? tryGetDeeplyInstantiatedTypeFor(arena, type.get().force()) : none<const Type>();
+		const Opt<const Type> t = tryGetInferred();
+		return has(t)
+			? tryGetDeeplyInstantiatedTypeFor(arena, force(t))
+			: none<const Type>();
 	}
 	const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena& arena, const Type t) const;
 
 	inline const Bool hasExpected() const {
-		return type.get().has();
+		return has(tryGetInferred());
 	}
 
 	inline const CheckedExpr bogus(const SourceRange range) {
@@ -143,20 +147,23 @@ public:
 	}
 
 	inline const CheckedExpr bogusWithType(const SourceRange range, const Type setType) {
-		type.set(setType);
+		cellSet<const Opt<const Type>>(&type, some<const Type>(setType));
 		return bogusWithoutAffectingExpected(range);
 	}
 
 	inline const Type inferred() const {
-		return type.get().force();
+		return force(tryGetInferred());
 	}
 
 	inline const Opt<const Type> tryGetInferred() const {
-		return type.get();
+		return cellGet(&type);
 	}
 
 	inline const Bool isExpectingString(const StructInst* stringType) const {
-		return _and(type.get().has(), typeEquals(type.get().force(), Type{stringType}));
+		const Opt<const Type> t = tryGetInferred();
+		return _and(
+			has(t),
+			typeEquals(force(t), Type{stringType}));
 	}
 
 	const CheckedExpr check(ExprCtx& ctx, const Type exprType, const Expr expr);
