@@ -6,15 +6,15 @@
 struct RangeIter {
 	size_t cur;
 
-	inline size_t operator*() const {
+	inline constexpr size_t operator*() const {
 		return cur;
 	}
 
-	inline void operator++() {
+	inline constexpr void operator++() {
 		cur++;
 	}
 
-	inline const Bool operator!=(const RangeIter other) const {
+	inline constexpr const Bool operator!=(const RangeIter other) const {
 		return neq(cur, other.cur);
 	}
 };
@@ -23,18 +23,18 @@ struct Range {
 	const size_t lo;
 	const size_t hi;
 
-	inline Range(const size_t _hi) : lo{0}, hi{_hi} {
+	inline constexpr explicit Range(const size_t _hi) : lo{0}, hi{_hi} {
 		assert(lo <= hi);
 	}
-	inline Range(const size_t _lo, const size_t _hi) : lo{_lo}, hi{_hi} {
+	inline constexpr Range(const size_t _lo, const size_t _hi) : lo{_lo}, hi{_hi} {
 		assert(lo <= hi);
 	}
 
-	inline RangeIter begin() const {
+	inline constexpr RangeIter begin() const {
 		return RangeIter{lo};
 	}
 
-	inline RangeIter end() const {
+	inline constexpr RangeIter end() const {
 		return RangeIter{hi};
 	}
 };

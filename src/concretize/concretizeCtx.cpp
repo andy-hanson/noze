@@ -13,7 +13,7 @@ namespace {
 		return compareArr<const ConcreteType, compareConcreteType>(a, b);
 	}
 
-	const Str getConcreteStructMangledName(Arena& arena, const Str declName, const Arr<const ConcreteType> typeArgs) {
+	const Str getConcreteStructMangledName(Arena& arena, const Sym declName, const Arr<const ConcreteType> typeArgs) {
 		Writer writer { arena };
 		writeMangledName(writer, declName);
 		for (const ConcreteType ta : typeArgs)
@@ -43,7 +43,7 @@ namespace {
 	// Don't need to take typeArgs here, since we have the concrete return type and param types anyway.
 	const Str getConcreteFunMangledName(
 		Arena& arena,
-		const Str declName,
+		const Sym declName,
 		const ConcreteType returnType,
 		const Arr<const ConcreteParam> params,
 		const Arr<const ConcreteFunInst> specImpls,
@@ -208,7 +208,7 @@ namespace {
 			Arena arena {};
 			Writer writer { arena };
 			writeStatic(writer, "Instantiating ");
-			writeStr(writer, decl->name());
+			writeSym(writer, decl->name());
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs) {
 				//TODO: print type args too
 				writeChar(writer, ' ');
@@ -221,7 +221,7 @@ namespace {
 		const ConcreteType returnType = getConcreteType(ctx, decl->returnType(), typeScope);
 		const Arr<const ConcreteParam> params = concretizeParamsAndSpecialize(ctx, decl->params(), key.specializeOnArgs, typeScope);
 		const Str mangledName = decl->isExtern()
-			? decl->name()
+			? strOfSym(ctx.arena, decl->name())
 			: getConcreteFunMangledName(
 				ctx.arena,
 				decl->name(),

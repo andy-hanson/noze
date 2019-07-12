@@ -341,7 +341,7 @@ const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const T
 		});
 }
 
-const Opt<const StructAndField> tryGetStructField(const Type targetType, const Str fieldName) {
+const Opt<const StructAndField> tryGetStructField(const Type targetType, const Sym fieldName) {
 	return targetType.match(
 		[](const Type::Bogus) {
 			//TODO: want to avoid cascading errors here.
@@ -360,7 +360,7 @@ const Opt<const StructAndField> tryGetStructField(const Type targetType, const S
 				},
 				[&](const StructBody::Record r) {
 					const Opt<const StructField*> field = findPtr(r.fields, [&](const StructField* f) {
-						return strEq(f->name, fieldName);
+						return symEq(f->name, fieldName);
 					});
 					return has(field)
 						? some<const StructAndField>(StructAndField{targetStructInst, force(field)})

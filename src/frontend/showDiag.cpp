@@ -130,9 +130,9 @@ namespace {
 		writeChar(writer, '\'');
 	}
 
-	void writeName(Writer& writer, const Str name) {
+	void writeName(Writer& writer, const Sym name) {
 		writeChar(writer, '\'');
-		writeStr(writer, name);
+		writeSym(writer, name);
 		writeChar(writer, '\'');
 	}
 
@@ -361,8 +361,8 @@ namespace {
 				writeStatic(writer, " has purity ");
 				writePurity(writer, d.member->purity);
 			},
-			[&](const Diag::RemoteFunDoesNotReturnFut d) {
-				writeStatic(writer, "remote-fun should return a fut, but returns ");
+			[&](const Diag::SendFunDoesNotReturnFut d) {
+				writeStatic(writer, "send-fun should return a fut, but returns ");
 				writeType(writer, d.actualReturnType);
 			},
 			[&](const Diag::SpecImplHasSpecs d) {

@@ -1,37 +1,46 @@
 #include "./builtinInfo.h"
 
 namespace {
-	const Bool isNamed(const Type t, const CStr name) {
-		return _and(t.isStructInst(), strEqLiteral(t.asStructInst()->decl->name, name));
+	const Bool isNamed(const Type t, const Sym name) {
+		return _and(
+			t.isStructInst(),
+			symEq(t.asStructInst()->decl->name, name));
 	}
 
 	const Bool isFloat64(const Type t) {
-		return isNamed(t, "float");
+		return isNamed(t, shortSymAlphaLiteral("float"));
 	}
 
 	const Bool isInt64(const Type t) {
-		return isNamed(t, "int");
+		return isNamed(t, shortSymAlphaLiteral("int"));
 	}
 
 	const Bool isNat64(const Type t) {
-		return isNamed(t, "nat");
+		return isNamed(t, shortSymAlphaLiteral("nat"));
 	}
 
 	const Bool isPtr(const Type t) {
-		return isNamed(t, "ptr");
+		return isNamed(t, shortSymAlphaLiteral("ptr"));
 	}
 
 	const Bool isVoid(const Type t) {
-		return isNamed(t, "void");
+		return isNamed(t, shortSymAlphaLiteral("void"));
 	}
 
 	const Bool isSomeFunPtr(const Type t) {
 		if (!t.isStructInst())
 			return False;
-		else {
-			const Str name = t.asStructInst()->decl->name;
-			return _and(name.size == 8, strEqLiteral(slice(name, 0, 7), "fun-ptr"));
-		}
+		else
+			switch (t.asStructInst()->decl->name.value) {
+				case shortSymAlphaLiteralValue("fun-ptr0"):
+				case shortSymAlphaLiteralValue("fun-ptr1"):
+				case shortSymAlphaLiteralValue("fun-ptr2"):
+				case shortSymAlphaLiteralValue("fun-ptr3"):
+				case shortSymAlphaLiteralValue("fun-ptr4"):
+					return True;
+				default:
+					return False;
+			}
 	}
 
 	const Opt<const BuiltinFunInfo> generate(const BuiltinFunKind kind) {
@@ -51,111 +60,103 @@ namespace {
 	}
 
 	const Opt<const BuiltinFunInfo> tryGetBuiltinFunInfo(const Sig sig) {
-		const Str name = sig.name;
+		const Sym name = sig.name;
 		const Opt<const BuiltinFunInfo> no = none<const BuiltinFunInfo>();
 		const Type rt = sig.returnType;
 		const Type p0 = sig.params.size > 0 ? at(sig.params, 0).type : Type{Type::Bogus{}};
 
-		switch (first(name)) {
-			case '<':
-				return strEqLiteral(name, "<=>")
-					? generate(BuiltinFunKind::compare)
+		Arena tempArena {};
+
+		switch (name.value) {
+			case shortSymOperatorLiteralValue("<=>"):
+				return generate(BuiltinFunKind::compare);
+			case shortSymOperatorLiteralValue("+"):
+				return isFloat64(rt) ? _operator(BuiltinFunKind::addFloat64)
+					: isPtr(rt) ? _operator(BuiltinFunKind::addPtr)
 					: no;
-			case '+':
-				return strEqLiteral(name, "+")
-					? isFloat64(rt) ? _operator(BuiltinFunKind::addFloat64)
-						: isPtr(rt) ? _operator(BuiltinFunKind::addPtr)
-						: no
+			case shortSymOperatorLiteralValue("-"):
+				return isFloat64(rt) ? _operator(BuiltinFunKind::subFloat64) : no;
+			case shortSymOperatorLiteralValue("*"):
+				return isFloat64(rt) ? _operator(BuiltinFunKind::mulFloat64) : no;
+
+			case shortSymAlphaLiteralValue("and"):
+				return _operator(BuiltinFunKind::_and);
+			case shortSymAlphaLiteralValue("as"):
+				return _operator(BuiltinFunKind::as);
+			case shortSymAlphaLiteralValue("call"):
+				return isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr) : no;
+			case shortSymAlphaLiteralValue("deref"):
+				return _operator(BuiltinFunKind::deref);
+			case shortSymAlphaLiteralValue("false"):
+				return constant(BuiltinFunKind::_false);
+			case shortSymAlphaLiteralValue("get-ctx"):
+				return _operator(BuiltinFunKind::getCtx);
+			case shortSymAlphaLiteralValue("hard-fail"):
+				return special(BuiltinFunKind::hardFail);
+			case shortSymAlphaLiteralValue("if"):
+				return _operator(BuiltinFunKind::_if);
+			case shortSymAlphaLiteralValue("not"):
+				return _operator(BuiltinFunKind::_not);
+			case shortSymAlphaLiteralValue("null"):
+				return constant(BuiltinFunKind::null);
+			case shortSymAlphaLiteralValue("one"):
+				return isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("one float")
+					: isInt64(rt) ? constant(BuiltinFunKind::oneInt64)
+					: isNat64(rt) ? constant(BuiltinFunKind::oneNat64)
 					: no;
-			case '-':
-				return strEqLiteral(name, "-") && isFloat64(rt) ? _operator(BuiltinFunKind::subFloat64) : no;
-			case '*':
-				return strEqLiteral(name, "*") && isFloat64(rt) ? _operator(BuiltinFunKind::mulFloat64) : no;
-			case 'a':
-				return strEqLiteral(name, "and") ? _operator(BuiltinFunKind::_and)
-					: strEqLiteral(name, "as") ? _operator(BuiltinFunKind::as)
-					: strEqLiteral(name, "as-non-const") ? _operator(BuiltinFunKind::asNonConst, True)
+			case shortSymAlphaLiteralValue("or"):
+				return _operator(BuiltinFunKind::_or);
+			case shortSymAlphaLiteralValue("pass"):
+				return isVoid(rt) ? constant(BuiltinFunKind::pass) : no;
+			case shortSymAlphaLiteralValue("ptr-cast"):
+				return _operator(BuiltinFunKind::ptrCast);
+			case shortSymAlphaLiteralValue("ptr-to"):
+				return _operator(BuiltinFunKind::ptrTo);
+			case shortSymAlphaLiteralValue("ref-of-val"):
+				return _operator(BuiltinFunKind::refOfVal);
+			case shortSymAlphaLiteralValue("set"):
+				return isPtr(p0) ? _operator(BuiltinFunKind::setPtr) : no;
+			case shortSymAlphaLiteralValue("size-of"):
+				return constant(BuiltinFunKind::sizeOf);
+			case shortSymAlphaLiteralValue("true"):
+				return constant(BuiltinFunKind::_true);
+			case shortSymAlphaLiteralValue("unsafe-div"):
+				return isFloat64(rt) ? _operator(BuiltinFunKind::unsafeDivFloat64)
+					: isInt64(rt) ? _operator(BuiltinFunKind::unsafeDivInt64)
+					: isNat64(rt) ? _operator(BuiltinFunKind::unsafeDivNat64)
 					: no;
-			case 'c':
-				return strEqLiteral(name, "call") && isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr)
-					: strEqLiteral(name, "compare-exchange-strong") ? special(BuiltinFunKind::compareExchangeStrong)
+			case shortSymAlphaLiteralValue("unsafe-mod"):
+				return _operator(BuiltinFunKind::unsafeModNat64);
+			case shortSymAlphaLiteralValue("wrap-add"):
+				return isInt64(rt) ? _operator(BuiltinFunKind::wrappingAddInt64)
+					: isNat64(rt) ? _operator(BuiltinFunKind::wrappingAddNat64)
 					: no;
-			case 'd':
-				return strEqLiteral(name, "deref") ? _operator(BuiltinFunKind::deref) : no;
-			case 'f':
-				return strEqLiteral(name, "false") ? constant(BuiltinFunKind::_false) : no;
-			case 'g':
-				return strEqLiteral(name, "get-ctx") ? _operator(BuiltinFunKind::getCtx) : no;
-			case 'h':
-				return strEqLiteral(name, "hard-fail") ? special(BuiltinFunKind::hardFail) : no;
-			case 'i':
-				return strEqLiteral(name, "if") ? _operator(BuiltinFunKind::_if)
-					: strEqLiteral(name, "is-reference-type?") ? constant(BuiltinFunKind::isReferenceType)
+			case shortSymAlphaLiteralValue("wrap-sub"):
+				return isInt64(rt) ? _operator(BuiltinFunKind::wrappingSubInt64)
+					: isNat64(rt) ? _operator(BuiltinFunKind::wrappingSubNat64)
 					: no;
-			case 'n':
-				return strEqLiteral(name, "not") ? _operator(BuiltinFunKind::_not)
-					: strEqLiteral(name, "null") ? constant(BuiltinFunKind::null)
+			case shortSymAlphaLiteralValue("wrap-mul"):
+				return isInt64(rt) ? _operator(BuiltinFunKind::wrappingMulInt64)
+					: isNat64(rt) ? _operator(BuiltinFunKind::wrappingMulNat64)
 					: no;
-			case 'o':
-				return strEqLiteral(name, "one")
-						? isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("one float")
-						: isInt64(rt) ? constant(BuiltinFunKind::oneInt64)
-						: isNat64(rt) ? constant(BuiltinFunKind::oneNat64)
-						: no
-					: strEqLiteral(name, "or") ? _operator(BuiltinFunKind::_or) : no;
-			case 'p':
-				return strEqLiteral(name, "pass")
-						? isVoid(rt) ? constant(BuiltinFunKind::pass) : no
-					: strEqLiteral(name, "ptr-cast") ? _operator(BuiltinFunKind::ptrCast)
-					: strEqLiteral(name, "ptr-to") ? _operator(BuiltinFunKind::ptrTo)
-					: no;
-			case 'r':
-				return strEqLiteral(name, "ref-of-val") ? _operator(BuiltinFunKind::refOfVal) : no;
-			case 's':
-				return strEqLiteral(name, "set")
-						? isPtr(p0) ? _operator(BuiltinFunKind::setPtr) : no
-					: strEqLiteral(name, "size-of") ? constant(BuiltinFunKind::sizeOf)
-					: no;
-			case 't':
-				return strEqLiteral(name, "true")
-					? constant(BuiltinFunKind::_true)
-					: no;
-			case 'u':
-				return strEqLiteral(name, "unsafe-div")
-						? isFloat64(rt) ? _operator(BuiltinFunKind::unsafeDivFloat64)
-							: isInt64(rt) ? _operator(BuiltinFunKind::unsafeDivInt64)
-							: isNat64(rt) ? _operator(BuiltinFunKind::unsafeDivNat64)
-							: no
-					: strEqLiteral(name, "unsafe-mod")
-						? _operator(BuiltinFunKind::unsafeModNat64)
-					: strEqLiteral(name, "unsafe-to-nat64")
-						? _operator(BuiltinFunKind::unsafeInt64ToNat64)
-					: strEqLiteral(name, "unsafe-to-int64")
-						? _operator(BuiltinFunKind::unsafeNat64ToInt64)
-					: no;
-			case 'w':
-				return strEqLiteral(name, "wrapping-add")
-						? isInt64(rt) ? _operator(BuiltinFunKind::wrappingAddInt64)
-							: isNat64(rt) ? _operator(BuiltinFunKind::wrappingAddNat64)
-							: no
-					: strEqLiteral(name, "wrapping-sub")
-						? isInt64(rt) ? _operator(BuiltinFunKind::wrappingSubInt64)
-							: isNat64(rt) ? _operator(BuiltinFunKind::wrappingSubNat64)
-							: no
-					: strEqLiteral(name, "wrapping-mul")
-						? isInt64(rt) ? _operator(BuiltinFunKind::wrappingMulInt64)
-						: isNat64(rt) ? _operator(BuiltinFunKind::wrappingMulNat64)
-						: no
-					: no;
-			case 'z':
-				return strEqLiteral(name, "zero")
-					? isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("zero float")
-						: isInt64(rt) ? constant(BuiltinFunKind::zeroInt64)
-						: isNat64(rt) ? constant(BuiltinFunKind::zeroNat64)
-						: no
+			case shortSymAlphaLiteralValue("zero"):
+				return isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("zero float")
+					: isInt64(rt) ? constant(BuiltinFunKind::zeroInt64)
+					: isNat64(rt) ? constant(BuiltinFunKind::zeroNat64)
 					: no;
 			default:
-				return no;
+				if (symEqLongAlphaLiteral(name, "as-non-const"))
+					return _operator(BuiltinFunKind::asNonConst, True);
+				else if (symEqLongAlphaLiteral(name, "compare-exchange-strong"))
+					return special(BuiltinFunKind::compareExchangeStrong);
+				else if (symEqLongAlphaLiteral(name, "is-reference-type"))
+					return constant(BuiltinFunKind::isReferenceType);
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat64"))
+					return _operator(BuiltinFunKind::unsafeInt64ToNat64);
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-int64"))
+					return _operator(BuiltinFunKind::unsafeNat64ToInt64);
+				else
+					return no;
 		}
 	}
 }
@@ -164,27 +165,37 @@ const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 	const Opt<const BuiltinFunInfo> res = tryGetBuiltinFunInfo(sig);
 	if (!has(res)) {
 		Arena arena {};
-		printf("not a builtin fun: %s\n", strToCStr(arena, sig.name));
+		printf("not a builtin fun: %s\n", symToCStr(arena, sig.name));
 		return todo<const BuiltinFunInfo>("not a builtin fun");
 	}
 	return force(res);
 }
 
 const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {
-	const Str name = s->name;
-	return strEqLiteral(name, "bool") ? BuiltinStructInfo{BuiltinStructKind::_bool, sizeof(Bool)}
-		: strEqLiteral(name, "byte") ? BuiltinStructInfo{BuiltinStructKind::byte, sizeof(byte)}
-		: strEqLiteral(name, "char") ? BuiltinStructInfo{BuiltinStructKind::_char, sizeof(char)}
-		: strEqLiteral(name, "float") ? BuiltinStructInfo{BuiltinStructKind::float64, sizeof(Float64)}
-		: strEqLiteral(name, "fun-ptr0")
-			|| strEqLiteral(name, "fun-ptr1")
-			|| strEqLiteral(name, "fun-ptr2")
-			|| strEqLiteral(name, "fun-ptr3")
-			|| strEqLiteral(name, "fun-ptr4")
-			? BuiltinStructInfo{BuiltinStructKind::funPtrN, sizeof(void(*))}
-		: strEqLiteral(name, "int") ? BuiltinStructInfo{BuiltinStructKind::int64, sizeof(Int64)}
-		: strEqLiteral(name, "nat") ? BuiltinStructInfo{BuiltinStructKind::nat64, sizeof(Nat64)}
-		: strEqLiteral(name, "ptr") ? BuiltinStructInfo{BuiltinStructKind::ptr, sizeof(void*)}
-		: strEqLiteral(name, "void") ? BuiltinStructInfo{BuiltinStructKind::_void, sizeof(byte)}
-		: todo<const BuiltinStructInfo>("not a recognized builtin struct");
+	switch (s->name.value) {
+		case shortSymAlphaLiteralValue("bool"):
+			return BuiltinStructInfo{BuiltinStructKind::_bool, sizeof(Bool)};
+		case shortSymAlphaLiteralValue("byte"):
+			return BuiltinStructInfo{BuiltinStructKind::byte, sizeof(byte)};
+		case shortSymAlphaLiteralValue("char"):
+			return BuiltinStructInfo{BuiltinStructKind::_char, sizeof(char)};
+		case shortSymAlphaLiteralValue("float"):
+			return BuiltinStructInfo{BuiltinStructKind::float64, sizeof(Float64)};
+		case shortSymAlphaLiteralValue("fun-ptr0"):
+		case shortSymAlphaLiteralValue("fun-ptr1"):
+		case shortSymAlphaLiteralValue("fun-ptr2"):
+		case shortSymAlphaLiteralValue("fun-ptr3"):
+		case shortSymAlphaLiteralValue("fun-ptr4"):
+			return BuiltinStructInfo{BuiltinStructKind::funPtrN, sizeof(void(*))};
+		case shortSymAlphaLiteralValue("int"):
+			return BuiltinStructInfo{BuiltinStructKind::int64, sizeof(Int64)};
+		case shortSymAlphaLiteralValue("nat"):
+			return BuiltinStructInfo{BuiltinStructKind::nat64, sizeof(Nat64)};
+		case shortSymAlphaLiteralValue("ptr"):
+			return BuiltinStructInfo{BuiltinStructKind::ptr, sizeof(void*)};
+		case shortSymAlphaLiteralValue("void"):
+			return BuiltinStructInfo{BuiltinStructKind::_void, sizeof(byte)};
+		default:
+			return todo<const BuiltinStructInfo>("not a recognized builtin struct");
+	}
 }

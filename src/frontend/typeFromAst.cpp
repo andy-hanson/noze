@@ -18,16 +18,16 @@ namespace {
 	template<typename TDecl, typename GetTMap>
 	const Opt<TDecl> tryFindT(
 		CheckCtx& ctx,
-		const Str name,
+		const Sym name,
 		const SourceRange range,
-		const Dict<const Str, TDecl, compareStr> dict,
+		const Dict<const Sym, TDecl, compareSym> dict,
 		Diag::NameNotFound::Kind kind,
 		GetTMap getTMap
 	) {
-		Cell<const Opt<TDecl>> res = Cell<const Opt<TDecl>>{getAt<const Str, TDecl, compareStr>(dict, name)};
+		Cell<const Opt<TDecl>> res = Cell<const Opt<TDecl>>{getAt<const Sym, TDecl, compareSym>(dict, name)};
 
 		for (const Module* m : ctx.includeAndImportsRange()) {
-			const Opt<TDecl> fromModule = getAt<const Str, TDecl, compareStr>(getTMap(m), name);
+			const Opt<TDecl> fromModule = getAt<const Sym, TDecl, compareSym>(getTMap(m), name);
 			if (has(fromModule)) {
 				if (has(cellGet(&res)))
 					todo<void>("Duplicate imports from different modules");
@@ -38,7 +38,7 @@ namespace {
 
 		const Opt<TDecl> r = cellGet(&res);
 		if (!has(r))
-			ctx.addDiag(range, Diag{Diag::NameNotFound{ctx.copyStr(name), kind}});
+			ctx.addDiag(range, Diag{Diag::NameNotFound{name, kind}});
 		return r;
 	}
 }
@@ -95,12 +95,12 @@ const Type typeFromAst(
 	return ast.match(
 		[&](const TypeAst::TypeParam p) {
 			const Opt<const TypeParam*> found = findPtr(typeParamsScope.innerTypeParams, [&](const TypeParam* it) {
-				return strEq(it->name, p.name);
+				return symEq(it->name, p.name);
 			});
 			if (has(found))
 				return Type{force(found)};
 			else {
-				ctx.addDiag(p.range, Diag{Diag::NameNotFound{ctx.copyStr(p.name), Diag::NameNotFound::Kind::typeParam}});
+				ctx.addDiag(p.range, Diag{Diag::NameNotFound{p.name, Diag::NameNotFound::Kind::typeParam}});
 				return Type{Type::Bogus{}};
 			}
 		},
@@ -112,7 +112,7 @@ const Type typeFromAst(
 
 const Opt<const SpecDecl*> tryFindSpec(
 	CheckCtx& ctx,
-	const Str name,
+	const Sym name,
 	const SourceRange range,
 	const SpecsMap specsMap) {
 	return tryFindT(ctx, name, range, specsMap, Diag::NameNotFound::Kind::spec, [](const Module* m) {

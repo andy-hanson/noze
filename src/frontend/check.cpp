@@ -11,10 +11,10 @@
 namespace {
 	const Opt<const StructDecl*> getCommonTemplateType(
 		const StructsAndAliasesMap& structsAndAliasesMap,
-		const Str name,
+		const Sym name,
 		const size_t expectedTypeParams
 	) {
-		const Opt<const StructOrAlias> res = getAt<const Str, const StructOrAlias, compareStr>(structsAndAliasesMap, name);
+		const Opt<const StructOrAlias> res = getAt<const Sym, const StructOrAlias, compareSym>(structsAndAliasesMap, name);
 		if (has(res)) {
 			// may fail -- builtin Template should not be an alias
 			const StructDecl* decl = force(res).asDecl();
@@ -28,10 +28,10 @@ namespace {
 	const Opt<const StructInst*> getCommonNonTemplateType(
 		Arena& arena,
 		const StructsAndAliasesMap& structsAndAliasesMap,
-		const Str name,
+		const Sym name,
 		MutArr<StructInst*>& delayedStructInsts
 	) {
-		const Opt<const StructOrAlias> opStructOrAlias = getAt<const Str, const StructOrAlias, compareStr>(structsAndAliasesMap, name);
+		const Opt<const StructOrAlias> opStructOrAlias = getAt<const Sym, const StructOrAlias, compareSym>(structsAndAliasesMap, name);
 		if (!has(opStructOrAlias))
 			return none<const StructInst*>();
 		else {
@@ -57,7 +57,7 @@ namespace {
 	) {
 		// non-template types
 		auto ng = [&](const CStr s) -> const Opt<const StructInst*> {
-			return getCommonNonTemplateType(ctx.arena, structsAndAliasesMap, strLiteral(s), delayedStructInsts);
+			return getCommonNonTemplateType(ctx.arena, structsAndAliasesMap, shortSymAlphaLiteral(s), delayedStructInsts);
 		};
 		const Opt<const StructInst*>
 			_bool = ng("bool"),
@@ -70,7 +70,7 @@ namespace {
 
 		// gemplate types
 		auto com = [&](const CStr name, const size_t nTypeParameters) -> const Opt<const StructDecl*> {
-			return getCommonTemplateType(structsAndAliasesMap, strLiteral(name), nTypeParameters);
+			return getCommonTemplateType(structsAndAliasesMap, shortSymAlphaLiteral(name), nTypeParameters);
 		};
 		const Opt<const StructDecl*>
 			opt = com("opt", 1),
@@ -83,15 +83,15 @@ namespace {
 			fun0 = com("fun0", 1),
 			fun1 = com("fun1", 2),
 			fun2 = com("fun2", 3),
-			remoteFun0 = com("remote-fun0", 1),
-			remoteFun1 = com("remote-fun1", 2),
-			remoteFun2 = com("remote-fun2", 3);
+			sendFun0 = com("send-fun0", 1),
+			sendFun1 = com("send-fun1", 2),
+			sendFun2 = com("send-fun2", 3);
 
 		if (has(_bool) && has(_char) && has(int64) && has(str) && has(_void) && has(anyPtr) &&
 			has(opt) && has(some) && has(none) &&
 			has(byVal) && has(arr) && has(fut) &&
 			has(fun0) && has(fun1) && has(fun2) &&
-			has(remoteFun0) && has(remoteFun1) && has(remoteFun2))
+			has(sendFun0) && has(sendFun1) && has(sendFun2))
 			return success<const CommonTypes, const Arr<const Diagnostic>>(
 				CommonTypes{
 					force(_bool),
@@ -107,7 +107,7 @@ namespace {
 					force(mutArr),
 					force(fut),
 					arrLiteral<const StructDecl*>(ctx.arena, force(fun0), force(fun1), force(fun2)),
-					arrLiteral<const StructDecl*>(ctx.arena, force(remoteFun0), force(remoteFun1), force(remoteFun2))});
+					arrLiteral<const StructDecl*>(ctx.arena, force(sendFun0), force(sendFun1), force(sendFun2))});
 		else {
 			const Diagnostic diag = Diagnostic{path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
 			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx.arena, diag));
@@ -116,11 +116,11 @@ namespace {
 
 	const Arr<const TypeParam> checkTypeParams(CheckCtx& ctx, const Arr<const TypeParamAst> asts) {
 		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(ctx.arena, asts, [&](const TypeParamAst& ast, const size_t i) {
-			return TypeParam{ast.range, ctx.copyStr(ast.name), i};
+			return TypeParam{ast.range, ast.name, i};
 		});
 		for (const size_t i : Range{typeParams.size})
 			for (const size_t prev_i : Range{i})
-				if (strEq(at(typeParams, prev_i).name, at(typeParams, i).name))
+				if (symEq(at(typeParams, prev_i).name, at(typeParams, i).name))
 					ctx.addDiag(at(typeParams, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
 		return typeParams;
 	}
@@ -128,8 +128,8 @@ namespace {
 	void collectTypeParamsInAst(Arena& arena, const TypeAst ast, ArrBuilder<const TypeParam>* res) {
 		return ast.match(
 			[&](const TypeAst::TypeParam tp) {
-				if (!exists(res->tempAsArr(), [&](const TypeParam it) { return strEq(it.name, tp.name); }))
-					add<const TypeParam>(arena, res, TypeParam{tp.range, copyStr(arena, tp.name), res->size()});
+				if (!exists(res->tempAsArr(), [&](const TypeParam it) { return symEq(it.name, tp.name); }))
+					add<const TypeParam>(arena, res, TypeParam{tp.range, tp.name, res->size()});
 			},
 			[&](const TypeAst::InstStruct i) {
 				for (const TypeAst arg : i.typeArgs)
@@ -154,11 +154,11 @@ namespace {
 	) {
 		const Arr<const Param> params = mapWithIndex<const Param>{}(ctx.arena, asts, [&](const ParamAst ast, const size_t index) {
 			const Type type = typeFromAst(ctx, ast.type, structsAndAliasesMap, typeParamsScope, delayStructInsts);
-			return Param{ast.range, ctx.copyStr(ast.name), type, index};
+			return Param{ast.range, ast.name, type, index};
 		});
 		for (const size_t i : Range{params.size})
 			for (const size_t prev_i : Range{i})
-				if (strEq(at(params, prev_i).name, at(params, i).name))
+				if (symEq(at(params, prev_i).name, at(params, i).name))
 					ctx.addDiag(at(params, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
 		return params;
 	}
@@ -173,7 +173,7 @@ namespace {
 		const TypeParamsScope typeParamsScope = TypeParamsScope{typeParams};
 		const Arr<const Param> params = checkParams(ctx, ast.params, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 		const Type returnType = typeFromAst(ctx, ast.returnType, structsAndAliasesMap, typeParamsScope, delayStructInsts);
-		return Sig{ast.range, ctx.copyStr(ast.name), returnType, params};
+		return Sig{ast.range, ast.name, returnType, params};
 	}
 
 	const Sig checkSigNoOwnTypeParams(
@@ -202,13 +202,13 @@ namespace {
 			const Arr<const Sig> sigs = map<const Sig>{}(ctx.arena, ast.sigs, [&](const SigAst it) {
 				return checkSigNoOwnTypeParams(ctx, it, typeParams, structsAndAliasesMap, delayStructInsts);
 			});
-			return SpecDecl{ast.range, ast.isPublic, ctx.copyStr(ast.name), typeParams, sigs};
+			return SpecDecl{ast.range, ast.isPublic, ast.name, typeParams, sigs};
 		});
 	}
 
 	const Arr<StructAlias> checkStructAliasesInitial(CheckCtx& ctx, const Arr<const StructAliasAst> asts) {
 		return map<StructAlias>{}(ctx.arena, asts, [&](const StructAliasAst ast) {
-			return StructAlias{ast.range, ast.isPublic, ctx.copyStr(ast.name), checkTypeParams(ctx, ast.typeParams)};
+			return StructAlias{ast.range, ast.isPublic, ast.name, checkTypeParams(ctx, ast.typeParams)};
 		});
 	}
 
@@ -241,7 +241,7 @@ namespace {
 	const Arr<StructDecl> checkStructsInitial(CheckCtx& ctx, const Arr<const StructDeclAst> asts) {
 		return map<StructDecl>{}(ctx.arena, asts, [&](const StructDeclAst ast) {
 			const PurityAndForceSendable p = getPurityFromAst(ast);
-			return StructDecl{ast.range, ast.isPublic, ctx.copyStr(ast.name), checkTypeParams(ctx, ast.typeParams), p.purity, p.forceSendable};
+			return StructDecl{ast.range, ast.isPublic, ast.name, checkTypeParams(ctx, ast.typeParams), p.purity, p.forceSendable};
 		});
 	}
 
@@ -252,16 +252,16 @@ namespace {
 		const Arr<const StructAliasAst> asts,
 		MutArr<StructInst*>& delayStructInsts
 	) {
-		zip(aliases, asts, [&](StructAlias& structAlias, const StructAliasAst& ast) {
+		zipPtrs(aliases, asts, [&](StructAlias* structAlias, const StructAliasAst* ast) {
 			const Opt<const StructInst*> inst = instStructFromAst(
 				ctx,
-				ast.target,
+				ast->target,
 				structsAndAliasesMap,
-				TypeParamsScope{structAlias.typeParams},
+				TypeParamsScope{structAlias->typeParams},
 				some<MutArr<StructInst*>*>(&delayStructInsts));
 			if (!has(inst))
 				todo<void>("handle invalid alias");
-			structAlias.setTarget(force(inst));
+			structAlias->setTarget(force(inst));
 		});
 	}
 
@@ -316,10 +316,10 @@ namespace {
 					ctx.addDiag(field.range, Diag{Diag::PurityOfFieldWorseThanRecord{strukt, fieldType}});
 				if (field.isMutable && strukt->purity != Purity::mut && !strukt->forceSendable)
 					ctx.addDiag(field.range, Diag{Diag::MutFieldInNonMutRecord{}});
-				return StructField{field.range, field.isMutable, ctx.copyStr(field.name), fieldType, index};
+				return StructField{field.range, field.isMutable, field.name, fieldType, index};
 			});
 		everyPair(fields, [&](const StructField a, const StructField b) {
-			if (strEq(a.name, b.name))
+			if (symEq(a.name, b.name))
 				ctx.addDiag(b.range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::field, a.name}});
 		});
 		return StructBody{StructBody::Record{getForcedByValOrRef(r.explicitByValOrRef), fields}};
@@ -395,25 +395,25 @@ namespace {
 	}
 
 	const StructsAndAliasesMap buildStructsAndAliasesDict(CheckCtx& ctx, const Arr<StructDecl> structs, const Arr<StructAlias> aliases) {
-		DictBuilder<const Str, const StructOrAlias, compareStr> d {};
+		DictBuilder<const Sym, const StructOrAlias, compareSym> d {};
 		for (const StructDecl* decl : ptrsRange(structs))
-			addToDict<const Str, const StructOrAlias, compareStr>(ctx.arena, &d, decl->name, StructOrAlias{decl});
+			addToDict<const Sym, const StructOrAlias, compareSym>(ctx.arena, &d, decl->name, StructOrAlias{decl});
 		for (const StructAlias* a : ptrsRange(aliases))
-			addToDict<const Str, const StructOrAlias, compareStr>(ctx.arena, &d, a->name, StructOrAlias{a});
-		return finishDict<const Str, const StructOrAlias, compareStr>(ctx.arena, &d, [&](const Str name, const StructOrAlias, const StructOrAlias b) {
+			addToDict<const Sym, const StructOrAlias, compareSym>(ctx.arena, &d, a->name, StructOrAlias{a});
+		return finishDict<const Sym, const StructOrAlias, compareSym>(ctx.arena, &d, [&](const Sym name, const StructOrAlias, const StructOrAlias b) {
 			ctx.addDiag(b.range(), Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::structOrAlias, name}});
 		});
 	}
 
 	template <typename T>
-	const Dict<const Str, T*, compareStr> buildDeclsDict(CheckCtx& ctx, const Arr<T> ts, const Diag::DuplicateDeclaration::Kind kind) {
-		return buildDict<const Str, T*, compareStr>{}(
+	const Dict<const Sym, T*, compareSym> buildDeclsDict(CheckCtx& ctx, const Arr<T> ts, const Diag::DuplicateDeclaration::Kind kind) {
+		return buildDict<const Sym, T*, compareSym>{}(
 			ctx.arena,
 			ts,
 			[](T& it) {
-				return KeyValuePair<const Str, T*>{it.name, &it};
+				return KeyValuePair<const Sym, T*>{it.name, &it};
 			},
-			[&](const Str name, T*, T* t) {
+			[&](const Sym name, T*, T* t) {
 				ctx.addDiag(t->range, Diag{Diag::DuplicateDeclaration{kind, name}});
 			});
 	}
@@ -446,7 +446,7 @@ namespace {
 				} else
 					return some<const SpecInst*>(instantiateSpec(ctx.arena, spec, typeArgs));
 			} else {
-				ctx.addDiag(ast.range, Diag{Diag::NameNotFound{ctx.copyStr(ast.spec), Diag::NameNotFound::Kind::spec}});
+				ctx.addDiag(ast.range, Diag{Diag::NameNotFound{ast.spec, Diag::NameNotFound::Kind::spec}});
 				return none<const SpecInst*>();
 			}
 		});
@@ -474,15 +474,15 @@ namespace {
 			return FunDecl{funAst.isPublic, flags, sig, typeParams, specUses};
 		});
 
-		const FunsMap funsMap = buildMultiDict<const Str, const FunDecl*, compareStr>{}(
+		const FunsMap funsMap = buildMultiDict<const Sym, const FunDecl*, compareSym>{}(
 			ctx.arena,
 			funs,
 			[](const FunDecl& it) {
-				return KeyValuePair<const Str, const FunDecl*>{it.name(), &it};
+				return KeyValuePair<const Sym, const FunDecl*>{it.name(), &it};
 			});
 
-		zip(funs, asts, [&](FunDecl& fun, const FunDeclAst funAst) {
-			fun.setBody(funAst.body.match(
+		zipPtrs(funs, asts, [&](FunDecl* fun, const FunDeclAst* funAst) {
+			fun->setBody(funAst->body.match(
 				[](const FunBodyAst::Builtin) {
 					return FunBody{FunBody::Builtin{}};
 				},
@@ -490,7 +490,7 @@ namespace {
 					return FunBody{FunBody::Extern{}};
 				},
 				[&](const ExprAst e) {
-					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, &fun, commonTypes)};
+					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, fun, commonTypes)};
 				}));
 		});
 

@@ -132,7 +132,7 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 			return getConcreteType(ctx, c->type, typeArgsScope);
 		});
 		if (has(t))
-			add<const ConcreteField>(ctx.arena, &res, ConcreteField{/*isMutable*/ False, copyStr(ctx.arena, c->name), force(t)});
+			add<const ConcreteField>(ctx.arena, &res, ConcreteField{/*isMutable*/ False, mangleName(ctx.arena, c->name), force(t)});
 	}
 	return finishArr(&res);
 }

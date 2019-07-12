@@ -7,6 +7,7 @@
 
 struct Lexer {
 	Arena& arena;
+	Symbols* symbols;
 	// Null-terminated.
 	const CStr sourceBegin;
 	// Starts at sourceBegin and proceeds until it hits NUL
@@ -65,7 +66,8 @@ inline const SourceRange range(Lexer& lexer, const Pos begin) {
 	return SourceRange{begin, curPos(lexer)};
 }
 
-const Str takeName(Lexer& lexer);
+const Sym takeName(Lexer& lexer);
+const Str takeNameAsStr(Lexer& lexer);
 const NameAndRange takeNameAndRange(Lexer& lexer);
 
 struct ExpressionToken {
@@ -111,4 +113,4 @@ const ExpressionToken takeExpressionToken(Lexer& lexer);
 
 const Bool tryTakeElseIndent(Lexer& lexer);
 
-Lexer createLexer(Arena& astArena, const NulTerminatedStr source);
+Lexer createLexer(Arena& astArena, Symbols* symbols, const NulTerminatedStr source);

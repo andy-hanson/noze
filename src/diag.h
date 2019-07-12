@@ -135,12 +135,12 @@ struct Diag {
 	// Note: this error is issued *before* resolving specs.
 	// We don't exclude a candidate based on not having specs.
 	struct CallMultipleMatches {
-		const Str funName;
+		const Sym funName;
 		// Unlike CallNoMatch, these are only the ones that match
 		const Arr<const CalledDecl> matches;
 	};
 	struct CallNoMatch {
-		const Str funName;
+		const Sym funName;
 		const Opt<const Type> expectedReturnType;
 		const size_t actualArity;
 		// NOTE: we may have given up early and this may not be as much as actualArity
@@ -169,7 +169,7 @@ struct Diag {
 			unionMember,
 		};
 		const Kind kind;
-		const Str name;
+		const Sym name;
 	};
 	struct ExpectedTypeIsNotALambda {
 		const Opt<const Type> expectedType;
@@ -190,7 +190,7 @@ struct Diag {
 			typeParam,
 		};
 
-		const Str name;
+		const Sym name;
 		const Kind kind;
 	};
 	struct ParamShadowsPrevious {
@@ -208,14 +208,14 @@ struct Diag {
 		const StructDecl* strukt;
 		const StructInst* member;
 	};
-	struct RemoteFunDoesNotReturnFut {
+	struct SendFunDoesNotReturnFut {
 		const Type actualReturnType;
 	};
 	struct SpecImplNotFound {
-		const Str sigName;
+		const Sym sigName;
 	};
 	struct SpecImplHasSpecs {
-		const Str funName;
+		const Sym funName;
 	};
 	struct TypeConflict {
 		const Type expected;
@@ -226,7 +226,7 @@ struct Diag {
 		// Type of `x` in `x.y := z`
 		const Type targetType;
 		// `y` in `x.y := z`
-		const Str fieldName;
+		const Sym fieldName;
 	};
 	struct WriteToNonMutableField {
 		const StructField* field;
@@ -270,7 +270,7 @@ private:
 		parseDiag,
 		purityOfFieldWorseThanRecord,
 		purityOfMemberWorseThanUnion,
-		remoteFunDoesNotReturnFut,
+		sendFunDoesNotReturnFut,
 		specImplHasSpecs,
 		specImplNotFound,
 		typeConflict,
@@ -304,7 +304,7 @@ private:
 		const ParseDiag parseDiag;
 		const PurityOfFieldWorseThanRecord purityOfFieldWorseThanRecord;
 		const PurityOfMemberWorseThanUnion purityOfMemberWorseThanUnion;
-		const RemoteFunDoesNotReturnFut remoteFunDoesNotReturnFut;
+		const SendFunDoesNotReturnFut sendFunDoesNotReturnFut;
 		const SpecImplHasSpecs specImplHasSpecs;
 		const SpecImplNotFound specImplNotFound;
 		const TypeConflict typeConflict;
@@ -338,7 +338,7 @@ public:
 	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
 	explicit inline Diag(const PurityOfFieldWorseThanRecord d) : kind{Kind::purityOfFieldWorseThanRecord}, purityOfFieldWorseThanRecord{d} {}
 	explicit inline Diag(const PurityOfMemberWorseThanUnion d) : kind{Kind::purityOfMemberWorseThanUnion}, purityOfMemberWorseThanUnion{d} {}
-	explicit inline Diag(const RemoteFunDoesNotReturnFut d) : kind{Kind::remoteFunDoesNotReturnFut}, remoteFunDoesNotReturnFut{d} {}
+	explicit inline Diag(const SendFunDoesNotReturnFut d) : kind{Kind::sendFunDoesNotReturnFut}, sendFunDoesNotReturnFut{d} {}
 	explicit inline Diag(const SpecImplHasSpecs d) : kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
 	explicit inline Diag(const SpecImplNotFound d) : kind{Kind::specImplNotFound}, specImplNotFound{d} {}
 	explicit inline Diag(const TypeConflict d) : kind{Kind::typeConflict}, typeConflict{d} {}
@@ -375,7 +375,7 @@ public:
 		typename CbParseDiag,
 		typename CbPurityOfFieldWorseThanRecord,
 		typename CbPurityOfMemberWorseThanUnion,
-		typename CbRemoteFunDoesNotReturnFut,
+		typename CbSendFunDoesNotReturnFut,
 		typename CbSpecImplHasSpecs,
 		typename CbSpecImplNotFound,
 		typename CbTypeConflict,
@@ -407,7 +407,7 @@ public:
 		CbParseDiag cbParseDiag,
 		CbPurityOfFieldWorseThanRecord cbPurityOfFieldWorseThanRecord,
 		CbPurityOfMemberWorseThanUnion cbPurityOfMemberWorseThanUnion,
-		CbRemoteFunDoesNotReturnFut cbRemoteFunDoesNotReturnFut,
+		CbSendFunDoesNotReturnFut cbSendFunDoesNotReturnFut,
 		CbSpecImplHasSpecs cbSpecImplHasSpecs,
 		CbSpecImplNotFound cbSpecImplNotFound,
 		CbTypeConflict cbTypeConflict,
@@ -461,8 +461,8 @@ public:
 				return cbPurityOfFieldWorseThanRecord(purityOfFieldWorseThanRecord);
 			case Kind::purityOfMemberWorseThanUnion:
 				return cbPurityOfMemberWorseThanUnion(purityOfMemberWorseThanUnion);
-			case Kind::remoteFunDoesNotReturnFut:
-				return cbRemoteFunDoesNotReturnFut(remoteFunDoesNotReturnFut);
+			case Kind::sendFunDoesNotReturnFut:
+				return cbSendFunDoesNotReturnFut(sendFunDoesNotReturnFut);
 			case Kind::specImplHasSpecs:
 				return cbSpecImplHasSpecs(specImplHasSpecs);
 			case Kind::specImplNotFound:

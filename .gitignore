@@ -2,6 +2,7 @@
 build
 # Built executable from ./build.sh
 noze
+noze-optimized
 
 # Ignore executables in test/, but do include the .nz and .c files
 # (cpp files are to ensure we know when compiler's output changes)

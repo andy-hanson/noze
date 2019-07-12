@@ -4,9 +4,10 @@
 
 void* Arena::alloc(const size_t n_bytes) {
 	if (begin == nullptr) {
-		// 4MB
-		size_t size = 4 * 1024 * 1024;
+		// 2MB
+		size_t size = 2 * 1024 * 1024;
 		begin = static_cast<byte*>(malloc(size));
+		assert(begin != nullptr);
 		cur = begin;
 		end = begin + size;
 
@@ -28,4 +29,9 @@ void* Arena::alloc(const size_t n_bytes) {
 		assert(*b == 0xff);
 
 	return res;
+}
+
+Arena::~Arena() {
+	if (begin != nullptr)
+		free(begin);
 }

@@ -6,6 +6,7 @@
 
 #include "./util/arrUtil.h"
 #include "./util/io.h"
+#include "./util/sym.h"
 #include "./concreteModel.h"
 
 #include "./compiler.h"
@@ -50,8 +51,6 @@ int main(const int argc, CStr const* const argv) {
 
 	if (true)
 		return cli(argc, argv);
-	else {
-		printf("%zu\n", sizeof(Bool));
+	else
 		return 0;
-	}
 }

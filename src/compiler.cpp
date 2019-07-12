@@ -54,23 +54,26 @@ namespace {
 	}
 
 	// mainPath is relative to programDir
+	// Returns exePath
 	const Opt<const AbsolutePath> buildWorker(
+		Arena& outputArena, // Just for exePath
 		const AbsolutePath nozeDir,
 		const AbsolutePath programDir,
 		const Path* mainPath,
 		const Environ environ
 	) {
 		Arena modelArena {};
+		Symbols symbols {};
 		const AbsolutePath include = childPath(modelArena, nozeDir, strLiteral("include"));
 		const ReadOnlyStorages storages = ReadOnlyStorages{ReadOnlyStorage{include}, ReadOnlyStorage{programDir}};
-		const Result<const Program, const Diagnostics> programResult = frontendCompile(modelArena, storages, mainPath);
+		const Result<const Program, const Diagnostics> programResult = frontendCompile(modelArena, &symbols, storages, mainPath);
 
 		return programResult.match(
 			[&](const Program program) {
-				const AbsolutePath fullMainPath = addManyChildren(modelArena, programDir, mainPath);
+				const AbsolutePath fullMainPath = addManyChildren(outputArena, programDir, mainPath);
 				const AbsolutePath cPath = changeExtension(modelArena, fullMainPath, strLiteral("c"));
 				emitProgram(program, cPath);
-				const AbsolutePath exePath = removeExtension(modelArena, fullMainPath);
+				const AbsolutePath exePath = removeExtension(outputArena, fullMainPath);
 				compileC(cPath, exePath, environ);
 				return some<const AbsolutePath>(exePath);
 			},
@@ -87,8 +90,9 @@ int build(
 	const Path* mainPath,
 	const Environ environ
 ) {
-	const Opt<const AbsolutePath> b = buildWorker(nozeDir, programDir, mainPath, environ);
-	return has(b) ? 0 : 1;
+	Arena exePathArena {};
+	const Opt<const AbsolutePath> exePath = buildWorker(exePathArena, nozeDir, programDir, mainPath, environ);
+	return has(exePath) ? 0 : 1;
 }
 
 int buildAndRun(
@@ -98,7 +102,8 @@ int buildAndRun(
 	const Arr<const Str> programArgs,
 	const Environ environ
 ) {
-	const Opt<const AbsolutePath> exePath = buildWorker(nozeDir, programDir, mainPath, environ);
+	Arena exePathArena {};
+	const Opt<const AbsolutePath> exePath = buildWorker(exePathArena, nozeDir, programDir, mainPath, environ);
 	return has(exePath)
 		? spawnAndWaitSync(force(exePath), programArgs, environ)
 		: 1;

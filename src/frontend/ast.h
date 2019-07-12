@@ -2,21 +2,22 @@
 
 #include "../util/path.h"
 #include "../util/sourceRange.h"
+#include "../util/sym.h"
 
 struct NameAndRange {
 	const SourceRange range;
-	const Str name;
+	const Sym name;
 };
 
 struct TypeAst {
 	struct TypeParam {
 		const SourceRange range;
-		const Str name;
+		const Sym name;
 	};
 
 	struct InstStruct {
 		const SourceRange range;
-		const Str name;
+		const Sym name;
 		const Arr<const TypeAst> typeArgs;
 	};
 
@@ -54,7 +55,7 @@ public:
 struct ExprAst;
 
 struct CallAst {
-	const Str funName;
+	const Sym funName;
 	const Arr<const TypeAst> typeArgs;
 	const Arr<const ExprAst> args;
 };
@@ -76,18 +77,18 @@ struct CreateRecordAst {
 };
 
 struct FunAsLambdaAst {
-	const Str funName;
+	const Sym funName;
 	const Arr<const TypeAst> typeArgs;
 };
 
 struct IdentifierAst {
-	const Str name;
+	const Sym name;
 };
 
 struct LambdaAst {
 	struct Param {
 		const SourceRange range;
-		const Str name;
+		const Sym name;
 	};
 
 	const Arr<const Param> params;
@@ -95,7 +96,7 @@ struct LambdaAst {
 };
 
 struct LetAst {
-	const Str name;
+	const Sym name;
 	const ExprAst* initializer;
 	const ExprAst* then;
 };
@@ -107,8 +108,8 @@ struct LiteralAst {
 struct MatchAst {
 	struct CaseAst {
 		const SourceRange range;
-		const Str structName;
-		const Opt<const Str> localName;
+		const Sym structName;
+		const Opt<const Sym> localName;
 		const ExprAst* then;
 	};
 
@@ -118,19 +119,19 @@ struct MatchAst {
 
 struct MessageSendAst {
 	const ExprAst* target;
-	const Str messageName;
+	const Sym messageName;
 	const Arr<const ExprAst> args;
 };
 
 struct NewActorAst {
 	struct Field {
 		const Bool isMutable;
-		const Str name;
+		const Sym name;
 		const ExprAst* expr;
 	};
 
 	struct MessageImpl {
-		const Str name;
+		const Sym name;
 		const Arr<const NameAndRange> paramNames;
 		const ExprAst* body;
 	};
@@ -146,7 +147,7 @@ struct SeqAst {
 
 struct StructFieldSetAst {
 	const ExprAst* target;
-	const Str fieldName;
+	const Sym fieldName;
 	const ExprAst* value;
 };
 
@@ -310,24 +311,24 @@ struct ExprAst {
 // Unlike TypeAst.TypeParam, this is the *declaration*
 struct TypeParamAst {
 	const SourceRange range;
-	const Str name;
+	const Sym name;
 };
 
 struct ParamAst {
 	const SourceRange range;
-	const Str name;
+	const Sym name;
 	const TypeAst type;
 };
 
 struct SpecUseAst {
 	const SourceRange range;
-	const Str spec;
+	const Sym spec;
 	const Arr<const TypeAst> typeArgs;
 };
 
 struct SigAst {
 	const SourceRange range;
-	const Str name;
+	const Sym name;
 	const TypeAst returnType;
 	const Arr<const ParamAst> params;
 };
@@ -341,7 +342,7 @@ enum class PuritySpecifier {
 struct StructAliasAst {
 	const SourceRange range;
 	const Bool isPublic;
-	const Str name;
+	const Sym name;
 	const Arr<const TypeParamAst> typeParams;
 	const TypeAst::InstStruct target;
 };
@@ -358,7 +359,7 @@ struct StructDeclAst {
 			struct Field {
 				const SourceRange range;
 				const Bool isMutable;
-				const Str name;
+				const Sym name;
 				const TypeAst type;
 			};
 			const Opt<const ExplicitByValOrRef> explicitByValOrRef;
@@ -421,7 +422,7 @@ struct StructDeclAst {
 
 	const SourceRange range;
 	const Bool isPublic;
-	const Str name;
+	const Sym name;
 	const Arr<const TypeParamAst> typeParams;
 	const Opt<const PuritySpecifier> purity;
 	const Body body;
@@ -430,7 +431,7 @@ struct StructDeclAst {
 struct SpecDeclAst {
 	const SourceRange range;
 	const Bool isPublic;
-	const Str name;
+	const Sym name;
 	const Arr<const TypeParamAst> typeParams;
 	const Arr<const SigAst> sigs;
 };

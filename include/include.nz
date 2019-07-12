@@ -54,7 +54,7 @@ ptr-cast ptr ?out(p ptr ?in) noctx unsafe builtin
 
 malloc any-ptr(size nat) unsafe extern
 
-allocate-bytes any-ptr(size nat) unsafe
+alloc any-ptr(size nat) unsafe
 	| TODO: Allocate from ctx (Use 'get-ctx' builtin fun)
 	| Note: malloc always returns aligned memory (max_align_t)
 	malloc: size
@@ -143,7 +143,7 @@ fun-ptr4<?r, ?p0, ?p1, ?p2, ?p3> builtin
 
 | A fun is two pointers -- one to the fun pointer, one to the closure.
 | TODO: point to the vtable, and have vtable also store layout information
-| A remote-fun is a fun plus a vat and actor id.
+| A send-fun is a fun plus a vat and actor id.
 fun0<?r> record mut
 	fun-ptr fun-ptr2 ?r ctx any-ptr
 	closure any-ptr
@@ -154,14 +154,14 @@ fun2<?r, ?p0, ?p1> record mut
 	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
 	closure any-ptr
 
-| A normal fun is non-sendable, a remote-fun becomes sendable by storing the vat/actor that will provide its ctx.
-remote-fun0<?r> record force-sendable
+| A normal fun is non-sendable, a send-fun becomes sendable by storing the vat/actor that will provide its ctx.
+send-fun0<?r> record force-sendable
 	vat-and-actor vat-and-actor-id
 	fun fun0 ?r
-remote-fun1<?r, ?p0> record force-sendable
+send-fun1<?r, ?p0> record force-sendable
 	vat-and-actor vat-and-actor-id
 	fun fun1 ?r ?p0
-remote-fun2<?r, ?p0, ?p1> record force-sendable
+send-fun2<?r, ?p0, ?p1> record force-sendable
 	vat-and-actor vat-and-actor-id
 	fun fun2 ?r ?p0 ?p1
 
@@ -192,7 +192,7 @@ call ?r(f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
 call-with-ctx ?r(c ctx, f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx
 	f.fun-ptr call c, f.closure, p0, p1
 
-call fut ?r(f remote-fun0 ?r) trusted
+call fut ?r(f send-fun0 ?r) trusted
 	| Create a future
 	| Put the task on the vat, that will write to the future
 	| Return the future
@@ -207,10 +207,10 @@ call fut ?r(f remote-fun0 ?r) trusted
 	vat add-task t
 	res
 
-call fut ?r(f remote-fun1 ?r ?p0, p0 ?p0)
+call fut ?r(f send-fun1 ?r ?p0, p0 ?p0)
 	todo
 
-call fut ?r(f remote-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1)
+call fut ?r(f send-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1)
 	todo
 
 region Arithmetic
@@ -226,9 +226,9 @@ unsafe-to-nat nat(i int) noctx builtin
 | UB for positive numbers >= 2 ** 63
 unsafe-to-int int(n nat) noctx builtin
 
-wrapping-add nat(a nat, b nat) noctx builtin
-wrapping-sub nat(a nat, b nat) noctx builtin
-wrapping-mul nat(a nat, b nat) noctx builtin
+wrap-add nat(a nat, b nat) noctx builtin
+wrap-sub nat(a nat, b nat) noctx builtin
+wrap-mul nat(a nat, b nat) noctx builtin
 unsafe-div nat(a nat, b nat) noctx unsafe builtin
 unsafe-mod nat(a nat, b nat) noctx unsafe builtin
 zero nat() noctx builtin
@@ -252,18 +252,18 @@ nine nat() noctx
 ten nat() noctx
 	nine incr
 hundred nat() noctx
-	ten wrapping-mul ten
+	ten wrap-mul ten
 thousand nat() noctx
-	hundred wrapping-mul ten
+	hundred wrap-mul ten
 
-wrapping-add int(a int, b int) noctx builtin
-wrapping-sub int(a int, b int) noctx builtin
-wrapping-mul int(a int, b int) noctx builtin
+wrap-add int(a int, b int) noctx builtin
+wrap-sub int(a int, b int) noctx builtin
+wrap-mul int(a int, b int) noctx builtin
 unsafe-div int(a int, b int) noctx unsafe builtin
 zero int() noctx builtin
 one int() noctx builtin
 neg-one int() noctx
-	zero wrapping-sub one
+	zero wrap-sub one
 two int() noctx
 	one incr
 three int() noctx
@@ -285,22 +285,22 @@ ten int() noctx
 
 incr nat(n nat) noctx
 	| TODO: assert: n != max-value
-	n wrapping-add one
+	n wrap-add one
 
 incr int(i int) noctx
 	| TODO: assert: i != max-value
-	i wrapping-add one
+	i wrap-add one
 
 incr ptr ?t(p ptr ?t) noctx unsafe
 	p + one
 
 decr-noctx nat(n nat) noctx unsafe
 	hard-forbid: n == zero
-	n wrapping-sub one
+	n wrap-sub one
 
 decr nat(n nat)
 	forbid: n == zero
-	n wrapping-sub one
+	n wrap-sub one
 
 | decr int(i int)
 |	i - 1
@@ -309,19 +309,19 @@ decr ptr ?t(p ptr ?t) noctx unsafe
 	p - one
 
 + nat(a nat, b nat)
-	res = a wrapping-add b
+	res = a wrap-add b
 	assert: res >= a and: res >= b
 	res
 - nat(a nat, b nat)
 	assert: a > b
-	a wrapping-sub b
+	a wrap-sub b
 * nat(a nat, b nat)
 	| TODO: better safety check
 	when
 		a == zero or: b == zero
 			zero
 		else
-			res = a wrapping-mul b
+			res = a wrap-mul b
 			assert: res / b == a
 			assert: res / a == b
 			res
@@ -344,7 +344,7 @@ mod nat(a nat, b nat) trusted
 	assert: a < 999
 	assert: b > -999
 	assert: b < 999
-	a wrapping-add b
+	a wrap-add b
 
 - int(a int, b int)
 	| TODO: better safety check
@@ -352,13 +352,13 @@ mod nat(a nat, b nat) trusted
 	assert: a < 999
 	assert: b > -999
 	assert: b < 999
-	a wrapping-sub b
+	a wrap-sub b
 * int(a int, b int)
 	assert: a > -999
 	assert: a < 999
 	assert: b > -999
 	assert: b < 999
-	a wrapping-mul b
+	a wrap-mul b
 / int(a int, b int) trusted
 	forbid: b == zero
 	| If a is the smallest int and b is -1, result is UB
@@ -552,7 +552,7 @@ resolve-recur void(node opt fut-callback-node<?t>, value ?t)
 		none
 			pass
 		some s
-			| the remote-fun will return a fut<void>, just ignore it
+			| the send-fun will return a fut<void>, just ignore it
 			drop: s.value.cb call value
 			s.value.next-node resolve-recur value
 
@@ -572,7 +572,7 @@ forward-to void(from fut ?t, to fut ?t) unsafe
 	from then-void \value
 		to resolve value
 
-then fut ?out(f fut ?in, cb remote-fun1 ?out ?in) trusted
+then fut ?out(f fut ?in, cb send-fun1 ?out ?in) trusted
 	res = new-unresolved-fut<?out>
 	f then-void \value
 		cb call value forward-to res
@@ -580,7 +580,7 @@ then fut ?out(f fut ?in, cb remote-fun1 ?out ?in) trusted
 
 joiner<?out, ?in0, ?in1> record force-sendable
 	res fut ?out
-	fun remote-fun2 ?out ?in0 ?in1
+	fun send-fun2 ?out ?in0 ?in1
 	arg0 mut opt ?in0
 	arg1 mut opt ?in1
 	| NOTE: we can't just check that both arg0 and arg1 are done -- we might try calling 'fun' twice.
@@ -594,7 +594,7 @@ decr-joiner void(j joiner ?out ?in0 ?in1) unsafe
 		else
 			pass
 
-join fut ?out(a fut ?in0, b fut ?in1, fun remote-fun2 ?out ?in0 ?in1) trusted
+join fut ?out(a fut ?in0, b fut ?in1, fun send-fun2 ?out ?in0 ?in1) trusted
 	res = new-unresolved-fut<?out>
 	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, new<none>, new<none>, new-thread-safe-counter: 2
 	a then-void \value
@@ -670,7 +670,7 @@ mut-arr<?t> record mut
 	data mut ptr ?t
 
 uninitialized-data ptr ?t(size nat) unsafe
-	bptr = allocate-bytes: size wrapping-mul size-of<?t>
+	bptr = alloc: size wrap-mul size-of<?t>
 	bptr ptr-cast<?t, byte>
 
 uninitialized-mut-arr mut-arr ?t(size nat) unsafe
@@ -1049,8 +1049,8 @@ usleep void(micro-seconds nat) extern
 
 | TODO:MOVE
 sleep-ms-sync void(ms nat) noctx
-	| TODO: wrapping-mul is unsafe
-	ms wrapping-mul thousand usleep
+	| TODO: wrap-mul is unsafe
+	ms wrap-mul thousand usleep
 
 wait-on void(c condition, last-checked nat) noctx
 	when

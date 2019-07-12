@@ -6,6 +6,7 @@
 #include "./util/path.h"
 #include "./util/sexpr.h"
 #include "./util/sourceRange.h"
+#include "./util/sym.h"
 #include "./util/writer.h"
 
 // A module came from the global imports directory or locally
@@ -46,8 +47,6 @@ struct AbsolutePathsGetter {
 
 using LineAndColumnGetters = Dict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;
 
-using Identifier = Str;
-
 enum class Purity {
 	data,
 	sendable,
@@ -64,7 +63,7 @@ inline Purity worsePurity(const Purity a, const Purity b) {
 
 struct TypeParam {
 	const SourceRange range;
-	const Identifier name;
+	const Sym name;
 	const size_t index;
 };
 
@@ -150,7 +149,7 @@ inline const Bool typeEquals(const Type a, const Type b) {
 
 struct Param {
 	const SourceRange range;
-	const Identifier name;
+	const Sym name;
 	const Type type;
 	const size_t index;
 
@@ -161,7 +160,7 @@ struct Param {
 
 struct Sig {
 	const SourceRange range;
-	const Identifier name;
+	const Sym name;
 	const Type returnType;
 	const Arr<const Param> params;
 };
@@ -178,7 +177,7 @@ struct Message {
 struct StructField {
 	const SourceRange range;
 	const Bool isMutable;
-	const Identifier name;
+	const Sym name;
 	const Type type;
 	const size_t index;
 
@@ -297,12 +296,12 @@ public:
 struct StructAlias {
 	const SourceRange range;
 	const Bool isPublic;
-	const Identifier name;
+	const Sym name;
 	const Arr<const TypeParam> typeParams;
 private:
 	Late<const StructInst*> _target;
 public:
-	StructAlias(const SourceRange _range, const Bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams)
+	StructAlias(const SourceRange _range, const Bool _isPublic, const Sym _name, const Arr<const TypeParam> _typeParams)
 		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams} {}
 
 	inline const StructInst* target() const {
@@ -316,7 +315,7 @@ public:
 struct StructDecl {
 	const SourceRange range;
 	const Bool isPublic;
-	const Identifier name;
+	const Sym name;
 	const Arr<const TypeParam> typeParams;
 	// Note: purity on the decl does not take type args into account
 	const Purity purity;
@@ -338,7 +337,7 @@ public:
 	}
 
 	// TODO: why do I need to specify a constructor here?
-	inline StructDecl(const SourceRange _range, const Bool _isPublic, const Identifier _name, const Arr<const TypeParam> _typeParams, const Purity _purity, const Bool _forceSendable)
+	inline StructDecl(const SourceRange _range, const Bool _isPublic, const Sym _name, const Arr<const TypeParam> _typeParams, const Purity _purity, const Bool _forceSendable)
 		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams}, purity{_purity}, forceSendable{_forceSendable} {}
 };
 
@@ -366,7 +365,7 @@ struct SpecInst;
 struct SpecDecl {
 	const SourceRange range;
 	const Bool isPublic;
-	const Identifier name;
+	const Sym name;
 	const Arr<const TypeParam> typeParams;
 	const Arr<const Sig> sigs;
 	mutable MutArr<const SpecInst*> insts {};
@@ -379,7 +378,7 @@ struct SpecInst {
 	// Instantiated signatures
 	const Arr<const Sig> sigs;
 
-	inline const Str name() const {
+	inline const Sym name() const {
 		return decl->name;
 	}
 };
@@ -486,7 +485,7 @@ struct FunDecl {
 		return flags.noCtx;
 	}
 
-	inline const Identifier name() const {
+	inline const Sym name() const {
 		return sig.name;
 	}
 
@@ -534,7 +533,7 @@ struct FunInst {
 		assert(specImpls.size == decl->nSpecImpls());
 	}
 
-	inline const Str name() const {
+	inline const Sym name() const {
 		return decl->name();
 	}
 };
@@ -549,7 +548,7 @@ struct SpecSig {
 	const Sig* sig;
 	const size_t indexOverAllSpecUses;
 
-	inline const Str name() const {
+	inline const Sym name() const {
 		return sig->name;
 	}
 };
@@ -593,7 +592,7 @@ public:
 			});
 	}
 
-	inline const Str name() const {
+	inline const Sym name() const {
 		return sig().name;
 	}
 
@@ -673,7 +672,7 @@ public:
 			});
 	}
 
-	inline const Str name() const {
+	inline const Sym name() const {
 		return match(
 			[](const FunInst* f) { return f->name(); },
 			[](const SpecSig s) { return s.name(); });
@@ -756,7 +755,7 @@ public:
 		);
 	}
 
-	inline const Str name() const {
+	inline const Sym name() const {
 		return match(
 			[](const StructAlias* a) { return a->name; },
 			[](const StructDecl* d) { return d->name; }
@@ -764,9 +763,9 @@ public:
 	}
 };
 
-using StructsAndAliasesMap = Dict<const Str, const StructOrAlias, compareStr>;
-using SpecsMap = Dict<const Str, const SpecDecl*, compareStr>;
-using FunsMap = MultiDict<Str, const FunDecl*, compareStr>;
+using StructsAndAliasesMap = Dict<const Sym, const StructOrAlias, compareSym>;
+using SpecsMap = Dict<const Sym, const SpecDecl*, compareSym>;
+using FunsMap = MultiDict<const Sym, const FunDecl*, compareSym>;
 
 struct Module {
 	const PathAndStorageKind pathAndStorageKind;
@@ -799,14 +798,14 @@ struct CommonTypes {
 	const StructDecl* mutArr;
 	const StructDecl* fut;
 	const Arr<const StructDecl*> funTypes;
-	const Arr<const StructDecl*> remoteFunTypes;
+	const Arr<const StructDecl*> sendFunTypes;
 
 	struct LambdaInfo {
-		const Bool isRemote;
-		const StructDecl* nonRemote;
+		const Bool isSend;
+		const StructDecl* nonSend;
 	};
 
-	inline const Bool isNonRemoteFunType(const StructDecl* s) const {
+	inline const Bool isNonsendFunType(const StructDecl* s) const {
 		for (const StructDecl* p : funTypes)
 			if (ptrEquals(p, s))
 				return True;
@@ -826,12 +825,12 @@ struct Program {
 };
 
 struct Local {
-	const Identifier name;
+	const Sym name;
 	const Type type;
 };
 
 struct ClosureField {
-	const Identifier name;
+	const Sym name;
 	const Type type;
 	const Expr* expr;
 	const size_t index;
@@ -870,11 +869,11 @@ struct Expr {
 	struct FunAsLambda {
 		const FunDecl* fun;
 		const StructInst* type;
-		const Bool isRemoteFun;
+		const Bool isSendFun;
 
 		inline FunAsLambda(
-			const FunDecl* _fun, const StructInst* _type, const Bool _isRemoteFun)
-			: fun{_fun}, type{_type}, isRemoteFun{_isRemoteFun} {
+			const FunDecl* _fun, const StructInst* _type, const Bool _isSendFun)
+			: fun{_fun}, type{_type}, isSendFun{_isSendFun} {
 			assert(!fun->isTemplate());
 		}
 	};
@@ -885,19 +884,19 @@ struct Expr {
 		const Expr* inner;
 	};
 
-	// type is the lambda's type (not the body's return type), e.g. a Fun1 or RemoteFun1 instance.
+	// type is the lambda's type (not the body's return type), e.g. a Fun1 or sendFun1 instance.
 	struct Lambda {
 		const Arr<const Param> params;
 		const Expr* body;
 		const Arr<const ClosureField*> closure;
 		// This is the funN type.
 		const StructInst* type;
-		const StructDecl* nonRemoteType;
-		const Bool isRemoteFun;
-		// For RemoteFun this includes 'fut'
+		const StructDecl* nonSendType;
+		const Bool isSendFun;
+		// For sendFun this includes 'fut'
 		const Type returnType;
 
-		// For a RemoteFun this is missing the 'fut'
+		// For a sendFun this is missing the 'fut'
 		inline const Type nonFutReturnType() const {
 			return at(type->typeArgs, 0);
 		}
@@ -939,7 +938,7 @@ struct Expr {
 	struct NewIfaceImpl {
 		struct Field {
 			const Bool isMutable;
-			const Identifier name;
+			const Sym name;
 			const Expr* expr;
 			const Type type;
 			const size_t index;
@@ -988,7 +987,7 @@ struct Expr {
 			return field->type;
 		}
 
-		inline const Str fieldName() const {
+		inline const Sym fieldName() const {
 			return field->name;
 		}
 	};

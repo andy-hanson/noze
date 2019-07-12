@@ -192,8 +192,8 @@ namespace {
 
 	const ConstantOrExpr concretizeFunAsLambda(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::FunAsLambda e) {
 		Arena& arena = ctx.arena();
-		if (e.isRemoteFun)
-			todo<void>("funaslambda remote");
+		if (e.isSendFun)
+			todo<void>("funaslambda sendfun");
 
 		const ConcreteFun* cf = getOrAddNonTemplateConcreteFunAndFillBody(ctx.concretizeCtx, e.fun);
 		const Str mangledName = cat(arena, cf->mangledName(), strLiteral("__asLambda"));
@@ -202,7 +202,7 @@ namespace {
 
 		const KnownLambdaBody* klb = arena.nu<KnownLambdaBody>()(
 			dynamicType, cf->sig, mangledName, none<const ConcreteParam>(), emptyArr<const ClosureSingleSpecialize>());
-		const Arr<const Expr> args = mapPointers<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
+		const Arr<const Expr> args = mapPtrs<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
 			return Expr{range, Expr::ParamRef{p}};
 		});
 		const Expr* body = arena.nu<const Expr>()(
@@ -263,8 +263,8 @@ namespace {
 
 	const ConstantOrExpr concretizeLambda(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Lambda e) {
 		Arena& arena = ctx.arena();
-		if (e.isRemoteFun)
-			todo<void>("remote fun");
+		if (e.isSendFun)
+			todo<void>("sendfun");
 
 		// Since we're just creating the lambda and not calling it, we can't specialize on params yet. (But we will specialize above.)
 		const Arr<const ConcreteParam> nonSpecializedParams = concretizeParamsNoSpecialize(ctx.concretizeCtx, e.params, ctx.typeArgsScope());
@@ -304,7 +304,7 @@ namespace {
 			: mangledName;
 	}
 
-	const ConcreteLocal* makeLocalWorker(ConcretizeExprCtx& ctx, const Str name, const ConcreteType type, const ConstantOrLambdaOrVariable clv) {
+	const ConcreteLocal* makeLocalWorker(ConcretizeExprCtx& ctx, const Sym name, const ConcreteType type, const ConstantOrLambdaOrVariable clv) {
 		const Str mangledName = chooseUniqueName(ctx.arena(), mangleName(ctx.arena(), name), tempAsArr(ctx.allLocalsInThisFun));
 		const ConcreteLocal* res = ctx.arena().nu<const ConcreteLocal>()(mangledName, type, clv);
 		push(ctx.arena(), ctx.allLocalsInThisFun, res);
@@ -316,7 +316,7 @@ namespace {
 	}
 
 	const ConcreteLocal* getMatchedLocal(ConcretizeExprCtx& ctx, const ConcreteStruct* matchedUnion) {
-		return makeLocalWorker(ctx, strLiteral("matched"), ConcreteType::value(matchedUnion), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+		return makeLocalWorker(ctx, shortSymAlphaLiteral("matched"), ConcreteType::value(matchedUnion), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 	}
 
 	const ConstantOrExpr concretizeWithLocal(ConcretizeExprCtx& ctx, const Local* modelLocal, const ConcreteLocal* concreteLocal, const Expr expr) {
@@ -443,7 +443,7 @@ namespace {
 		const ConstantOrExpr target = concretizeExpr(ctx, *e.target);
 		const ConcreteType targetType = ctx.getConcreteType_forStructInst(e.targetType);
 		const size_t fieldIndex = e.field->index;
-		const Str fieldName = e.field->name;
+		const Sym fieldName = e.field->name;
 		AllConstants& allConstants = ctx.allConstants();
 
 		const ConcreteField* field = getMatchingField(targetType, fieldIndex);
@@ -465,10 +465,10 @@ namespace {
 					// Fields are "size", "data"
 					switch (fieldIndex) {
 						case 0:
-							assert(strEqLiteral(fieldName, "size"));
+							assert(symEq(fieldName, shortSymAlphaLiteral("size")));
 							return ConstantOrExpr{allConstants.nat64(arena, type, a.size())};
 						case 1:
-							assert(strEqLiteral(fieldName, "data"));
+							assert(symEq(fieldName, shortSymAlphaLiteral("data")));
 							return ConstantOrExpr{allConstants.ptr(arena, type, c, 0)};
 						default:
 							assert(0);
@@ -478,13 +478,13 @@ namespace {
 					const KnownLambdaBody* klb = kind.asLambda().knownLambdaBody;
 					switch (fieldIndex) {
 						case 0: {
-							assert(strEqLiteral(fieldName, "fun-ptr"));
+							assert(symEq(fieldName, shortSymAlphaLiteral("fun-ptr")));
 							// instantiate the lambda now
 							const ConcreteFun* cf = instantiateKnownLambdaBodyForDynamic(ctx.concretizeCtx, klb);
 							return ConstantOrExpr{allConstants.funPtr(arena, type, cf)};
 						}
 						case 1:
-							assert(strEqLiteral(fieldName, "closure"));
+							assert(symEq(fieldName, shortSymAlphaLiteral("closure")));
 							if (klb->hasClosure())
 								// Constant parts of closure are omitted, so this must be non-constant.
 								return expr();

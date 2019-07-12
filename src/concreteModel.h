@@ -373,7 +373,7 @@ struct ConstantKind {
 		const ConcreteFun* fun;
 	};
 
-	// Note: A remote-fun is never constant since that needs at least a vat id.
+	// Note: A send-fun is never constant since that needs at least a vat id.
 	struct Lambda {
 		const KnownLambdaBody* knownLambdaBody;
 

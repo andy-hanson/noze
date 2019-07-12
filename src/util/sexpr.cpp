@@ -10,7 +10,7 @@ void writeSexpr(Writer& writer, const Sexpr s) {
 			writeChar(writer, ']');
 		},
 		[&](const SexprRecord s) {
-			writeStr(writer, s.name);
+			writeSym(writer, s.name);
 			writeChar(writer, '(');
 			writeWithCommas(writer, s.children, [&](const Sexpr element) {
 				writeSexpr(writer, element);
@@ -18,6 +18,10 @@ void writeSexpr(Writer& writer, const Sexpr s) {
 			writeChar(writer, ')');
 		},
 		[&](const Str s) {
+			//TODO: quoted
 			writeStr(writer, s);
+		},
+		[&](const Sym s) {
+			writeSym(writer, s);
 		});
 }

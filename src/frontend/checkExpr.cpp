@@ -189,8 +189,8 @@ namespace {
 
 	struct ExpectedLambdaType {
 		const StructDecl* funStruct;
-		const StructDecl* nonRemoteFunStruct;
-		const Bool isRemoteFun;
+		const StructDecl* nonSendFunStruct;
+		const Bool isSendFun;
 		const Arr<const Type> paramTypes;
 		const Type nonInstantiatedPossiblyFutReturnType;
 	};
@@ -219,8 +219,8 @@ namespace {
 				todo<void>("getExpectedLambdaType");
 			return force(op);
 		});
-		const Type nonInstantiatedReturnType = info.isRemote ? ctx.makeFutType(nonInstantiatedNonFutReturnType) : nonInstantiatedNonFutReturnType;
-		return some<const ExpectedLambdaType>(ExpectedLambdaType{funStruct, info.nonRemote, info.isRemote, paramTypes, nonInstantiatedReturnType});
+		const Type nonInstantiatedReturnType = info.isSend ? ctx.makeFutType(nonInstantiatedNonFutReturnType) : nonInstantiatedNonFutReturnType;
+		return some<const ExpectedLambdaType>(ExpectedLambdaType{funStruct, info.nonSend, info.isSend, paramTypes, nonInstantiatedReturnType});
 	}
 
 	const CheckedExpr checkFunAsLambda(ExprCtx& ctx, const SourceRange range, const FunAsLambdaAst ast, Expected& expected) {
@@ -268,14 +268,14 @@ namespace {
 				todo<void>("checkFunAsLambda -- param types don't match");
 		});
 
-		return expected.check(ctx, Type{type}, Expr{range, Expr::FunAsLambda{fun, type, et.isRemoteFun}});
+		return expected.check(ctx, Type{type}, Expr{range, Expr::FunAsLambda{fun, type, et.isSendFun}});
 	}
 
 	const CheckedExpr checkRef(
 		ExprCtx& ctx,
 		const Expr expr,
 		const SourceRange range,
-		const Str name,
+		const Sym name,
 		const Type type,
 		const Arr<LambdaInfo*> passedLambdas,
 		Expected& expected
@@ -288,10 +288,10 @@ namespace {
 			LambdaInfo* l0 = first(passedLambdas);
 			// Shouldn't have already closed over it (or we should just be using that)
 			assert(!exists(tempAsArr(l0->closureFields), [&](const ClosureField* it) {
-				return strEq(it->name, name);
+				return symEq(it->name, name);
 			}));
 			const ClosureField* field = ctx.arena().nu<const ClosureField>()(
-				ctx.copyStr(name),
+				name,
 				type,
 				ctx.alloc(expr),
 				l0->closureFields.size());
@@ -308,10 +308,7 @@ namespace {
 	}
 
 	const CheckedExpr checkIdentifier(ExprCtx& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
-		const Str name = ast.name;
-
-		if (strEqLiteral(name, "pred"))
-			debugger();
+		const Sym name = ast.name;
 
 		if (!isEmpty(ctx.lambdas)) {
 			// Innermost lambda first
@@ -321,16 +318,16 @@ namespace {
 				const Arr<LambdaInfo*> passedLambdas = slice(tempAsArr(ctx.lambdas), i + 1);
 
 				for (const Local* local : tempAsArr(lambda->locals))
-					if (strEq(local->name, name))
+					if (symEq(local->name, name))
 						return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, passedLambdas, expected);
 
 				for (const Param* param : ptrsRange(lambda->lambdaParams))
-					if (strEq(param->name, name))
+					if (symEq(param->name, name))
 						return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, passedLambdas, expected);
 
 				// Check if we've already added something with this name to closureFields to avoid adding it twice.
 				for (const ClosureField* field : tempAsArr(lambda->closureFields))
-					if (strEq(field->name, name))
+					if (symEq(field->name, name))
 						return checkRef(ctx, Expr{range, Expr::ClosureFieldRef{field}}, range, name, field->type, passedLambdas, expected);
 			}
 		}
@@ -338,20 +335,20 @@ namespace {
 		const Arr<LambdaInfo*> allLambdas = tempAsArr(ctx.lambdas);
 
 		for (const Local* local : tempAsArr(ctx.messageOrFunctionLocals))
-			if (strEq(local->name, name))
+			if (symEq(local->name, name))
 				return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, allLambdas, expected);
 
 		if (has(ctx.newAndMessageInfo)) {
 			const NewAndMessageInfo nmi = force(ctx.newAndMessageInfo);
 			for (const Param* param : ptrsRange(nmi.instantiatedParams))
-				if (strEq(param->name, name))
+				if (symEq(param->name, name))
 					return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
 			for (const Expr::NewIfaceImpl::Field* field : ptrsRange(nmi.fields))
-				if (strEq(field->name, name))
+				if (symEq(field->name, name))
 					return checkRef(ctx, Expr{range, Expr::IfaceImplFieldRef{field}}, range, name, field->type, allLambdas, expected);
 		} else
 			for (const Param* param : ptrsRange(ctx.outermostFun->params()))
-				if (strEq(param->name, name))
+				if (symEq(param->name, name))
 					return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
 
 		return checkIdentifierCall(ctx, range, name, expected);
@@ -366,7 +363,7 @@ namespace {
 			return checkNoCallLiteral(ctx, range, ast.literal, expected);
 		else {
 			const CallAst call = CallAst{
-				strLiteral("literal"),
+				shortSymAlphaLiteral("literal"),
 				emptyArr<const TypeAst>(),
 				arrLiteral<const ExprAst>(ctx.arena(), ExprAst{range, ExprAstKind{ast}})};
 			return checkCall(ctx, range, call, expected);
@@ -391,7 +388,7 @@ namespace {
 		});
 	}
 
-	const Arr<const Param> checkFunOrRemoteFunParamsForLambda(
+	const Arr<const Param> checkFunOrSendFunParamsForLambda(
 		Arena& arena,
 		const Arr<const LambdaAst::Param> paramAsts,
 		const Arr<const Type> expectedParamTypes
@@ -401,7 +398,7 @@ namespace {
 			paramAsts,
 			expectedParamTypes,
 			[&](const LambdaAst::Param ast, const Type expectedParamType, const size_t index) {
-				return Param{ast.range, copyStr(arena, ast.name), expectedParamType, index};
+				return Param{ast.range, ast.name, expectedParamType, index};
 			});
 	}
 
@@ -424,7 +421,7 @@ namespace {
 			todo<void>("checkLambdaWorker -- # params is wrong");
 		}
 
-		const Arr<const Param> params = checkFunOrRemoteFunParamsForLambda(arena, paramAsts, et.paramTypes);
+		const Arr<const Param> params = checkFunOrSendFunParamsForLambda(arena, paramAsts, et.paramTypes);
 		LambdaInfo info = LambdaInfo{params};
 		Expected returnTypeInferrer = expected.copyWithNewExpectedType(et.nonInstantiatedPossiblyFutReturnType);
 
@@ -435,7 +432,7 @@ namespace {
 
 		const Type actualPossiblyFutReturnType = returnTypeInferrer.inferred();
 		const Opt<const Type> actualNonFutReturnType = [&]() {
-			if (et.isRemoteFun) {
+			if (et.isSendFun) {
 				if (actualPossiblyFutReturnType.isStructInst()) {
 					const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
 					return ptrEquals(ap->decl, ctx.commonTypes.fut)
@@ -447,7 +444,7 @@ namespace {
 				return some<const Type>(actualPossiblyFutReturnType);
 		}();
 		if (!has(actualNonFutReturnType)) {
-			ctx.addDiag(range, Diag{Diag::RemoteFunDoesNotReturnFut{actualPossiblyFutReturnType}});
+			ctx.addDiag(range, Diag{Diag::SendFunDoesNotReturnFut{actualPossiblyFutReturnType}});
 			return expected.bogus(range);
 		} else {
 			const StructInst* instFunStruct = instantiateStructNeverDelay(
@@ -458,8 +455,8 @@ namespace {
 				body,
 				freeze(info.closureFields),
 				instFunStruct,
-				et.nonRemoteFunStruct,
-				et.isRemoteFun,
+				et.nonSendFunStruct,
+				et.isSendFun,
 				actualPossiblyFutReturnType};
 
 			return CheckedExpr{Expr{range, lambda}};
@@ -472,7 +469,7 @@ namespace {
 
 	const CheckedExpr checkLet(ExprCtx& ctx, const SourceRange range, const LetAst ast, Expected& expected) {
 		const ExprAndType init = checkAndInfer(ctx, *ast.initializer);
-		const Local* local = ctx.arena().nu<Local>()(ctx.copyStr(ast.name), init.type);
+		const Local* local = ctx.arena().nu<Local>()(ast.name, init.type);
 		const Expr* then = ctx.alloc(checkWithLocal(ctx, local, *ast.then, expected));
 		return CheckedExpr{Expr{range, Expr::Let{local, ctx.alloc(init.expr), then}}};
 	}
@@ -513,7 +510,7 @@ namespace {
 			const Bool badCases = _or(
 				members.size != ast.cases.size,
 				zipSome(members, ast.cases, [&](const StructInst* member, const MatchAst::CaseAst caseAst) {
-					return !strEq(member->decl->name, caseAst.structName);
+					return !symEq(member->decl->name, caseAst.structName);
 				}));
 			if (badCases) {
 				ctx.addDiag(range, Diag{Diag::MatchCaseStructNamesDoNotMatch{members}});
@@ -526,7 +523,7 @@ namespace {
 					[&](const StructInst* member, const MatchAst::CaseAst caseAst) {
 						const Opt<const Local*> local = has(caseAst.localName)
 							? some<const Local*>(
-								ctx.arena().nu<Local>()(ctx.copyStr(force(caseAst.localName)), Type{member}))
+								ctx.arena().nu<Local>()(force(caseAst.localName), Type{member}))
 							: none<const Local*>();
 						const Expr then = expected.isBogus()
 							? expected.bogus(range).expr
@@ -559,7 +556,7 @@ namespace {
 				const Opt<const Message*> opMessage = findPtr(
 					getMessages(instIface),
 					[&](const Message* m) {
-						return strEq(m->sig.name, ast.messageName);
+						return symEq(m->sig.name, ast.messageName);
 					});
 				if (!has(opMessage)) todo<void>("checkMessageSend");
 				const Message* message = force(opMessage);
@@ -584,17 +581,17 @@ namespace {
 			ast.fields,
 			[&](const NewActorAst::Field field, const size_t index) {
 				const ExprAndType et = checkAndInfer(ctx, *field.expr);
-				return Expr::NewIfaceImpl::Field{field.isMutable, ctx.copyStr(field.name), ctx.alloc(et.expr), et.type, index};
+				return Expr::NewIfaceImpl::Field{field.isMutable, field.name, ctx.alloc(et.expr), et.type, index};
 			});
 		const Arr<const Expr> messageImpls = mapZipPtrs<const Expr>{}(
 			ctx.arena(),
 			getMessages(instIface),
 			ast.messages,
 			[&](const Message* message, const NewActorAst::MessageImpl* impl) {
-				if (!strEq(message->sig.name, impl->name))
+				if (!symEq(message->sig.name, impl->name))
 					todo<void>("checkNewActor");
 				zip(message->sig.params, impl->paramNames, [&](const Param param, const NameAndRange paramName) {
-					if (!strEq(param.name, paramName.name))
+					if (!symEq(param.name, paramName.name))
 						todo<void>("checkNewActor -- param names don't match");
 				});
 				return withMessageImpl(ctx, NewAndMessageInfo{message->sig.params, fields, message}, [&](ExprCtx& newCtx) {
@@ -635,7 +632,7 @@ namespace {
 	const CheckedExpr checkThen(ExprCtx& ctx, const SourceRange range, const ThenAst ast, Expected& expected) {
 		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx.arena(), ast.left), ast.then}}};
 		const CallAst call = CallAst{
-			strLiteral("then"),
+			shortSymAlphaLiteral("then"),
 			emptyArr<const TypeAst>(),
 			arrLiteral<const ExprAst>(ctx.arena(), *ast.futExpr, lambda)};
 		return checkCall(ctx, range, call, expected);

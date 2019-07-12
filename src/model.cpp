@@ -48,8 +48,8 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 		if (ptrEquals(p, s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{False, s});
 
-	for (const size_t i : Range{remoteFunTypes.size})
-		if (ptrEquals(at(remoteFunTypes, i), s))
+	for (const size_t i : Range{sendFunTypes.size})
+		if (ptrEquals(at(sendFunTypes, i), s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{True, at(funTypes, i)});
 
 	return none<const CommonTypes::LambdaInfo>();
@@ -184,7 +184,7 @@ const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
 }
 
 void writeStructInst(Writer& writer, const StructInst* s) {
-	writeStr(writer, s->decl->name);
+	writeSym(writer, s->decl->name);
 	if (!isEmpty(s->typeArgs)) {
 		Cell<const Bool> first { True };
 		for (const Type t : s->typeArgs) {
@@ -203,7 +203,7 @@ void writeType(Writer& writer, const Type type) {
 		},
 		[&](const TypeParam* p) {
 			writeChar(writer, '?');
-			writeStr(writer, p->name);
+			writeSym(writer, p->name);
 		},
 		[&](const StructInst* s) {
 			writeStructInst(writer, s);
@@ -213,11 +213,13 @@ void writeType(Writer& writer, const Type type) {
 namespace {
 	const Sexpr structInstToSexpr(Arena& arena, const StructInst* si) {
 		return Sexpr{SexprRecord{
-			strLiteral("struct-inst"),
+			shortSymAlphaLiteral("structinst"),
 			arrLiteral<const Sexpr>(
 				arena,
 				Sexpr{si->decl->name},
-				arrToSexpr<const Type, typeToSexpr>(arena, si->typeArgs))
+				arrToSexpr<const Type>(arena, si->typeArgs, [&](const Type t) {
+					return typeToSexpr(arena, t);
+				}))
 		}};
 	}
 }
@@ -226,7 +228,7 @@ const Sexpr typeToSexpr(Arena& arena, const Type type) {
 	unused(arena);
 	return type.match(
 		[&](const Type::Bogus) {
-			return Sexpr{strLiteral("bogus")};
+			return Sexpr{shortSymAlphaLiteral("bogus")};
 		},
 		[&](const TypeParam* p) {
 			return Sexpr{p->name};
@@ -256,10 +258,12 @@ const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
 		},
 		[&](const Expr::Call e) {
 			return Sexpr{SexprRecord{
-				strLiteral("call"),
+				shortSymAlphaLiteral("call"),
 				arrLiteral<const Sexpr>(arena, {
 					calledToSexpr(arena, e.called),
-					arrToSexpr<const Expr, exprToSexpr>(arena, e.args)
+					arrToSexpr<const Expr>(arena, e.args, [&](const Expr arg) {
+						return exprToSexpr(arena, arg);
+					})
 				})}};
 		},
 		[&](const Expr::ClosureFieldRef) {
@@ -273,10 +277,12 @@ const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
 		},
 		[&](const Expr::CreateRecord e) {
 			return Sexpr{SexprRecord{
-				strLiteral("create-record"),
+				shortSymAlphaLiteral("record"),
 				arrLiteral<const Sexpr>(arena, {
 					structInstToSexpr(arena, e.structInst),
-					arrToSexpr<const Expr, exprToSexpr>(arena, e.args)})}};
+					arrToSexpr<const Expr>(arena, e.args, [&](const Expr arg) {
+						return exprToSexpr(arena, arg);
+					})})}};
 		},
 		[&](const Expr::FunAsLambda) {
 			return todo<const Sexpr>("funaslambda");

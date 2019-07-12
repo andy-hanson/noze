@@ -11,7 +11,7 @@ namespace {
 			do {
 				const Pos start = curPos(lexer);
 				take(lexer, '?');
-				const Str name = takeName(lexer);
+				const Sym name = takeName(lexer);
 				add<const TypeParamAst>(lexer.arena, &res, TypeParamAst{range(lexer, start), name});
 			} while(tryTake(lexer, ", "));
 			take(lexer, '>');
@@ -37,9 +37,9 @@ namespace {
 		while (tryTake(lexer, '.'))
 			nDots++;
 
-		Path const* path = rootPath(lexer.arena, takeName(lexer));
+		Path const* path = rootPath(lexer.arena, takeNameAsStr(lexer));
 		while (tryTake(lexer, '.'))
-			path = childPath(lexer.arena, path, takeName(lexer));
+			path = childPath(lexer.arena, path, takeNameAsStr(lexer));
 		path = addExtension(lexer.arena, path, strLiteral(".nz"));
 		return ImportAst{range(lexer, start), nDots, path};
 	}
@@ -52,7 +52,7 @@ namespace {
 			ArrBuilder<const ParamAst> res {};
 			for (;;) {
 				const Pos start = curPos(lexer);
-				const Str name = takeName(lexer);
+				const Sym name = takeName(lexer);
 				take(lexer, ' ');
 				const TypeAst type = parseType(lexer);
 				add<const ParamAst>(lexer.arena, &res, ParamAst{range(lexer, start), name, type});
@@ -64,7 +64,7 @@ namespace {
 		}
 	}
 
-	const SigAst parseSigAfterNameAndSpace(Lexer& lexer, const Pos start, const Str name) {
+	const SigAst parseSigAfterNameAndSpace(Lexer& lexer, const Pos start, const Sym name) {
 		const TypeAst returnType = parseType(lexer);
 		const Arr<const ParamAst> params = parseParams(lexer);
 		return SigAst{range(lexer, start), name, returnType, params};
@@ -72,7 +72,7 @@ namespace {
 
 	const SigAst parseSig(Lexer& lexer) {
 		const Pos start = curPos(lexer);
-		const Str sigName = takeName(lexer);
+		const Sym sigName = takeName(lexer);
 		take(lexer, ' ');
 		return parseSigAfterNameAndSpace(lexer, start, sigName);
 	}
@@ -159,20 +159,24 @@ namespace {
 		Cell<const Bool> isFirstLine = True;
 		do {
 			const Pos start = curPos(lexer);
-			const Str name = takeName(lexer);
-			if (strEqLiteral(name, "by-val")) {
-				if (!cellGet(&isFirstLine))
-					todo<void>("by-val on later line");
-				cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
-			} else if (strEqLiteral(name, "by-ref")) {
-				if (!cellGet(&isFirstLine))
-					todo<void>("by-ref on later line");
-				cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
-			} else {
-				take(lexer, ' ');
-				const Bool isMutable = tryTake(lexer, "mut ");
-				const TypeAst type = parseType(lexer);
-				add<const StructDeclAst::Body::Record::Field>(lexer.arena, &res, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
+			const Sym name = takeName(lexer);
+			switch (name.value) {
+				case shortSymAlphaLiteralValue("by-val"):
+					if (!cellGet(&isFirstLine))
+						todo<void>("by-val on later line");
+					cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
+					break;
+				case shortSymAlphaLiteralValue("by-ref"):
+					if (!cellGet(&isFirstLine))
+						todo<void>("by-ref on later line");
+					cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
+					break;
+				default: {
+					take(lexer, ' ');
+					const Bool isMutable = tryTake(lexer, "mut ");
+					const TypeAst type = parseType(lexer);
+					add<const StructDeclAst::Body::Record::Field>(lexer.arena, &res, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
+				}
 			}
 			cellSet<const Bool>(&isFirstLine, False);
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
@@ -183,7 +187,7 @@ namespace {
 		ArrBuilder<const TypeAst::InstStruct> res {};
 		do {
 			const Pos start = curPos(lexer);
-			const Str name = takeName(lexer);
+			const Sym name = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 			add<const TypeAst::InstStruct>(lexer.arena, &res, TypeAst::InstStruct{range(lexer, start), name, typeArgs});
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
@@ -216,26 +220,32 @@ namespace {
 
 		while (tryTake(lexer, ' ')) {
 			const Pos start = curPos(lexer);
-			const Str name = takeName(lexer);
-			if (strEqLiteral(name, "noctx"))
-				setIt(&noCtx);
-			else if (strEqLiteral(name, "summon"))
-				setIt(&summon);
-			else if (strEqLiteral(name, "unsafe"))
-				setIt(&unsafe);
-			else if (strEqLiteral(name, "trusted"))
-				setIt(&trusted);
-			else if (strEqLiteral(name, "builtin")) {
-				cellSet<const Bool>(&builtin, True);
-				break;
-			} else if (strEqLiteral(name, "extern")) {
-				cellSet<const Bool>(&_extern, True);
-				break;
-			} else {
-				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-				add<const SpecUseAst>(lexer.arena, &specUses, SpecUseAst{range(lexer, start), name, typeArgs});
+			const Sym name = takeName(lexer);
+			switch (name.value) {
+				case shortSymAlphaLiteralValue("noctx"):
+					setIt(&noCtx);
+					break;
+				case shortSymAlphaLiteralValue("summon"):
+					setIt(&summon);
+					break;
+				case shortSymAlphaLiteralValue("unsafe"):
+					setIt(&unsafe);
+					break;
+				case shortSymAlphaLiteralValue("trusted"):
+					setIt(&trusted);
+					break;
+				case shortSymAlphaLiteralValue("builtin"):
+					cellSet<const Bool>(&builtin, True);
+					goto end_loop;
+				case shortSymAlphaLiteralValue("extern"):
+					cellSet<const Bool>(&_extern, True);
+					goto end_loop;
+				default:
+					const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
+					add<const SpecUseAst>(lexer.arena, &specUses, SpecUseAst{range(lexer, start), name, typeArgs});
 			}
 		}
+		end_loop:
 
 		if (cellGet(&unsafe) && cellGet(&trusted))
 			todo<void>("'unsafe trusted' is redundant");
@@ -265,7 +275,7 @@ namespace {
 		Lexer& lexer,
 		const Bool isPublic,
 		const Pos start,
-		const Str name,
+		const Sym name,
 		const Arr<const TypeParamAst> typeParams
 	) {
 		const SigAst sig = parseSigAfterNameAndSpace(lexer, start, name);
@@ -283,7 +293,7 @@ namespace {
 		ArrBuilder<const FunDeclAst>* funs
 	) {
 		const Pos start = curPos(lexer);
-		const Str name = takeName(lexer);
+		const Sym name = takeName(lexer);
 		const Arr<const TypeParamAst> typeParams = parseTypeParams(lexer);
 		take(lexer, ' ');
 
@@ -385,9 +395,9 @@ namespace {
 	}
 }
 
-const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, const NulTerminatedStr source) {
+const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, Symbols* symbols, const NulTerminatedStr source) {
 	try {
-		Lexer lexer = createLexer(astArena, source);
+		Lexer lexer = createLexer(astArena, symbols, source);
 		return success<const FileAst, const ParseDiagnostic>(parseFileMayThrow(lexer));
 	} catch (ParseDiagnostic p) {
 		return failure<const FileAst, const ParseDiagnostic>(p);

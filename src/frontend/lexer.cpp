@@ -63,12 +63,12 @@ namespace {
 	const Str takeOperatorRest(Lexer& lexer, const CStr begin)  {
 		while (isOperatorChar(*lexer.ptr))
 			lexer.ptr++;
-		return copyStr(lexer, begin, lexer.ptr);
+		return arrOfRange(begin, lexer.ptr);
 	}
 
 	const ExpressionToken takeOperator(Lexer& lexer, const CStr begin)  {
 		const Str name = takeOperatorRest(lexer, begin);
-		return ExpressionToken{NameAndRange{range(lexer, begin), name}};
+		return ExpressionToken{NameAndRange{range(lexer, begin), getSymFromOperator(lexer.symbols, name)}};
 	}
 
 	const Str takeStringLiteral(Lexer& lexer) {
@@ -127,7 +127,7 @@ namespace {
 			lexer.ptr++;
 		if (*lexer.ptr == '?')
 			lexer.ptr++;
-		return copyStr(lexer, begin, lexer.ptr);
+		return arrOfRange(begin, lexer.ptr);
 	}
 
 	void skipRestOfLine(Lexer& lexer) {
@@ -162,6 +162,23 @@ namespace {
 		if (delta != 1)
 			throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedIndent{}});
 	}
+
+	struct StrAndIsOperator {
+		const Str str;
+		const Bool isOperator;
+	};
+
+	const StrAndIsOperator takeNameAsTempStr(Lexer& lexer) {
+		const CStr begin = lexer.ptr;
+		if (isOperatorChar(*lexer.ptr)) {
+			lexer.ptr++;
+			return StrAndIsOperator{takeOperatorRest(lexer, begin), True};
+		} else if (isLowerCaseLetter(*lexer.ptr)) {
+			lexer.ptr++;
+			return StrAndIsOperator{takeNameRest(lexer, begin), False};
+		} else
+			return throwUnexpected<const StrAndIsOperator>(lexer);
+	}
 }
 
 const Bool tryTake(Lexer& lexer, const char c) {
@@ -193,21 +210,20 @@ void take(Lexer& lexer, const CStr c) {
 		throwUnexpected<void>(lexer);
 }
 
-const Str takeName(Lexer& lexer) {
-	const CStr begin = lexer.ptr;
-	if (isOperatorChar(*lexer.ptr)) {
-		lexer.ptr++;
-		return takeOperatorRest(lexer, begin);
-	} else if (isLowerCaseLetter(*lexer.ptr)) {
-		lexer.ptr++;
-		return takeNameRest(lexer, begin);
-	} else
-		return throwUnexpected<const Str>(lexer);
+const Sym takeName(Lexer& lexer) {
+	const StrAndIsOperator s = takeNameAsTempStr(lexer);
+	return s.isOperator
+		? getSymFromOperator(lexer.symbols, s.str)
+		: getSymFromAlphaIdentifier(lexer.symbols, s.str);
+}
+
+const Str takeNameAsStr(Lexer& lexer) {
+	return copyStr(lexer.arena, takeNameAsTempStr(lexer).str);
 }
 
 const NameAndRange takeNameAndRange(Lexer& lexer)  {
 	const CStr begin = lexer.ptr;
-	const Str name = takeName(lexer);
+	const Sym name = takeName(lexer);
 	return NameAndRange{range(lexer, begin), name};
 }
 
@@ -234,18 +250,22 @@ const ExpressionToken takeExpressionToken(Lexer& lexer)  {
 			if (isOperatorChar(c))
 				return takeOperator(lexer, begin);
 			else if (isLowerCaseLetter(c)) {
-				const Str name = takeNameRest(lexer, begin);
-				return strEqLiteral(name, "match")
-					? ExpressionToken{ExpressionToken::Kind::match}
-					: strEqLiteral(name, "new")
-					? ExpressionToken{ExpressionToken::Kind::_new}
-					: strEqLiteral(name, "new-actor")
-					? ExpressionToken{ExpressionToken::Kind::newActor}
-					: strEqLiteral(name, "new-arr")
-					? ExpressionToken{ExpressionToken::Kind::newArr}
-					: strEqLiteral(name, "when")
-					? ExpressionToken{ExpressionToken::Kind::when}
-					: ExpressionToken{NameAndRange{range(lexer, begin), name}};
+				const Str nameStr = takeNameRest(lexer, begin);
+				const Sym name = getSymFromAlphaIdentifier(lexer.symbols, nameStr);
+				switch (name.value) {
+					case shortSymAlphaLiteralValue("match"):
+						return ExpressionToken{ExpressionToken::Kind::match};
+					case shortSymAlphaLiteralValue("new"):
+						return ExpressionToken{ExpressionToken::Kind::_new};
+					case shortSymAlphaLiteralValue("new-actor"):
+						return ExpressionToken{ExpressionToken::Kind::newActor};
+					case shortSymAlphaLiteralValue("new-arr"):
+						return ExpressionToken{ExpressionToken::Kind::newArr};
+					case shortSymAlphaLiteralValue("when"):
+						return ExpressionToken{ExpressionToken::Kind::when};
+					default:
+						return ExpressionToken{NameAndRange{range(lexer, begin), name}};
+				}
 			} else if (isDigit(c))
 				return takeNumber(lexer, begin);
 			else
@@ -326,7 +346,7 @@ const Bool tryTakeElseIndent(Lexer& lexer)  {
 	return res;
 }
 
-Lexer createLexer(Arena& arena, const NulTerminatedStr source) {
+Lexer createLexer(Arena& arena, Symbols* symbols, const NulTerminatedStr source) {
 	// Note: We *are* relying on the nul terminator to stop the lexer.
 	const Str str = stripNulTerminator(source);
 	const uint len = safeSizeTToUint(str.size);
@@ -351,5 +371,5 @@ Lexer createLexer(Arena& arena, const NulTerminatedStr source) {
 			}
 		}
 
-	return Lexer{arena, /*sourceBegin*/ str.begin(), /*ptr*/ str.begin(), /*indent*/ 0};
+	return Lexer{arena, symbols, /*sourceBegin*/ str.begin(), /*ptr*/ str.begin(), /*indent*/ 0};
 }

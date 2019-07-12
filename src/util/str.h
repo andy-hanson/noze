@@ -16,11 +16,11 @@ struct NulTerminatedStr {
 	}
 };
 
-inline CStr end(const CStr c) {
+inline constexpr CStr end(const CStr c) {
 	return *c == '\0' ? c : end(c + 1);
 }
 
-inline const Str strLiteral(const CStr c) {
+inline constexpr const Str strLiteral(const CStr c) {
 	return Str{c, static_cast<size_t>(end(c) - c)};
 }
 

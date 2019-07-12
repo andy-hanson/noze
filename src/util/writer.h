@@ -25,6 +25,7 @@ void writeStr(Writer& writer, const Str s);
 inline void writeStatic(Writer& writer, const char* c) {
 	writeStr(writer, strLiteral(c));
 }
+
 void writeNat(Writer& writer, const Nat64 s);
 void writeInt(Writer& writer, const Int64 s);
 inline void writeBool(Writer& writer, const Bool b) {

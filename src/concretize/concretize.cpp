@@ -21,7 +21,7 @@ namespace {
 	}
 
 	const FunDecl* getMainFun(const Program& program) {
-		const Arr<const FunDecl*> mainFuns = multiDictGetAt<Str, const FunDecl*, compareStr>(program.mainModule->funsMap, strLiteral("main"));
+		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.mainModule->funsMap, shortSymAlphaLiteral("main"));
 		if (mainFuns.size != 1)
 			todo<void>("wrong number main funs");
 		const FunDecl* mainFun = only(mainFuns);
@@ -30,7 +30,7 @@ namespace {
 	}
 
 	const FunDecl* getAllocFun(const Program& program) {
-		const Arr<const FunDecl*> allocFuns = multiDictGetAt<Str, const FunDecl*, compareStr>(program.includeModule->funsMap, strLiteral("allocate-bytes"));
+		const Arr<const FunDecl*> allocFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
 		if (allocFuns.size != 1)
 			todo<void>("wrong number allocate-bytes funs");
 		const FunDecl* allocFun = only(allocFuns);
@@ -41,7 +41,7 @@ namespace {
 	// Gets 'call' for 'fun'
 	// 'call' for 'fun-ptr' is a builtin already so no need to handle that here
 	const Arr<const FunDecl*> getCallFuns(Arena& arena, const Program& program) {
-		const Arr<const FunDecl*> allCallFuns = multiDictGetAt<Str, const FunDecl*, compareStr>(program.includeModule->funsMap, strLiteral("call"));
+		const Arr<const FunDecl*> allCallFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("call"));
 		const Arr<const FunDecl*> res = filter(arena, allCallFuns, [&](const FunDecl* f) {
 			const StructDecl* decl = first(f->params()).type.asStructInst()->decl;
 			return exists(program.commonTypes.funTypes, [&](const StructDecl* funStruct) {

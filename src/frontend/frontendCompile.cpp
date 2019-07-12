@@ -26,6 +26,7 @@ namespace {
 	const Result<const FileAst, const Arr<const Diagnostic>> parseSingle(
 		Arena& modelArena,
 		Arena& astsArena,
+		Symbols* symbols,
 		const PathAndStorageKind where,
 		const ReadOnlyStorages storages,
 		LineAndColumnGettersBuilder* lineAndColumnGetters
@@ -36,7 +37,7 @@ namespace {
 			const NulTerminatedStr text = force(opFileContent);
 			addToDict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(modelArena, lineAndColumnGetters, where, lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
 			return mapFailure<const Arr<const Diagnostic>>{}(
-				parseFile(astsArena, text),
+				parseFile(astsArena, symbols, text),
 				[&](const ParseDiagnostic p) { return parseDiagnostics(modelArena, where, p); });
 		}
 		else
@@ -70,6 +71,7 @@ namespace {
 	const Result<const Arr<const PathAndAst>, const Arr<const Diagnostic>> parseEverything(
 		Arena& modelArena,
 		Arena& astsArena,
+		Symbols* symbols,
 		const Path* mainPath,
 		ReadOnlyStorages storages,
 		LineAndColumnGettersBuilder* lineAndColumnGetters
@@ -91,7 +93,7 @@ namespace {
 				break;
 
 			const PathAndStorageKind path = force(opPath);
-			const Result<const FileAst, const Arr<const Diagnostic>> parseResult = parseSingle(modelArena, astsArena, path, storages, lineAndColumnGetters);
+			const Result<const FileAst, const Arr<const Diagnostic>> parseResult = parseSingle(modelArena, astsArena, symbols, path, storages, lineAndColumnGetters);
 			if (!parseResult.isSuccess())
 				return failure<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(parseResult.asFailure());
 
@@ -132,6 +134,7 @@ namespace {
 
 const Result<const Program, const Diagnostics> frontendCompile(
 	Arena& modelArena,
+	Symbols* symbols,
 	const ReadOnlyStorages storages,
 	const Path* mainPath
 ) {
@@ -143,7 +146,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	const PathAndStorageKind inclPath = includePath(modelArena);
 
 	const Result<const IncludeCheck, const Arr<const Diagnostic>> include = flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(
-		parseSingle(modelArena, astsArena, inclPath, storages, &lineAndColumnGetters),
+		parseSingle(modelArena, astsArena, symbols, inclPath, storages, &lineAndColumnGetters),
 		[&](const FileAst ast) {
 			return checkIncludeNz(modelArena, ast, inclPath);
 		});
@@ -152,7 +155,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 		include,
 		[&](const IncludeCheck includeCheck) {
 			return mapSuccess<const IncludeAndPathAndAsts>{}(
-				parseEverything(modelArena, astsArena, mainPath, storages, &lineAndColumnGetters),
+				parseEverything(modelArena, astsArena, symbols, mainPath, storages, &lineAndColumnGetters),
 				[&](const Arr<const PathAndAst> everything) {
 					return IncludeAndPathAndAsts{includeCheck, everything};
 				});

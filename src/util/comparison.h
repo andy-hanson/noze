@@ -15,12 +15,12 @@ template <typename T>
 using Cmp = Comparison(*)(const T, const T);
 
 template <typename T>
-inline Comparison comparePrimitive(const T a, const T b) {
+inline constexpr Comparison comparePrimitive(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value || std::is_enum<T>::value, "must be primitive");
 	return a < b ? Comparison::less : a > b ? Comparison::greater : Comparison::equal;
 }
 
-inline Comparison compareBool(const Bool a, const Bool b) {
+inline constexpr Comparison compareBool(const Bool a, const Bool b) {
 	return comparePrimitive(a.b, b.b);
 }
 

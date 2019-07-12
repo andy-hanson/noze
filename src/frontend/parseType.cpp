@@ -23,7 +23,7 @@ namespace {
 	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner) {
 		const Pos start = curPos(lexer);
 		const Bool isTypeParam = tryTake(lexer, '?');
-		const Str name = takeName(lexer);
+		const Sym name = takeName(lexer);
 		const Arr<const TypeAst> typeArgs = tryParseTypeArgsWorker(lexer, isInner);
 		if (isTypeParam && !isEmpty(typeArgs))
 			return throwAtChar<const TypeAst>(lexer, ParseDiag{ParseDiag::TypeParamCantHaveTypeArgs{}});

@@ -31,7 +31,7 @@ const Type typeFromAst(
 
 const Opt<const SpecDecl*> tryFindSpec(
 	CheckCtx& ctx,
-	const Str name,
+	const Sym name,
 	const SourceRange range,
 	const SpecsMap specsMap);
 

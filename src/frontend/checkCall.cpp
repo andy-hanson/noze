@@ -48,7 +48,7 @@ namespace {
 		}
 	};
 
-	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Str funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
+	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Sym funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
 		MutArr<Candidate> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			const size_t nTypeParams = called.typeParams().size;
@@ -64,7 +64,7 @@ namespace {
 		return res;
 	}
 
-	const Arr<const CalledDecl> getAllCandidatesAsCalledDecls(ExprCtx& ctx, const Str funName) {
+	const Arr<const CalledDecl> getAllCandidatesAsCalledDecls(ExprCtx& ctx, const Sym funName) {
 		ArrBuilder<const CalledDecl> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			add<const CalledDecl>(ctx.arena(), &res, called);
@@ -128,7 +128,7 @@ namespace {
 		}
 	}
 
-	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx& ctx, const Str funName, const Expr arg) {
+	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx& ctx, const Sym funName, const Expr arg) {
 		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx.arena(), ctx.commonTypes), funName);
 		return has(field)
 			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), force(field).structInst, force(field).field})
@@ -237,11 +237,11 @@ namespace {
 	}
 
 	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprCtx& ctx, const SourceRange range, const Candidate candidate) {
-		const Opt<const Arr<const Type>> res = mapOrNone<const Type>{}(
+		const Opt<const Arr<const Type>> res = mapPtrsOrNone<const Type>{}(
 			ctx.arena(),
 			candidate.typeArgs,
-			[](const SingleInferringType& i) {
-				return i.tryGetInferred();
+			[](const SingleInferringType* i) {
+				return i->tryGetInferred();
 			});
 		if (!has(res))
 			ctx.addDiag(range, Diag{Diag::CantInferTypeArguments{}});
@@ -287,12 +287,13 @@ namespace {
 }
 
 const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst ast, Expected& expected) {
+	const Sym funName = ast.funName;
 	const size_t arity = ast.args.size;
 
 	const Bool mightBePropertyAccess = _and(arity == 1, exprMightHaveProperties(only(ast.args)));
 
 	const Arr<const Type> explicitTypeArgs = typeArgsFromAsts(ctx, ast.typeArgs);
-	MutArr<Candidate> candidates = getInitialCandidates(ctx, ast.funName, explicitTypeArgs, arity);
+	MutArr<Candidate> candidates = getInitialCandidates(ctx, funName, explicitTypeArgs, arity);
 	// TODO: may not need to be deeply instantiated to do useful filtering here
 	const Opt<const Type> expectedReturnType = expected.tryGetDeeplyInstantiatedType(ctx.arena());
 	if (has(expectedReturnType))
@@ -330,7 +331,7 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 
 	if (mightBePropertyAccess && arity == 1 && has(args)) {
 		// Might be a struct field access
-		const Opt<const Expr::StructFieldAccess> sfa = tryGetStructFieldAccess(ctx, ast.funName, only(force(args)));
+		const Opt<const Expr::StructFieldAccess> sfa = tryGetStructFieldAccess(ctx, funName, only(force(args)));
 		if (has(sfa)) {
 			if (!isEmpty(candidatesArr))
 				todo<void>("ambiguous call vs property access");
@@ -339,7 +340,6 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 	}
 
 	if (!has(args) || candidatesArr.size != 1) {
-		const Str funName = ctx.checkCtx.copyStr(ast.funName);
 		if (isEmpty(candidatesArr)) {
 			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
 			ctx.addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, finishArr(&actualArgTypes), allCandidates}});

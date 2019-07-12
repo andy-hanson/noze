@@ -169,7 +169,6 @@ namespace {
 	}
 
 	const AbsolutePath getNozeDirectory(const AbsolutePath pathToThisExecutable) {
-		assert(strEqLiteral(baseName(pathToThisExecutable), "noze"));
 		return climbUpToNoze(forceOrTodo(parent(pathToThisExecutable)));
 	}
 

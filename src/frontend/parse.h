@@ -10,4 +10,4 @@ struct ParseDiagnostic {
 	const ParseDiag diag;
 };
 
-const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, const NulTerminatedStr source);
+const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, Symbols* symbols, const NulTerminatedStr source);

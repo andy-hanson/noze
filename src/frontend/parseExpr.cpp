@@ -75,13 +75,13 @@ namespace {
 	const ExprAndMaybeDedent parseCallOrMessage(Lexer& lexer, const ExprAst target, const Bool allowBlock) {
 		const Pos start = curPos(lexer);
 		if (tryTake(lexer, '.')) {
-			const Str funName = takeName(lexer);
+			const Sym funName = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 			const CallAst call = CallAst{funName, typeArgs, arrLiteral<const ExprAst>(lexer.arena, target)};
 			return noDedent(ExprAst{range(lexer, start), ExprAstKind{call}});
 		} else {
 			const Bool isMessage = tryTake(lexer, '!');
-			const Str funName = takeName(lexer);
+			const Sym funName = takeName(lexer);
 			const Bool colon = tryTake(lexer, ':');
 			const Arr<const TypeAst> typeArgs = isMessage ? emptyArr<const TypeAst>() : tryParseTypeArgs(lexer);
 			const ArgsAndMaybeDedent args = parseArgs(lexer, ArgCtx{allowBlock, /*allowcall*/ colon});
@@ -174,14 +174,14 @@ namespace {
 
 	const Bool bodyUsesIt(const ExprAst body) {
 		return someInOwnBody(body, [](const ExprAst it) {
-			return it.kind.isIdentifier() && strEqLiteral(it.kind.asIdentifier().name, "it");
+			return it.kind.isIdentifier() && symEq(it.kind.asIdentifier().name, shortSymAlphaLiteral("it"));
 		});
 	}
 
 	const ExprAst tryParseDots(Lexer& lexer, const ExprAst initial) {
 		const Pos start = curPos(lexer);
 		if (tryTake(lexer, '.')) {
-			const Str name = takeName(lexer);
+			const Sym name = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 			const CallAst call = CallAst{name, typeArgs, arrLiteral<const ExprAst>(lexer.arena, initial)};
 			const ExprAst expr = ExprAst{range(lexer, start), ExprAstKind{call}};
@@ -199,14 +199,14 @@ namespace {
 		const size_t matchDedents = [&]() {
 			for (;;) {
 				const Pos startCase = curPos(lexer);
-				const Str structName = takeName(lexer);
-				const Opt<const Str> localName = tryTakeIndent(lexer)
-					? none<const Str>()
+				const Sym structName = takeName(lexer);
+				const Opt<const Sym> localName = tryTakeIndent(lexer)
+					? none<const Sym>()
 					: [&]() {
 						take(lexer, ' ');
-						const Str localName = takeName(lexer);
+						const Sym localName = takeName(lexer);
 						takeIndent(lexer);
-						return some<const Str>(localName);
+						return some<const Sym>(localName);
 					}();
 				const ExprAndDedent ed = parseStatementsAndDedent(lexer);
 				add<const MatchAst::CaseAst>(lexer.arena, &cases, MatchAst::CaseAst{range(lexer, startCase), structName, localName, alloc(lexer, ed.expr)});
@@ -254,7 +254,7 @@ namespace {
 				ArrBuilder<const NewActorAst::Field> res {};
 				do {
 					const Bool isMutable = tryTake(lexer, "mut ");
-					const Str name = takeName(lexer);
+					const Sym name = takeName(lexer);
 					if (!tryTake(lexer, " = "))
 						todo<void>("parseNew");
 					const ExprAst init = parseExprNoBlock(lexer);
@@ -269,7 +269,7 @@ namespace {
 		ArrBuilder<const NewActorAst::MessageImpl> messages {};
 		const size_t extraDedents = [&]() {
 			for (;;) {
-				const Str messageName = takeName(lexer);
+				const Sym messageName = takeName(lexer);
 				take(lexer, '(');
 				const Arr<const NameAndRange> paramNames = [&]() {
 					if (tryTake(lexer, ')'))
@@ -325,7 +325,7 @@ namespace {
 		using Kind = ExpressionToken::Kind;
 		switch (et.kind) {
 			case Kind::ampersand: {
-				const Str funName = takeName(lexer);
+				const Sym funName = takeName(lexer);
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 				return noDedent(ExprAst{getRange(), ExprAstKind{FunAsLambdaAst{funName, typeArgs}}});
 			}
@@ -337,7 +337,7 @@ namespace {
 				take(lexer, '}');
 				const SourceRange range = getRange();
 				const Arr<const LambdaAst::Param> params = bodyUsesIt(*body)
-					? arrLiteral<const LambdaAst::Param>(lexer.arena, LambdaAst::Param{range, strLiteral("it")})
+					? arrLiteral<const LambdaAst::Param>(lexer.arena, LambdaAst::Param{range, shortSymAlphaLiteral("it")})
 					: emptyArr<const LambdaAst::Param>();
 				const ExprAst expr = ExprAst{range, ExprAstKind{LambdaAst{params, body}}};
 				return noDedent(tryParseDots(lexer, expr));
@@ -356,7 +356,7 @@ namespace {
 				checkBlockAllowed();
 				return parseMatch(lexer, start);
 			case Kind::nameAndRange: {
-				const Str name = et.asNameAndRange().name;
+				const Sym name = et.asNameAndRange().name;
 				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 				const Bool tookColon = tryTake(lexer, ':');
 				if (tookColon) {

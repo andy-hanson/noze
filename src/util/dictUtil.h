@@ -39,8 +39,8 @@ struct buildMultiDict {
 				push(arena, res, KeyValuePair<K, MutArr<V>>{pair.key, MutArr<V>{arena, pair.value}});
 		}
 		const Arr<KeyValuePair<K, MutArr<V>>> arr = freeze(res);
-		const Arr<KeyValuePair<K, const Arr<V>>> pairs = map<KeyValuePair<K, const Arr<V>>>{}(arena, arr, [](KeyValuePair<K, MutArr<V>>& m) {
-			return KeyValuePair<K, const Arr<V>>{m.key, freeze(m.value)};
+		const Arr<KeyValuePair<K, const Arr<V>>> pairs = mapPtrs<KeyValuePair<K, const Arr<V>>>{}(arena, arr, [](KeyValuePair<K, MutArr<V>>* m) {
+			return KeyValuePair<K, const Arr<V>>{m->key, freeze(m->value)};
 		});
 		return MultiDict<K, V, cmp>{Dict<K, const Arr<V>, cmp>{pairs}};
 	}

@@ -176,4 +176,4 @@ struct StructAndField {
 	const StructInst* structInst;
 	const StructField* field;
 };
-const Opt<const StructAndField> tryGetStructField(const Type targetType, const Str fieldName);
+const Opt<const StructAndField> tryGetStructField(const Type targetType, const Sym fieldName);

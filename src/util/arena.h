@@ -14,6 +14,7 @@ struct Arena {
 	byte* end;
 
 	inline Arena() : begin{nullptr}, cur{nullptr}, end{nullptr} {}
+	~Arena();
 
 	Arena(const Arena& other) = delete;
 

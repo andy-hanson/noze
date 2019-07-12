@@ -7,11 +7,11 @@
 struct Bool {
 	bool b;
 
-	inline explicit Bool(bool _b) : b{_b} {}
+	inline constexpr explicit Bool(bool _b) : b{_b} {}
 	// This is necessary to use Bool in 'if' statements.
 	// Unfortunately, this makes it implicitly convert to int too!
 	// (and size_t, and float, and basically everything...)
-	inline operator bool() const {
+	inline constexpr operator bool() const {
 		return b;
 	}
 };
@@ -20,13 +20,13 @@ static const Bool True { true };
 static const Bool False { false };
 
 template <typename T>
-inline const Bool eq(const T a, const T b) {
+inline constexpr const Bool eq(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value, "must be primitive");
 	return Bool{a == b};
 }
 
 template <typename T>
-const Bool neq(const T a, const T b) {
+inline constexpr const Bool neq(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value, "must be primitive");
 	return Bool{a != b};
 }

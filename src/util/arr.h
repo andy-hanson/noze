@@ -11,6 +11,10 @@ struct Arr {
 	T* const _begin;
 	const size_t size;
 
+	inline constexpr Arr(T* const begin, const size_t _size) : _begin{begin}, size{_size} {
+		assert(size < 1000000); // sanity check
+	}
+
 	inline const T* begin() const {
 		return _begin;
 	}
@@ -27,7 +31,7 @@ struct Arr {
 };
 
 template <typename T>
-inline T& at(const Arr<T> a, const size_t index) {
+inline constexpr T at(const Arr<T> a, const size_t index) {
 	assert(index < a.size);
 	return a._begin[index];
 }
