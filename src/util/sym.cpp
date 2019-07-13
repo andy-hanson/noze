@@ -2,9 +2,16 @@
 
 namespace {
 	const Sym getSymFromLongStr(Symbols* symbols, const Str str, const Bool isOperator) {
-		const CStr cstr = symbols->largeStrings.getOrAdd(symbols->arena, str, [&]() {
-			return strToCStr(symbols->arena, str);
-		});
+		const CStr cstr = getOrAddAndCopyKey<const Str, const CStr, compareStr>{}(
+			symbols->arena,
+			&symbols->largeStrings,
+			str,
+			[&]() {
+				return copyStr(symbols->arena, str);
+			},
+			[&]() {
+				return strToCStr(symbols->arena, str);
+			});
 		const Nat64 res = reinterpret_cast<const Nat64>(cstr) | (isOperator ? symImpl::shortOrLongOperatorMarker : symImpl::shortOrLongAlphaMarker);
 		assert((res & (symImpl::shortAlphaOrOperatorMarker)) == 0);
 		return Sym{res};

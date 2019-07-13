@@ -212,7 +212,7 @@ namespace {
 				Called{instantiateNonTemplateFun(ctx.arena(), e.fun)},
 				args});
 		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInst, body};
-		ctx.concretizeCtx.knownLambdaBodyToInfo.add(arena, klb, info);
+		addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(arena, &ctx.concretizeCtx.knownLambdaBodyToInfo, klb, info);
 		return ConstantOrExpr{ctx.allConstants().lambda(arena, klb)};
 	}
 
@@ -291,7 +291,7 @@ namespace {
 			dynamicType, nonSpecializedSig, mangledName, closureSpecialize.closureParam, closureSpecialize.closureSpecialize);
 		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInst, e.body};
 
-		ctx.concretizeCtx.knownLambdaBodyToInfo.add(arena, klb, info);
+		addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(arena, &ctx.concretizeCtx.knownLambdaBodyToInfo, klb, info);
 
 		return has(closureSpecialize.closureParam)
 			? nuExpr(arena, klb->dynamicType, range, some<const KnownLambdaBody*>(klb), ConcreteExpr::Lambda{closureSpecialize.nonConstantArgs})
@@ -320,9 +320,9 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeWithLocal(ConcretizeExprCtx& ctx, const Local* modelLocal, const ConcreteLocal* concreteLocal, const Expr expr) {
-		ctx.locals.add(ctx.arena(), modelLocal, concreteLocal);
+		addToDict<const Local*, const ConcreteLocal*, comparePtr<const Local>>(ctx.arena(), &ctx.locals, modelLocal, concreteLocal);
 		const ConstantOrExpr res = concretizeExpr(ctx, expr);
-		const ConcreteLocal* cl2 = ctx.locals.mustDelete(modelLocal);
+		const ConcreteLocal* cl2 = mustDelete(&ctx.locals, modelLocal);
 		assert(ptrEquals(cl2, concreteLocal));
 		return res;
 	}
@@ -584,7 +584,7 @@ namespace {
 				return concretizeLet(ctx, range, e);
 			},
 			[&](const Expr::LocalRef e) {
-				const ConcreteLocal* let = ctx.locals.mustGet(e.local);
+				const ConcreteLocal* let = mustGetAt_mut(&ctx.locals, e.local);
 				const ConstantOrLambdaOrVariable value = let->constantOrLambdaOrVariable;
 				if (value.isConstant())
 					return ConstantOrExpr{value.asConstant()};

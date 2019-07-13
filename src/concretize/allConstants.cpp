@@ -29,7 +29,7 @@ const Constant* AllConstants::_nuConstant(Arena& arena, const ConcreteType type,
 
 const Constant* AllConstants::arr(Arena& arena, const ConcreteStruct* arrayType, const ConcreteType elementType, const Arr<const Constant*> elements) {
 	const ConstantArrKey key = ConstantArrKey{elementType, elements};
-	return arrays.getOrAdd(arena, key, [&]() {
+	return getOrAdd<const ConstantArrKey, const Constant*, compareConstantArrKey>{}(arena, &arrays, key, [&]() {
 		return _nuConstant(arena, ConcreteType::fromStruct(arrayType), ConstantKind{ConstantKind::Array{key}}, nextArrId++);
 	});
 }
@@ -45,7 +45,7 @@ const Constant* AllConstants::ptr(Arena& arena, const ConcreteType pointerType, 
 	assertIsPointer(pointerType);
 	const ConstantKind::Array a = array->kind.asArray();
 	assert(index < a.size());
-	const Arr<const Constant*> ptrs = arrayToPtrs.getOrAdd(arena, array, [&]() {
+	const Arr<const Constant*> ptrs = getOrAdd<const Constant*, Arr<const Constant*>, comparePtr<const Constant>>{}(arena, &arrayToPtrs, array, [&]() {
 		return fillArr<const Constant*>{}(arena, a.size(), [&](const size_t idx) {
 			return _nuConstant(arena, pointerType, ConstantKind{ConstantKind::Ptr{array, idx}}, nextPtrId++);
 		});
@@ -55,7 +55,7 @@ const Constant* AllConstants::ptr(Arena& arena, const ConcreteType pointerType, 
 
 const Constant* AllConstants::_null(Arena& arena, const ConcreteType pointerType) {
 	assertIsPointer(pointerType);
-	return nulls.getOrAdd(arena, pointerType.strukt, [&]() {
+	return getOrAdd<const ConcreteStruct*, const Constant*, comparePtr<const ConcreteStruct>>{}(arena, &nulls, pointerType.strukt, [&]() {
 		return _nuConstant(arena, pointerType, ConstantKind{ConstantKind::Null{}}, 0);
 	});
 }
@@ -78,20 +78,20 @@ const Constant* AllConstants::_void(Arena& arena, const ConcreteType voidType) {
 }
 
 const Constant* AllConstants::_char(Arena& arena, const ConcreteType charType, const char value) {
-	return chars.getOrAdd(arena, value, [&]() {
+	return getOrAdd<const char, const Constant*, comparePrimitive<const char>>{}(arena, &chars, value, [&]() {
 		return _nuConstant(arena, charType, ConstantKind{value}, value);
 	});
 }
 
 const Constant* AllConstants::int64(Arena& arena, const ConcreteType int64Type, const Int64 value) {
-	return int64s.getOrAdd(arena, value, [&]() {
+	return getOrAdd<const Int64, const Constant*, comparePrimitive<const Int64>>{}(arena, &int64s, value, [&]() {
 		// Id matters for mangling. Go ahead and wrap to nat64.
 		return _nuConstant(arena, int64Type, ConstantKind{value}, static_cast<Nat64>(value));
 	});
 }
 
 const Constant* AllConstants::nat64(Arena& arena, const ConcreteType nat64Type, const Nat64 value) {
-	return nat64s.getOrAdd(arena, value, [&]() {
+	return getOrAdd<const Nat64, const Constant*, comparePrimitive<const Nat64>>{}(arena, &nat64s, value, [&]() {
 		return _nuConstant(arena, nat64Type, ConstantKind{value}, value);
 	});
 }
@@ -107,20 +107,20 @@ const Constant* AllConstants::lambda(Arena& arena, const KnownLambdaBody* klb) {
 
 const Constant* AllConstants::record(Arena& arena, const ConcreteType recordType, const Arr<const Constant*> args) {
 	assert(recordType.strukt->isRecord());
-	ConstantsForRecord* cr = records.getOrAdd(arena, recordType, [&]() {
+	ConstantsForRecord* cr = getOrAdd<const ConcreteType, ConstantsForRecord*, compareConcreteType>{}(arena, &records, recordType, [&]() {
 		return arena.nu<ConstantsForRecord>()();
 	});
-	return cr->values.getOrAdd(arena, args, [&]() {
+	return getOrAdd<const Arr<const Constant*>, const Constant*, compareArrConstants> {}(arena, &cr->values, args, [&]() {
 		return _nuConstant(arena, recordType, ConstantKind{ConstantKind::Record{recordType, args}}, cr->nextId++);
 	});
 }
 
 const Constant* AllConstants::_union(Arena& arena, const ConcreteType unionType, const size_t memberIndex, const Constant* member) {
 	assert(unionType.strukt->isUnion());
-	ConstantsForUnion* cu = unions.getOrAdd(arena, unionType.strukt, [&]() {
+	ConstantsForUnion* cu = getOrAdd<const ConcreteStruct*, ConstantsForUnion*, comparePtr<const ConcreteStruct>>{}(arena, &unions, unionType.strukt, [&]() {
 		return arena.nu<ConstantsForUnion>()();
 	});
-	const Constant* res = cu->values.getOrAdd(arena, member, [&]() {
+	const Constant* res = getOrAdd<const Constant*, const Constant*, comparePtr<const Constant>>{}(arena, &cu->values, member, [&]() {
 		return _nuConstant(arena, unionType, ConstantKind{ConstantKind::Union{unionType.strukt, memberIndex, member}}, cu->nextId++);
 	});
 	assert(res->kind.asUnion().memberIndex == memberIndex);

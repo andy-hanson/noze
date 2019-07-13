@@ -121,7 +121,7 @@ namespace {
 		return mapOrFail<const Module*, const Arr<const Diagnostic>>{}(modelArena, imports, [&](const ImportAst ast) {
 			// resolveImport should succeed because we already did this in parseEverything. (TODO: then keep it around with the ast?)
 			const PathAndStorageKind importPath = force(resolveImport(modelArena, curPath, ast));
-			const Opt<const Module*> i = compiled.get(importPath);
+			const Opt<const Module*> i = getAt_mut<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(&compiled, importPath);
 			if (has(i))
 				return success<const Module*, const Arr<const Diagnostic>>(force(i));
 			else {
@@ -179,7 +179,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 					[&](const Arr<const Module*> imports) {
 						const Result<const Module*, const Arr<const Diagnostic>> res = check(modelArena, imports, ast.ast, ast.pathAndStorageKind, includeCheck);
 						if (res.isSuccess())
-							compiled.add(tempArena, ast.pathAndStorageKind, res.asSuccess());
+							addToDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(tempArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
 						return res;
 					});
 			});

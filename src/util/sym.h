@@ -185,8 +185,9 @@ inline constexpr const Bool isShortOperator(const Sym a) {
 }
 
 // Get symbol from characters 'a'-'z' '0'-'9' '-' '?'
+// str is temporary, we'll make a copy
 const Sym getSymFromAlphaIdentifier(Symbols* symbols, const Str str);
-
+// str is temporary, we'll make a copy
 const Sym getSymFromOperator(Symbols* symbols, const Str str);
 
 inline constexpr Comparison compareSym(const Sym a, const Sym b) {

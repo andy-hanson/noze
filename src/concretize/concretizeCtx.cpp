@@ -245,7 +245,7 @@ namespace {
 			key.specializeOnArgs,
 			decl->body(),
 			none<const KnownLambdaBody*>()};
-		ctx.concreteFunToSource.add(ctx.arena, res, source);
+		addToDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(ctx.arena, &ctx.concreteFunToSource, res, source);
 		return res;
 	}
 
@@ -261,7 +261,7 @@ namespace {
 
 			cf->_body.set(ConcreteFunBody{ConcreteFunBody::Bogus{}});
 
-			const ConcreteFunSource source = force(ctx.concreteFunToSource.tryDeleteAndGet(cf));
+			const ConcreteFunSource source = mustDelete<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(&ctx.concreteFunToSource, cf);
 			const ConcreteFunBody body = source.body.match(
 				[&](const FunBody::Builtin) {
 					return getBuiltinFunBody(ctx, source, cf);
@@ -311,7 +311,7 @@ namespace {
 		const Bool isForDynamic
 	) {
 		const Str mangledName = getLambdaInstanceMangledName(ctx.arena, klb->mangledName, specializeOnArgs, isForDynamic);
-		const LambdaInfo info = ctx.knownLambdaBodyToInfo.mustGet(klb);
+		const LambdaInfo info = mustGetAt_mut(&ctx.knownLambdaBodyToInfo, klb);
 		const ConcreteType returnType = klb->nonSpecializedSig.returnType; // specialization never changes the return type
 		const Arr<const ConcreteParam> params = specializeParamsForLambdaInstance(ctx, klb->nonSpecializedSig.params, specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
@@ -339,7 +339,7 @@ namespace {
 			specializeOnArgs,
 			FunBody{info.body},
 			some<const KnownLambdaBody*>(klb)};
-		ctx.concreteFunToSource.add(ctx.arena, res, source);
+		addToDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(ctx.arena, &ctx.concreteFunToSource, res, source);
 
 		fillInConcreteFunBody(ctx, res);
 
@@ -347,7 +347,7 @@ namespace {
 	}
 
 	ConcreteFun* getOrAddConcreteFunWithoutFillingBody(ConcretizeCtx& ctx, const ConcreteFunKey key) {
-		return ctx.allConcreteFuns.getOrAdd(ctx.arena, key, [&]() {
+		return getOrAdd<const ConcreteFunKey, ConcreteFun*, compareConcreteFunKey> {}(ctx.arena, &ctx.allConcreteFuns, key, [&]() {
 			return getConcreteFunFromKey(ctx, key);
 		});
 	}
@@ -424,7 +424,11 @@ const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx& ctx, const Conc
 }
 
 const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(ConcretizeCtx& ctx, const KnownLambdaBody* klb, const Arr<const ConstantOrLambdaOrVariable> args) {
-	return klb->directCallInstances.getOrAdd(ctx.arena, args, [&]() {
+	return getOrAdd<
+		const Arr<const ConstantOrLambdaOrVariable>,
+		const ConcreteFun*,
+		compareConstantOrLambdaOrVariableArr
+	>{}(ctx.arena, &klb->directCallInstances, args, [&]() {
 		return getConcreteFunFromKnownLambdaBodyAndFill(ctx, klb, args, /*isForDynamic*/ False);
 	});
 }
@@ -446,7 +450,7 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 		const ConcreteStructKey key = ConcreteStructKey{i->decl, typeArgs};
 		Cell<const Bool> didAdd { False };
 		// Note: we can't do anything in this callback that would call getOrAddConcreteStruct again.
-		ConcreteStruct* res = ctx.allConcreteStructs.getOrAdd(ctx.arena, key, [&]() {
+		ConcreteStruct* res = getOrAdd<const ConcreteStructKey, ConcreteStruct*, compareConcreteStructKey>{}(ctx.arena, &ctx.allConcreteStructs, key, [&]() {
 			cellSet<const Bool>(&didAdd, True);
 			return ctx.arena.nu<ConcreteStruct>()(
 				getConcreteStructMangledName(ctx.arena, i->decl->name, key.typeArgs),

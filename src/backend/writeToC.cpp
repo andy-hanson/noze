@@ -205,7 +205,7 @@ namespace {
 	using StructStates = MutDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>;
 
 	const Bool canReferenceType(const ConcreteType t, const StructStates& structStates) {
-		const Opt<const StructState> state = structStates.get(t.strukt);
+		const Opt<const StructState> state = getAt_mut(&structStates, t.strukt);
 		if (has(state))
 			switch (force(state)) {
 				case StructState::declared:
@@ -238,7 +238,7 @@ namespace {
 	// Returns any new work it did -- if we declared or defined the struct
 	const Opt<const StructState> writeStructDeclarationOrDefinition(Writer& writer, const ConcreteStruct* strukt, const StructStates& structStates) {
 		auto declare = [&]() -> const Opt<const StructState> {
-			if (!structStates.has(strukt)) {
+			if (!hasKey_mut(&structStates, strukt)) {
 				declareStruct(writer, strukt);
 				return some<const StructState>(StructState::declared);
 			} else
@@ -287,11 +287,11 @@ namespace {
 			Cell<const Bool> madeProgress { False };
 			Cell<const Bool> someIncomplete { False };
 			for (const ConcreteStruct* strukt : allStructs) {
-				const Opt<const StructState> curState = structStates.get(strukt);
+				const Opt<const StructState> curState = getAt_mut(&structStates, strukt);
 				if (!has(curState) || force(curState) != StructState::defined) {
 					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, structStates);
 					if (has(didWork)) {
-						structStates.set(tempArena, strukt, force(didWork));
+						setInDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>(tempArena, &structStates, strukt, force(didWork));
 						cellSet<const Bool>(&madeProgress, True);
 					} else
 						cellSet<const Bool>(&someIncomplete, True);
