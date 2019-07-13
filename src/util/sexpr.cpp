@@ -1,6 +1,6 @@
 #include "./sexpr.h"
 
-void writeSexpr(Writer& writer, const Sexpr s) {
+void writeSexpr(Writer* writer, const Sexpr s) {
 	s.match(
 		[&](const Arr<const Sexpr> s) {
 			writeChar(writer, '[');

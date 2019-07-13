@@ -4,7 +4,7 @@
 
 namespace {
 	//TODO:MOVE
-	void writePath(Writer& writer, const Path* p) {
+	void writePath(Writer* writer, const Path* p) {
 		if (has(p->parent))
 			writePath(writer, force(p->parent));
 		writeChar(writer, '/');
@@ -12,23 +12,23 @@ namespace {
 	}
 
 	//TODO:MOVE
-	void writeLineAndColumn(Writer& writer, const LineAndColumn lc) {
+	void writeLineAndColumn(Writer* writer, const LineAndColumn lc) {
 		writeNat(writer, lc.line + 1);
 		writeChar(writer, ':');
 		writeNat(writer, lc.column + 1);
 	}
 
-	void writePos(Writer& writer, const LineAndColumnGetter lc, const Pos pos) {
+	void writePos(Writer* writer, const LineAndColumnGetter lc, const Pos pos) {
 		writeLineAndColumn(writer, lineAndColumnAtPos(lc, pos));
 	}
 
-	void writeRange(Writer& writer, const LineAndColumnGetter lc, const SourceRange range) {
+	void writeRange(Writer* writer, const LineAndColumnGetter lc, const SourceRange range) {
 		writePos(writer, lc, range.start);
 		writeChar(writer, '-');
 		writePos(writer, lc, range.end);
 	}
 
-	void writeWhere(Writer& writer, const FilesInfo fi, const PathAndStorageKind where, const SourceRange range) {
+	void writeWhere(Writer* writer, const FilesInfo fi, const PathAndStorageKind where, const SourceRange range) {
 		writeBold(writer);
 		Arena temp {};
 		writeHyperlink(writer, pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where)), pathToStr(&temp, where.path));
@@ -38,7 +38,7 @@ namespace {
 		writeReset(writer);
 	}
 
-	void writeLineNumber(Writer& writer, const FilesInfo fi, const Module* module, const SourceRange range) {
+	void writeLineNumber(Writer* writer, const FilesInfo fi, const Module* module, const SourceRange range) {
 		// TODO
 		const PathAndStorageKind where = module->pathAndStorageKind;
 		writeBold(writer);
@@ -49,7 +49,7 @@ namespace {
 		writeNat(writer, line + 1);
 	}
 
-	void showChar(Writer& writer, char c) {
+	void showChar(Writer* writer, char c) {
 		switch (c) {
 			case '\0':
 				writeStatic(writer, "\\0");
@@ -66,7 +66,7 @@ namespace {
 		}
 	}
 
-	void writeParseDiag(Writer& writer, const ParseDiag d) {
+	void writeParseDiag(Writer* writer, const ParseDiag d) {
 		d.match(
 			[&](const ParseDiag::ExpectedCharacter) {
 				todo<void>("expectedcharacter");
@@ -112,7 +112,7 @@ namespace {
 	}
 
 	//TODO:MOVE
-	void writePurity(Writer& writer, const Purity p) {
+	void writePurity(Writer* writer, const Purity p) {
 		writeChar(writer, '\'');
 		switch (p) {
 			case Purity::data:
@@ -130,13 +130,13 @@ namespace {
 		writeChar(writer, '\'');
 	}
 
-	void writeName(Writer& writer, const Sym name) {
+	void writeName(Writer* writer, const Sym name) {
 		writeChar(writer, '\'');
 		writeSym(writer, name);
 		writeChar(writer, '\'');
 	}
 
-	void writeSigJustTypes(Writer& writer, const Sig s) {
+	void writeSigJustTypes(Writer* writer, const Sig s) {
 		writeType(writer, s.returnType);
 		writeChar(writer, '(');
 		writeWithCommas(writer, s.params, [&](const Param p) {
@@ -145,7 +145,7 @@ namespace {
 		writeChar(writer, ')');
 	}
 
-	void writeCalledDecl(Writer& writer, const FilesInfo fi, const CalledDecl c) {
+	void writeCalledDecl(Writer* writer, const FilesInfo fi, const CalledDecl c) {
 		writeSigJustTypes(writer, c.sig());
 		return c.match(
 			[&](const FunDecl* funDecl) {
@@ -162,7 +162,7 @@ namespace {
 	}
 
 	template <typename Filter>
-	void writeCalledDecls(Writer& writer, const FilesInfo fi, const Arr<const CalledDecl> cs, Filter flt) {
+	void writeCalledDecls(Writer* writer, const FilesInfo fi, const Arr<const CalledDecl> cs, Filter flt) {
 		for (const CalledDecl c : cs)
 			if (flt(c)) {
 				writeChar(writer, '\n');
@@ -170,13 +170,13 @@ namespace {
 			}
 	}
 
-	void writeCalledDecls(Writer& writer, const FilesInfo fi, const Arr<const CalledDecl> cs) {
+	void writeCalledDecls(Writer* writer, const FilesInfo fi, const Arr<const CalledDecl> cs) {
 		writeCalledDecls(writer, fi, cs, [](const CalledDecl) {
 			return True;
 		});
 	}
 
-	void writeCallNoMatch(Writer& writer, const FilesInfo fi, const Diag::CallNoMatch d) {
+	void writeCallNoMatch(Writer* writer, const FilesInfo fi, const Diag::CallNoMatch d) {
 		const Bool someCandidateHasCorrectArity = exists(d.allCandidates, [&](const CalledDecl c) {
 			return eq(arity(c), d.actualArity);
 		});
@@ -219,7 +219,7 @@ namespace {
 				writeWithCommas(writer, d.actualArgTypes, [&](const Type t) {
 					writeType(writer, t);
 				});
-				if (d.actualArgTypes.size < d.actualArity)
+				if (size(d.actualArgTypes) < d.actualArity)
 					writeStatic(writer, " (other arguments not checked, gave up early)");
 			}
 			writeStatic(writer, "\ncandidates (with ");
@@ -231,7 +231,7 @@ namespace {
 		}
 	}
 
-	void writeDiag(Writer& writer, const FilesInfo fi, const Diag d) {
+	void writeDiag(Writer* writer, const FilesInfo fi, const Diag d) {
 		d.match(
 			[&](const Diag::CallMultipleMatches d) {
 				writeStatic(writer, "cannot choose an overload of ");
@@ -416,7 +416,7 @@ namespace {
 			});
 	}
 
-	void showDiagnostic(Writer& writer, const FilesInfo fi, const Diagnostic d) {
+	void showDiagnostic(Writer* writer, const FilesInfo fi, const Diagnostic d) {
 		writeWhere(writer, fi, d.where, d.range);
 		writeChar(writer, ' ');
 		writeDiag(writer, fi, d.diag);
@@ -434,13 +434,13 @@ void printDiagnostics(const Diagnostics diagnostics) {
 
 	for (const Arr<const Diagnostic> group : groups) {
 		if (first(group).diag.isFileDoesNotExist()) {
-			assert(group.size == 1);
-			writePath(writer, only(group).where.path);
-			writeStatic(writer, ": file does not exist\n");
+			assert(size(group) == 1);
+			writePath(&writer, only(group).where.path);
+			writeStatic(&writer, ": file does not exist\n");
 		} else
 			for (const Diagnostic d : group)
-				showDiagnostic(writer, diagnostics.filesInfo, d);
+				showDiagnostic(&writer, diagnostics.filesInfo, d);
 	}
 
-	printf("%s\n", finishWriterToCStr(writer));
+	printf("%s\n", finishWriterToCStr(&writer));
 }

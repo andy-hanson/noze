@@ -117,18 +117,18 @@ namespace {
 	}
 
 	const Command parseBuildCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
-		if (args.size == 1 && !isHelp(only(args)))
+		if (size(args) == 1 && !isHelp(only(args)))
 			return Command{Command::Build{parseProgramDirAndMain(arena, cwd, only(args))}};
 		else
 			return Command{Command::HelpBuild{}};
 	}
 
 	const Command parseRunCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
-		if (args.size == 0 || isHelp(at(args, 0)))
+		if (size(args) == 0 || isHelp(at(args, 0)))
 			return Command{Command::HelpRun{}};
 		else {
 			const ProgramDirAndMain programDirAndMain = parseProgramDirAndMain(arena, cwd, at(args, 0));
-			if (args.size == 1)
+			if (size(args) == 1)
 				return Command{Command::Run{programDirAndMain, emptyArr<const Str>()}};
 			else if (!strEqLiteral(at(args, 1), "--"))
 				return Command{Command::HelpRun{}};
@@ -139,7 +139,7 @@ namespace {
 
 	const Command parseCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
 		// Parse command name
-		if (args.size == 0)
+		if (size(args) == 0)
 			return Command{Command::Help{}};
 		else {
 			const Str arg0 = at(args, 0);
@@ -152,7 +152,7 @@ namespace {
 			else if (strEqLiteral(arg0, "run"))
 				return parseRunCommand(arena, cwd, tail(args));
 			else if (strEqLiteral(arg0, "test"))
-				return args.size == 1 ? Command{Command::Test{}} : Command{Command::Help{}};
+				return size(args) == 1 ? Command{Command::Test{}} : Command{Command::Help{}};
 			else
 				return todo<const Command>("bad command name");
 		}

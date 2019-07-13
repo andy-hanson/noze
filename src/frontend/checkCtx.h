@@ -33,7 +33,7 @@ struct IncludeAndImportsRange {
 	}
 
 	inline IncludeAndImportsIter end() {
-		return IncludeAndImportsIter{include, imports, static_cast<ssize_t>(imports.size)};
+		return IncludeAndImportsIter{include, imports, static_cast<ssize_t>(size(imports))};
 	}
 };
 

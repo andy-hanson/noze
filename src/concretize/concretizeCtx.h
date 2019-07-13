@@ -23,7 +23,7 @@ struct TypeArgsScope {
 
 	inline TypeArgsScope(const Arr<const TypeParam> _typeParams, const Arr<const ConcreteType> _typeArgs)
 		: typeParams{_typeParams}, typeArgs{_typeArgs} {
-		assert(typeParams.size == typeArgs.size);
+		assert(sizeEq(typeParams, typeArgs));
 	}
 
 	static inline TypeArgsScope empty() {
@@ -47,8 +47,8 @@ struct ConcreteFunInst {
 
 	inline ConcreteFunInst(const FunDecl* _decl, const Arr<const ConcreteType> _typeArgs, const Arr<const ConcreteFunInst> _specImpls)
 		: decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls} {
-		assert(typeArgs.size == decl->typeParams.size);
-		assert(specImpls.size == decl->nSpecImpls());
+		assert(sizeEq(typeArgs, decl->typeParams));
+		assert(size(specImpls) == decl->nSpecImpls());
 	}
 
 	inline const TypeArgsScope typeArgsScope() const {
@@ -72,7 +72,7 @@ struct ConcreteFunKey {
 		const ConcreteFunInst _funInst,
 		const Arr<const ConstantOrLambdaOrVariable> _specializeOnArgs
 	) : funInst{_funInst}, specializeOnArgs{_specializeOnArgs} {
-		assert(arity(funInst) == specializeOnArgs.size);
+		assert(arity(funInst) == size(specializeOnArgs));
 	}
 
 	inline const FunDecl* decl() const {

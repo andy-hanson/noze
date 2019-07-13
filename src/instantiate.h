@@ -13,7 +13,7 @@ struct TypeParamsAndArgs {
 
 	inline TypeParamsAndArgs(const Arr<const TypeParam> _typeParams, const Arr<const Type> _typeArgs)
 		: typeParams{_typeParams}, typeArgs{_typeArgs} {
-		assert(typeParams.size == typeArgs.size);
+		assert(sizeEq(typeParams, typeArgs));
 	}
 };
 

@@ -48,7 +48,7 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 		if (ptrEquals(p, s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{False, s});
 
-	for (const size_t i : Range{sendFunTypes.size})
+	for (const size_t i : Range{size(sendFunTypes)})
 		if (ptrEquals(at(sendFunTypes, i), s))
 			return some<const CommonTypes::LambdaInfo>(LambdaInfo{True, at(funTypes, i)});
 
@@ -183,7 +183,7 @@ const Type Expr::getType(Arena* arena, const CommonTypes& commonTypes) const {
 		});
 }
 
-void writeStructInst(Writer& writer, const StructInst* s) {
+void writeStructInst(Writer* writer, const StructInst* s) {
 	writeSym(writer, s->decl->name);
 	if (!isEmpty(s->typeArgs)) {
 		Cell<const Bool> first { True };
@@ -196,7 +196,7 @@ void writeStructInst(Writer& writer, const StructInst* s) {
 	}
 }
 
-void writeType(Writer& writer, const Type type) {
+void writeType(Writer* writer, const Type type) {
 	type.match(
 		[&](const Type::Bogus) {
 			writeStatic(writer, "<<bogus>>");
@@ -328,7 +328,7 @@ const Sexpr exprToSexpr(Arena* arena, const Expr expr) {
 		});
 }
 
-void writeExpr(Writer& writer, const Expr expr) {
+void writeExpr(Writer* writer, const Expr expr) {
 	Arena arena {};
 	writeSexpr(writer, exprToSexpr(&arena, expr));
 }

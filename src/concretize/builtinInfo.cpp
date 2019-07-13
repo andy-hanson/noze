@@ -63,7 +63,9 @@ namespace {
 		const Sym name = sig.name;
 		const Opt<const BuiltinFunInfo> no = none<const BuiltinFunInfo>();
 		const Type rt = sig.returnType;
-		const Type p0 = sig.params.size > 0 ? at(sig.params, 0).type : Type{Type::Bogus{}};
+		const Type p0 = isEmpty(sig.params)
+			? Type{Type::Bogus{}}
+			: at(sig.params, 0).type;
 
 		Arena tempArena {};
 

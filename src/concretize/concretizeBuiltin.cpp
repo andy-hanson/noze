@@ -60,7 +60,7 @@ namespace {
 	const ComparisonTypes getComparisonTypes(const ConcreteType comparison, const Arr<const ConcreteType> typeArgs) {
 		const ConcreteType t = only(typeArgs);
 		const Arr<const ConcreteType> unionMembers = comparison.strukt->body().asUnion().members;
-		assert(unionMembers.size == 3);
+		assert(size(unionMembers) == 3);
 		const ConcreteType less = at(unionMembers, 0);
 		const ConcreteType equal = at(unionMembers, 1);
 		const ConcreteType greater = at(unionMembers, 2);

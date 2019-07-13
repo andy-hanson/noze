@@ -15,12 +15,12 @@ struct Lexer {
 	size_t indent = 0;
 };
 
-inline char curChar(Lexer& lexer) {
-	return *lexer.ptr;
+inline char curChar(Lexer* lexer) {
+	return *lexer->ptr;
 }
 
-inline Pos curPos(const Lexer& lexer) {
-	return safeSizeTToUint(lexer.ptr - lexer.sourceBegin);
+inline Pos curPos(const Lexer* lexer) {
+	return safeSizeTToUint(lexer->ptr - lexer->sourceBegin);
 }
 
 template <typename T>
@@ -34,41 +34,41 @@ T throwDiag(const SourceRange range, const ParseDiag diag) {
 }
 
 template <typename T>
-T throwAtChar(Lexer& lexer, const ParseDiag diag) {
+T throwAtChar(Lexer* lexer, const ParseDiag diag) {
 	const Pos a = curPos(lexer);
 	const SourceRange range = SourceRange{a, curChar(lexer) == '\0' ? a : a + 1};
 	return throwDiag<T>(range, diag);
 }
 
-const Bool tryTake(Lexer& lexer, const char c);
-const Bool tryTake(Lexer& lexer, const CStr c);
-void take(Lexer& lexer, const char c);
-void take(Lexer& lexer, const CStr c) ;
+const Bool tryTake(Lexer* lexer, const char c);
+const Bool tryTake(Lexer* lexer, const CStr c);
+void take(Lexer* lexer, const char c);
+void take(Lexer* lexer, const CStr c) ;
 
-void skipBlankLines(Lexer& lexer);
+void skipBlankLines(Lexer* lexer);
 
 enum class NewlineOrIndent { newline, indent };
-NewlineOrIndent takeNewlineOrIndent(Lexer& lexer);
+NewlineOrIndent takeNewlineOrIndent(Lexer* lexer);
 
-void takeIndent(Lexer& lexer);
-void takeDedent(Lexer& lexer);
-const Bool tryTakeIndent(Lexer& lexer);
-NewlineOrIndent tryTakeIndentAfterNewline(Lexer& lexer);
+void takeIndent(Lexer* lexer);
+void takeDedent(Lexer* lexer);
+const Bool tryTakeIndent(Lexer* lexer);
+NewlineOrIndent tryTakeIndentAfterNewline(Lexer* lexer);
 
 // Returns # of dedents. (TODO:RENAME)
-size_t takeNewlineOrDedentAmount(Lexer& lexer);
+size_t takeNewlineOrDedentAmount(Lexer* lexer);
 
 enum class NewlineOrDedent { newline, dedent };
-NewlineOrDedent takeNewlineOrSingleDedent(Lexer& lexer);
+NewlineOrDedent takeNewlineOrSingleDedent(Lexer* lexer);
 
-inline const SourceRange range(Lexer& lexer, const Pos begin) {
+inline const SourceRange range(Lexer* lexer, const Pos begin) {
 	assert(begin < curPos(lexer));
 	return SourceRange{begin, curPos(lexer)};
 }
 
-const Sym takeName(Lexer& lexer);
-const Str takeNameAsStr(Lexer& lexer);
-const NameAndRange takeNameAndRange(Lexer& lexer);
+const Sym takeName(Lexer* lexer);
+const Str takeNameAsStr(Lexer* lexer);
+const NameAndRange takeNameAndRange(Lexer* lexer);
 
 struct ExpressionToken {
 	enum class Kind {
@@ -109,8 +109,8 @@ struct ExpressionToken {
 		return nameAndRange;
 	}
 };
-const ExpressionToken takeExpressionToken(Lexer& lexer);
+const ExpressionToken takeExpressionToken(Lexer* lexer);
 
-const Bool tryTakeElseIndent(Lexer& lexer);
+const Bool tryTakeElseIndent(Lexer* lexer);
 
 Lexer createLexer(Arena* astArena, Symbols* symbols, const NulTerminatedStr source);

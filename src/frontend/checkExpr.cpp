@@ -159,8 +159,8 @@ namespace {
 		if (has(opRecord)) {
 			const RecordAndIsBuiltinByVal record = force(opRecord);
 			const Arr<const StructField> fields = record.record.fields;
-			if (ast.args.size != fields.size) {
-				ctx.addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, fields.size, ast.args.size}});
+			if (!sizeEq(ast.args, fields)) {
+				ctx.addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, size(fields), size(ast.args)}});
 				return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : expected.bogus(range);
 			} else {
 				const Arr<const Expr> args = mapZip<const Expr>{}(ctx.arena(), fields, ast.args, [&](const StructField field, const ExprAst arg) {
@@ -172,7 +172,7 @@ namespace {
 				if (ctx.outermostFun->noCtx() && !record.isBuiltinByVal) {
 					const Opt<const ForcedByValOrRef> forcedByValOrRef = record.record.forcedByValOrRef;
 					const Bool isAlwaysByVal = _or(
-						fields.size == 0,
+						isEmpty(fields),
 						(has(forcedByValOrRef) && force(forcedByValOrRef) == ForcedByValOrRef::byVal));
 					if (!isAlwaysByVal)
 						ctx.addDiag(range, Diag{Diag::CreateRecordByRefNoCtx{decl}});
@@ -246,12 +246,12 @@ namespace {
 			return finishArr(&funsInScopeBuilder);
 		}();
 
-		if (funsInScope.size != 1)
+		if (size(funsInScope) != 1)
 			todo<void>("checkFunAsLambda");
 
 		const FunDecl* fun = only(funsInScope);
 
-		if (ast.typeArgs.size != fun->typeParams.size)
+		if (!sizeEq(ast.typeArgs, fun->typeParams))
 			// TODO: type inference
 			todo<void>("checkFunAsLambda");
 
@@ -417,8 +417,8 @@ namespace {
 
 		const ExpectedLambdaType et = force(opEt);
 
-		if (paramAsts.size != et.paramTypes.size) {
-			printf("Number of params should be %zu, got %zu\n", et.paramTypes.size, paramAsts.size);
+		if (!sizeEq(paramAsts, et.paramTypes)) {
+			printf("Number of params should be %zu, got %zu\n", size(et.paramTypes), size(paramAsts));
 			todo<void>("checkLambdaWorker -- # params is wrong");
 		}
 
@@ -512,7 +512,7 @@ namespace {
 			const Arr<const StructInst*> members = force(unionAndMembers).members;
 
 			const Bool badCases = _or(
-				members.size != ast.cases.size,
+				!sizeEq(members, ast.cases),
 				zipSome(members, ast.cases, [&](const StructInst* member, const MatchAst::CaseAst caseAst) {
 					return !symEq(member->decl->name, caseAst.structName);
 				}));
@@ -565,7 +565,7 @@ namespace {
 				if (!has(opMessage)) todo<void>("checkMessageSend");
 				const Message* message = force(opMessage);
 				const Sig& messageSig = message->sig;
-				if (ast.args.size != arity(messageSig))
+				if (size(ast.args) != arity(messageSig))
 					todo<void>("checkMessageSend");
 				const Arr<const Expr> args = mapZip<const Expr>{}(ctx.arena(), ast.args, messageSig.params, [&](const ExprAst argAst, const Param& param) {
 					return checkAndExpect(ctx, argAst, instantiateType(ctx.arena(), param.type, instIface));

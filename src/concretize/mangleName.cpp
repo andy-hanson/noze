@@ -16,11 +16,11 @@ namespace {
 
 const Str mangleName(Arena* arena, const Sym name) {
 	Writer writer { arena };
-	writeMangledName(writer, name);
-	return finishWriter(writer);
+	writeMangledName(&writer, name);
+	return finishWriter(&writer);
 }
 
-void writeMangledName(Writer& writer, const Sym name) {
+void writeMangledName(Writer* writer, const Sym name) {
 	Arena tempArena {};
 
 	if (isSymOperator(name)) {

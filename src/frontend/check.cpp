@@ -18,7 +18,7 @@ namespace {
 		if (has(res)) {
 			// may fail -- builtin Template should not be an alias
 			const StructDecl* decl = force(res).asDecl();
-			if (decl->typeParams.size != expectedTypeParams)
+			if (size(decl->typeParams) != expectedTypeParams)
 				todo<void>("getCommonTemplateType");
 			return some<const StructDecl*>(decl);
 		} else
@@ -118,7 +118,7 @@ namespace {
 		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(ctx.arena, asts, [&](const TypeParamAst& ast, const size_t i) {
 			return TypeParam{ast.range, ast.name, i};
 		});
-		for (const size_t i : Range{typeParams.size})
+		for (const size_t i : Range{size(typeParams)})
 			for (const size_t prev_i : Range{i})
 				if (symEq(at(typeParams, prev_i).name, at(typeParams, i).name))
 					ctx.addDiag(at(typeParams, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
@@ -156,7 +156,7 @@ namespace {
 			const Type type = typeFromAst(ctx, ast.type, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 			return Param{ast.range, ast.name, type, index};
 		});
-		for (const size_t i : Range{params.size})
+		for (const size_t i : Range{size(params)})
 			for (const size_t prev_i : Range{i})
 				if (symEq(at(params, prev_i).name, at(params, i).name))
 					ctx.addDiag(at(params, i).range, Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
@@ -273,7 +273,7 @@ namespace {
 	//TODO:MOVE
 	template <typename T, typename Cb>
 	void everyPairWithIndex(const Arr<T> a, Cb cb) {
-		for (const size_t i : Range{a.size})
+		for (const size_t i : Range{size(a)})
 			for (const size_t j : Range{i})
 				cb(at(a, i), at(a, j), i, j);
 	}
@@ -281,7 +281,7 @@ namespace {
 	//TODO:MOVE
 	template <typename T, typename Cb>
 	void everyPair(const Arr<T> a, Cb cb) {
-		for (const size_t i : Range{a.size})
+		for (const size_t i : Range{size(a)})
 			for (const size_t j : Range{i})
 				cb(at(a, i), at(a, j));
 	}
@@ -440,8 +440,8 @@ namespace {
 					structsAndAliasesMap,
 					typeParamsScope,
 					none<MutArr<StructInst*>*>());
-				if (typeArgs.size != spec->typeParams.size) {
-					ctx.addDiag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, spec->typeParams.size, typeArgs.size}});
+				if (!sizeEq(typeArgs, spec->typeParams)) {
+					ctx.addDiag(ast.range, Diag{Diag::WrongNumberTypeArgsForSpec{spec, size(spec->typeParams), size(typeArgs)}});
 					return none<const SpecInst*>();
 				} else
 					return some<const SpecInst*>(instantiateSpec(ctx.arena, spec, typeArgs));

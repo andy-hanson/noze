@@ -11,7 +11,7 @@ namespace {
 		if (mainFun->isTemplate())
 			todo<void>("main is Template?");
 		const Arr<const Param> params = mainFun->params();
-		if (params.size == 0) {
+		if (size(params) == 0) {
 			const Type ret = mainFun->returnType();
 			if (!(ret.isStructInst() && ptrEquals(ret.asStructInst()->decl, commonTypes.int64->decl)))
 				todo<void>("checkMainSignature -- doesn't return int64");
@@ -22,7 +22,7 @@ namespace {
 
 	const FunDecl* getMainFun(const Program& program) {
 		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.mainModule->funsMap, shortSymAlphaLiteral("main"));
-		if (mainFuns.size != 1)
+		if (size(mainFuns) != 1)
 			todo<void>("wrong number main funs");
 		const FunDecl* mainFun = only(mainFuns);
 		checkMainSignature(program.commonTypes, mainFun);
@@ -31,7 +31,7 @@ namespace {
 
 	const FunDecl* getAllocFun(const Program& program) {
 		const Arr<const FunDecl*> allocFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
-		if (allocFuns.size != 1)
+		if (size(allocFuns) != 1)
 			todo<void>("wrong number allocate-bytes funs");
 		const FunDecl* allocFun = only(allocFuns);
 		// TODO: check the signature!
@@ -48,7 +48,7 @@ namespace {
 				return ptrEquals(decl, funStruct);
 			});
 		});
-		assert(res.size == 3);
+		assert(size(res) == 3);
 		return res;
 	}
 }

@@ -288,7 +288,7 @@ struct ConcreteType {
 	}
 };
 
-inline void writeConcreteType(Writer& writer, const ConcreteType t) {
+inline void writeConcreteType(Writer* writer, const ConcreteType t) {
 	writeStr(writer, t.strukt->mangledName);
 	if (t.isPointer)
 		writeChar(writer, '*');
@@ -333,7 +333,7 @@ struct ConcreteSig {
 	const Arr<const ConcreteParam> params;
 
 	inline size_t arity() const {
-		return params.size;
+		return size(params);
 	}
 };
 
@@ -360,7 +360,7 @@ struct ConstantKind {
 			return key.elementType;
 		}
 		inline size_t size() const {
-			return elements().size;
+			return ::size(elements());
 		}
 		inline const Arr<const Constant*> elements() const {
 			return key.elements;
@@ -604,7 +604,7 @@ struct Constant {
 	}
 };
 
-void writeConstant(Writer& writer, const Constant* c);
+void writeConstant(Writer* writer, const Constant* c);
 
 // NOTE: a Constant can still have a KnownLambdaBody of course!
 struct ConstantOrLambdaOrVariable {
@@ -672,7 +672,7 @@ public:
 	}
 };
 
-void writeConstantOrLambdaOrVariable(Writer& writer, const ConstantOrLambdaOrVariable clv);
+void writeConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv);
 
 inline Comparison compareConstantOrLambdaOrVariable(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
 	// variable < constant < knownlambdabody
@@ -1061,7 +1061,7 @@ struct ConcreteExpr {
 
 		inline Match(const ConcreteLocal* _matchedLocal, const ConcreteExpr* _matchedValue, const Arr<const Case> _cases)
 			: matchedLocal{_matchedLocal}, matchedValue{_matchedValue}, cases{_cases} {
-			assert(matchedUnionMembers().size == cases.size);
+			assert(sizeEq(matchedUnionMembers(), cases));
 		}
 
 		inline const Arr<const ConcreteType> matchedUnionMembers() const {
@@ -1096,11 +1096,11 @@ struct ConcreteExpr {
 		) : iface{_iface}, fieldsStruct{_fieldsStruct}, fieldInitializers{_fieldInitializers}, messageImpls{_messageImpls} {
 			if (has(fieldsStruct)) {
 				const ConcreteStruct* strukt = force(fieldsStruct).strukt;
-				assert(strukt->body().asRecord().fields.size == fieldInitializers.size);
+				assert(sizeEq(strukt->body().asRecord().fields, fieldInitializers));
 			} else
 				assert(isEmpty(fieldInitializers));
 
-			assert(iface->body().asIface().messages.size == messageImpls.size);
+			assert(sizeEq(iface->body().asIface().messages, messageImpls));
 		}
 
 		inline const Arr<const ConcreteSig> messagesSigs() const {
@@ -1221,7 +1221,7 @@ public:
 	}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const ImplicitConvertToUnion a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::implicitConvertToUnion}, implicitConvertToUnion{a} {
-		assert(a.memberIndex < type.strukt->body().asUnion().members.size);
+		assert(a.memberIndex < size(type.strukt->body().asUnion().members));
 	}
 	inline ConcreteExpr(const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, const Lambda a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::lambda}, lambda{a} {}

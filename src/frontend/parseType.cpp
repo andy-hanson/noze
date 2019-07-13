@@ -1,16 +1,16 @@
 #include "./parseType.h"
 
 namespace {
-	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner);
+	const TypeAst parseTypeWorker(Lexer* lexer, const Bool isInner);
 
-	const Arr<const TypeAst> tryParseTypeArgsWorker(Lexer& lexer, const Bool isInner) {
+	const Arr<const TypeAst> tryParseTypeArgsWorker(Lexer* lexer, const Bool isInner) {
 		ArrBuilder<const TypeAst> res {};
 		// Require '<>' if parsing type args inside of type args.
 		if (!isInner || tryTake(lexer, '<')) {
 			for (;;) {
 				if (!isInner && !tryTake(lexer, ' '))
 					break;
-				add<const TypeAst>(lexer.arena, &res, parseTypeWorker(lexer, /*isInner*/ True));
+				add<const TypeAst>(lexer->arena, &res, parseTypeWorker(lexer, /*isInner*/ True));
 				if (isInner && !tryTake(lexer, ", "))
 					break;
 			}
@@ -20,7 +20,7 @@ namespace {
 		return finishArr(&res);
 	}
 
-	const TypeAst parseTypeWorker(Lexer& lexer, const Bool isInner) {
+	const TypeAst parseTypeWorker(Lexer* lexer, const Bool isInner) {
 		const Pos start = curPos(lexer);
 		const Bool isTypeParam = tryTake(lexer, '?');
 		const Sym name = takeName(lexer);
@@ -34,11 +34,11 @@ namespace {
 	}
 }
 
-const Arr<const TypeAst> tryParseTypeArgs(Lexer& lexer) {
+const Arr<const TypeAst> tryParseTypeArgs(Lexer* lexer) {
 	return tryParseTypeArgsWorker(lexer, /*isInner*/ True);
 }
 
-const Opt<const TypeAst> tryParseTypeArg(Lexer& lexer) {
+const Opt<const TypeAst> tryParseTypeArg(Lexer* lexer) {
 	if (tryTake(lexer, '<')) {
 		const TypeAst res = parseTypeWorker(lexer, /*isInner*/ True);
 		take(lexer, '>');
@@ -47,7 +47,7 @@ const Opt<const TypeAst> tryParseTypeArg(Lexer& lexer) {
 		return none<const TypeAst>();
 }
 
-const TypeAst::InstStruct parseStructType(Lexer& lexer) {
+const TypeAst::InstStruct parseStructType(Lexer* lexer) {
 	const TypeAst t = parseType(lexer);
 	return t.match(
 		[](const TypeAst::TypeParam) {
@@ -58,6 +58,6 @@ const TypeAst::InstStruct parseStructType(Lexer& lexer) {
 		});
 }
 
-const TypeAst parseType(Lexer& lexer) {
+const TypeAst parseType(Lexer* lexer) {
 	return parseTypeWorker(lexer, /*isInner*/ False);
 }

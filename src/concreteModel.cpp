@@ -10,12 +10,12 @@ ConstantKind::Lambda::Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} 
 }
 
 ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a) : called{c}, args{a} {
-	assert(called->arityExcludingCtxIncludingClosure() == args.size);
+	assert(called->arityExcludingCtxIncludingClosure() == size(args));
 
 	if (has(called->closureParam)) {
 		assert(concreteTypeEq(force(at(args, 0).typeWithKnownLambdaBody()), force(called->closureParam).type));
 	}
-	for (const size_t i : Range{called->paramsExcludingCtxAndClosure().size}) {
+	for (const size_t i : Range{size(called->paramsExcludingCtxAndClosure())}) {
 		const ConcreteParam param = at(called->paramsExcludingCtxAndClosure(), i);
 		// If the arg has a knownlambdabody but no closure, we shouldn't bother passing it.
 		const ConstantOrExpr arg = at(args, i + boolToNat(has(called->closureParam)));
@@ -23,17 +23,17 @@ ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a
 		if (!has(argType) || !concreteTypeEq(force(argType), param.type)) {
 			Arena arena {};
 			Writer writer { &arena };
-			writeStatic(writer, "Call argument type mismatch for ");
-			writeStr(writer, c->mangledName());
-			writeStatic(writer, "\nExpected: ");
-			writeConcreteType(writer, param.type);
-			writeStatic(writer, "\nActual: ");
+			writeStatic(&writer, "Call argument type mismatch for ");
+			writeStr(&writer, c->mangledName());
+			writeStatic(&writer, "\nExpected: ");
+			writeConcreteType(&writer, param.type);
+			writeStatic(&writer, "\nActual: ");
 			if (has(argType))
-				writeConcreteType(writer, force(argType));
+				writeConcreteType(&writer, force(argType));
 			else
-				writeStatic(writer, "<<none>>");
-			writeChar(writer, '\n');
-			debugPrint(finishWriterToCStr(writer));
+				writeStatic(&writer, "<<none>>");
+			writeChar(&writer, '\n');
+			debugPrint(finishWriterToCStr(&writer));
 			assert(0);
 		}
 	}
@@ -64,7 +64,7 @@ const Constant* ConstantKind::Ptr::deref() const {
 	return at(array->kind.asArray().elements(), index);
 }
 
-void writeConstant(Writer& writer, const Constant* c) {
+void writeConstant(Writer* writer, const Constant* c) {
 	c->kind.match(
 		[&](const ConstantKind::Array a) {
 			writeChar(writer, '[');
@@ -112,7 +112,7 @@ void writeConstant(Writer& writer, const Constant* c) {
 		});
 }
 
-void writeConstantOrLambdaOrVariable(Writer& writer, const ConstantOrLambdaOrVariable clv) {
+void writeConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv) {
 	clv.match(
 		[&](const ConstantOrLambdaOrVariable::Variable) {
 			writeStatic(writer, "variable");

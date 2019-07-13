@@ -3,4 +3,4 @@
 #include "./ast.h"
 #include "./lexer.h"
 
-const ExprAst parseFunExprBody(Lexer& lexer);
+const ExprAst parseFunExprBody(Lexer* lexer);

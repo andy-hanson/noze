@@ -61,14 +61,14 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath p
 
 	CloseFd closeFd { fd };
 
-	const off_t size = lseek(fd, 0, SEEK_END);
-	if (size == -1)
+	const off_t fileSize = lseek(fd, 0, SEEK_END);
+	if (fileSize == -1)
 		return todo<Ret>("lseek failed");
 
-	if (size > 99999)
+	if (fileSize > 99999)
 		return todo<Ret>("size suspiciously large");
 
-	assert(size != 0); // TODO: handle empty files
+	assert(fileSize != 0); // TODO: handle empty files
 
 	// Go back to the beginning so we can read
 	const off_t off = lseek(fd, 0, SEEK_SET);
@@ -77,13 +77,13 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath p
 
 	assert(off == 0);
 
-	MutStr res = newUninitializedMutArr<const char>(arena, size + 1); // + 1 for the '\0'
-	const ssize_t nBytesRead = read(fd, const_cast<char*>(res.begin()), size);
+	MutStr res = newUninitializedMutArr<const char>(arena, fileSize + 1); // + 1 for the '\0'
+	const ssize_t nBytesRead = read(fd, const_cast<char*>(res.begin()), fileSize);
 
 	if (nBytesRead == -1)
 		return todo<Ret>("read failed");
 
-	if (nBytesRead != size)
+	if (nBytesRead != fileSize)
 		return todo<Ret>("nBytesRead not right?");
 
 	setAt<const char>(res, res.size() - 1, '\0');
@@ -96,8 +96,8 @@ void writeFileSync(const AbsolutePath path, const Str content) {
 	const int fd = tryOpen(path, O_CREAT | O_WRONLY | O_TRUNC, 0b110100100);
 	CloseFd closeFd { fd };
 
-	const ssize_t wroteBytes = write(fd, content.begin(), content.size);
-	if (wroteBytes != static_cast<ssize_t>(content.size)) {
+	const ssize_t wroteBytes = write(fd, content.begin(), size(content));
+	if (wroteBytes != static_cast<ssize_t>(size(content))) {
 		if (wroteBytes == -1)
 			return todo<void>("writefile failed");
 		else
@@ -195,7 +195,10 @@ int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, c
 	CStr const* const cEnviron = [&]() {
 		ArrBuilder<const CStr> cEnviron {};
 		for (const KeyValuePair<const Str, const Str> pair : environ)
-			add<const CStr>(&tempArena, &cEnviron, strToCStr(&tempArena, cat(&tempArena, pair.key, strLiteral("="), pair.value)));
+			add<const CStr>(
+				&tempArena,
+				&cEnviron,
+				strToCStr(&tempArena, cat(&tempArena, pair.key, strLiteral("="), pair.value)));
 		add<const CStr>(&tempArena, &cEnviron, nullptr);
 		return finishArr(&cEnviron).begin();
 	}();

@@ -70,4 +70,4 @@ const Sexpr arrToSexpr(Arena* arena, const Arr<T> a, CbToSexpr cbToSexpr) {
 	}));
 }
 
-void writeSexpr(Writer& writer, const Sexpr s);
+void writeSexpr(Writer* writer, const Sexpr s);

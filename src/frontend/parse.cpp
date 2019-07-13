@@ -5,14 +5,14 @@
 #include "./parseType.h"
 
 namespace {
-	const Arr<const TypeParamAst> parseTypeParams(Lexer& lexer) {
+	const Arr<const TypeParamAst> parseTypeParams(Lexer* lexer) {
 		if (tryTake(lexer, '<')) {
 			ArrBuilder<const TypeParamAst> res {};
 			do {
 				const Pos start = curPos(lexer);
 				take(lexer, '?');
 				const Sym name = takeName(lexer);
-				add<const TypeParamAst>(lexer.arena, &res, TypeParamAst{range(lexer, start), name});
+				add<const TypeParamAst>(lexer->arena, &res, TypeParamAst{range(lexer, start), name});
 			} while(tryTake(lexer, ", "));
 			take(lexer, '>');
 			return finishArr(&res);
@@ -20,7 +20,7 @@ namespace {
 			return emptyArr<const TypeParamAst>();
 	}
 
-	PuritySpecifier parsePurity(Lexer& lexer) {
+	PuritySpecifier parsePurity(Lexer* lexer) {
 		if (tryTake(lexer, "mut"))
 			return PuritySpecifier::mut;
 		else if (tryTake(lexer, "sendable"))
@@ -31,20 +31,20 @@ namespace {
 			return throwAtChar<const PuritySpecifier>(lexer, ParseDiag{ParseDiag::ExpectedPurityAfterSpace{}});
 	}
 
-	const ImportAst parseSingleImport(Lexer& lexer) {
+	const ImportAst parseSingleImport(Lexer* lexer) {
 		const Pos start = curPos(lexer);
 		uint nDots = 0;
 		while (tryTake(lexer, '.'))
 			nDots++;
 
-		Path const* path = rootPath(lexer.arena, takeNameAsStr(lexer));
+		Path const* path = rootPath(lexer->arena, takeNameAsStr(lexer));
 		while (tryTake(lexer, '.'))
-			path = childPath(lexer.arena, path, takeNameAsStr(lexer));
-		path = addExtension(lexer.arena, path, strLiteral(".nz"));
+			path = childPath(lexer->arena, path, takeNameAsStr(lexer));
+		path = addExtension(lexer->arena, path, strLiteral(".nz"));
 		return ImportAst{range(lexer, start), nDots, path};
 	}
 
-	const Arr<const ParamAst> parseParams(Lexer& lexer) {
+	const Arr<const ParamAst> parseParams(Lexer* lexer) {
 		take(lexer, '(');
 		if (tryTake(lexer, ')'))
 			return emptyArr<const ParamAst>();
@@ -55,7 +55,7 @@ namespace {
 				const Sym name = takeName(lexer);
 				take(lexer, ' ');
 				const TypeAst type = parseType(lexer);
-				add<const ParamAst>(lexer.arena, &res, ParamAst{range(lexer, start), name, type});
+				add<const ParamAst>(lexer->arena, &res, ParamAst{range(lexer, start), name, type});
 				if (tryTake(lexer, ')'))
 					break;
 				take(lexer, ", ");
@@ -64,32 +64,32 @@ namespace {
 		}
 	}
 
-	const SigAst parseSigAfterNameAndSpace(Lexer& lexer, const Pos start, const Sym name) {
+	const SigAst parseSigAfterNameAndSpace(Lexer* lexer, const Pos start, const Sym name) {
 		const TypeAst returnType = parseType(lexer);
 		const Arr<const ParamAst> params = parseParams(lexer);
 		return SigAst{range(lexer, start), name, returnType, params};
 	}
 
-	const SigAst parseSig(Lexer& lexer) {
+	const SigAst parseSig(Lexer* lexer) {
 		const Pos start = curPos(lexer);
 		const Sym sigName = takeName(lexer);
 		take(lexer, ' ');
 		return parseSigAfterNameAndSpace(lexer, start, sigName);
 	}
 
-	const Arr<const ImportAst> parseImports(Lexer& lexer) {
+	const Arr<const ImportAst> parseImports(Lexer* lexer) {
 		ArrBuilder<const ImportAst> res {};
 		do {
-			add<const ImportAst>(lexer.arena, &res, parseSingleImport(lexer));
+			add<const ImportAst>(lexer->arena, &res, parseSingleImport(lexer));
 		} while (tryTake(lexer, ' '));
 		take(lexer, '\n');
 		return finishArr(&res);
 	}
 
-	const Arr<const SigAst> parseIndentedSigs(Lexer& lexer) {
+	const Arr<const SigAst> parseIndentedSigs(Lexer* lexer) {
 		ArrBuilder<const SigAst> res {};
 		do {
-			add<const SigAst>(lexer.arena, &res, parseSig(lexer));
+			add<const SigAst>(lexer->arena, &res, parseSig(lexer));
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
 		return finishArr(&res);
 	}
@@ -124,7 +124,7 @@ namespace {
 		}
 	}
 
-	const Opt<const NonFunKeywordAndIndent> tryTake(Lexer& lexer, const CStr kwSpace, const CStr kwNl, const NonFunKeyword keyword) {
+	const Opt<const NonFunKeywordAndIndent> tryTake(Lexer* lexer, const CStr kwSpace, const CStr kwNl, const NonFunKeyword keyword) {
 		if (tryTake(lexer, kwSpace))
 			return some<const NonFunKeywordAndIndent>(NonFunKeywordAndIndent{keyword, SpaceOrNewlineOrIndent::space});
 		else if (tryTake(lexer, kwNl)) {
@@ -134,7 +134,7 @@ namespace {
 			return none<const NonFunKeywordAndIndent>();
 	}
 
-	const Opt<const NonFunKeywordAndIndent> parseNonFunKeyword(Lexer& lexer) {
+	const Opt<const NonFunKeywordAndIndent> parseNonFunKeyword(Lexer* lexer) {
 		switch (curChar(lexer)) {
 			case 'a':
 				return tryTake(lexer, "alias ", "alias\n", NonFunKeyword::alias);
@@ -153,7 +153,7 @@ namespace {
 		}
 	}
 
-	const StructDeclAst::Body::Record parseFields(Lexer& lexer) {
+	const StructDeclAst::Body::Record parseFields(Lexer* lexer) {
 		ArrBuilder<const StructDeclAst::Body::Record::Field> res {};
 		Cell<const Opt<const ExplicitByValOrRef>> explicitByValOrRef = none<const ExplicitByValOrRef>();
 		Cell<const Bool> isFirstLine = True;
@@ -175,7 +175,7 @@ namespace {
 					take(lexer, ' ');
 					const Bool isMutable = tryTake(lexer, "mut ");
 					const TypeAst type = parseType(lexer);
-					add<const StructDeclAst::Body::Record::Field>(lexer.arena, &res, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
+					add<const StructDeclAst::Body::Record::Field>(lexer->arena, &res, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
 				}
 			}
 			cellSet<const Bool>(&isFirstLine, False);
@@ -183,13 +183,13 @@ namespace {
 		return StructDeclAst::Body::Record{cellGet(&explicitByValOrRef), finishArr(&res)};
 	}
 
-	const Arr<const TypeAst::InstStruct> parseUnionMembers(Lexer& lexer) {
+	const Arr<const TypeAst::InstStruct> parseUnionMembers(Lexer* lexer) {
 		ArrBuilder<const TypeAst::InstStruct> res {};
 		do {
 			const Pos start = curPos(lexer);
 			const Sym name = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-			add<const TypeAst::InstStruct>(lexer.arena, &res, TypeAst::InstStruct{range(lexer, start), name, typeArgs});
+			add<const TypeAst::InstStruct>(lexer->arena, &res, TypeAst::InstStruct{range(lexer, start), name, typeArgs});
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
 		return finishArr(&res);
 	}
@@ -203,7 +203,7 @@ namespace {
 		const Opt<const FunBodyAst> body; // 'builtin' or 'extern'
 	};
 
-	const SpecUsesAndSigFlagsAndKwBody parseSpecUsesAndSigFlagsAndKwBody(Lexer& lexer) {
+	const SpecUsesAndSigFlagsAndKwBody parseSpecUsesAndSigFlagsAndKwBody(Lexer* lexer) {
 		ArrBuilder<const SpecUseAst> specUses {};
 		Cell<const Bool> noCtx { False };
 		Cell<const Bool> summon { False };
@@ -242,7 +242,7 @@ namespace {
 					goto end_loop;
 				default:
 					const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-					add<const SpecUseAst>(lexer.arena, &specUses, SpecUseAst{range(lexer, start), name, typeArgs});
+					add<const SpecUseAst>(lexer->arena, &specUses, SpecUseAst{range(lexer, start), name, typeArgs});
 			}
 		}
 		end_loop:
@@ -272,7 +272,7 @@ namespace {
 	}
 
 	const FunDeclAst parseFun(
-		Lexer& lexer,
+		Lexer* lexer,
 		const Bool isPublic,
 		const Pos start,
 		const Sym name,
@@ -285,7 +285,7 @@ namespace {
 	}
 
 	void parseSpecOrStructOrFun(
-		Lexer& lexer,
+		Lexer* lexer,
 		const Bool isPublic,
 		ArrBuilder<const SpecDeclAst>* specs,
 		ArrBuilder<const StructAliasAst>* structAliases,
@@ -326,14 +326,14 @@ namespace {
 					todo<void>("alias shouldn't have purity");
 				const TypeAst::InstStruct target = parseStructType(lexer);
 				takeDedent(lexer);
-				add<const StructAliasAst>(lexer.arena, structAliases, StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
+				add<const StructAliasAst>(lexer->arena, structAliases, StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
 			} else if (kw == NonFunKeyword::spec) {
 				if (!tookIndent)
 					todo<void>("always indent spec");
 				if (has(purity))
 					todo<void>("spec shouldn't have purity");
 				const Arr<const SigAst> sigs = parseIndentedSigs(lexer);
-				add<const SpecDeclAst>(lexer.arena, specs, SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
+				add<const SpecDeclAst>(lexer->arena, specs, SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
 			} else {
 				using Body = StructDeclAst::Body;
 				const Body body = [&]() {
@@ -360,13 +360,13 @@ namespace {
 							return unreachable<const Body>();
 					}
 				}();
-				add<const StructDeclAst>(lexer.arena, structs, StructDeclAst{range(lexer, start), isPublic, name, typeParams, purity, body});
+				add<const StructDeclAst>(lexer->arena, structs, StructDeclAst{range(lexer, start), isPublic, name, typeParams, purity, body});
 			}
 		} else
-			add<const FunDeclAst>(lexer.arena, funs, parseFun(lexer, isPublic, start, name, typeParams));
+			add<const FunDeclAst>(lexer->arena, funs, parseFun(lexer, isPublic, start, name, typeParams));
 	}
 
-	const FileAst parseFileMayThrow(Lexer& lexer) {
+	const FileAst parseFileMayThrow(Lexer* lexer) {
 		skipBlankLines(lexer);
 		const Arr<const ImportAst> imports = tryTake(lexer, "import ")
 			? parseImports(lexer)
@@ -398,7 +398,7 @@ namespace {
 const Result<const FileAst, const ParseDiagnostic> parseFile(Arena* astArena, Symbols* symbols, const NulTerminatedStr source) {
 	try {
 		Lexer lexer = createLexer(astArena, symbols, source);
-		return success<const FileAst, const ParseDiagnostic>(parseFileMayThrow(lexer));
+		return success<const FileAst, const ParseDiagnostic>(parseFileMayThrow(&lexer));
 	} catch (ParseDiagnostic p) {
 		return failure<const FileAst, const ParseDiagnostic>(p);
 	}

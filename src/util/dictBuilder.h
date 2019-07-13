@@ -18,7 +18,7 @@ template <typename K, typename V, Cmp<K> cmp, typename CbConflict>
 Dict<K, V, cmp> finishDict(Arena* arena, DictBuilder<K, V, cmp>* db, CbConflict cbConflict) {
 	MutArr<KeyValuePair<K, V>> res;
 	Arr<KeyValuePair<K, V>> allPairs = finishArr(&db->builder);
-	for (const size_t i : Range{allPairs.size}) {
+	for (const size_t i : Range{size(allPairs)}) {
 		Cell<const Bool> isConflict { False };
 		for (const size_t j : Range{res.size()}) {
 			if (cmp(at(allPairs, i).key, at(res, j).key) == Comparison::equal) {
@@ -36,7 +36,7 @@ Dict<K, V, cmp> finishDict(Arena* arena, DictBuilder<K, V, cmp>* db, CbConflict 
 template <typename K, typename V, Cmp<K> cmp>
 Dict<K, V, cmp> finishDictShouldBeNoConflict(DictBuilder<K, V, cmp>* db) {
 	Arr<KeyValuePair<K, V>> allPairs = finishArr(&db->builder);
-	for (const size_t i : Range{allPairs.size})
+	for (const size_t i : Range{size(allPairs)})
 		for (const size_t j : Range{i})
 			assert(cmp(at(allPairs, i).key, at(allPairs, j).key) != Comparison::equal);
 	return Dict<K, V, cmp>{allPairs};

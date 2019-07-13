@@ -51,9 +51,9 @@ namespace {
 	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Sym funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
 		MutArr<Candidate> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
-			const size_t nTypeParams = called.typeParams().size;
+			const size_t nTypeParams = size(called.typeParams());
 			if (arity(called) == actualArity &&
-				(isEmpty(explicitTypeArgs) || nTypeParams == explicitTypeArgs.size)) {
+				(isEmpty(explicitTypeArgs) || nTypeParams == size(explicitTypeArgs))) {
 				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx.arena(), nTypeParams, [&](const size_t i) {
 					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
 					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(at(explicitTypeArgs, i))};
@@ -101,7 +101,7 @@ namespace {
 	};
 
 	CommonOverloadExpected getCommonOverloadParamExpected(Arena* arena, const Arr<Candidate> candidates, const size_t argIdx) {
-		switch (candidates.size) {
+		switch (size(candidates)) {
 			case 0:
 				return CommonOverloadExpected{Expected::infer(), False};
 			case 1: {
@@ -191,7 +191,7 @@ namespace {
 
 		// If any candidates left take specs -- leave as a TODO
 		const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(candidates));
-		switch (candidatesArr.size) {
+		switch (size(candidatesArr)) {
 			case 0:
 				ctx.addDiag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
 				return none<const Called>();
@@ -206,18 +206,19 @@ namespace {
 	// On failure, returns none.
 	const Opt<const Arr<const Called>> checkSpecImpls(ExprCtx& ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
 		// We store the impls in a flat array. Calculate the size ahead of time.
-		const size_t size = [&]() {
+		const size_t nImpls = [&]() {
+			//TODO:SUM
 			size_t s = 0;
 			for (const SpecInst* specInst : called->specs)
-				s += specInst->sigs.size;
+				s += size(specInst->sigs);
 			return s;
 		}();
 
-		if (size != 0 && !allowSpecs) {
+		if (nImpls != 0 && !allowSpecs) {
 			ctx.addDiag(range, Diag{Diag::SpecImplHasSpecs{}});
 			return none<const Arr<const Called>>();
 		} else {
-			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx.arena(), size);
+			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx.arena(), nImpls);
 			size_t outI = 0;
 			for (const SpecInst* specInst : called->specs) {
 				// Note: specInst was instantiated potentialyl based on f's params.
@@ -231,7 +232,7 @@ namespace {
 					outI++;
 				}
 			}
-			assert(outI == size);
+			assert(outI == nImpls);
 			return some<const Arr<const Called>>(freeze(res));
 		}
 	}
@@ -288,7 +289,7 @@ namespace {
 
 const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst ast, Expected& expected) {
 	const Sym funName = ast.funName;
-	const size_t arity = ast.args.size;
+	const size_t arity = size(ast.args);
 
 	const Bool mightBePropertyAccess = _and(arity == 1, exprMightHaveProperties(only(ast.args)));
 
@@ -339,7 +340,7 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		}
 	}
 
-	if (!has(args) || candidatesArr.size != 1) {
+	if (!has(args) || size(candidatesArr) != 1) {
 		if (isEmpty(candidatesArr)) {
 			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
 			ctx.addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, finishArr(&actualArgTypes), allCandidates}});

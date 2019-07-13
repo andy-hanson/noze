@@ -5,4 +5,4 @@
 
 const Str mangleName(Arena* arena, const Sym name);
 
-void writeMangledName(Writer& writer, const Sym name);
+void writeMangledName(Writer* writer, const Sym name);

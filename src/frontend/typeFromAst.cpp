@@ -60,9 +60,9 @@ const Opt<const StructInst*> instStructFromAst(
 		return none<const StructInst*>();
 
 	const StructOrAlias sOrA = force(opDecl);
-	const size_t nExpectedTypeArgs = sOrA.typeParams().size;
+	const size_t nExpectedTypeArgs = size(sOrA.typeParams());
 	const Arr<const Type> typeArgs = [&]() {
-		const size_t nActualTypeArgs = ast.typeArgs.size;
+		const size_t nActualTypeArgs = size(ast.typeArgs);
 		if (nActualTypeArgs != nExpectedTypeArgs) {
 			ctx.addDiag(ast.range, Diag{Diag::WrongNumberTypeArgsForStruct{sOrA, nExpectedTypeArgs, nActualTypeArgs}});
 			return fillArr<const Type>{}(ctx.arena, nExpectedTypeArgs, [](const size_t) {

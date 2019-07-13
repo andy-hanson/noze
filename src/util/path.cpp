@@ -14,21 +14,24 @@ namespace {
 	}
 
 	size_t pathToStrSize(const Path* path, const Bool nulTerminated) {
-		size_t size = 0;
-		walkPathBackwards(path, [&](const Str part) { size += part.size + 1; });
-		return nulTerminated ? size + 1 : size;
+		//TODO:SUM
+		size_t sz = 0;
+		walkPathBackwards(path, [&](const Str part) {
+			sz += size(part) + 1;
+		});
+		return sz + (nulTerminated ? 1 : 0);
 	}
 
 	const Str pathToStrWorker(Arena* arena, const Path* path, const Bool nulTerminated) {
-		const size_t size = pathToStrSize(path, nulTerminated);
-		MutStr res = newUninitializedMutArr<const char>(arena, size);
-		size_t i = size;
+		const size_t sz = pathToStrSize(path, nulTerminated);
+		MutStr res = newUninitializedMutArr<const char>(arena, sz);
+		size_t i = sz;
 		if (nulTerminated) {
 			i --;
 			setAt<const char>(res, i, '\0');
 		}
 		walkPathBackwards(path, [&](const Str part) {
-			i -= part.size;
+			i -= size(part);
 			copyFrom(res, i, part);
 			i--;
 			setAt<const char>(res, i, '/');
@@ -39,7 +42,7 @@ namespace {
 
 	const Str removeExtension(const Str s) {
 		// Find the '.'
-		for (const size_t i : RangeDown{s.size}) {
+		for (const size_t i : RangeDown{size(s)}) {
 			if (at(s, i) == '.')
 				return slice(s, 0, i);
 		}
@@ -127,7 +130,7 @@ const NulTerminatedStr pathToNulTerminatedStr(Arena* arena, const Path* path) {
 }
 
 const Path* parsePath(Arena* arena, const Str str) {
-	const size_t len = str.size;
+	const size_t len = size(str);
 	size_t i = 0;
 	if (i < len && at(str, i) == '/')
 		// Ignore leading slash

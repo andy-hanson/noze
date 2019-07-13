@@ -261,7 +261,7 @@ namespace {
 				}();
 			return ClosureSingleSpecialize{clv, field};
 		});
-		assert(fieldI == closureFields.size);
+		assert(fieldI == size(closureFields));
 
 		return ClosureSpecialize{closureParam, closureSpecialize, specializeOnArgs.nonOmittedArgs};
 
@@ -277,10 +277,10 @@ namespace {
 
 		const Str mangledName = [&]() {
 			Writer writer { arena };
-			writeStr(writer, ctx.currentConcreteFun->mangledName());
-			writeStatic(writer, "__lambda");
-			writeNat(writer, ctx.currentConcreteFun->nextLambdaIndex++);
-			return finishWriter(writer);
+			writeStr(&writer, ctx.currentConcreteFun->mangledName());
+			writeStatic(&writer, "__lambda");
+			writeNat(&writer, ctx.currentConcreteFun->nextLambdaIndex++);
+			return finishWriter(&writer);
 		}();
 
 		const Arr<const ConstantOrExpr> closureArgsWithConstants = map<const ConstantOrExpr>{}(arena,  e.closure, [&](const ClosureField* f) {
@@ -393,10 +393,10 @@ namespace {
 		});
 		const Str mangledNameBase = [&]() {
 			Writer writer { arena };
-			writeStr(writer, ctx.currentConcreteFun->mangledName());
-			writeStatic(writer, "__ifaceImpl");
-			writeNat(writer, ctx.currentConcreteFun->nextNewIfaceImplIndex++);
-			return finishWriter(writer);
+			writeStr(&writer, ctx.currentConcreteFun->mangledName());
+			writeStatic(&writer, "__ifaceImpl");
+			writeNat(&writer, ctx.currentConcreteFun->nextNewIfaceImplIndex++);
+			return finishWriter(&writer);
 		}();
 		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls = mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
 			arena,
@@ -407,10 +407,10 @@ namespace {
 				const ConstantOrExpr concreteBody = concretizeExpr(newCtx, body);
 				const Str mangledName = [&]() {
 					Writer writer { arena };
-					writeStr(writer, mangledNameBase);
-					writeStatic(writer, "__");
-					writeStr(writer, sig.mangledName);
-					return finishWriter(writer);
+					writeStr(&writer, mangledNameBase);
+					writeStatic(&writer, "__");
+					writeStr(&writer, sig.mangledName);
+					return finishWriter(&writer);
 				}();
 				return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
 			});

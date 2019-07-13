@@ -39,17 +39,17 @@ const LineAndColumnGetter lineAndColumnGetterForText(Arena* arena, const Str tex
 	ArrBuilder<const Pos> res {};
 	add<const Pos>(arena, &res, 0);
 	// TODO:EACHWITHINDEX
-	for (const size_t i : Range{text.size})
+	for (const size_t i : Range{size(text)})
 		if (at(text, i) == '\n')
 			add<const Pos>(arena, &res, safeSizeTToUint(i + 1));
 	return LineAndColumnGetter{copyStr(arena, text), finishArr(&res)};
 }
 
 const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos pos) {
-	assert(pos <= lc.text.size);
+	assert(pos <= size(lc.text));
 
 	uint lowLine = 0; // inclusive
-	uint highLine = safeSizeTToUint(lc.lineToPos.size); // exclusive
+	uint highLine = safeSizeTToUint(size(lc.lineToPos)); // exclusive
 
 	while (lowLine < highLine - 1) {
 		const uint middleLine = mid(lowLine, highLine);
@@ -66,7 +66,7 @@ const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos p
 
 	const uint line = lowLine;
 	const Pos lineStart = at(lc.lineToPos, line);
-	assert(pos >= lineStart && (line == lc.lineToPos.size - 1 || pos <= at(lc.lineToPos, line + 1)));
+	assert(pos >= lineStart && (line == size(lc.lineToPos) - 1 || pos <= at(lc.lineToPos, line + 1)));
 	// Need to walk the line looking for tabs, which count as more
 	// (TODO: precalculate the # tabs on each line)
 	uint column= 0;

@@ -15,15 +15,15 @@ namespace {
 
 	const Str getConcreteStructMangledName(Arena* arena, const Sym declName, const Arr<const ConcreteType> typeArgs) {
 		Writer writer { arena };
-		writeMangledName(writer, declName);
+		writeMangledName(&writer, declName);
 		for (const ConcreteType ta : typeArgs)
-			writeConcreteTypeForMangle(writer, ta);
-		return finishWriter(writer);
+			writeConcreteTypeForMangle(&writer, ta);
+		return finishWriter(&writer);
 	}
 
-	void writeSpecializeOnArgsForMangle(Writer& writer, const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs) {
+	void writeSpecializeOnArgsForMangle(Writer* writer, const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs) {
 		//TODO:EACHWITHINDEX
-		for (const size_t i : Range{specializeOnArgs.size})
+		for (const size_t i : Range{size(specializeOnArgs)})
 			at(specializeOnArgs, i).match(
 				[](const ConstantOrLambdaOrVariable::Variable) {},
 				[&](const Constant* c) {
@@ -50,17 +50,17 @@ namespace {
 		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs
 	) {
 		Writer writer { arena };
-		writeMangledName(writer, declName);
-		writeConcreteTypeForMangle(writer, returnType);
+		writeMangledName(&writer, declName);
+		writeConcreteTypeForMangle(&writer, returnType);
 		for (const ConcreteParam param : params)
-			writeConcreteTypeForMangle(writer, param.type);
+			writeConcreteTypeForMangle(&writer, param.type);
 		for (const ConcreteFunInst si : specImpls) {
 			//TODO: include *its* type args!
-			writeStatic(writer, "__");
-			writeMangledName(writer, si.decl->name());
+			writeStatic(&writer, "__");
+			writeMangledName(&writer, si.decl->name());
 		}
-		writeSpecializeOnArgsForMangle(writer, specializeOnArgs);
-		return finishWriter(writer);
+		writeSpecializeOnArgsForMangle(&writer, specializeOnArgs);
+		return finishWriter(&writer);
 	}
 
 	const Opt<const SpecialStructKind> getSpecialStructKind(const StructInst* i, const CommonTypes& commonTypes) {
@@ -207,14 +207,14 @@ namespace {
 			printInstantiatingIndent();
 			Arena arena {};
 			Writer writer { &arena };
-			writeStatic(writer, "Instantiating ");
-			writeSym(writer, decl->name());
+			writeStatic(&writer, "Instantiating ");
+			writeSym(&writer, decl->name());
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs) {
 				//TODO: print type args too
-				writeChar(writer, ' ');
-				writeConstantOrLambdaOrVariable(writer, clv);
+				writeChar(&writer, ' ');
+				writeConstantOrLambdaOrVariable(&writer, clv);
 			}
-			printf("%s\n", finishWriterToCStr(writer));
+			printf("%s\n", finishWriterToCStr(&writer));
 		}
 
 		const TypeArgsScope typeScope = key.typeArgsScope();
@@ -242,7 +242,7 @@ namespace {
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs)
 				assert(clv.isVariable());
 
-		assert(key.decl()->params().size == key.specializeOnArgs.size);
+		assert(sizeEq(key.decl()->params(), key.specializeOnArgs));
 
 		const ConcreteFunSource source = ConcreteFunSource{
 			res,
@@ -299,11 +299,11 @@ namespace {
 		const Bool isForDynamic
 	) {
 		Writer writer { arena };
-		writeStr(writer, knownLambdaBodyMangledName);
-		writeSpecializeOnArgsForMangle(writer, specializeOnArgs);
+		writeStr(&writer, knownLambdaBodyMangledName);
+		writeSpecializeOnArgsForMangle(&writer, specializeOnArgs);
 		if (isForDynamic)
-			writeStatic(writer, "__dynamic");
-		return finishWriter(writer);
+			writeStatic(&writer, "__dynamic");
+		return finishWriter(&writer);
 	}
 
 	// Get a ConcreteFun for a particular instance of a KnownLambdaBody -- used by instantiateKnownLambdaBody
@@ -444,7 +444,11 @@ const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx& ctx, cons
 	// - Do no specialization
 	// - Add a dummy closure type, even if it won't be used.
 	return lazilySet(klb->dynamicInstance, [&]() {
-		return getConcreteFunFromKnownLambdaBodyAndFill(ctx, klb, allVariable(ctx.arena, klb->nonSpecializedSig.params.size), /*isForDynamic*/ True);
+		return getConcreteFunFromKnownLambdaBodyAndFill(
+			ctx,
+			klb,
+			allVariable(ctx.arena, size(klb->nonSpecializedSig.params)),
+			/*isForDynamic*/ True);
 	});
 }
 

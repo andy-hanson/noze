@@ -8,7 +8,7 @@
 struct NulTerminatedStr {
 	const Str str;
 	explicit inline NulTerminatedStr(const Str _str) : str{_str} {
-		assert(at(str, str.size - 1) == '\0');
+		assert(at(str, size(str) - 1) == '\0');
 	}
 
 	inline CStr asCStr() const {

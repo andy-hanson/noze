@@ -126,18 +126,18 @@ namespace symImpl {
 	static_assert((shortOperatorMarker & (static_cast<Nat64>(1) << (bitsPerOperatorChar * (maxShortOperatorSize - 1)))) == 0, "1");
 
 	inline constexpr Nat64 packAlphaIdentifier(const Str str) {
-		assert(str.size <= maxShortAlphaIdentifierSize);
+		assert(size(str) <= maxShortAlphaIdentifierSize);
 		Nat64 res = 0;
-		for (const Nat64 i : Range{str.size}) // TODO: zipwithindex
+		for (const Nat64 i : Range{size(str)}) // TODO: zipwithindex
 			res |= packAlphaChar(at(str, i)) << (bitsPerAlphaChar * i);
 		assert((res & shortAlphaIdentifierMarker) == 0);
 		return res | shortAlphaIdentifierMarker;
 	}
 
 	inline constexpr Nat64 packOperator(const Str str) {
-		assert(str.size <= maxShortOperatorSize);
+		assert(size(str) <= maxShortOperatorSize);
 		Nat64 res = 0;
-		for (const Nat64 i : Range{str.size}) // TODO: zipwithindex
+		for (const Nat64 i : Range{size(str)}) // TODO: zipwithindex
 			res |= packOperatorChar(at(str, i)) << (bitsPerOperatorChar * i);
 		assert((res & shortOperatorMarker) == 0);
 		return res | shortOperatorMarker;
@@ -199,7 +199,7 @@ inline constexpr const Bool symEq(const Sym a, const Sym b) {
 }
 
 inline constexpr const Sym shortSymAlphaLiteral(const char* name) {
-	assert(strLiteral(name).size <= symImpl::maxShortAlphaIdentifierSize);
+	assert(size(strLiteral(name)) <= symImpl::maxShortAlphaIdentifierSize);
 	return Sym{symImpl::packAlphaIdentifier(strLiteral(name))};
 }
 
@@ -208,7 +208,7 @@ inline constexpr Nat64 shortSymAlphaLiteralValue(const char* name) {
 }
 
 inline constexpr const Sym shortSymOperatorLiteral(const char* name) {
-	assert(strLiteral(name).size <= symImpl::maxShortOperatorSize);
+	assert(size(strLiteral(name)) <= symImpl::maxShortOperatorSize);
 	return Sym{symImpl::packOperator(strLiteral(name))};
 }
 
@@ -221,7 +221,7 @@ const Bool symEqLongAlphaLiteral(const Sym a, const char* lit);
 const Bool symEqLongOperatorLiteral(const Sym a, const char* lit);
 
 const Str strOfSym(Arena* arena, const Sym a);
-void writeSym(Writer& writer, const Sym s);
+void writeSym(Writer* writer, const Sym s);
 
 inline CStr symToCStr(Arena* arena, const Sym a) {
 	return strToCStr(arena, strOfSym(arena, a));

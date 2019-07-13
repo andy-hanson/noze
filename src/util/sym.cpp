@@ -24,12 +24,12 @@ namespace {
 			const char expected = at(str, idx++);
 			assert(c == expected);
 		});
-		assert(idx == str.size);
+		assert(idx == size(str));
 	}
 }
 
 const Sym getSymFromAlphaIdentifier(Symbols* symbols, const Str str) {
-	const Sym res = str.size <= symImpl::maxShortAlphaIdentifierSize
+	const Sym res = size(str) <= symImpl::maxShortAlphaIdentifierSize
 		? Sym{symImpl::packAlphaIdentifier(str)}
 		: getSymFromLongStr(symbols, str, False);
 	assertSym(res, str);
@@ -37,7 +37,7 @@ const Sym getSymFromAlphaIdentifier(Symbols* symbols, const Str str) {
 }
 
 const Sym getSymFromOperator(Symbols* symbols, const Str str) {
-	const Sym res = str.size <= symImpl::maxShortOperatorSize
+	const Sym res = size(str) <= symImpl::maxShortOperatorSize
 		? Sym{symImpl::packOperator(str)}
 		: getSymFromLongStr(symbols, str, True);
 	assertSym(res, str);
@@ -46,7 +46,7 @@ const Sym getSymFromOperator(Symbols* symbols, const Str str) {
 
 const Bool symEqLongAlphaLiteral(const Sym a, const char* lit) {
 	const Str str = strLiteral(lit);
-	assert(str.size > symImpl::maxShortAlphaIdentifierSize);
+	assert(size(str) > symImpl::maxShortAlphaIdentifierSize);
 	return _and(
 		symImpl::isLongSym(a),
 		strEqLiteral(symImpl::asLong(a), lit));
@@ -54,7 +54,7 @@ const Bool symEqLongAlphaLiteral(const Sym a, const char* lit) {
 
 const Bool symEqLongOperatorLiteral(const Sym a, const char* lit) {
 	const Str str = strLiteral(lit);
-	assert(str.size > symImpl::maxShortOperatorSize);
+	assert(size(str) > symImpl::maxShortOperatorSize);
 	return _and(
 		symImpl::isLongSym(a),
 		strEqLiteral(symImpl::asLong(a), lit));
@@ -62,11 +62,11 @@ const Bool symEqLongOperatorLiteral(const Sym a, const char* lit) {
 
 const Str strOfSym(Arena* arena, const Sym a) {
 	Writer writer { arena };
-	writeSym(writer, a);
-	return finishWriter(writer);
+	writeSym(&writer, a);
+	return finishWriter(&writer);
 }
 
-void writeSym(Writer& writer, const Sym a) {
+void writeSym(Writer* writer, const Sym a) {
 	eachCharInSym(a, [&](const char c) {
 		writeChar(writer, c);
 	});

@@ -64,7 +64,9 @@ namespace {
 	}
 
 	const SpecializeOnArgs dontSpecialize(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args) {
-		return SpecializeOnArgs{allVariable(ctx.arena, args.size), makeLambdasDynamic_arr(ctx, range, args)};
+		return SpecializeOnArgs{
+			allVariable(ctx.arena, size(args)),
+			makeLambdasDynamic_arr(ctx, range, args)};
 	}
 }
 
@@ -126,7 +128,7 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 	const TypeArgsScope typeArgsScope
 ) {
 	ArrBuilder<const ConcreteField> res;
-	for (const size_t i : Range{closure.size}) {
+	for (const size_t i : Range{size(closure)}) {
 		const ClosureField* c = at(closure, i);
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(closureSpecialize, i), [&]() {
 			return getConcreteType(ctx, c->type, typeArgsScope);
@@ -143,10 +145,10 @@ const Arr<const ConcreteParam> concretizeParamsAndSpecialize(
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs,
 	const TypeArgsScope typeArgsScope
 ) {
-	assert(params.size == specializeOnArgs.size);
+	assert(sizeEq(params, specializeOnArgs));
 	// TODO: mapOpZip helper
 	ArrBuilder<const ConcreteParam> res {};
-	for (const size_t i : Range{params.size}) {
+	for (const size_t i : Range{size(params)}) {
 		const Param p = at(params, i);
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() {
 			return getConcreteType(ctx, p.type, typeArgsScope);
@@ -165,7 +167,7 @@ const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
 ) {
 	ArrBuilder<const ConcreteParam> res {};
 	//TODO: 'zip' helper
-	for (const size_t i : Range{nonSpecializedParams.size}) {
+	for (const size_t i : Range{size(nonSpecializedParams)}) {
 		const ConcreteParam p = at(nonSpecializedParams, i);
 		const Opt<const ConcreteType> t = getSpecializedParamType(at(specializeOnArgs, i), [&]() { return p.type; });
 		if (has(t))
@@ -175,7 +177,7 @@ const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
 }
 
 const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx& ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope) {
-	return concretizeParamsAndSpecialize(ctx, params, allVariable(ctx.arena, params.size), typeArgsScope);
+	return concretizeParamsAndSpecialize(ctx, params, allVariable(ctx.arena, size(params)), typeArgsScope);
 }
 
 const ConstantOrExpr makeLambdasDynamic(ConcretizeCtx& ctx, const SourceRange range, const ConstantOrExpr expr) {

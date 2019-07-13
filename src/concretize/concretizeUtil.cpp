@@ -47,7 +47,7 @@ const Arr<const ConstantOrLambdaOrVariable> allVariable(Arena* arena, const size
 	});
 }
 
-void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t) {
+void writeConcreteTypeForMangle(Writer* writer, const ConcreteType t) {
 	writeStatic(writer, "__");
 	if (t.isPointer)
 		writeStatic(writer, "ptr_");

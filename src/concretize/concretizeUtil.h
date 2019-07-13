@@ -69,4 +69,4 @@ inline const Opt<const KnownLambdaBody*> knownLambdaBodyFromConstantOrExpr(const
 }
 
 // TODO: does this really belong here?
-void writeConcreteTypeForMangle(Writer& writer, const ConcreteType t);
+void writeConcreteTypeForMangle(Writer* writer, const ConcreteType t);

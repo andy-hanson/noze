@@ -18,7 +18,7 @@ struct SpecializeOnArgs {
 		for (const ConstantOrLambdaOrVariable arg : specializeOnArgs)
 			if (!arg.isConstant())
 				nNotSpecialized++;
-		assert(nNotSpecialized == nonOmittedArgs.size);
+		assert(nNotSpecialized == size(nonOmittedArgs));
 	}
 };
 const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(ConcretizeCtx& ctx, const SourceRange range, const Arr<const ConstantOrExpr> args);

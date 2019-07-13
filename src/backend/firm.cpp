@@ -23,7 +23,7 @@ namespace {
 	// This is never a pointer type (unless the type is ptr)
 	ir_type* initValueType(const ConcreteStruct* s) {
 		const Str name = s->mangledName;
-		ident* id = new_id_from_chars(name.begin(), name.size);
+		ident* id = new_id_from_chars(name.begin(), size(name));
 		return s->body().match(
 			[](const ConcreteStructBody::Builtin) {
 				return todo<ir_type*>("BUILTIN");

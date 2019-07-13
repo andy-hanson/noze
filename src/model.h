@@ -166,7 +166,7 @@ struct Sig {
 };
 
 inline size_t arity(const Sig s) {
-	return s.params.size;
+	return size(s.params);
 }
 
 struct Message {
@@ -350,7 +350,7 @@ private:
 	Late<StructBody> _body;
 public:
 	inline StructInst(const StructDecl* d, const Arr<const Type> t, const Purity p) : decl{d}, typeArgs{t}, purity{p}, _body{} {
-		assert(d->typeParams.size == t.size);
+		assert(sizeEq(d->typeParams, t));
 	}
 	inline StructBody body() const {
 		return _body.get();
@@ -500,7 +500,7 @@ struct FunDecl {
 	inline size_t nSpecImpls() const {
 		size_t n = 0;
 		for (const SpecInst* s : specs)
-			n += s->sigs.size;
+			n += size(s->sigs);
 		return n;
 	}
 
@@ -529,8 +529,8 @@ struct FunInst {
 
 	inline FunInst(const FunDecl* _decl, const Arr<const Type> _typeArgs, const Arr<const Called> _specImpls, const Sig _sig)
 		: decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls}, sig{_sig} {
-		assert(typeArgs.size == decl->typeParams.size);
-		assert(specImpls.size == decl->nSpecImpls());
+		assert(sizeEq(typeArgs, decl->typeParams));
+		assert(size(specImpls) == decl->nSpecImpls());
 	}
 
 	inline const Sym name() const {
@@ -952,7 +952,7 @@ struct Expr {
 		inline NewIfaceImpl(
 			const StructInst* _iface, const Arr<const Field> _fields, const Arr<const Expr> _messageImpls)
 			: iface{_iface}, fields{_fields}, messageImpls{_messageImpls} {
-			assert(messageImpls.size == ifaceBody().messages.size);
+			assert(sizeEq(messageImpls, ifaceBody().messages));
 		}
 
 		inline StructBody::Iface ifaceBody() const {
@@ -1202,9 +1202,9 @@ public:
 	const Type getType(Arena* arena, const CommonTypes& commonTypes) const;
 };
 
-void writeStructInst(Writer& writer, const StructInst* s);
-void writeType(Writer& writer, const Type type);
-void writeExpr(Writer& writer, const Expr expr);
+void writeStructInst(Writer* writer, const StructInst* s);
+void writeType(Writer* writer, const Type type);
+void writeExpr(Writer* writer, const Expr expr);
 
 const Sexpr typeToSexpr(Arena* arena, const Type type);
 const Sexpr exprToSexpr(Arena* arena, const Expr expr);
