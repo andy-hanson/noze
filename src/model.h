@@ -40,7 +40,7 @@ struct AbsolutePathsGetter {
 		}
 	}
 
-	inline const AbsolutePath getAbsolutePath(Arena& arena, const PathAndStorageKind p) const {
+	inline const AbsolutePath getAbsolutePath(Arena* arena, const PathAndStorageKind p) const {
 		return addManyChildren(arena, getBasePath(p.storageKind), p.path);
 	}
 };
@@ -1198,13 +1198,13 @@ public:
 		}
 	}
 
-	const Bool typeIsBogus(Arena& arena) const;
-	const Type getType(Arena& arena, const CommonTypes& commonTypes) const;
+	const Bool typeIsBogus(Arena* arena) const;
+	const Type getType(Arena* arena, const CommonTypes& commonTypes) const;
 };
 
 void writeStructInst(Writer& writer, const StructInst* s);
 void writeType(Writer& writer, const Type type);
 void writeExpr(Writer& writer, const Expr expr);
 
-const Sexpr typeToSexpr(Arena& arena, const Type type);
-const Sexpr exprToSexpr(Arena& arena, const Expr expr);
+const Sexpr typeToSexpr(Arena* arena, const Type type);
+const Sexpr exprToSexpr(Arena* arena, const Expr expr);

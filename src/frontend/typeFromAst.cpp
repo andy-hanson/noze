@@ -146,6 +146,6 @@ const Bool typeIsPossiblySendable(const Type type) {
 		});
 }
 
-const Type makeFutType(Arena& arena, const CommonTypes& commonTypes, const Type type) {
+const Type makeFutType(Arena* arena, const CommonTypes& commonTypes, const Type type) {
 	return Type{instantiateStructNeverDelay(arena, commonTypes.fut, arrLiteral<const Type>(arena, type))};
 }

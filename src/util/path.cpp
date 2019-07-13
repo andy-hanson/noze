@@ -19,7 +19,7 @@ namespace {
 		return nulTerminated ? size + 1 : size;
 	}
 
-	const Str pathToStrWorker(Arena& arena, const Path* path, const Bool nulTerminated) {
+	const Str pathToStrWorker(Arena* arena, const Path* path, const Bool nulTerminated) {
 		const size_t size = pathToStrSize(path, nulTerminated);
 		MutStr res = newUninitializedMutArr<const char>(arena, size);
 		size_t i = size;
@@ -46,35 +46,35 @@ namespace {
 		return todo<const Str>("removeExtension -- no '.'");
 	}
 
-	const Str addExtension(Arena& arena, const Str s, const Str extension) {
+	const Str addExtension(Arena* arena, const Str s, const Str extension) {
 		return cat(arena, s, strLiteral("."), extension);
 	}
 
-	const Str changeExtension(Arena& arena, const Str s, const Str extension) {
+	const Str changeExtension(Arena* arena, const Str s, const Str extension) {
 		return addExtension(arena, removeExtension(s), extension);
 	}
 }
 
-const Path* addManyChildren(Arena& arena, const Path* a, const Path* b) {
+const Path* addManyChildren(Arena* arena, const Path* a, const Path* b) {
 	const Path* p = has(b->parent)
 		? addManyChildren(arena, a, force(b->parent))
 		: a;
 	return childPath(arena, p, b->baseName);
 }
 
-const Path* removeExtension(Arena& arena, const Path* path) {
+const Path* removeExtension(Arena* arena, const Path* path) {
 	return childPath(arena, path->parent, removeExtension(path->baseName));
 }
 
-const Path* addExtension(Arena& arena, const Path* path, const Str extension) {
+const Path* addExtension(Arena* arena, const Path* path, const Str extension) {
 	return childPath(arena, path->parent, addExtension(arena, path->baseName, extension));
 }
 
-const Path* changeExtension(Arena& arena, const Path* path, const Str extension) {
+const Path* changeExtension(Arena* arena, const Path* path, const Str extension) {
 	return childPath(arena, path->parent, changeExtension(arena, path->baseName, extension));
 }
 
-const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath) {
+const Opt<const Path*> resolvePath(Arena* arena, const Path* path, const RelPath relPath) {
 	Path const* cur = path;
 	for (uint i = 0; i < relPath.nParents; i++) {
 		if (!has(cur->parent))
@@ -87,7 +87,7 @@ const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath
 }
 
 namespace {
-	const RelPath parseRelPath(Arena& arena, const Str s) {
+	const RelPath parseRelPath(Arena* arena, const Str s) {
 		if (at(s, 0) == '.') {
 			if (at(s, 1) == '/')
 				return parseRelPath(arena, slice(s, 2));
@@ -102,7 +102,7 @@ namespace {
 	}
 }
 
-const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena& arena, const Str s) {
+const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena* arena, const Str s) {
 	switch (at(s, 0)) {
 		case '.':
 			return AbsoluteOrRelPath{parseRelPath(arena, s)};
@@ -118,15 +118,15 @@ const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena& arena, const Str s) {
 	}
 }
 
-const Str pathToStr(Arena& arena, const Path* path) {
+const Str pathToStr(Arena* arena, const Path* path) {
 	return pathToStrWorker(arena, path, /*nulTerminated*/ False);
 }
 
-const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path) {
+const NulTerminatedStr pathToNulTerminatedStr(Arena* arena, const Path* path) {
 	return NulTerminatedStr{pathToStrWorker(arena, path, /*nulTerminated*/ True)};
 }
 
-const Path* parsePath(Arena& arena, const Str str) {
+const Path* parsePath(Arena* arena, const Str str) {
 	const size_t len = str.size;
 	size_t i = 0;
 	if (i < len && at(str, i) == '/')
@@ -156,13 +156,16 @@ const Path* parsePath(Arena& arena, const Str str) {
 	return path;
 }
 
-const AbsolutePath parseAbsolutePath(Arena& arena, const Str str) {
+const AbsolutePath parseAbsolutePath(Arena* arena, const Str str) {
 	// TODO: handle 'C:/'
 	return AbsolutePath{parsePath(arena, str)};
 }
 
-const Path* copyPath(Arena& arena, const Path* path) {
-	return arena.nu<const Path>()(
-		has(path->parent) ? some<const Path*>(copyPath(arena, force(path->parent))) : none<const Path*>(),
+const Path* copyPath(Arena* arena, const Path* path) {
+	return nu<const Path>{}(
+		arena,
+		has(path->parent)
+			? some<const Path*>(copyPath(arena, force(path->parent)))
+			: none<const Path*>(),
 		copyStr(arena, path->baseName));
 }

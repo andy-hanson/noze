@@ -7,10 +7,10 @@
 const Bool allConstant(const Arr<const ConstantOrExpr> args);
 const Bool allConstant(const Arr<const ConstantOrLambdaOrVariable> args);
 
-const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena& arena, const Arr<const ConstantOrExpr> args);
-const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena& arena, const Arr<const ConstantOrLambdaOrVariable> args);
+const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena* arena, const Arr<const ConstantOrExpr> args);
+const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena* arena, const Arr<const ConstantOrLambdaOrVariable> args);
 
-const Arr<const ConstantOrLambdaOrVariable> allVariable(Arena& arena, const size_t size);
+const Arr<const ConstantOrLambdaOrVariable> allVariable(Arena* arena, const size_t size);
 
 inline const Opt<const KnownLambdaBody*> getKnownLambdaBodyFromConstantOrExpr(const ConstantOrExpr e) {
 	return e.match(

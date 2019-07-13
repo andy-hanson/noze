@@ -61,10 +61,10 @@ public:
 };
 
 template <typename T>
-using ToSexpr = const Sexpr (*)(Arena& arena, const T);
+using ToSexpr = const Sexpr (*)(Arena* arena, const T);
 
 template <typename T, typename CbToSexpr>
-const Sexpr arrToSexpr(Arena& arena, const Arr<T> a, CbToSexpr cbToSexpr) {
+const Sexpr arrToSexpr(Arena* arena, const Arr<T> a, CbToSexpr cbToSexpr) {
 	return Sexpr(map<const Sexpr>{}(arena, a, [&](const T t) {
 		return cbToSexpr(t);
 	}));

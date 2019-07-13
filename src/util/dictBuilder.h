@@ -10,12 +10,12 @@ struct DictBuilder {
 };
 
 template <typename K, typename V, Cmp<K> cmp>
-void addToDict(Arena& arena, DictBuilder<K, V, cmp>* db, K key, V value) {
+void addToDict(Arena* arena, DictBuilder<K, V, cmp>* db, K key, V value) {
 	add<KeyValuePair<K, V>>(arena, &db->builder, KeyValuePair<K, V>{key, value});
 }
 
 template <typename K, typename V, Cmp<K> cmp, typename CbConflict>
-Dict<K, V, cmp> finishDict(Arena& arena, DictBuilder<K, V, cmp>* db, CbConflict cbConflict) {
+Dict<K, V, cmp> finishDict(Arena* arena, DictBuilder<K, V, cmp>* db, CbConflict cbConflict) {
 	MutArr<KeyValuePair<K, V>> res;
 	Arr<KeyValuePair<K, V>> allPairs = finishArr(&db->builder);
 	for (const size_t i : Range{allPairs.size}) {

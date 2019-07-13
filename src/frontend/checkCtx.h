@@ -38,7 +38,7 @@ struct IncludeAndImportsRange {
 };
 
 struct CheckCtx {
-	Arena& arena;
+	Arena* arena;
 	const PathAndStorageKind path;
 	const Opt<const Module*> include;
 	const Arr<const Module*> imports;

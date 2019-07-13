@@ -31,7 +31,7 @@ namespace {
 	void writeWhere(Writer& writer, const FilesInfo fi, const PathAndStorageKind where, const SourceRange range) {
 		writeBold(writer);
 		Arena temp {};
-		writeHyperlink(writer, pathToStr(temp, fi.absolutePathsGetter.getAbsolutePath(temp, where)), pathToStr(temp, where.path));
+		writeHyperlink(writer, pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where)), pathToStr(&temp, where.path));
 		writeChar(writer, ' ');
 		writeRed(writer);
 		writeRange(writer, mustGetAt<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(fi.lineAndColumnGetters, where), range);
@@ -426,9 +426,9 @@ namespace {
 
 void printDiagnostics(const Diagnostics diagnostics) {
 	Arena tempArena {};
-	Writer writer { tempArena};
+	Writer writer { &tempArena };
 	//TODO: sort diagnostics by file / range
-	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(tempArena, diagnostics.diagnostics, [&](const Diagnostic a, const Diagnostic b) {
+	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(&tempArena, diagnostics.diagnostics, [&](const Diagnostic a, const Diagnostic b) {
 		return comparePathAndStorageKind(a.where, b.where);
 	});
 

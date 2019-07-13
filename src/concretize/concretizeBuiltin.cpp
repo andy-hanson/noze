@@ -72,7 +72,7 @@ namespace {
 	}
 
 	const Opt<const Constant*> tryEvalBuiltinAsConst(
-		Arena& arena,
+		Arena* arena,
 		AllConstants& allConstants,
 		const BuiltinFunInfo info,
 		const Arr<const ConcreteType> typeArgs,
@@ -295,18 +295,18 @@ namespace {
 	}
 
 	template <typename T>
-	inline const ConcreteExpr* genExpr(Arena& arena, const ConcreteType type, T value) {
-		return arena.nu<const ConcreteExpr>()(type, SourceRange::empty(), none<const KnownLambdaBody*>(), value);
+	inline const ConcreteExpr* genExpr(Arena* arena, const ConcreteType type, T value) {
+		return nu<const ConcreteExpr>{}(arena, type, SourceRange::empty(), none<const KnownLambdaBody*>(), value);
 	}
 
-	const ConcreteExpr* makeLess(Arena& arena, const ConcreteType boolType, const ConcreteExpr* l, const ConcreteExpr* r) {
+	const ConcreteExpr* makeLess(Arena* arena, const ConcreteType boolType, const ConcreteExpr* l, const ConcreteExpr* r) {
 		return genExpr(arena, boolType, ConcreteExpr::SpecialBinary{
 			ConcreteExpr::SpecialBinary::Kind::less,
 			ConstantOrExpr{l},
 			ConstantOrExpr{r}});
 	}
 
-	const ConcreteExpr* makeCond(Arena& arena, const ConcreteType type, const ConcreteExpr* cond, const ConcreteExpr* then, const ConcreteExpr* elze) {
+	const ConcreteExpr* makeCond(Arena* arena, const ConcreteType type, const ConcreteExpr* cond, const ConcreteExpr* then, const ConcreteExpr* elze) {
 		return genExpr(arena, type, ConcreteExpr::Cond{cond, ConstantOrExpr{then}, ConstantOrExpr{elze}});
 	}
 
@@ -316,7 +316,7 @@ namespace {
 	};
 
 	const LocalAndExpr combineCompares(
-		Arena& arena,
+		Arena* arena,
 		const ConcreteExpr* cmpFirst,
 		const ConcreteExpr* cmpSecond,
 		const ConcreteType comparisonType
@@ -333,7 +333,8 @@ namespace {
 				return cmp;
 		}
 		*/
-		const ConcreteLocal* cmpFirstLocal = arena.nu<const ConcreteLocal>()(
+		const ConcreteLocal* cmpFirstLocal = nu<const ConcreteLocal>{}(
+			arena,
 			strLiteral("cmp"),
 			comparisonType,
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
@@ -345,14 +346,18 @@ namespace {
 			/*less*/ caseUseFirst,
 			/*equal*/ caseUseSecond,
 			/*greater*/ caseUseFirst);
-		const ConcreteLocal* matchedLocal = arena.nu<const ConcreteLocal>()(strLiteral("matched"), comparisonType, ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+		const ConcreteLocal* matchedLocal = nu<const ConcreteLocal>{}(
+			arena,
+			strLiteral("matched"),
+			comparisonType,
+			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 		const ConcreteExpr* then = genExpr(arena, comparisonType, ConcreteExpr::Match{matchedLocal, cmpFirst, cases});
 		const ConcreteExpr* res = genExpr(arena, comparisonType, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
 		return LocalAndExpr{cmpFirstLocal, res};
 	}
 
 	const ConcreteFunExprBody generateCompare(ConcretizeCtx& ctx, const ConcreteFunInst concreteFunInst, const ConcreteFun* fun) {
-		Arena& arena = ctx.arena;
+		Arena* arena = ctx.arena;
 		const ComparisonTypes types = getComparisonTypes(fun->returnType(), concreteFunInst.typeArgs);
 
 		auto getExpr = [&](const size_t memberIndex, const ConcreteType memberType) -> const ConcreteExpr* {

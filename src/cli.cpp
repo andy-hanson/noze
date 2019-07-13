@@ -99,7 +99,7 @@ namespace {
 		}
 	};
 
-	const AbsolutePath parseCwdRelativePath(Arena& arena, const AbsolutePath cwd, const Str arg) {
+	const AbsolutePath parseCwdRelativePath(Arena* arena, const AbsolutePath cwd, const Str arg) {
 		return parseAbsoluteOrRelPath(arena, arg).match(
 			[](const AbsolutePath p) {
 				return p;
@@ -109,21 +109,21 @@ namespace {
 			});
 	}
 
-	const ProgramDirAndMain parseProgramDirAndMain(Arena& arena, const AbsolutePath cwd, const Str arg) {
+	const ProgramDirAndMain parseProgramDirAndMain(Arena* arena, const AbsolutePath cwd, const Str arg) {
 		const AbsolutePath mainAbsolutePath = parseCwdRelativePath(arena, cwd, arg);
 		const AbsolutePath dir = forceOrTodo(parent(mainAbsolutePath));
 		const Str name = baseName(mainAbsolutePath);
 		return ProgramDirAndMain{dir, rootPath(arena, name)};
 	}
 
-	const Command parseBuildCommand(Arena& arena, const AbsolutePath cwd, const Arr<const Str> args) {
+	const Command parseBuildCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
 		if (args.size == 1 && !isHelp(only(args)))
 			return Command{Command::Build{parseProgramDirAndMain(arena, cwd, only(args))}};
 		else
 			return Command{Command::HelpBuild{}};
 	}
 
-	const Command parseRunCommand(Arena& arena, const AbsolutePath cwd, const Arr<const Str> args) {
+	const Command parseRunCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
 		if (args.size == 0 || isHelp(at(args, 0)))
 			return Command{Command::HelpRun{}};
 		else {
@@ -137,7 +137,7 @@ namespace {
 		}
 	}
 
-	const Command parseCommand(Arena& arena, const AbsolutePath cwd, const Arr<const Str> args) {
+	const Command parseCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
 		// Parse command name
 		if (args.size == 0)
 			return Command{Command::Help{}};
@@ -200,7 +200,7 @@ namespace {
 	int go(const CommandLineArgs args) {
 		Arena arena {};
 		const AbsolutePath nozeDir = getNozeDirectory(args.pathToThisExecutable);
-		const Command command = parseCommand(arena, args.cwd, args.args);
+		const Command command = parseCommand(&arena, args.cwd, args.args);
 		return command.match(
 			[&](const Command::Build b) {
 				return build(nozeDir, b.programDirAndMain.programDir, b.programDirAndMain.mainPath, args.environ);
@@ -220,8 +220,8 @@ namespace {
 			[&](const Command::Test) {
 				return buildAndRun(
 					nozeDir,
-					childPath(arena, nozeDir, strLiteral("test")),
-					rootPath(arena, strLiteral("a.nz")),
+					childPath(&arena, nozeDir, strLiteral("test")),
+					rootPath(&arena, strLiteral("a.nz")),
 					emptyArr<const Str>(),
 					args.environ);
 			},
@@ -234,5 +234,5 @@ namespace {
 
 int cli(const int argc, CStr const* const argv){
 	Arena arena {};
-	return go(parseArgs(arena, argc, argv));
+	return go(parseArgs(&arena, argc, argv));
 }

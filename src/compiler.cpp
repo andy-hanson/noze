@@ -15,9 +15,9 @@
 namespace {
 	void emitProgram(const Program program, const AbsolutePath cPath) {
 		Arena concreteArena {};
-		const ConcreteProgram concreteProgram = concretize(concreteArena, program);
+		const ConcreteProgram concreteProgram = concretize(&concreteArena, program);
 		Arena writeArena {};
-		const Str emitted = writeToC(writeArena, concreteProgram);
+		const Str emitted = writeToC(&writeArena, concreteProgram);
 		writeFileSync(cPath, emitted);
 	}
 
@@ -25,11 +25,11 @@ namespace {
 		Arena arena {};
 		// TODO: option to use g++
 		const AbsolutePath cCompiler = childPath(
-			arena,
-			AbsolutePath{rootPath(arena, strLiteral("usr"))},
+			&arena,
+			AbsolutePath{rootPath(&arena, strLiteral("usr"))},
 			strLiteral("bin"),
 			strLiteral("cc"));
-		const Arr<const Str> args = arrLiteral<const Str>(arena, {
+		const Arr<const Str> args = arrLiteral<const Str>(&arena, {
 			strLiteral("-Werror"),
 			strLiteral("-Wextra"),
 			strLiteral("-Wall"),
@@ -42,9 +42,9 @@ namespace {
 			strLiteral("-Wno-unused-value"),
 			// TODO: configurable whether we want debug or release
 			strLiteral("-g"),
-			pathToStr(arena, cPath),
+			pathToStr(&arena, cPath),
 			strLiteral("-o"),
-			pathToStr(arena, exePath)
+			pathToStr(&arena, exePath)
 		});
 		int err = spawnAndWaitSync(cCompiler, args, environ);
 		if (err != 0) {
@@ -56,7 +56,7 @@ namespace {
 	// mainPath is relative to programDir
 	// Returns exePath
 	const Opt<const AbsolutePath> buildWorker(
-		Arena& outputArena, // Just for exePath
+		Arena* outputArena, // Just for exePath
 		const AbsolutePath nozeDir,
 		const AbsolutePath programDir,
 		const Path* mainPath,
@@ -64,14 +64,14 @@ namespace {
 	) {
 		Arena modelArena {};
 		Symbols symbols {};
-		const AbsolutePath include = childPath(modelArena, nozeDir, strLiteral("include"));
+		const AbsolutePath include = childPath(&modelArena, nozeDir, strLiteral("include"));
 		const ReadOnlyStorages storages = ReadOnlyStorages{ReadOnlyStorage{include}, ReadOnlyStorage{programDir}};
-		const Result<const Program, const Diagnostics> programResult = frontendCompile(modelArena, &symbols, storages, mainPath);
+		const Result<const Program, const Diagnostics> programResult = frontendCompile(&modelArena, &symbols, storages, mainPath);
 
 		return programResult.match(
 			[&](const Program program) {
 				const AbsolutePath fullMainPath = addManyChildren(outputArena, programDir, mainPath);
-				const AbsolutePath cPath = changeExtension(modelArena, fullMainPath, strLiteral("c"));
+				const AbsolutePath cPath = changeExtension(&modelArena, fullMainPath, strLiteral("c"));
 				emitProgram(program, cPath);
 				const AbsolutePath exePath = removeExtension(outputArena, fullMainPath);
 				compileC(cPath, exePath, environ);
@@ -91,7 +91,7 @@ int build(
 	const Environ environ
 ) {
 	Arena exePathArena {};
-	const Opt<const AbsolutePath> exePath = buildWorker(exePathArena, nozeDir, programDir, mainPath, environ);
+	const Opt<const AbsolutePath> exePath = buildWorker(&exePathArena, nozeDir, programDir, mainPath, environ);
 	return has(exePath) ? 0 : 1;
 }
 
@@ -103,7 +103,7 @@ int buildAndRun(
 	const Environ environ
 ) {
 	Arena exePathArena {};
-	const Opt<const AbsolutePath> exePath = buildWorker(exePathArena, nozeDir, programDir, mainPath, environ);
+	const Opt<const AbsolutePath> exePath = buildWorker(&exePathArena, nozeDir, programDir, mainPath, environ);
 	return has(exePath)
 		? spawnAndWaitSync(force(exePath), programArgs, environ)
 		: 1;

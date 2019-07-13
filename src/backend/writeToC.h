@@ -2,4 +2,4 @@
 
 #include "../concreteModel.h"
 
-const Str writeToC(Arena& arena, const ConcreteProgram program);
+const Str writeToC(Arena* arena, const ConcreteProgram program);

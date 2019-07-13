@@ -165,7 +165,7 @@ const BuiltinFunInfo getBuiltinFunInfo(const Sig sig) {
 	const Opt<const BuiltinFunInfo> res = tryGetBuiltinFunInfo(sig);
 	if (!has(res)) {
 		Arena arena {};
-		printf("not a builtin fun: %s\n", symToCStr(arena, sig.name));
+		printf("not a builtin fun: %s\n", symToCStr(&arena, sig.name));
 		return todo<const BuiltinFunInfo>("not a builtin fun");
 	}
 	return force(res);

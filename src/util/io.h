@@ -4,7 +4,7 @@
 #include "../util/path.h"
 
 const Bool fileExists(const AbsolutePath path);
-const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const AbsolutePath path);
+const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath path);
 void writeFileSync(const AbsolutePath path, const Str content);
 
 using Environ = const Arr<const KeyValuePair<const Str, const Str>>;
@@ -22,6 +22,6 @@ struct CommandLineArgs {
 	const Arr<const Str> args;
 	const Environ environ;
 };
-const CommandLineArgs parseArgs(Arena& arena, const int argc, CStr const* const argv);
+const CommandLineArgs parseArgs(Arena* arena, const int argc, CStr const* const argv);
 
-const Environ getEnviron(Arena& arena);
+const Environ getEnviron(Arena* arena);

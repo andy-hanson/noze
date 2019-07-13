@@ -72,7 +72,7 @@ namespace {
 		return finishArr(&res);
 	}
 
-	const Type getCandidateExpectedParameterTypeRecur(Arena& arena, const Candidate& candidate, const Type candidateParamType) {
+	const Type getCandidateExpectedParameterTypeRecur(Arena* arena, const Candidate& candidate, const Type candidateParamType) {
 		return candidateParamType.match(
 			[](const Type::Bogus) {
 				return Type{Type::Bogus{}};
@@ -91,7 +91,7 @@ namespace {
 			});
 	}
 
-	const Type getCandidateExpectedParameterType(Arena& arena, const Candidate& candidate, const size_t argIdx) {
+	const Type getCandidateExpectedParameterType(Arena* arena, const Candidate& candidate, const size_t argIdx) {
 		return getCandidateExpectedParameterTypeRecur(arena, candidate, at(candidate.called.params(), argIdx).type);
 	}
 
@@ -100,7 +100,7 @@ namespace {
 		const Bool isExpectedFromCandidate;
 	};
 
-	CommonOverloadExpected getCommonOverloadParamExpected(Arena& arena, const Arr<Candidate> candidates, const size_t argIdx) {
+	CommonOverloadExpected getCommonOverloadParamExpected(Arena* arena, const Arr<Candidate> candidates, const size_t argIdx) {
 		switch (candidates.size) {
 			case 0:
 				return CommonOverloadExpected{Expected::infer(), False};
@@ -161,7 +161,7 @@ namespace {
 			});
 	}
 
-	void filterByReturnType(Arena& arena, MutArr<Candidate>& candidates, const Type expectedReturnType) {
+	void filterByReturnType(Arena* arena, MutArr<Candidate>& candidates, const Type expectedReturnType) {
 		// Filter by return type. Also does type argument inference on the candidate.
 		filterUnordered(candidates, [&](Candidate& candidate) {
 			return matchTypesNoDiagnostic(
@@ -173,7 +173,7 @@ namespace {
 		});
 	}
 
-	void filterByParamType(Arena& arena, MutArr<Candidate>& candidates, const Type actualArgType, const size_t argIdx) {
+	void filterByParamType(Arena* arena, MutArr<Candidate>& candidates, const Type actualArgType, const size_t argIdx) {
 		// Remove candidates that can't accept this as a param. Also does type argument inference on the candidate.
 		filterUnordered(candidates, [&](Candidate& candidate) {
 			const Type expectedArgType = getCandidateExpectedParameterType(arena, candidate, argIdx);

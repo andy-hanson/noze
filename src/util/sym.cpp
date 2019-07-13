@@ -3,14 +3,14 @@
 namespace {
 	const Sym getSymFromLongStr(Symbols* symbols, const Str str, const Bool isOperator) {
 		const CStr cstr = getOrAddAndCopyKey<const Str, const CStr, compareStr>{}(
-			symbols->arena,
+			&symbols->arena,
 			&symbols->largeStrings,
 			str,
 			[&]() {
-				return copyStr(symbols->arena, str);
+				return copyStr(&symbols->arena, str);
 			},
 			[&]() {
-				return strToCStr(symbols->arena, str);
+				return strToCStr(&symbols->arena, str);
 			});
 		const Nat64 res = reinterpret_cast<const Nat64>(cstr) | (isOperator ? symImpl::shortOrLongOperatorMarker : symImpl::shortOrLongAlphaMarker);
 		assert((res & (symImpl::shortAlphaOrOperatorMarker)) == 0);
@@ -60,7 +60,7 @@ const Bool symEqLongOperatorLiteral(const Sym a, const char* lit) {
 		strEqLiteral(symImpl::asLong(a), lit));
 }
 
-const Str strOfSym(Arena& arena, const Sym a) {
+const Str strOfSym(Arena* arena, const Sym a) {
 	Writer writer { arena };
 	writeSym(writer, a);
 	return finishWriter(writer);

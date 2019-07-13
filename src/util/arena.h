@@ -14,30 +14,23 @@ struct Arena {
 	byte* end;
 
 	inline Arena() : begin{nullptr}, cur{nullptr}, end{nullptr} {}
+	Arena(const Arena* other) = delete;
 	~Arena();
 
-	Arena(const Arena& other) = delete;
+};
 
-	void* alloc(const size_t n_bytes);
+void* alloc(Arena* arena, const size_t n_bytes);
 
-	template <typename T>
-	struct Nu {
-		Arena* arena;
+template <typename T>
+inline T* newUninitialized(Arena* arena) {
+	return static_cast<T*>(alloc(arena, sizeof(T)));
+}
 
-		template <typename... Args>
-		inline T* operator()(Args... args) {
-			typename std::remove_const<T>::type* res = arena->newUninitialized<typename std::remove_const<T>::type>();
-			return new (res) T{args...};
-		}
-	};
-
-	template <typename T>
-	inline Nu<T> nu() {
-		return Nu<T>{this};
-	}
-
-	template <typename T>
-	inline T* newUninitialized() {
-		return static_cast<T*>(alloc(sizeof(T)));
+template <typename T>
+struct nu {
+	template <typename... Args>
+	inline T* operator()(Arena* arena, Args... args) {
+		typename std::remove_const<T>::type* res = newUninitialized<typename std::remove_const<T>::type>(arena);
+		return new (res) T{args...};
 	}
 };

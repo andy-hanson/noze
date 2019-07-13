@@ -18,11 +18,11 @@ Comparison compareStr(const Str a, const Str b) {
 	}
 }
 
-const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s) {
+const NulTerminatedStr strToNulTerminatedStr(Arena* arena, const Str s) {
 	return NulTerminatedStr{cat(arena, s, Str{"\0", 1})};
 }
 
-const Str copyStr(Arena& arena, const Str s) {
+const Str copyStr(Arena* arena, const Str s) {
 	return copyArr(arena, s);
 }
 

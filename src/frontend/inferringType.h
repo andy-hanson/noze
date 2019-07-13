@@ -36,7 +36,7 @@ struct ExprCtx {
 		return checkCtx.copyStr(s);
 	}
 
-	inline Arena& arena() {
+	inline Arena* arena() {
 		return checkCtx.arena;
 	}
 
@@ -49,7 +49,7 @@ struct ExprCtx {
 	}
 
 	inline const Expr* alloc(const Expr e) {
-		return arena().nu<const Expr>()(e);
+		return nu<const Expr>{}(arena(), e);
 	}
 };
 
@@ -72,7 +72,7 @@ struct SingleInferringType {
 	}
 
 	// Note: this may infer type parameters.
-	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);
+	const Bool setTypeNoDiagnostic(Arena* arena, const Type setType);
 };
 
 struct InferringTypeArgs {
@@ -95,12 +95,12 @@ inline const CheckedExpr bogusWithoutAffectingExpected(const SourceRange range) 
 
 // Inferring type args are in 'a', not 'b'
 const Bool matchTypesNoDiagnostic(
-	Arena& arena,
+	Arena* arena,
 	const Type a,
 	const Type b,
 	InferringTypeArgs aInferringTypeArgs,
 	const Bool allowConvertAToBUnion);
-inline const Bool matchTypesNoDiagnostic(Arena& arena, const Type a, const Type b, InferringTypeArgs aInferringTypeArgs) {
+inline const Bool matchTypesNoDiagnostic(Arena* arena, const Type a, const Type b, InferringTypeArgs aInferringTypeArgs) {
 	return matchTypesNoDiagnostic(arena, a, b, aInferringTypeArgs, /*allowConvertAToBUnion*/ False);
 }
 
@@ -130,13 +130,13 @@ public:
 	}
 
 	const Opt<const Type> shallowInstantiateType() const;
-	inline const Opt<const Type> tryGetDeeplyInstantiatedType(Arena& arena) const {
+	inline const Opt<const Type> tryGetDeeplyInstantiatedType(Arena* arena) const {
 		const Opt<const Type> t = tryGetInferred();
 		return has(t)
 			? tryGetDeeplyInstantiatedTypeFor(arena, force(t))
 			: none<const Type>();
 	}
-	const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena& arena, const Type t) const;
+	const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Type t) const;
 
 	inline const Bool hasExpected() const {
 		return has(tryGetInferred());
@@ -169,7 +169,7 @@ public:
 	const CheckedExpr check(ExprCtx& ctx, const Type exprType, const Expr expr);
 
 	// Note: this may infer type parameters
-	const Bool setTypeNoDiagnostic(Arena& arena, const Type setType);
+	const Bool setTypeNoDiagnostic(Arena* arena, const Type setType);
 };
 
 struct StructAndField {

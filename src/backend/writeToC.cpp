@@ -291,7 +291,7 @@ namespace {
 				if (!has(curState) || force(curState) != StructState::defined) {
 					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, structStates);
 					if (has(didWork)) {
-						setInDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>(tempArena, &structStates, strukt, force(didWork));
+						setInDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>(&tempArena, &structStates, strukt, force(didWork));
 						cellSet<const Bool>(&madeProgress, True);
 					} else
 						cellSet<const Bool>(&someIncomplete, True);
@@ -1062,7 +1062,7 @@ namespace {
 	}
 }
 
-const Str writeToC(Arena& arena, const ConcreteProgram program) {
+const Str writeToC(Arena* arena, const ConcreteProgram program) {
 	Writer writer { arena };
 
 	//writeStatic(writer, "#include <stdatomic.h>\n"); // compare_exchange_strong

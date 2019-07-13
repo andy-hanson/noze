@@ -40,42 +40,42 @@ inline const Str baseName(const AbsolutePath a) {
 	return a.path->baseName;
 }
 
-inline const Path* rootPath(Arena& arena, const Str name) {
-	return arena.nu<const Path>()(none<const Path*>(), name);
+inline const Path* rootPath(Arena* arena, const Str name) {
+	return nu<const Path>{}(arena, none<const Path*>(), name);
 }
 
-inline const Path* childPath(Arena& arena, const Opt<const Path*> parent, const Str name) {
-	return arena.nu<const Path>()(parent, name);
+inline const Path* childPath(Arena* arena, const Opt<const Path*> parent, const Str name) {
+	return nu<const Path>{}(arena, parent, name);
 }
 
-inline const Path* childPath(Arena& arena, const Path* parent, const Str name) {
+inline const Path* childPath(Arena* arena, const Path* parent, const Str name) {
 	return childPath(arena, some<const Path*>(parent), name);
 }
 
-inline const AbsolutePath childPath(Arena& arena, const AbsolutePath parent, const Str name) {
+inline const AbsolutePath childPath(Arena* arena, const AbsolutePath parent, const Str name) {
 	return AbsolutePath{childPath(arena, parent.path, name)};
 }
 
-inline const Path* childPath(Arena& arena, const Path* parent, const Str name0, const Str name1) {
+inline const Path* childPath(Arena* arena, const Path* parent, const Str name0, const Str name1) {
 	return childPath(arena, childPath(arena, parent, name0), name1);
 }
 
-inline const AbsolutePath childPath(Arena& arena, const AbsolutePath parent, const Str name0, const Str name1) {
+inline const AbsolutePath childPath(Arena* arena, const AbsolutePath parent, const Str name0, const Str name1) {
 	return AbsolutePath{childPath(arena, parent.path, name0, name1)};
 }
 
-const Path* removeExtension(Arena& arena, const Path* path);
-inline const AbsolutePath removeExtension(Arena& arena, const AbsolutePath path) {
+const Path* removeExtension(Arena* arena, const Path* path);
+inline const AbsolutePath removeExtension(Arena* arena, const AbsolutePath path) {
 	return AbsolutePath{removeExtension(arena, path.path)};
 }
 
-const Path* addExtension(Arena& arena, const Path* path, const Str extension);
-inline const AbsolutePath addExtension(Arena& arena, const AbsolutePath path, const Str extension) {
+const Path* addExtension(Arena* arena, const Path* path, const Str extension);
+inline const AbsolutePath addExtension(Arena* arena, const AbsolutePath path, const Str extension) {
 	return AbsolutePath{addExtension(arena, path.path, extension)};
 }
 
-const Path* changeExtension(Arena& arena, const Path* path, const Str extension);
-inline const AbsolutePath changeExtension(Arena& arena, const AbsolutePath path, const Str extension) {
+const Path* changeExtension(Arena* arena, const Path* path, const Str extension);
+inline const AbsolutePath changeExtension(Arena* arena, const AbsolutePath path, const Str extension) {
 	return AbsolutePath{changeExtension(arena, path.path, extension)};
 }
 
@@ -85,9 +85,9 @@ struct RelPath {
 	const Path* path;
 };
 
-const Opt<const Path*> resolvePath(Arena& arena, const Path* path, const RelPath relPath);
+const Opt<const Path*> resolvePath(Arena* arena, const Path* path, const RelPath relPath);
 
-inline const Opt<const AbsolutePath> resolvePath(Arena& arena, const AbsolutePath path, const RelPath relPath) {
+inline const Opt<const AbsolutePath> resolvePath(Arena* arena, const AbsolutePath path, const RelPath relPath) {
 	const Opt<const Path*> p = resolvePath(arena, path.path, relPath);
 	return has(p) ? some<const AbsolutePath>(AbsolutePath{force(p)}) : none<const AbsolutePath>();
 }
@@ -128,30 +128,30 @@ public:
 	}
 };
 
-const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena& arena, const Str s);
+const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena* arena, const Str s);
 
-const Path* addManyChildren(Arena& arena, const Path* a, const Path* b);
+const Path* addManyChildren(Arena* arena, const Path* a, const Path* b);
 
-inline const AbsolutePath addManyChildren(Arena& arena, const AbsolutePath a, const Path* b) {
+inline const AbsolutePath addManyChildren(Arena* arena, const AbsolutePath a, const Path* b) {
 	return AbsolutePath{addManyChildren(arena, a.path, b)};
 }
 
-const Str pathToStr(Arena& arena, const Path* path);
-const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const Path* path);
+const Str pathToStr(Arena* arena, const Path* path);
+const NulTerminatedStr pathToNulTerminatedStr(Arena* arena, const Path* path);
 
-inline const Str pathToStr(Arena& arena, const AbsolutePath path) {
+inline const Str pathToStr(Arena* arena, const AbsolutePath path) {
 	return pathToStr(arena, path.path);
 }
-inline const NulTerminatedStr pathToNulTerminatedStr(Arena& arena, const AbsolutePath path) {
+inline const NulTerminatedStr pathToNulTerminatedStr(Arena* arena, const AbsolutePath path) {
 	return pathToNulTerminatedStr(arena, path.path);
 }
-inline CStr pathToCStr(Arena& arena, const AbsolutePath path) {
+inline CStr pathToCStr(Arena* arena, const AbsolutePath path) {
 	return pathToNulTerminatedStr(arena, path).asCStr();
 }
 
 // NOTE: this does *not* do a copy, original str must be kept alive!
-const Path* parsePath(Arena& arena, const Str str);
-const AbsolutePath parseAbsolutePath(Arena& arena, const Str str);
+const Path* parsePath(Arena* arena, const Str str);
+const AbsolutePath parseAbsolutePath(Arena* arena, const Str str);
 
 inline Comparison comparePath(const Path* a, const Path* b) {
 	const Comparison res = compareStr(a->baseName, b->baseName);
@@ -159,4 +159,4 @@ inline Comparison comparePath(const Path* a, const Path* b) {
 	return result;
 }
 
-const Path* copyPath(Arena& arena, const Path* path);
+const Path* copyPath(Arena* arena, const Path* path);

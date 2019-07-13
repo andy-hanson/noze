@@ -290,7 +290,8 @@ namespace {
 			assert(!exists(tempAsArr(l0->closureFields), [&](const ClosureField* it) {
 				return symEq(it->name, name);
 			}));
-			const ClosureField* field = ctx.arena().nu<const ClosureField>()(
+			const ClosureField* field = nu<const ClosureField>{}(
+				ctx.arena(),
 				name,
 				type,
 				ctx.alloc(expr),
@@ -389,7 +390,7 @@ namespace {
 	}
 
 	const Arr<const Param> checkFunOrSendFunParamsForLambda(
-		Arena& arena,
+		Arena* arena,
 		const Arr<const LambdaAst::Param> paramAsts,
 		const Arr<const Type> expectedParamTypes
 	) {
@@ -409,7 +410,7 @@ namespace {
 		const ExprAst bodyAst,
 		Expected& expected
 	) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
 		if (!has(opEt))
 			return expected.bogus(range);
@@ -469,7 +470,10 @@ namespace {
 
 	const CheckedExpr checkLet(ExprCtx& ctx, const SourceRange range, const LetAst ast, Expected& expected) {
 		const ExprAndType init = checkAndInfer(ctx, *ast.initializer);
-		const Local* local = ctx.arena().nu<Local>()(ast.name, init.type);
+		const Local* local = nu<Local>()(
+			ctx.arena(),
+			ast.name,
+			init.type);
 		const Expr* then = ctx.alloc(checkWithLocal(ctx, local, *ast.then, expected));
 		return CheckedExpr{Expr{range, Expr::Let{local, ctx.alloc(init.expr), then}}};
 	}
@@ -523,7 +527,7 @@ namespace {
 					[&](const StructInst* member, const MatchAst::CaseAst caseAst) {
 						const Opt<const Local*> local = has(caseAst.localName)
 							? some<const Local*>(
-								ctx.arena().nu<Local>()(force(caseAst.localName), Type{member}))
+								nu<Local>()(ctx.arena(), force(caseAst.localName), Type{member}))
 							: none<const Local*>();
 						const Expr then = expected.isBogus()
 							? expected.bogus(range).expr

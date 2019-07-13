@@ -40,7 +40,7 @@ namespace {
 
 	// Gets 'call' for 'fun'
 	// 'call' for 'fun-ptr' is a builtin already so no need to handle that here
-	const Arr<const FunDecl*> getCallFuns(Arena& arena, const Program& program) {
+	const Arr<const FunDecl*> getCallFuns(Arena* arena, const Program& program) {
 		const Arr<const FunDecl*> allCallFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("call"));
 		const Arr<const FunDecl*> res = filter(arena, allCallFuns, [&](const FunDecl* f) {
 			const StructDecl* decl = first(f->params()).type.asStructInst()->decl;
@@ -53,7 +53,7 @@ namespace {
 	}
 }
 
-const ConcreteProgram concretize(Arena& arena, const Program program) {
+const ConcreteProgram concretize(Arena* arena, const Program program) {
 	ConcretizeCtx ctx { arena, getAllocFun(program), getCallFuns(arena, program), program.commonTypes };
 	const ConcreteFun* mainConcreteFun = getOrAddNonTemplateConcreteFunAndFillBody(ctx, getMainFun(program));
 	// We remove items from these dicts when we process them.

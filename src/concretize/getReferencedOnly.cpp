@@ -4,13 +4,13 @@
 
 namespace {
 	template <typename T>
-	void pushIfNotContained(Arena& arena, MutArr<const T*>& all, const T* t) {
+	void pushIfNotContained(Arena* arena, MutArr<const T*>& all, const T* t) {
 		if (!contains<const T*, ptrEquals<const T>>(tempAsArr(all), t))
 			push(arena, all, t);
 	}
 
 	struct SetReferencedCtx {
-		Arena& arena;
+		Arena* arena;
 
 		// For each of these -- we are collecting an array of all of them, and advancing an index of the ones we've scanned.
 		// When the index reaches the array's length we are done (at least until another is pushed)
@@ -227,7 +227,7 @@ namespace {
 	}
 }
 
-const ConcreteProgram getReferencedOnly(Arena& arena, const ConcreteFun* mainFun, const ConcreteStruct* ctxStruct) {
+const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun, const ConcreteStruct* ctxStruct) {
 	SetReferencedCtx ctx { arena };
 	ctx.addFun(mainFun);
 	for (;;) {

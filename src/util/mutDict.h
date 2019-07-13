@@ -27,7 +27,7 @@ inline const V mustGetAt_mut(const MutDict<K, V, cmp>* d, const K key) {
 }
 
 template <typename K, typename V, Cmp<K> cmp>
-void setInDict(Arena& arena, MutDict<K, V, cmp>* d, const K key, const V value) {
+void setInDict(Arena* arena, MutDict<K, V, cmp>* d, const K key, const V value) {
 	for (KeyValuePair<K, V>& pair : tempAsArr(d->pairs))
 		if (cmp(pair.key, key) == Comparison::equal) {
 			overwriteConst(pair.value, value);
@@ -37,7 +37,7 @@ void setInDict(Arena& arena, MutDict<K, V, cmp>* d, const K key, const V value) 
 }
 
 template <typename K, typename V, Cmp<K> cmp>
-void addToDict(Arena& arena, MutDict<K, V, cmp>* d, const K key, const V value) {
+void addToDict(Arena* arena, MutDict<K, V, cmp>* d, const K key, const V value) {
 	const Bool has = hasKey_mut<K, V, cmp>(d, key);
 	assert(!has);
 	push(arena, d->pairs, KeyValuePair<K, V>{key, value});
@@ -46,7 +46,7 @@ void addToDict(Arena& arena, MutDict<K, V, cmp>* d, const K key, const V value) 
 template <typename K, typename V, Cmp<K> cmp>
 struct getOrAdd {
 	template <typename GetValue>
-	const V operator()(Arena& arena, MutDict<K, V, cmp>* d, const K key, GetValue getValue) {
+	const V operator()(Arena* arena, MutDict<K, V, cmp>* d, const K key, GetValue getValue) {
 		for (const KeyValuePair<K, V>& pair : tempAsArr(d->pairs))
 			if (cmp(pair.key, key) == Comparison::equal)
 				return pair.value;
@@ -61,7 +61,7 @@ struct getOrAdd {
 template <typename K, typename V, Cmp<K> cmp>
 struct getOrAddAndCopyKey {
 	template <typename GetKeyCopy, typename GetValue>
-	const V operator()(Arena& arena, MutDict<K, V, cmp>* d, const K key, GetKeyCopy getKeyCopy, GetValue getValue) {
+	const V operator()(Arena* arena, MutDict<K, V, cmp>* d, const K key, GetKeyCopy getKeyCopy, GetValue getValue) {
 		for (const KeyValuePair<K, V>& pair : tempAsArr(d->pairs))
 			if (cmp(pair.key, key) == Comparison::equal)
 				return pair.value;

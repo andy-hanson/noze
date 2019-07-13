@@ -57,7 +57,7 @@ namespace {
 			});
 	}
 
-	const TypesDict getTypesDict(Arena& arena, const Arr<const ConcreteStruct*> allStructs) {
+	const TypesDict getTypesDict(Arena* arena, const Arr<const ConcreteStruct*> allStructs) {
 		const TypesDict typesDict = [&]() {
 			DictBuilder<const ConcreteStruct*, const TypesForStruct, comparePtr<const ConcreteStruct>> allTypes {};
 			for (const ConcreteStruct* s : allStructs) {
@@ -105,7 +105,7 @@ namespace {
 
 	void doIt(const ConcreteProgram program) {
 		Arena arena {};
-		const TypesDict typesDict = getTypesDict(arena, program.allStructs);
+		const TypesDict typesDict = getTypesDict(&arena, program.allStructs);
 
 		ir_type* ctxType = mustGetAt(typesDict, program.ctxType).pointerType;
 

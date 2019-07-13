@@ -58,7 +58,7 @@ namespace {
 
 	// When matching a type, we may fill in type parameters, so we may want to set a new more specific expected type.
 	const SetTypeResult setTypeNoDiagnosticWorkerWorkerWorker(
-		Arena& arena,
+		Arena* arena,
 		const Type a,
 		const Type b,
 		InferringTypeArgs& aInferringTypeArgs,
@@ -66,7 +66,7 @@ namespace {
 	);
 
 	const SetTypeResult setForStructInstsWithSameDecl(
-		Arena& arena,
+		Arena* arena,
 		const StructDecl* decl,
 		const Arr<const Type> as,
 		const Arr<const Type> bs,
@@ -102,7 +102,7 @@ namespace {
 	}
 
 	const SetTypeResult setTypeNoDiagnosticWorker_forStructInst(
-		Arena& arena,
+		Arena* arena,
 		const StructInst* a,
 		const StructInst* b,
 		InferringTypeArgs& aInferringTypeArgs,
@@ -142,7 +142,7 @@ namespace {
 			typeParam);
 	}
 
-	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena& arena, const Type t, const InferringTypeArgs& inferringTypeArgs) {
+	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena* arena, const Type t, const InferringTypeArgs& inferringTypeArgs) {
 		return t.match(
 			[](const Type::Bogus) {
 				return some<const Type>(Type{Type::Bogus{}});
@@ -163,7 +163,7 @@ namespace {
 	}
 
 	const SetTypeResult setTypeNoDiagnosticWorkerWorker(
-		Arena& arena,
+		Arena* arena,
 		const Opt<const Type> a,
 		const Type b,
 		InferringTypeArgs& aInferringTypeArgs
@@ -173,7 +173,7 @@ namespace {
 			: SetTypeResult{SetTypeResult::Set{b}};
 	}
 
-	const SetTypeResult setTypeNoDiagnosticWorker_forSingleInferringType(Arena& arena, SingleInferringType& sit, const Type setType) {
+	const SetTypeResult setTypeNoDiagnosticWorker_forSingleInferringType(Arena* arena, SingleInferringType& sit, const Type setType) {
 		InferringTypeArgs ita = InferringTypeArgs::none();
 		const SetTypeResult res = setTypeNoDiagnosticWorkerWorker(arena, cellGet(&sit.type), setType, ita);
 		res.match(
@@ -190,7 +190,7 @@ namespace {
 	// 'a' may contain type parameters from inferringTypeArgs. We'll infer those here.
 	// If 'allowConvertAToBUnion' is set, if 'b' is a union type and 'a' is a member, we'll set it to the union.
 	const SetTypeResult setTypeNoDiagnosticWorkerWorkerWorker(
-		Arena& arena,
+		Arena* arena,
 		const Type a,
 		const Type b,
 		InferringTypeArgs& aInferringTypeArgs,
@@ -228,7 +228,7 @@ namespace {
 
 }
 
-const Bool SingleInferringType::setTypeNoDiagnostic(Arena& arena, const Type setType) {
+const Bool SingleInferringType::setTypeNoDiagnostic(Arena* arena, const Type setType) {
 	InferringTypeArgs ita = InferringTypeArgs::none();
 	return setTypeNoDiagnosticWorkerWorker(arena, cellGet(&type), setType, ita).match(
 		[&](const SetTypeResult::Set s) {
@@ -300,7 +300,7 @@ const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr 
 	}
 }
 
-const Bool Expected::setTypeNoDiagnostic(Arena& arena, const Type setType) {
+const Bool Expected::setTypeNoDiagnostic(Arena* arena, const Type setType) {
 	const SetTypeResult typeToSet = setTypeNoDiagnosticWorkerWorker(arena, cellGet(&type), setType, inferringTypeArgs);
 	return typeToSet.match(
 		[&](const SetTypeResult::Set s) {
@@ -324,11 +324,11 @@ const Opt<const Type> Expected::shallowInstantiateType() const {
 		return t;
 }
 
-const Opt<const Type> Expected::tryGetDeeplyInstantiatedTypeFor(Arena& arena, const Type t) const {
+const Opt<const Type> Expected::tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Type t) const {
 	return tryGetDeeplyInstantiatedTypeWorker(arena, t, inferringTypeArgs);
 }
 
-const Bool matchTypesNoDiagnostic(Arena& arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs, const Bool allowConvertToUnion) {
+const Bool matchTypesNoDiagnostic(Arena* arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs, const Bool allowConvertToUnion) {
 	return setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType, setType, inferringTypeArgs, allowConvertToUnion).match(
 		[](const SetTypeResult::Set) {
 			return True;

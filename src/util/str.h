@@ -28,9 +28,9 @@ inline const NulTerminatedStr nulTerminatedStrLiteral(const CStr c) {
 	return NulTerminatedStr{Str{c, static_cast<size_t>(end(c) + 1 - c)}};
 }
 
-const NulTerminatedStr strToNulTerminatedStr(Arena& arena, const Str s);
+const NulTerminatedStr strToNulTerminatedStr(Arena* arena, const Str s);
 
-inline CStr strToCStr(Arena& arena, const Str s) {
+inline CStr strToCStr(Arena* arena, const Str s) {
 	return strToNulTerminatedStr(arena, s).asCStr();
 }
 
@@ -42,9 +42,9 @@ inline const Bool strEqLiteral(const Str s, const CStr b) {
 	return strEq(s, strLiteral(b));
 }
 
-const Str copyStr(Arena& arena, const Str s);
+const Str copyStr(Arena* arena, const Str s);
 
-inline const NulTerminatedStr copyNulTerminatedStr(Arena& arena, const NulTerminatedStr in) {
+inline const NulTerminatedStr copyNulTerminatedStr(Arena* arena, const NulTerminatedStr in) {
 	return NulTerminatedStr{copyStr(arena, in.str)};
 }
 

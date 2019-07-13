@@ -14,7 +14,7 @@ namespace {
 	}
 }
 
-const Str mangleName(Arena& arena, const Sym name) {
+const Str mangleName(Arena* arena, const Sym name) {
 	Writer writer { arena };
 	writeMangledName(writer, name);
 	return finishWriter(writer);

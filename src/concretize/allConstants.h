@@ -27,24 +27,24 @@ private:
 	MutDict<const ConcreteStruct*, const Constant*, comparePtr<const ConcreteStruct>> nulls;
 	ArrBuilder<const Constant*> all;
 
-	const Constant* _nuConstant(Arena& arena, const ConcreteType type, const ConstantKind kind, const size_t id);
+	const Constant* _nuConstant(Arena* arena, const ConcreteType type, const ConstantKind kind, const size_t id);
 public:
 	AllConstants(const AllConstants&) = delete;
 	inline AllConstants() {}
 
-	const Constant* arr(Arena& arena, const ConcreteStruct* arrayType, const ConcreteType elementType, const Arr<const Constant*> elements);
+	const Constant* arr(Arena* arena, const ConcreteStruct* arrayType, const ConcreteType elementType, const Arr<const Constant*> elements);
 
-	const Constant* ptr(Arena& arena, const ConcreteType pointerType, const Constant* array, const size_t index);
+	const Constant* ptr(Arena* arena, const ConcreteType pointerType, const Constant* array, const size_t index);
 
-	const Constant* _null(Arena& arena, const ConcreteType pointerType);
+	const Constant* _null(Arena* arena, const ConcreteType pointerType);
 
-	const Constant* _bool(Arena& arena, const ConcreteType boolType, const Bool value);
-	const Constant* _void(Arena& arena, const ConcreteType voidType);
-	const Constant* _char(Arena& arena, const ConcreteType charType, const char value);
-	const Constant* int64(Arena& arena, const ConcreteType int64Type, const Int64 value);
-	const Constant* nat64(Arena& arena, const ConcreteType nat64Type, const Nat64 value);
-	const Constant* funPtr(Arena& arena, const ConcreteType funPtrType, const ConcreteFun* fun);
-	const Constant* lambda(Arena& arena, const KnownLambdaBody* klb);
-	const Constant* record(Arena& arena, const ConcreteType recordType, const Arr<const Constant*> args);
-	const Constant* _union(Arena& arena, const ConcreteType unionType, const size_t memberIndex, const Constant* member);
+	const Constant* _bool(Arena* arena, const ConcreteType boolType, const Bool value);
+	const Constant* _void(Arena* arena, const ConcreteType voidType);
+	const Constant* _char(Arena* arena, const ConcreteType charType, const char value);
+	const Constant* int64(Arena* arena, const ConcreteType int64Type, const Int64 value);
+	const Constant* nat64(Arena* arena, const ConcreteType nat64Type, const Nat64 value);
+	const Constant* funPtr(Arena* arena, const ConcreteType funPtrType, const ConcreteFun* fun);
+	const Constant* lambda(Arena* arena, const KnownLambdaBody* klb);
+	const Constant* record(Arena* arena, const ConcreteType recordType, const Arr<const Constant*> args);
+	const Constant* _union(Arena* arena, const ConcreteType unionType, const size_t memberIndex, const Constant* member);
 };

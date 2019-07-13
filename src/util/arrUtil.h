@@ -133,7 +133,7 @@ const T last(const MutArr<T>& a) {
 }
 
 template <typename T>
-Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
+Arr<T> cat(Arena* arena, const Arr<T> a, const Arr<T> b) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size);
 	copyFrom(res, 0, a);
 	copyFrom(res, a.size, b);
@@ -141,7 +141,7 @@ Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b) {
 }
 
 template <typename T>
-Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b, const Arr<T> c) {
+Arr<T> cat(Arena* arena, const Arr<T> a, const Arr<T> b, const Arr<T> c) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size + c.size);
 	copyFrom(res, 0, a);
 	copyFrom(res, a.size, b);
@@ -150,7 +150,7 @@ Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b, const Arr<T> c) {
 }
 
 template <typename T>
-Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b, const Arr<T> c, const Arr<T> d) {
+Arr<T> cat(Arena* arena, const Arr<T> a, const Arr<T> b, const Arr<T> c, const Arr<T> d) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, a.size + b.size + c.size);
 	copyFrom(res, 0, a);
 	copyFrom(res, a.size, b);
@@ -160,7 +160,7 @@ Arr<T> cat(Arena& arena, const Arr<T> a, const Arr<T> b, const Arr<T> c, const A
 }
 
 template <typename T>
-Arr<T> prepend(Arena& arena, const T a, const Arr<T> b) {
+Arr<T> prepend(Arena* arena, const T a, const Arr<T> b) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, 1 + b.size);
 	setAt<T>(res, 0, a);
 	for (const size_t i : Range{b.size})
@@ -169,23 +169,23 @@ Arr<T> prepend(Arena& arena, const T a, const Arr<T> b) {
 }
 
 template<typename T>
-inline Arr<T> arrLiteral(Arena& arena, T a) {
-	T* out = static_cast<T*>(arena.alloc(sizeof(T) * 1));
+inline Arr<T> arrLiteral(Arena* arena, T a) {
+	T* out = static_cast<T*>(alloc(arena, sizeof(T) * 1));
 	initMemory(out[0], a);
 	return Arr<T>{out, 1};
 }
 
 template<typename T>
-inline Arr<T> arrLiteral(Arena& arena, T a, T b) {
-	T* out = static_cast<T*>(arena.alloc(sizeof(T) * 2));
+inline Arr<T> arrLiteral(Arena* arena, T a, T b) {
+	T* out = static_cast<T*>(alloc(arena, sizeof(T) * 2));
 	initMemory(out[0], a);
 	initMemory(out[1], b);
 	return Arr<T>{out, 2};
 }
 
 template <typename T>
-inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c) {
-	T* out = static_cast<T*>(arena.alloc(sizeof(T) * 3));
+inline Arr<T> arrLiteral(Arena* arena, T a, T b, T c) {
+	T* out = static_cast<T*>(alloc(arena, sizeof(T) * 3));
 	initMemory(out[0], a);
 	initMemory(out[1], b);
 	initMemory(out[2], c);
@@ -193,14 +193,14 @@ inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c) {
 }
 
 template <typename T>
-inline Arr<T> arrLiteral(Arena& arena, T a, T b, T c, T d) {
+inline Arr<T> arrLiteral(Arena* arena, T a, T b, T c, T d) {
 	return arrLiteral(arena, { a, b, c, d });
 }
 
 template <typename T>
-inline Arr<T> arrLiteral(Arena& arena, std::initializer_list<T> list) {
+inline Arr<T> arrLiteral(Arena* arena, std::initializer_list<T> list) {
 	const size_t size = list.size();
-	T* out = static_cast<T*>(arena.alloc(sizeof(T) * size));
+	T* out = static_cast<T*>(alloc(arena, sizeof(T) * size));
 	T* lBegin = list.begin();
 	assert(lBegin + size == list.end());
 	for (const size_t i : Range{size})
@@ -211,8 +211,8 @@ inline Arr<T> arrLiteral(Arena& arena, std::initializer_list<T> list) {
 template <typename Out>
 struct fillArr {
 	template <typename Cb>
-	const Arr<Out> operator()(Arena& arena, const size_t size, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+	const Arr<Out> operator()(Arena* arena, const size_t size, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size));
 		for (const size_t i : Range{size})
 			initMemory(out[i], cb(i));
 		return Arr<Out>{out, size};
@@ -222,8 +222,8 @@ struct fillArr {
 template <typename Out>
 struct fillArrOrFail {
 	template <typename Cb>
-	const Opt<const Arr<Out>> operator()(Arena& arena, const size_t size, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+	const Opt<const Arr<Out>> operator()(Arena* arena, const size_t size, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size));
 		for (const size_t i : Range{size}) {
 			const Opt<Out> op = cb(i);
 			if (has(op))
@@ -238,8 +238,8 @@ struct fillArrOrFail {
 template <typename Out>
 struct map {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena& arena, Arr<In> in, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+	Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * in.size));
 		for (const size_t i : Range{in.size})
 			initMemory(out[i], cb(at(in, i)));
 		return Arr<Out>{out, in.size};
@@ -249,8 +249,8 @@ struct map {
 template <typename Out>
 struct mapPtrs {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena& arena, Arr<In> in, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+	Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * in.size));
 		for (const size_t i : Range{in.size})
 			initMemory(out[i], cb(getPtr(in, i)));
 		return Arr<Out>{out, in.size};
@@ -260,8 +260,8 @@ struct mapPtrs {
 template <typename Out>
 struct mapWithIndex {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+	Arr<Out> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * in.size));
 		for (const size_t i : Range{in.size})
 			initMemory(out[i], cb(at(in, i), i));
 		return Arr<Out>{out, in.size};
@@ -271,8 +271,8 @@ struct mapWithIndex {
 template <typename Out>
 struct mapOrNone {
 	template <typename In, typename Cb>
-	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In> in, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+	const Opt<const Arr<Out>> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * in.size));
 		for (const size_t i : Range{in.size}) {
 			const Opt<Out> o = cb(at(in, i));
 			if (has(o))
@@ -287,8 +287,8 @@ struct mapOrNone {
 template <typename Out>
 struct mapPtrsOrNone {
 	template <typename In, typename Cb>
-	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In> in, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+	const Opt<const Arr<Out>> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * in.size));
 		for (const size_t i : Range{in.size}) {
 			const Opt<Out> o = cb(getPtr(in, i));
 			if (has(o))
@@ -316,8 +316,8 @@ struct mapOrFail {
 	}
 
 	template <typename In, typename Cb>
-	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena& arena, const Arr<In> in, Cb cb) {
-		OutSuccess* out = static_cast<OutSuccess*>(arena.alloc(sizeof(OutSuccess) * in.size));
+	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+		OutSuccess* out = static_cast<OutSuccess*>(alloc(arena, sizeof(OutSuccess) * in.size));
 		const Result<const _void, OutFailure> res = worker(out, in, cb);
 		return mapSuccess<const Arr<OutSuccess>>{}(res, [&](const _void) {
 			return Arr<OutSuccess>{out, in.size};
@@ -328,8 +328,8 @@ struct mapOrFail {
 template <typename OutSuccess, typename OutFailure>
 struct mapOrFailReverse {
 	template <typename In, typename Cb>
-	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena& arena, const Arr<In> in, Cb cb) {
-		OutSuccess* out = static_cast<OutSuccess*>(arena.alloc(sizeof(OutSuccess) * in.size));
+	const Result<const Arr<OutSuccess>, OutFailure> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+		OutSuccess* out = static_cast<OutSuccess*>(alloc(arena, sizeof(OutSuccess) * in.size));
 		for (const size_t i : RangeDown{in.size}) {
 			const Result<OutSuccess, OutFailure> result = cb(at(in, i));
 			if (result.isSuccess())
@@ -354,10 +354,10 @@ const Bool zipSome(const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
 template <typename Out>
 struct zipOrFail {
 	template <typename In0, typename In1, typename Cb>
-	const Opt<const Arr<Out>> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+	const Opt<const Arr<Out>> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
 		const size_t size = in0.size;
 		assert(in1.size == size);
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size));
 		for (const size_t i : Range{size}) {
 			const Opt<Out> o = cb(at(in0, i), at(in1, i));
 			if (has(o))
@@ -372,8 +372,8 @@ struct zipOrFail {
 template <typename Out>
 struct mapOp {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena& arena, const Arr<In> in, Cb cb) {
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * in.size));
+	Arr<Out> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * in.size));
 		size_t out_i = 0;
 		for (const size_t in_i : Range{in.size}) {
 			Opt<Out> op = cb(at(in, in_i));
@@ -388,7 +388,7 @@ struct mapOp {
 };
 
 template <typename T, typename Cb>
-const Arr<T> filter(Arena& arena, const Arr<T> a, Cb cb) {
+const Arr<T> filter(Arena* arena, const Arr<T> a, Cb cb) {
 	return mapOp<T>{}(arena, a, [&](const T t) {
 		return cb(t) ? some<T>(t) : none<T>();
 	});
@@ -397,10 +397,10 @@ const Arr<T> filter(Arena& arena, const Arr<T> a, Cb cb) {
 template <typename Out>
 struct mapZip {
 	template <typename In0, typename In1, typename Cb>
-	Arr<Out> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+	Arr<Out> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
 		const size_t size = in0.size;
 		assert(in1.size == size);
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size));
 		for (const size_t i : Range{size})
 			initMemory(out[i], cb(at(in0, i), at(in1, i)));
 		return Arr<Out>{out, size};
@@ -410,10 +410,10 @@ struct mapZip {
 template <typename Out>
 struct mapZipWithIndex {
 	template <typename In0, typename In1, typename Cb>
-	Arr<Out> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+	Arr<Out> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
 		const size_t size = in0.size;
 		assert(in1.size == size);
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size));
 		for (const size_t i : Range{size})
 			initMemory(out[i], cb(at(in0, i), at(in1, i), i));
 		return Arr<Out>{out, size};
@@ -423,10 +423,10 @@ struct mapZipWithIndex {
 template <typename Out>
 struct mapZipPtrs {
 	template <typename In0, typename In1, typename Cb>
-	Arr<Out> operator()(Arena& arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+	Arr<Out> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
 		const size_t size = in0.size;
 		assert(in1.size == size);
-		Out* out = static_cast<Out*>(arena.alloc(sizeof(Out) * size));
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size));
 		for (const size_t i : Range{size})
 			initMemory(out[i], cb(getPtr(in0, i), getPtr(in1, i)));
 		return Arr<Out>{out, size};
@@ -481,13 +481,13 @@ const Bool every(const Arr<T> a, Cb cb) {
 }
 
 template <typename T>
-const Arr<T> copyArr(Arena& arena, const Arr<T> in) {
+const Arr<T> copyArr(Arena* arena, const Arr<T> in) {
 	return map<T>{}(arena, in, [](T x) { return x; });
 }
 
 // Each of the returned arrays has elements considered equivalent by `cmp`
 template <typename T, typename Cmp>
-const Arr<const Arr<T>> sortAndGroup(Arena& arena, const Arr<T> a, Cmp cmp) {
+const Arr<const Arr<T>> sortAndGroup(Arena* arena, const Arr<T> a, Cmp cmp) {
 	MutArr<MutArr<T>> res;
 
 	auto addSingle = [&](const T x) -> void {

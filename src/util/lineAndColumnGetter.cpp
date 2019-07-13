@@ -35,7 +35,7 @@ namespace {
 	}
 }
 
-const LineAndColumnGetter lineAndColumnGetterForText(Arena& arena, const Str text) {
+const LineAndColumnGetter lineAndColumnGetterForText(Arena* arena, const Str text) {
 	ArrBuilder<const Pos> res {};
 	add<const Pos>(arena, &res, 0);
 	// TODO:EACHWITHINDEX

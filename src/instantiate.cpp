@@ -1,6 +1,6 @@
 #include "./instantiate.h"
 
-const Type instantiateType(Arena& arena, const Type type, const TypeParamsAndArgs typeParamsAndArgs) {
+const Type instantiateType(Arena* arena, const Type type, const TypeParamsAndArgs typeParamsAndArgs) {
 	return type.match(
 		[](const Type::Bogus) {
 			return Type{Type::Bogus{}};
@@ -34,7 +34,7 @@ namespace {
 			});
 	}
 
-	const Sig instantiateSig(Arena& arena, const Sig sig, const TypeParamsAndArgs typeParamsAndArgs) {
+	const Sig instantiateSig(Arena* arena, const Sig sig, const TypeParamsAndArgs typeParamsAndArgs) {
 		const Type returnType = instantiateType(arena, sig.returnType, typeParamsAndArgs);
 		const Arr<const Param> params = map<const Param>{}(arena, sig.params, [&](const Param p) {
 			return p.withType(instantiateType(arena, p.type, typeParamsAndArgs));
@@ -43,17 +43,17 @@ namespace {
 	}
 }
 
-const FunInst* instantiateFun(Arena& arena, const FunDecl* decl, const Arr<const Type> typeArgs, const Arr<const Called> specImpls) {
+const FunInst* instantiateFun(Arena* arena, const FunDecl* decl, const Arr<const Type> typeArgs, const Arr<const Called> specImpls) {
 	for (const FunInst* fi : tempAsArr(decl->insts))
 		if (eachCorresponds(fi->typeArgs, typeArgs, typeEquals) && eachCorresponds(fi->specImpls, specImpls, calledEquals))
 			return fi;
 
-	const FunInst* res = arena.nu<const FunInst>()(decl, typeArgs, specImpls, instantiateSig(arena, decl->sig, TypeParamsAndArgs{decl->typeParams, typeArgs}));
+	const FunInst* res = nu<const FunInst>{}(arena, decl, typeArgs, specImpls, instantiateSig(arena, decl->sig, TypeParamsAndArgs{decl->typeParams, typeArgs}));
 	push<const FunInst*>(arena, decl->insts, res);
 	return res;
 }
 
-const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
+const StructBody instantiateStructBody(Arena* arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
 	const TypeParamsAndArgs typeParamsAndArgs = TypeParamsAndArgs{decl->typeParams, typeArgs};
 	return decl->body().match(
 		[](const StructBody::Bogus) {
@@ -87,7 +87,7 @@ const StructBody instantiateStructBody(Arena& arena, const StructDecl* decl, con
 }
 
 const StructInst* instantiateStruct(
-	Arena& arena,
+	Arena* arena,
 	const StructDecl* decl,
 	const Arr<const Type> typeArgs,
 	DelayStructInsts delayStructInsts
@@ -103,7 +103,7 @@ const StructInst* instantiateStruct(
 		return pur;
 	}();
 
-	StructInst* res = arena.nu<StructInst>()(decl, typeArgs, purity);
+	StructInst* res = nu<StructInst>{}(arena, decl, typeArgs, purity);
 	push<const StructInst*>(arena, decl->insts, res);
 
 	if (decl->bodyIsSet())
@@ -114,7 +114,7 @@ const StructInst* instantiateStruct(
 	return res;
 }
 
-const StructInst* instantiateStructInst(Arena& arena, const StructInst* structInst, const TypeParamsAndArgs typeParamsAndArgs) {
+const StructInst* instantiateStructInst(Arena* arena, const StructInst* structInst, const TypeParamsAndArgs typeParamsAndArgs) {
 	// TODO:PERF don't create the array if we don't need it (`instantiate` could take the callback)
 	const Arr<const Type> itsTypeArgs = map<const Type>{}(arena, structInst->typeArgs, [&](const Type t) {
 		return instantiateType(arena, t, typeParamsAndArgs);
@@ -122,7 +122,7 @@ const StructInst* instantiateStructInst(Arena& arena, const StructInst* structIn
 	return instantiateStructNeverDelay(arena, structInst->decl, itsTypeArgs);
 }
 
-const SpecInst* instantiateSpec(Arena& arena, const SpecDecl* decl, const Arr<const Type> typeArgs) {
+const SpecInst* instantiateSpec(Arena* arena, const SpecDecl* decl, const Arr<const Type> typeArgs) {
 	for (const SpecInst* si : tempAsArr(decl->insts))
 		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
 			return si;
@@ -130,12 +130,12 @@ const SpecInst* instantiateSpec(Arena& arena, const SpecDecl* decl, const Arr<co
 	const Arr<const Sig> sigs = map<const Sig>{}(arena, decl->sigs, [&](const Sig sig) {
 		return instantiateSig(arena, sig, TypeParamsAndArgs{decl->typeParams, typeArgs});
 	});
-	const SpecInst* res = arena.nu<const SpecInst>()(decl, typeArgs, sigs);
+	const SpecInst* res = nu<const SpecInst>{}(arena, decl, typeArgs, sigs);
 	push<const SpecInst*>(arena, decl->insts, res);
 	return res;
 }
 
-const SpecInst* instantiateSpecInst(Arena& arena, const SpecInst* specInst, const TypeParamsAndArgs typeParamsAndArgs) {
+const SpecInst* instantiateSpecInst(Arena* arena, const SpecInst* specInst, const TypeParamsAndArgs typeParamsAndArgs) {
 	// TODO:PERF don't create the array if we don't need it (`instantiate` could take the callback)
 	const Arr<const Type> itsTypeArgs = map<const Type>{}(arena, specInst->typeArgs, [&](const Type t) {
 		return instantiateType(arena, t, typeParamsAndArgs);

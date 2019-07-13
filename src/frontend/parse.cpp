@@ -395,7 +395,7 @@ namespace {
 	}
 }
 
-const Result<const FileAst, const ParseDiagnostic> parseFile(Arena& astArena, Symbols* symbols, const NulTerminatedStr source) {
+const Result<const FileAst, const ParseDiagnostic> parseFile(Arena* astArena, Symbols* symbols, const NulTerminatedStr source) {
 	try {
 		Lexer lexer = createLexer(astArena, symbols, source);
 		return success<const FileAst, const ParseDiagnostic>(parseFileMayThrow(lexer));

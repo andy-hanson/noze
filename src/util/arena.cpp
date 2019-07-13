@@ -2,30 +2,30 @@
 
 #include <cstdlib> // malloc
 
-void* Arena::alloc(const size_t n_bytes) {
-	if (begin == nullptr) {
+void* alloc(Arena* arena, const size_t n_bytes) {
+	if (arena->begin == nullptr) {
 		// 2MB
 		size_t size = 2 * 1024 * 1024;
-		begin = static_cast<byte*>(malloc(size));
-		assert(begin != nullptr);
-		cur = begin;
-		end = begin + size;
+		arena->begin = static_cast<byte*>(malloc(size));
+		assert(arena->begin != nullptr);
+		arena->cur = arena->begin;
+		arena->end = arena->begin + size;
 
 		// Fill with 0xff for debugging
-		for (byte* b = cur; b < end; b++)
+		for (byte* b = arena->cur; b < arena->end; b++)
 			*b = 0xff;
 	}
 
 	assert(n_bytes < 99999); // sanity check
 
 	// Since we filled with 0xff, should still be that way!
-	byte* res = cur;
-	cur = cur + n_bytes;
+	byte* res = arena->cur;
+	arena->cur = arena->cur + n_bytes;
 
-	if (cur > end)
+	if (arena->cur > arena->end)
 		todo<void>("Ran out of space!");
 
-	for (byte* b = res; b < cur; b++)
+	for (byte* b = res; b < arena->cur; b++)
 		assert(*b == 0xff);
 
 	return res;

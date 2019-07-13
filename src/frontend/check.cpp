@@ -26,7 +26,7 @@ namespace {
 	}
 
 	const Opt<const StructInst*> getCommonNonTemplateType(
-		Arena& arena,
+		Arena* arena,
 		const StructsAndAliasesMap& structsAndAliasesMap,
 		const Sym name,
 		MutArr<StructInst*>& delayedStructInsts
@@ -125,7 +125,7 @@ namespace {
 		return typeParams;
 	}
 
-	void collectTypeParamsInAst(Arena& arena, const TypeAst ast, ArrBuilder<const TypeParam>* res) {
+	void collectTypeParamsInAst(Arena* arena, const TypeAst ast, ArrBuilder<const TypeParam>* res) {
 		return ast.match(
 			[&](const TypeAst::TypeParam tp) {
 				if (!exists(res->tempAsArr(), [&](const TypeParam it) { return symEq(it.name, tp.name); }))
@@ -137,7 +137,7 @@ namespace {
 			});
 	}
 
-	const Arr<const TypeParam> collectTypeParams(Arena& arena, const SigAst ast) {
+	const Arr<const TypeParam> collectTypeParams(Arena* arena, const SigAst ast) {
 		ArrBuilder<const TypeParam> res {};
 		collectTypeParamsInAst(arena, ast.returnType, &res);
 		for (const ParamAst p : ast.params)
@@ -499,7 +499,7 @@ namespace {
 
 	template <typename GetCommonTypes>
 	const Result<const IncludeCheck, const Arr<const Diagnostic>> checkWorker(
-		Arena& arena,
+		Arena* arena,
 		const Opt<const Module*> include,
 		const Arr<const Module*> imports,
 		const FileAst ast,
@@ -533,7 +533,8 @@ namespace {
 				const FunsAndMap funsAndMap = checkFuns(ctx, commonTypes, specsMap, structsAndAliasesMap, ast.funs);
 
 				// Create a module unconditionally so every function will always have containingModule set, even in failure case
-				const Module* mod = arena.nu<const Module>()(
+				const Module* mod = nu<const Module>{}(
+					arena,
 					path,
 					imports,
 					asConstArr<StructDecl>(structs),
@@ -555,7 +556,7 @@ namespace {
 }
 
 const Result<const IncludeCheck, const Arr<const Diagnostic>> checkIncludeNz(
-	Arena& arena,
+	Arena* arena,
 	const FileAst ast,
 	const PathAndStorageKind path
 ) {
@@ -571,7 +572,7 @@ const Result<const IncludeCheck, const Arr<const Diagnostic>> checkIncludeNz(
 }
 
 const Result<const Module*, const Arr<const Diagnostic>> check(
-	Arena& arena,
+	Arena* arena,
 	const Arr<const Module*> imports,
 	const FileAst ast,
 	const PathAndStorageKind path,

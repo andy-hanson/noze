@@ -7,7 +7,7 @@
 struct ReadOnlyStorage {
 	const AbsolutePath root;
 
-	inline const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const Path* path) const {
+	inline const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const Path* path) const {
 		return ::tryReadFile(arena, addManyChildren(arena, root, path));
 	}
 };

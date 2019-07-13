@@ -12,8 +12,8 @@
 
 namespace {
 	int tryOpen(const AbsolutePath path, const int flags, const int moreFlags) {
-		Arena tempArena;
-		const int fd = open(pathToCStr(tempArena, path), flags, moreFlags);
+		Arena tempArena {};
+		const int fd = open(pathToCStr(&tempArena, path), flags, moreFlags);
 		if (fd == -1)
 			todo<void>("Can't write to file");
 		return fd;
@@ -27,15 +27,15 @@ namespace {
 		}
 	};
 
-	const Str copyCStrToStr(Arena& arena, const CStr begin) {
+	const Str copyCStrToStr(Arena* arena, const CStr begin) {
 		return copyStr(arena, strLiteral(begin));
 	}
 }
 
 const Bool fileExists(const AbsolutePath path) {
-	Arena tempArena;
+	Arena tempArena {};
 	struct stat s;
-	const int res = stat(pathToCStr(tempArena, path), &s);
+	const int res = stat(pathToCStr(&tempArena, path), &s);
 	if (res == 0)
 		return True;
 	else if (res == ENOENT)
@@ -44,11 +44,11 @@ const Bool fileExists(const AbsolutePath path) {
 		return todo<const Bool>("fileExists failed");
 }
 
-const Opt<const NulTerminatedStr> tryReadFile(Arena& arena, const AbsolutePath path) {
+const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath path) {
 	using Ret = const Opt<const NulTerminatedStr>;
 
 	Arena tempArena;
-	const CStr pathCStr = pathToCStr(tempArena, path);
+	const CStr pathCStr = pathToCStr(&tempArena, path);
 	const int fd = open(pathCStr, O_RDONLY);
 	if (fd == -1) {
 		if (errno == ENOENT)
@@ -154,7 +154,7 @@ namespace {
 		return KeyValuePair<const Str, const Str>{key, value};
 	}
 
-	const AbsolutePath getCwd(Arena& arena) {
+	const AbsolutePath getCwd(Arena* arena) {
 		const size_t maxSize = 256;
 		char buff[maxSize];
 		const CStr b = getcwd(buff, maxSize);
@@ -166,7 +166,7 @@ namespace {
 		}
 	}
 
-	const AbsolutePath getPathToThisExecutable(Arena& arena, const AbsolutePath cwd, const Str relativePath) {
+	const AbsolutePath getPathToThisExecutable(Arena* arena, const AbsolutePath cwd, const Str relativePath) {
 		const AbsolutePath res = parseAbsoluteOrRelPath(arena, relativePath).match(
 			[&](const AbsolutePath p) {
 				return p;
@@ -180,30 +180,30 @@ namespace {
 }
 
 int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, const Environ environ) {
-	Arena arena {};
-	const CStr executableCStr = pathToCStr(arena, executable);
+	Arena tempArena {};
+	const CStr executableCStr = pathToCStr(&tempArena, executable);
 
 	CStr const* const cArgs = [&]() {
 		ArrBuilder<const CStr> cArgs {};
-		add<const CStr>(arena, &cArgs, executableCStr);
+		add<const CStr>(&tempArena, &cArgs, executableCStr);
 		for (const Str arg : args)
-			add<const CStr>(arena, &cArgs, strToCStr(arena, arg));
-		add<const CStr>(arena, &cArgs, nullptr);
+			add<const CStr>(&tempArena, &cArgs, strToCStr(&tempArena, arg));
+		add<const CStr>(&tempArena, &cArgs, nullptr);
 		return finishArr(&cArgs).begin();
 	}();
 
 	CStr const* const cEnviron = [&]() {
 		ArrBuilder<const CStr> cEnviron {};
 		for (const KeyValuePair<const Str, const Str> pair : environ)
-			add<const CStr>(arena, &cEnviron, strToCStr(arena, cat(arena, pair.key, strLiteral("="), pair.value)));
-		add<const CStr>(arena, &cEnviron, nullptr);
+			add<const CStr>(&tempArena, &cEnviron, strToCStr(&tempArena, cat(&tempArena, pair.key, strLiteral("="), pair.value)));
+		add<const CStr>(&tempArena, &cEnviron, nullptr);
 		return finishArr(&cEnviron).begin();
 	}();
 
 	return spawnAndWaitSync(executableCStr, cArgs, cEnviron);
 }
 
-const CommandLineArgs parseArgs(Arena& arena, const int argc, CStr const* const argv) {
+const CommandLineArgs parseArgs(Arena* arena, const int argc, CStr const* const argv) {
 	const Arr<const CStr> allArgs = Arr<const CStr>{argv, safeIntToSizeT(argc)};
 	const Arr<const Str> args = map<const Str>{}(arena, allArgs, [&](const CStr arg) {
 		return strLiteral(arg);
@@ -213,7 +213,7 @@ const CommandLineArgs parseArgs(Arena& arena, const int argc, CStr const* const 
 	return CommandLineArgs{cwd, getPathToThisExecutable(arena, cwd, first(args)), tail(args), getEnviron(arena)};
 }
 
-const Environ getEnviron(Arena& arena) {
+const Environ getEnviron(Arena* arena) {
 	ArrBuilder<const KeyValuePair<const Str, const Str>> res {};
 	for (CStr const* env = environ; *env != nullptr; env++)
 		add<const KeyValuePair<const Str, const Str>>(arena, &res, parseEnvironEntry(*env));

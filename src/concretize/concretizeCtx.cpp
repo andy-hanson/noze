@@ -13,7 +13,7 @@ namespace {
 		return compareArr<const ConcreteType, compareConcreteType>(a, b);
 	}
 
-	const Str getConcreteStructMangledName(Arena& arena, const Sym declName, const Arr<const ConcreteType> typeArgs) {
+	const Str getConcreteStructMangledName(Arena* arena, const Sym declName, const Arr<const ConcreteType> typeArgs) {
 		Writer writer { arena };
 		writeMangledName(writer, declName);
 		for (const ConcreteType ta : typeArgs)
@@ -42,7 +42,7 @@ namespace {
 
 	// Don't need to take typeArgs here, since we have the concrete return type and param types anyway.
 	const Str getConcreteFunMangledName(
-		Arena& arena,
+		Arena* arena,
 		const Sym declName,
 		const ConcreteType returnType,
 		const Arr<const ConcreteParam> params,
@@ -206,7 +206,7 @@ namespace {
 		if (PRINT_INSTANTIATION) {
 			printInstantiatingIndent();
 			Arena arena {};
-			Writer writer { arena };
+			Writer writer { &arena };
 			writeStatic(writer, "Instantiating ");
 			writeSym(writer, decl->name());
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs) {
@@ -231,7 +231,12 @@ namespace {
 				key.specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
 		// no closure for fun from decl
-		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(_not(decl->noCtx()), none<const ConcreteParam>(), sig, isCallFun(ctx, decl));
+		ConcreteFun* res = nu<ConcreteFun>{}(
+			ctx.arena,
+			_not(decl->noCtx()),
+			none<const ConcreteParam>(),
+			sig,
+			isCallFun(ctx, decl));
 
 		if (isNonSpecializableBuiltin(decl))
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs)
@@ -288,7 +293,7 @@ namespace {
 	}
 
 	const Str getLambdaInstanceMangledName(
-		Arena& arena,
+		Arena* arena,
 		const Str knownLambdaBodyMangledName,
 		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs,
 		const Bool isForDynamic
@@ -327,7 +332,8 @@ namespace {
 			}())
 			: klb->closureParam;
 
-		ConcreteFun* res = ctx.arena.nu<ConcreteFun>()(
+		ConcreteFun* res = nu<ConcreteFun>{}(
+			ctx.arena,
 			/*needsCtx*/ True, // TODO:PERF for some non-dynamic calls it does not need ctx
 			closure,
 			sig,
@@ -452,7 +458,8 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 		// Note: we can't do anything in this callback that would call getOrAddConcreteStruct again.
 		ConcreteStruct* res = getOrAdd<const ConcreteStructKey, ConcreteStruct*, compareConcreteStructKey>{}(ctx.arena, &ctx.allConcreteStructs, key, [&]() {
 			cellSet<const Bool>(&didAdd, True);
-			return ctx.arena.nu<ConcreteStruct>()(
+			return nu<ConcreteStruct>{}(
+				ctx.arena,
 				getConcreteStructMangledName(ctx.arena, i->decl->name, key.typeArgs),
 				getSpecialStructKind(i, ctx.commonTypes));
 		});
@@ -485,11 +492,12 @@ const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr
 }
 
 namespace {
-	const Opt<const ConcreteType> concreteTypeFromFieldsCommon(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName, const Bool neverPointer) {
+	const Opt<const ConcreteType> concreteTypeFromFieldsCommon(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName, const Bool neverPointer) {
 		if (isEmpty(fields))
 			return none<const ConcreteType>();
 		else {
-			ConcreteStruct* cs = arena.nu<ConcreteStruct>()(
+			ConcreteStruct* cs = nu<ConcreteStruct>{}(
+				arena,
 				mangledName,
 				none<const SpecialStructKind>(),
 				getConcreteStructInfoForFields(none<const ForcedByValOrRef>(), fields));
@@ -499,11 +507,11 @@ namespace {
 	}
 }
 
-const Opt<const ConcreteType> concreteTypeFromFields(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName) {
+const Opt<const ConcreteType> concreteTypeFromFields(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName) {
 	return concreteTypeFromFieldsCommon(arena, fields, mangledName, False);
 }
 
-const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName) {
+const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName) {
 	return concreteTypeFromFieldsCommon(arena, fields, mangledName, True);
 }
 

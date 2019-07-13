@@ -346,7 +346,7 @@ const Bool tryTakeElseIndent(Lexer& lexer)  {
 	return res;
 }
 
-Lexer createLexer(Arena& arena, Symbols* symbols, const NulTerminatedStr source) {
+Lexer createLexer(Arena* arena, Symbols* symbols, const NulTerminatedStr source) {
 	// Note: We *are* relying on the nul terminator to stop the lexer.
 	const Str str = stripNulTerminator(source);
 	const uint len = safeSizeTToUint(str.size);

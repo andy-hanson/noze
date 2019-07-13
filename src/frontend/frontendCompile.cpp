@@ -9,23 +9,23 @@
 #include "./parse.h"
 
 namespace {
-	const PathAndStorageKind includePath(Arena& arena) {
+	const PathAndStorageKind includePath(Arena* arena) {
 		return PathAndStorageKind{rootPath(arena, strLiteral("include.nz")), StorageKind::global};
 	}
 
-	const Opt<const NulTerminatedStr> getFile(Arena& fileArena, const PathAndStorageKind pk, const ReadOnlyStorages storages) {
+	const Opt<const NulTerminatedStr> getFile(Arena* fileArena, const PathAndStorageKind pk, const ReadOnlyStorages storages) {
 		return storages.choose(pk.storageKind).tryReadFile(fileArena, pk.path);
 	}
 
-	const Arr<const Diagnostic> parseDiagnostics(Arena& modelArena, const PathAndStorageKind where, const ParseDiagnostic p) {
+	const Arr<const Diagnostic> parseDiagnostics(Arena* modelArena, const PathAndStorageKind where, const ParseDiagnostic p) {
 		return arrLiteral<const Diagnostic>(modelArena, Diagnostic{where, p.range, Diag{p.diag}});
 	}
 
 	using LineAndColumnGettersBuilder = DictBuilder<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;
 
 	const Result<const FileAst, const Arr<const Diagnostic>> parseSingle(
-		Arena& modelArena,
-		Arena& astsArena,
+		Arena* modelArena,
+		Arena* astsArena,
 		Symbols* symbols,
 		const PathAndStorageKind where,
 		const ReadOnlyStorages storages,
@@ -56,7 +56,7 @@ namespace {
 	};
 
 	// NOTE: does not ensure that the file exists. Only returns none for a relative import that tries climbing past the root.
-	const Opt<const PathAndStorageKind> resolveImport(Arena& modelArena, const PathAndStorageKind from, const ImportAst ast) {
+	const Opt<const PathAndStorageKind> resolveImport(Arena* modelArena, const PathAndStorageKind from, const ImportAst ast) {
 		const Path* path = copyPath(modelArena, ast.path);
 		if (ast.nDots == 0)
 			return some<const PathAndStorageKind>(PathAndStorageKind{path, StorageKind::global});
@@ -69,8 +69,8 @@ namespace {
 	}
 
 	const Result<const Arr<const PathAndAst>, const Arr<const Diagnostic>> parseEverything(
-		Arena& modelArena,
-		Arena& astsArena,
+		Arena* modelArena,
+		Arena* astsArena,
 		Symbols* symbols,
 		const Path* mainPath,
 		ReadOnlyStorages storages,
@@ -84,8 +84,8 @@ namespace {
 		MutSet<const PathAndStorageKind, comparePathAndStorageKind> seenSet {};
 
 		const PathAndStorageKind firstPathAndStorageKind = PathAndStorageKind{mainPath, StorageKind::local};
-		push<const PathAndStorageKind>(tempArena, toParse, firstPathAndStorageKind);
-		seenSet.add(tempArena, firstPathAndStorageKind);
+		push<const PathAndStorageKind>(&tempArena, toParse, firstPathAndStorageKind);
+		seenSet.add(&tempArena, firstPathAndStorageKind);
 
 		for (;;) {
 			const Opt<const PathAndStorageKind> opPath = pop(toParse);
@@ -104,8 +104,8 @@ namespace {
 				if (!has(opDependencyPath))
 					todo<void>("diagnostic: import resolution failed");
 				const PathAndStorageKind dependencyPath = force(opDependencyPath);
-				if (seenSet.tryAdd(tempArena, dependencyPath))
-					push<const PathAndStorageKind>(tempArena, toParse, dependencyPath);
+				if (seenSet.tryAdd(&tempArena, dependencyPath))
+					push<const PathAndStorageKind>(&tempArena, toParse, dependencyPath);
 			}
 		}
 
@@ -113,7 +113,7 @@ namespace {
 	}
 
 	const Result<const Arr<const Module*>, const Arr<const Diagnostic>> getImports(
-		Arena& modelArena,
+		Arena* modelArena,
 		const Arr<const ImportAst> imports,
 		const PathAndStorageKind curPath,
 		const MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>& compiled
@@ -133,7 +133,7 @@ namespace {
 }
 
 const Result<const Program, const Diagnostics> frontendCompile(
-	Arena& modelArena,
+	Arena* modelArena,
 	Symbols* symbols,
 	const ReadOnlyStorages storages,
 	const Path* mainPath
@@ -146,7 +146,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	const PathAndStorageKind inclPath = includePath(modelArena);
 
 	const Result<const IncludeCheck, const Arr<const Diagnostic>> include = flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(
-		parseSingle(modelArena, astsArena, symbols, inclPath, storages, &lineAndColumnGetters),
+		parseSingle(modelArena, &astsArena, symbols, inclPath, storages, &lineAndColumnGetters),
 		[&](const FileAst ast) {
 			return checkIncludeNz(modelArena, ast, inclPath);
 		});
@@ -155,7 +155,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 		include,
 		[&](const IncludeCheck includeCheck) {
 			return mapSuccess<const IncludeAndPathAndAsts>{}(
-				parseEverything(modelArena, astsArena, symbols, mainPath, storages, &lineAndColumnGetters),
+				parseEverything(modelArena, &astsArena, symbols, mainPath, storages, &lineAndColumnGetters),
 				[&](const Arr<const PathAndAst> everything) {
 					return IncludeAndPathAndAsts{includeCheck, everything};
 				});
@@ -179,7 +179,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 					[&](const Arr<const Module*> imports) {
 						const Result<const Module*, const Arr<const Diagnostic>> res = check(modelArena, imports, ast.ast, ast.pathAndStorageKind, includeCheck);
 						if (res.isSuccess())
-							addToDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(tempArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
+							addToDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(&tempArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
 						return res;
 					});
 			});

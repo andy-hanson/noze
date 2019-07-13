@@ -17,12 +17,12 @@ public:
 		return False;
 	}
 
-	void add(Arena& arena, const T value) {
+	void add(Arena* arena, const T value) {
 		const Bool added = tryAdd(arena, value);
 		assert(added);
 	}
 
-	const Bool tryAdd(Arena& arena, const T value) {
+	const Bool tryAdd(Arena* arena, const T value) {
 		const Bool h = has(value);
 		if (_not(h))
 			push<T>(arena, arr, value);

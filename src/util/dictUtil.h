@@ -3,7 +3,7 @@
 template <typename K, typename V, Cmp<K> cmp>
 struct buildDict {
 	template <typename T, typename GetPair, typename OnConflict>
-	Dict<K, V, cmp> operator()(Arena& arena, const Arr<T> inputs, GetPair getPair, OnConflict onConflict) {
+	Dict<K, V, cmp> operator()(Arena* arena, const Arr<T> inputs, GetPair getPair, OnConflict onConflict) {
 		MutArr<KeyValuePair<K, V>> res;
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);
@@ -24,7 +24,7 @@ struct buildDict {
 template <typename K, typename V, Cmp<K> cmp>
 struct buildMultiDict {
 	template <typename T, typename GetPair>
-	MultiDict<K, V, cmp> operator()(Arena& arena, const Arr<T> inputs, GetPair getPair) {
+	MultiDict<K, V, cmp> operator()(Arena* arena, const Arr<T> inputs, GetPair getPair) {
 		MutArr<KeyValuePair<K, MutArr<V>>> res {};
 		for (const T& input : inputs) {
 			KeyValuePair<K, V> pair = getPair(input);

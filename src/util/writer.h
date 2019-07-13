@@ -4,7 +4,7 @@
 #include "./str.h"
 
 struct Writer {
-	Arena& arena;
+	Arena* arena;
 	ArrBuilder<const char> res {};
 };
 

@@ -17,7 +17,7 @@ struct MutArr {
 	MutArr(const MutArr&) = delete;
 	MutArr(MutArr&&) = default;
 	inline MutArr(T* begin, const size_t len) : isFrozen{false}, _begin{begin}, capacity{len}, _size{len} {}
-	inline MutArr(Arena& arena, T value) : isFrozen{false}, _begin{arena.nu<T>()(value)}, capacity{1}, _size{1} {}
+	inline MutArr(Arena* arena, T value) : isFrozen{false}, _begin{nu<T>{}(arena, value)}, capacity{1}, _size{1} {}
 
 	inline size_t size() const {
 		return _size;
@@ -53,11 +53,11 @@ inline void setAt(MutArr<T>& m, const size_t index, const T value) {
 }
 
 template <typename T>
-void push(Arena& arena, MutArr<T>& m, const T value) {
+void push(Arena* arena, MutArr<T>& m, const T value) {
 	if (m._size == m.capacity) {
 		T* oldBegin = m._begin;
 		m.capacity = m._size == 0 ? 4 : m._size * 2;
-		m._begin = static_cast<T*>(arena.alloc(sizeof(T) * m.capacity));
+		m._begin = static_cast<T*>(alloc(arena, sizeof(T) * m.capacity));
 		for (const size_t i : Range{m._size})
 			initMemory(m._begin[i], oldBegin[i]);
 	}
@@ -117,8 +117,8 @@ void deleteAt(MutArr<T>& m, const size_t index) {
 }
 
 template <typename T>
-inline MutArr<T> newUninitializedMutArr(Arena& arena, const size_t size) {
-	return MutArr<T>{static_cast<T*>(arena.alloc(sizeof(T) * size)), size};
+inline MutArr<T> newUninitializedMutArr(Arena* arena, const size_t size) {
+	return MutArr<T>{static_cast<T*>(alloc(arena, sizeof(T) * size)), size};
 }
 
 template <typename T>

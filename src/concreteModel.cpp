@@ -22,7 +22,7 @@ ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a
 		const Opt<const ConcreteType> argType = arg.typeWithKnownLambdaBody();
 		if (!has(argType) || !concreteTypeEq(force(argType), param.type)) {
 			Arena arena {};
-			Writer writer { arena };
+			Writer writer { &arena };
 			writeStatic(writer, "Call argument type mismatch for ");
 			writeStr(writer, c->mangledName());
 			writeStatic(writer, "\nExpected: ");

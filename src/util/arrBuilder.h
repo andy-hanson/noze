@@ -18,7 +18,7 @@ struct ArrBuilder {
 };
 
 template <typename T>
-inline void add(Arena& arena, ArrBuilder<T>* builder, T value) {
+inline void add(Arena* arena, ArrBuilder<T>* builder, T value) {
 	push<T>(arena, builder->inner, value);
 }
 

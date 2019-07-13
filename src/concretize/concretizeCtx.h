@@ -129,7 +129,7 @@ struct LambdaInfo {
 };
 
 struct ConcretizeCtx {
-	Arena& arena;
+	Arena* arena;
 	const FunDecl* allocFun;
 	const Arr<const FunDecl*> callFuns;
 	const CommonTypes& commonTypes;
@@ -151,7 +151,7 @@ struct ConcretizeCtx {
 	Late<const ConcreteType> _anyPtrType;
 	Late<const ConcreteType> _ctxPtrType;
 
-	ConcretizeCtx(Arena& _arena, const FunDecl* _allocFun, const Arr<const FunDecl*> _callFuns, const CommonTypes& _commonTypes)
+	ConcretizeCtx(Arena* _arena, const FunDecl* _allocFun, const Arr<const FunDecl*> _callFuns, const CommonTypes& _commonTypes)
 		: arena{_arena}, allocFun{_allocFun}, callFuns{_callFuns}, commonTypes{_commonTypes}, allConstants{} {}
 
 	const ConcreteType boolType();
@@ -180,19 +180,19 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx& ctx, const Struc
 const ConcreteType getConcreteType(ConcretizeCtx& ctx, const Type t, const TypeArgsScope typeArgsScope);
 const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx& ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope);
 
-const Opt<const ConcreteType> concreteTypeFromFields(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName);
-const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena& arena, const Arr<const ConcreteField> fields, const Str mangledName);
+const Opt<const ConcreteType> concreteTypeFromFields(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName);
+const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName);
 
 const Bool isCallFun(ConcretizeCtx& ctx, const FunDecl* decl);
 
 // TODO:MOVE?
 template <typename T>
-const ConstantOrExpr nuExpr(Arena& arena, const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, T t) {
-	return ConstantOrExpr{arena.nu<const ConcreteExpr>()(type, range, klb, t)};
+const ConstantOrExpr nuExpr(Arena* arena, const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, T t) {
+	return ConstantOrExpr{nu<const ConcreteExpr>{}(arena, type, range, klb, t)};
 }
 
 template <typename T>
-const ConstantOrExpr nuExpr(Arena& arena, const ConcreteType type, const SourceRange range, T t) {
+const ConstantOrExpr nuExpr(Arena* arena, const ConcreteType type, const SourceRange range, T t) {
 	return nuExpr(arena, type, range, none<const KnownLambdaBody*>(), t);
 }
 

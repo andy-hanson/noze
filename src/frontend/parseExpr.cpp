@@ -5,7 +5,7 @@
 
 namespace {
 	const ExprAst* alloc(Lexer& lexer, const ExprAst e) {
-		return lexer.arena.nu<const ExprAst>()(e);
+		return nu<const ExprAst>{}(lexer.arena, e);
 	}
 
 	struct ArgCtx {

@@ -6,7 +6,7 @@
 #include "../util/arrUtil.h" // copyStr
 
 struct Lexer {
-	Arena& arena;
+	Arena* arena;
 	Symbols* symbols;
 	// Null-terminated.
 	const CStr sourceBegin;
@@ -113,4 +113,4 @@ const ExpressionToken takeExpressionToken(Lexer& lexer);
 
 const Bool tryTakeElseIndent(Lexer& lexer);
 
-Lexer createLexer(Arena& astArena, Symbols* symbols, const NulTerminatedStr source);
+Lexer createLexer(Arena* astArena, Symbols* symbols, const NulTerminatedStr source);

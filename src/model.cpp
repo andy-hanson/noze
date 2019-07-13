@@ -55,7 +55,7 @@ const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const Str
 	return none<const CommonTypes::LambdaInfo>();
 }
 
-const Bool Expr::typeIsBogus(Arena& arena) const {
+const Bool Expr::typeIsBogus(Arena* arena) const {
 	return match(
 		[](const Expr::Bogus) {
 			return True;
@@ -119,7 +119,7 @@ const Bool Expr::typeIsBogus(Arena& arena) const {
 		});
 }
 
-const Type Expr::getType(Arena& arena, const CommonTypes& commonTypes) const {
+const Type Expr::getType(Arena* arena, const CommonTypes& commonTypes) const {
 	return match(
 		[](const Expr::Bogus) {
 			return Type{Type::Bogus{}};
@@ -211,7 +211,7 @@ void writeType(Writer& writer, const Type type) {
 }
 
 namespace {
-	const Sexpr structInstToSexpr(Arena& arena, const StructInst* si) {
+	const Sexpr structInstToSexpr(Arena* arena, const StructInst* si) {
 		return Sexpr{SexprRecord{
 			shortSymAlphaLiteral("structinst"),
 			arrLiteral<const Sexpr>(
@@ -224,7 +224,7 @@ namespace {
 	}
 }
 
-const Sexpr typeToSexpr(Arena& arena, const Type type) {
+const Sexpr typeToSexpr(Arena* arena, const Type type) {
 	unused(arena);
 	return type.match(
 		[&](const Type::Bogus) {
@@ -239,7 +239,7 @@ const Sexpr typeToSexpr(Arena& arena, const Type type) {
 }
 
 namespace {
-	const Sexpr calledToSexpr(Arena& arena, const Called c) {
+	const Sexpr calledToSexpr(Arena* arena, const Called c) {
 		unused(arena);
 		return c.match(
 			[&](const FunInst*) {
@@ -251,7 +251,7 @@ namespace {
 	}
 }
 
-const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
+const Sexpr exprToSexpr(Arena* arena, const Expr expr) {
 	return expr.match(
 		[&](const Expr::Bogus) {
 			return Sexpr{strLiteral("bogus")};
@@ -330,5 +330,5 @@ const Sexpr exprToSexpr(Arena& arena, const Expr expr) {
 
 void writeExpr(Writer& writer, const Expr expr) {
 	Arena arena {};
-	writeSexpr(writer, exprToSexpr(arena, expr));
+	writeSexpr(writer, exprToSexpr(&arena, expr));
 }

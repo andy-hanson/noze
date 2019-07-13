@@ -23,7 +23,7 @@ namespace {
 		ConcretizeExprCtx(const ConcretizeExprCtx&) = delete;
 		ConcretizeExprCtx(ConcretizeExprCtx&&) = default;
 
-		Arena& arena() {
+		Arena* arena() {
 			return concretizeCtx.arena;
 		}
 
@@ -162,7 +162,7 @@ namespace {
 	};
 
 	const ConstantOrExpr concretizeCreateRecord(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::CreateRecord e) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const ConcreteType type = ctx.getConcreteType_forStructInst(e.structInst);
 		auto nonConstant = [&](const Arr<const ConstantOrExpr> nonConstantArgs) -> const ConstantOrExpr {
 			const ConstantOrExpr value = nuExpr(arena, type.byVal(), range, ConcreteExpr::CreateRecord{makeLambdasDynamic_arr(ctx.concretizeCtx, range, nonConstantArgs)});
@@ -191,7 +191,7 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeFunAsLambda(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::FunAsLambda e) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		if (e.isSendFun)
 			todo<void>("funaslambda sendfun");
 
@@ -200,12 +200,18 @@ namespace {
 
 		const ConcreteType dynamicType = ctx.getConcreteType_forStructInst(e.type);
 
-		const KnownLambdaBody* klb = arena.nu<KnownLambdaBody>()(
-			dynamicType, cf->sig, mangledName, none<const ConcreteParam>(), emptyArr<const ClosureSingleSpecialize>());
+		const KnownLambdaBody* klb = nu<KnownLambdaBody>{}(
+			arena,
+			dynamicType,
+			cf->sig,
+			mangledName,
+			none<const ConcreteParam>(),
+			emptyArr<const ClosureSingleSpecialize>());
 		const Arr<const Expr> args = mapPtrs<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
 			return Expr{range, Expr::ParamRef{p}};
 		});
-		const Expr* body = arena.nu<const Expr>()(
+		const Expr* body = nu<const Expr>{}(
+			arena,
 			range,
 			Expr::Call{
 				// TODO: this should technically use the model arena and not the concrete arena?
@@ -228,7 +234,7 @@ namespace {
 		const Arr<const ClosureField*> closure,
 		const Str mangledName
 	) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForLambdaClosure(ctx.concretizeCtx, range, closureArgsWithConstants);
 
 		// Only the non-constant closures should go into the closure type.
@@ -262,7 +268,7 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeLambda(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Lambda e) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		if (e.isSendFun)
 			todo<void>("sendfun");
 
@@ -287,8 +293,13 @@ namespace {
 
 		const ConcreteType dynamicType = ctx.getConcreteType_forStructInst(e.type);
 
-		const KnownLambdaBody* klb = arena.nu<const KnownLambdaBody>()(
-			dynamicType, nonSpecializedSig, mangledName, closureSpecialize.closureParam, closureSpecialize.closureSpecialize);
+		const KnownLambdaBody* klb = nu<const KnownLambdaBody>()(
+			arena,
+			dynamicType,
+			nonSpecializedSig,
+			mangledName,
+			closureSpecialize.closureParam,
+			closureSpecialize.closureSpecialize);
 		const LambdaInfo info = LambdaInfo{ctx.concreteFunSource.containingFunInst, e.body};
 
 		addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(arena, &ctx.concretizeCtx.knownLambdaBodyToInfo, klb, info);
@@ -298,7 +309,7 @@ namespace {
 			: ConstantOrExpr{ctx.allConstants().lambda(arena, klb)};
 	}
 
-	const Str chooseUniqueName(Arena& arena, const Str mangledName, const Arr<const ConcreteLocal*> allLocals) {
+	const Str chooseUniqueName(Arena* arena, const Str mangledName, const Arr<const ConcreteLocal*> allLocals) {
 		return exists(allLocals, [&](const ConcreteLocal* l) { return strEq(l->mangledName, mangledName); })
 			? chooseUniqueName(arena, cat(arena, mangledName, strLiteral("1")), allLocals)
 			: mangledName;
@@ -306,7 +317,7 @@ namespace {
 
 	const ConcreteLocal* makeLocalWorker(ConcretizeExprCtx& ctx, const Sym name, const ConcreteType type, const ConstantOrLambdaOrVariable clv) {
 		const Str mangledName = chooseUniqueName(ctx.arena(), mangleName(ctx.arena(), name), tempAsArr(ctx.allLocalsInThisFun));
-		const ConcreteLocal* res = ctx.arena().nu<const ConcreteLocal>()(mangledName, type, clv);
+		const ConcreteLocal* res = nu<const ConcreteLocal>{}(ctx.arena(), mangledName, type, clv);
 		push(ctx.arena(), ctx.allLocalsInThisFun, res);
 		return res;
 	}
@@ -342,7 +353,7 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeMatch(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::Match e) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const ConstantOrExpr matched = concretizeExpr(ctx, *e.matched);
 		const ConcreteStruct* matchedUnion = ctx.getConcreteType_forStructInst(e.matchedUnion).mustBeNonPointer();
 		const ConcreteType type = ctx.getConcreteType(e.type);
@@ -372,7 +383,7 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeNewIfaceImpl(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::NewIfaceImpl e) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const ConcreteStruct* iface = ctx.getConcreteType_forStructInst(e.iface).mustBeNonPointer();
 		const Arr<const ConcreteField> fields = map<const ConcreteField>{}(arena, e.fields, [&](const Expr::NewIfaceImpl::Field f) {
 			return ConcreteField{f.isMutable, mangleName(arena, f.name), ctx.getConcreteType(f.type)};
@@ -439,7 +450,7 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeStructFieldAccess(ConcretizeExprCtx& ctx, const SourceRange range, const Expr::StructFieldAccess e) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const ConstantOrExpr target = concretizeExpr(ctx, *e.target);
 		const ConcreteType targetType = ctx.getConcreteType_forStructInst(e.targetType);
 		const size_t fieldIndex = e.field->index;
@@ -514,7 +525,7 @@ namespace {
 	}
 
 	const ConstantOrExpr concretizeExpr(ConcretizeExprCtx& ctx, const Expr expr) {
-		Arena& arena = ctx.arena();
+		Arena* arena = ctx.arena();
 		const SourceRange range = expr.range();
 
 		return expr.match(
