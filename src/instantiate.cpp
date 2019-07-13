@@ -44,12 +44,12 @@ namespace {
 }
 
 const FunInst* instantiateFun(Arena* arena, const FunDecl* decl, const Arr<const Type> typeArgs, const Arr<const Called> specImpls) {
-	for (const FunInst* fi : tempAsArr(decl->insts))
+	for (const FunInst* fi : tempAsArr(&decl->insts))
 		if (eachCorresponds(fi->typeArgs, typeArgs, typeEquals) && eachCorresponds(fi->specImpls, specImpls, calledEquals))
 			return fi;
 
 	const FunInst* res = nu<const FunInst>{}(arena, decl, typeArgs, specImpls, instantiateSig(arena, decl->sig, TypeParamsAndArgs{decl->typeParams, typeArgs}));
-	push<const FunInst*>(arena, decl->insts, res);
+	push<const FunInst*>(arena, &decl->insts, res);
 	return res;
 }
 
@@ -92,7 +92,7 @@ const StructInst* instantiateStruct(
 	const Arr<const Type> typeArgs,
 	DelayStructInsts delayStructInsts
 ) {
-	for (const StructInst* si : tempAsArr(decl->insts))
+	for (const StructInst* si : tempAsArr(&decl->insts))
 		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
 			return si;
 
@@ -104,13 +104,13 @@ const StructInst* instantiateStruct(
 	}();
 
 	StructInst* res = nu<StructInst>{}(arena, decl, typeArgs, purity);
-	push<const StructInst*>(arena, decl->insts, res);
+	push<const StructInst*>(arena, &decl->insts, res);
 
 	if (decl->bodyIsSet())
 		res->setBody(instantiateStructBody(arena, decl, typeArgs));
 	else
 		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
-		push(arena, *force(delayStructInsts), res);
+		push(arena, force(delayStructInsts), res);
 	return res;
 }
 
@@ -123,7 +123,7 @@ const StructInst* instantiateStructInst(Arena* arena, const StructInst* structIn
 }
 
 const SpecInst* instantiateSpec(Arena* arena, const SpecDecl* decl, const Arr<const Type> typeArgs) {
-	for (const SpecInst* si : tempAsArr(decl->insts))
+	for (const SpecInst* si : tempAsArr(&decl->insts))
 		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
 			return si;
 
@@ -131,7 +131,7 @@ const SpecInst* instantiateSpec(Arena* arena, const SpecDecl* decl, const Arr<co
 		return instantiateSig(arena, sig, TypeParamsAndArgs{decl->typeParams, typeArgs});
 	});
 	const SpecInst* res = nu<const SpecInst>{}(arena, decl, typeArgs, sigs);
-	push<const SpecInst*>(arena, decl->insts, res);
+	push<const SpecInst*>(arena, &decl->insts, res);
 	return res;
 }
 

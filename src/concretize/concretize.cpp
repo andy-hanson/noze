@@ -55,8 +55,8 @@ namespace {
 
 const ConcreteProgram concretize(Arena* arena, const Program program) {
 	ConcretizeCtx ctx { arena, getAllocFun(program), getCallFuns(arena, program), program.commonTypes };
-	const ConcreteFun* mainConcreteFun = getOrAddNonTemplateConcreteFunAndFillBody(ctx, getMainFun(program));
+	const ConcreteFun* mainConcreteFun = getOrAddNonTemplateConcreteFunAndFillBody(&ctx, getMainFun(program));
 	// We remove items from these dicts when we process them.
-	assert(isEmpty(ctx.concreteFunToSource));
+	assert(mutDictIsEmpty(&ctx.concreteFunToSource));
 	return getReferencedOnly(arena, mainConcreteFun, ctx.ctxPtrType().strukt);
 }

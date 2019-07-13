@@ -313,7 +313,7 @@ decr ptr ?t(p ptr ?t) noctx unsafe
 	assert: res >= a and: res >= b
 	res
 - nat(a nat, b nat)
-	assert: a > b
+	assert: a >= b
 	a wrap-sub b
 * nat(a nat, b nat)
 	| TODO: better safety check

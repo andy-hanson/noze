@@ -1,3 +1,13 @@
+my-spec<?t> spec
+	zero ?t()
+	+ ?t(a ?t, b ?t)
+
+my-sum ?t(a arr ?t) my-spec<?t>
+	when
+		a empty?
+			zero
+		else
+			a.first + a.tail.my-sum
 
 | actual main function
 main int() trusted noctx summon
@@ -18,6 +28,7 @@ main int() trusted noctx summon
 	ctx-by-val = new-ctx: gctx, vat, actor-id
 	ctx = ctx-by-val ref-of-val
 	ctx call-with-ctx &other-main
+
 	| TODO: catch exceptions and return 1 on error
 	zero
 
@@ -49,13 +60,15 @@ f nat(s stream nat)
 
 | Main function normally seen by users
 other-main void() trusted summon
-	print-sync: "hello ya world"
-	rgs = (zero to 1000).to-stream<range-nat, nat>
-	filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5}
-	x = filtered sum
-	assert: x == 233168
-	print-sync: x.to-str
-	pass
+	| rgs = (zero to 1000).to-stream<range-nat, nat>
+	| filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5}
+	| x = filtered sum
+	| assert: x == 233168
+	| print-sync: x.to-str
+
+	n = (new-arr<nat> 1, 2, 3) my-sum
+	print-sync: n.to-str
+
 	pass
 
 test void() trusted summon

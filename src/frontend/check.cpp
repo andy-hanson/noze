@@ -10,7 +10,7 @@
 
 namespace {
 	const Opt<const StructDecl*> getCommonTemplateType(
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const Sym name,
 		const size_t expectedTypeParams
 	) {
@@ -27,9 +27,9 @@ namespace {
 
 	const Opt<const StructInst*> getCommonNonTemplateType(
 		Arena* arena,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const Sym name,
-		MutArr<StructInst*>& delayedStructInsts
+		MutArr<StructInst*>* delayedStructInsts
 	) {
 		const Opt<const StructOrAlias> opStructOrAlias = getAt<const Sym, const StructOrAlias, compareSym>(structsAndAliasesMap, name);
 		if (!has(opStructOrAlias))
@@ -44,20 +44,20 @@ namespace {
 						arena,
 						s,
 						emptyArr<const Type>(),
-						some<MutArr<StructInst*>*>(&delayedStructInsts));
+						some<MutArr<StructInst*>*>(delayedStructInsts));
 				}));
 		}
 	}
 
 	const Result<const CommonTypes, const Arr<const Diagnostic>> getCommonTypes(
 		const PathAndStorageKind path,
-		CheckCtx& ctx,
-		const StructsAndAliasesMap& structsAndAliasesMap,
-		MutArr<StructInst*>& delayedStructInsts
+		CheckCtx* ctx,
+		const StructsAndAliasesMap structsAndAliasesMap,
+		MutArr<StructInst*>* delayedStructInsts
 	) {
 		// non-template types
 		auto ng = [&](const CStr s) -> const Opt<const StructInst*> {
-			return getCommonNonTemplateType(ctx.arena, structsAndAliasesMap, shortSymAlphaLiteral(s), delayedStructInsts);
+			return getCommonNonTemplateType(ctx->arena, structsAndAliasesMap, shortSymAlphaLiteral(s), delayedStructInsts);
 		};
 		const Opt<const StructInst*>
 			_bool = ng("bool"),
@@ -101,16 +101,16 @@ namespace {
 					force(str),
 					force(_void),
 					force(anyPtr),
-					arrLiteral<const StructDecl*>(ctx.arena, force(opt), force(some), force(none)),
+					arrLiteral<const StructDecl*>(ctx->arena, force(opt), force(some), force(none)),
 					force(byVal),
 					force(arr),
 					force(mutArr),
 					force(fut),
-					arrLiteral<const StructDecl*>(ctx.arena, force(fun0), force(fun1), force(fun2)),
-					arrLiteral<const StructDecl*>(ctx.arena, force(sendFun0), force(sendFun1), force(sendFun2))});
+					arrLiteral<const StructDecl*>(ctx->arena, force(fun0), force(fun1), force(fun2)),
+					arrLiteral<const StructDecl*>(ctx->arena, force(sendFun0), force(sendFun1), force(sendFun2))});
 		else {
 			const Diagnostic diag = Diagnostic{path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
-			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx.arena, diag));
+			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx->arena, diag));
 		}
 	}
 
@@ -129,7 +129,7 @@ namespace {
 		return ast.match(
 			[&](const TypeAst::TypeParam tp) {
 				if (!exists(res->tempAsArr(), [&](const TypeParam it) { return symEq(it.name, tp.name); }))
-					add<const TypeParam>(arena, res, TypeParam{tp.range, tp.name, res->size()});
+					add<const TypeParam>(arena, res, TypeParam{tp.range, tp.name, arrBuilderSize(res)});
 			},
 			[&](const TypeAst::InstStruct i) {
 				for (const TypeAst arg : i.typeArgs)
@@ -167,7 +167,7 @@ namespace {
 		CheckCtx& ctx,
 		const SigAst ast,
 		const Arr<const TypeParam> typeParams,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		DelayStructInsts delayStructInsts
 	) {
 		const TypeParamsScope typeParamsScope = TypeParamsScope{typeParams};
@@ -180,22 +180,22 @@ namespace {
 		CheckCtx& ctx,
 		const SigAst ast,
 		const Arr<const TypeParam> outerTypeParams,
-		const StructsAndAliasesMap& structsAndAliasesMap,
-		MutArr<StructInst*>& delayStructInsts
+		const StructsAndAliasesMap structsAndAliasesMap,
+		MutArr<StructInst*>* delayStructInsts
 	) {
 		return checkSig(
 			ctx,
 			ast,
 			outerTypeParams,
 			structsAndAliasesMap,
-			some<MutArr<StructInst*>*>(&delayStructInsts));
+			some<MutArr<StructInst*>*>(delayStructInsts));
 	}
 
 	const Arr<const SpecDecl> checkSpecDecls(
 		CheckCtx& ctx,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const Arr<const SpecDeclAst> asts,
-		MutArr<StructInst*>& delayStructInsts
+		MutArr<StructInst*>* delayStructInsts
 	) {
 		return map<const SpecDecl>{}(ctx.arena, asts, [&](const SpecDeclAst ast) {
 			const Arr<const TypeParam> typeParams = checkTypeParams(ctx, ast.typeParams);
@@ -247,10 +247,10 @@ namespace {
 
 	void checkStructAliasTargets(
 		CheckCtx& ctx,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		Arr<StructAlias> aliases,
 		const Arr<const StructAliasAst> asts,
-		MutArr<StructInst*>& delayStructInsts
+		MutArr<StructInst*>* delayStructInsts
 	) {
 		zipPtrs(aliases, asts, [&](StructAlias* structAlias, const StructAliasAst* ast) {
 			const Opt<const StructInst*> inst = instStructFromAst(
@@ -258,7 +258,7 @@ namespace {
 				ast->target,
 				structsAndAliasesMap,
 				TypeParamsScope{structAlias->typeParams},
-				some<MutArr<StructInst*>*>(&delayStructInsts));
+				some<MutArr<StructInst*>*>(delayStructInsts));
 			if (!has(inst))
 				todo<void>("handle invalid alias");
 			structAlias->setTarget(force(inst));
@@ -302,16 +302,16 @@ namespace {
 
 	const StructBody checkRecord(
 		CheckCtx& ctx,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const StructDecl* strukt,
 		const StructDeclAst::Body::Record r,
-		MutArr<StructInst*>& delayStructInsts
+		MutArr<StructInst*>* delayStructInsts
 	) {
 		const Arr<const StructField> fields = mapWithIndex<const StructField>{}(
 			ctx.arena,
 			r.fields,
 			[&](const StructDeclAst::Body::Record::Field field, const size_t index) {
-				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, some<MutArr<StructInst*>*>(&delayStructInsts));
+				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, some<MutArr<StructInst*>*>(delayStructInsts));
 				if (isPurityWorse(fieldType.purity(), strukt->purity) && !strukt->forceSendable)
 					ctx.addDiag(field.range, Diag{Diag::PurityOfFieldWorseThanRecord{strukt, fieldType}});
 				if (field.isMutable && strukt->purity != Purity::mut && !strukt->forceSendable)
@@ -328,12 +328,12 @@ namespace {
 	void checkStructBodies(
 		CheckCtx& ctx,
 		const CommonTypes& commonTypes,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const Arr<StructDecl> structs,
 		const Arr<const StructDeclAst> asts,
-		MutArr<StructInst*>& delayStructInsts
+		MutArr<StructInst*>* delayStructInsts
 	) {
-		DelayStructInsts delay = some<MutArr<StructInst*>*>(&delayStructInsts);
+		DelayStructInsts delay = some<MutArr<StructInst*>*>(delayStructInsts);
 		zipPtrs(structs, asts, [&](StructDecl* strukt, const StructDeclAst* ast) {
 			const StructBody body = ast->body.match(
 				[](const StructDeclAst::Body::Builtin) {
@@ -426,7 +426,7 @@ namespace {
 	const Arr<const SpecInst*> checkSpecUses(
 		CheckCtx& ctx,
 		const Arr<const SpecUseAst> asts,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const SpecsMap& specsMap,
 		const TypeParamsScope& typeParamsScope
 	) {
@@ -456,7 +456,7 @@ namespace {
 		CheckCtx& ctx,
 		const CommonTypes& commonTypes,
 		const SpecsMap& specsMap,
-		const StructsAndAliasesMap& structsAndAliasesMap,
+		const StructsAndAliasesMap structsAndAliasesMap,
 		const Arr<const FunDeclAst> asts
 	) {
 		const Arr<FunDecl> funs = map<FunDecl>{}(ctx.arena, asts, [&](const FunDeclAst funAst) {
@@ -518,17 +518,17 @@ namespace {
 		// In case the decl body isn't available yet, we'll delay creating the StructInst body, which isn't needed until expr checking.
 		MutArr<StructInst*> delayStructInsts = MutArr<StructInst*>{};
 
-		checkStructAliasTargets(ctx, structsAndAliasesMap, structAliases, ast.structAliases, delayStructInsts);
-		const Arr<const SpecDecl> specs = checkSpecDecls(ctx, structsAndAliasesMap, ast.specs, delayStructInsts);
+		checkStructAliasTargets(ctx, structsAndAliasesMap, structAliases, ast.structAliases, &delayStructInsts);
+		const Arr<const SpecDecl> specs = checkSpecDecls(ctx, structsAndAliasesMap, ast.specs, &delayStructInsts);
 		const SpecsMap specsMap = buildDeclsDict<const SpecDecl>(ctx, specs, Diag::DuplicateDeclaration::Kind::spec);
 
 		if (ctx.hasDiags())
 			return failure<const IncludeCheck, const Arr<const Diagnostic>>(ctx.diags());
 		else {
-			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypes = getCommonTypes(ctx, structsAndAliasesMap, delayStructInsts);
+			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypes = getCommonTypes(&ctx, structsAndAliasesMap, &delayStructInsts);
 			return flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(commonTypes, [&](const CommonTypes commonTypes) {
-				checkStructBodies(ctx, commonTypes, structsAndAliasesMap, structs, ast.structs, delayStructInsts);
-				for (StructInst* i : freeze(delayStructInsts))
+				checkStructBodies(ctx, commonTypes, structsAndAliasesMap, structs, ast.structs, &delayStructInsts);
+				for (StructInst* i : freeze(&delayStructInsts))
 					i->setBody(instantiateStructBody(arena, i->decl, i->typeArgs));
 				const FunsAndMap funsAndMap = checkFuns(ctx, commonTypes, specsMap, structsAndAliasesMap, ast.funs);
 
@@ -566,7 +566,7 @@ const Result<const IncludeCheck, const Arr<const Diagnostic>> checkIncludeNz(
 		emptyArr<const Module*>(),
 		ast,
 		path,
-		[&](CheckCtx& ctx, const StructsAndAliasesMap& structsAndAliasesMap, MutArr<StructInst*>& delayedStructInsts) {
+		[&](CheckCtx* ctx, const StructsAndAliasesMap structsAndAliasesMap, MutArr<StructInst*>* delayedStructInsts) {
 			return getCommonTypes(path, ctx, structsAndAliasesMap, delayedStructInsts);
 		});
 }
@@ -584,7 +584,7 @@ const Result<const Module*, const Arr<const Diagnostic>> check(
 		imports,
 		ast,
 		path,
-		[&](CheckCtx&, const StructsAndAliasesMap&, const MutArr<StructInst*>&) {
+		[&](CheckCtx*, const StructsAndAliasesMap, const MutArr<StructInst*>*) {
 			return success<const CommonTypes, const Arr<const Diagnostic>>(includeCheck.commonTypes);
 		});
 	return mapSuccess<const Module*>{}(res, [](const IncludeCheck ic) { return ic.module; });

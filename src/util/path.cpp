@@ -14,7 +14,6 @@ namespace {
 	}
 
 	size_t pathToStrSize(const Path* path, const Bool nulTerminated) {
-		//TODO:SUM
 		size_t sz = 0;
 		walkPathBackwards(path, [&](const Str part) {
 			sz += size(part) + 1;
@@ -28,16 +27,16 @@ namespace {
 		size_t i = sz;
 		if (nulTerminated) {
 			i --;
-			setAt<const char>(res, i, '\0');
+			setAt<const char>(&res, i, '\0');
 		}
 		walkPathBackwards(path, [&](const Str part) {
 			i -= size(part);
-			copyFrom(res, i, part);
+			copyFrom(&res, i, part);
 			i--;
-			setAt<const char>(res, i, '/');
+			setAt<const char>(&res, i, '/');
 		});
 		assert(i == 0);
-		return freeze(res);
+		return freeze(&res);
 	}
 
 	const Str removeExtension(const Str s) {

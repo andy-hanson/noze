@@ -51,7 +51,7 @@ struct CheckCtx {
 	}
 
 	inline const Bool hasDiags() const {
-		return _not(isEmpty(diagsBuilder));
+		return _not(arrBuilderIsEmpty(&diagsBuilder));
 	}
 
 	inline const Arr<const Diagnostic> diags() {

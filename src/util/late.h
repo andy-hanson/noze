@@ -6,45 +6,46 @@
 
 template <typename T>
 struct Late {
-private:
 	Cell<const Bool> _isSet;
 	union {
-		T value;
+		T _value;
 	};
-public:
 	Late(const Late&) = delete;
-	inline Late(Late&&) = default;
 	inline Late() : _isSet{False} {}
-	inline Late(const T _value) : _isSet{True}, value{_value} {}
-
-	inline const Bool isSet() const {
-		return cellGet(&_isSet);
-	}
-
-	inline const T& get() const {
-		assert(cellGet(&_isSet));
-		return value;
-	}
-
-	inline void set(T v) {
-		assert(!cellGet(&_isSet));
-		initMemory(value, v);
-		cellSet<const Bool>(&_isSet, True);
-	}
-
-	inline void setOverwrite(T v) {
-		assert(cellGet(&_isSet));
-		overwriteConst(value, v);
-	}
+	inline Late(const T value) : _isSet{True}, _value{value} {}
 };
 
+template <typename T>
+inline const Bool lateIsSet(const Late<T>* late) {
+	return cellGet(&late->_isSet);
+}
+
+template <typename T>
+inline const T& lateGet(const Late<T>* late) {
+	assert(lateIsSet(late));
+	return late->_value;
+}
+
+template <typename T>
+inline void lateSet(Late<T>* late, T v) {
+	assert(!lateIsSet(late));
+	initMemory(late->_value, v);
+	cellSet<const Bool>(&late->_isSet, True);
+}
+
+template <typename T>
+inline void lateSetOverwrite(Late<T>* late, T v) {
+	assert(lateIsSet(late));
+	overwriteConst(late->_value, v);
+}
+
 template <typename T, typename Cb>
-inline const T lazilySet(Late<T>& late, Cb cb) {
-	if (late.isSet())
-		return late.get();
+inline const T lazilySet(Late<T>* late, Cb cb) {
+	if (lateIsSet(late))
+		return lateGet(late);
 	else {
 		const T value = cb();
-		late.set(value);
+		lateSet<T>(late, value);
 		return value;
 	}
 }

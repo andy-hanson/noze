@@ -22,9 +22,9 @@ namespace {
 
 	template <typename Cb>
 	inline auto withLambda(ExprCtx& ctx, LambdaInfo* info, Cb cb) {
-		push(ctx.arena(), ctx.lambdas, info);
+		push(ctx.arena(), &ctx.lambdas, info);
 		auto res = cb();
-		LambdaInfo* popped = mustPop(ctx.lambdas);
+		LambdaInfo* popped = mustPop(&ctx.lambdas);
 		assert(ptrEquals(popped, info));
 		return res;
 	}
@@ -287,7 +287,7 @@ namespace {
 			// Inner ones must reference this by a closure field.
 			LambdaInfo* l0 = first(passedLambdas);
 			// Shouldn't have already closed over it (or we should just be using that)
-			assert(!exists(tempAsArr(l0->closureFields), [&](const ClosureField* it) {
+			assert(!exists(tempAsArr(&l0->closureFields), [&](const ClosureField* it) {
 				return symEq(it->name, name);
 			}));
 			const ClosureField* field = nu<const ClosureField>{}(
@@ -295,8 +295,8 @@ namespace {
 				name,
 				type,
 				ctx.alloc(expr),
-				l0->closureFields.size());
-			push<const ClosureField*>(ctx.arena(), l0->closureFields, field);
+				mutArrSize(&l0->closureFields));
+			push<const ClosureField*>(ctx.arena(), &l0->closureFields, field);
 			return checkRef(
 				ctx,
 				Expr{range, Expr::ClosureFieldRef{field}},
@@ -311,14 +311,14 @@ namespace {
 	const CheckedExpr checkIdentifier(ExprCtx& ctx, const SourceRange range, const IdentifierAst ast, Expected& expected) {
 		const Sym name = ast.name;
 
-		if (!isEmpty(ctx.lambdas)) {
+		if (!mutArrIsEmpty(&ctx.lambdas)) {
 			// Innermost lambda first
-			for (const size_t i : RangeDown{ctx.lambdas.size()}) {
-				LambdaInfo* lambda = at(ctx.lambdas, i);
+			for (const size_t i : RangeDown{mutArrSize(&ctx.lambdas)}) {
+				LambdaInfo* lambda = mutArrAt(&ctx.lambdas, i);
 				// Lambdas we skipped past that need closures
-				const Arr<LambdaInfo*> passedLambdas = slice(tempAsArr(ctx.lambdas), i + 1);
+				const Arr<LambdaInfo*> passedLambdas = slice(tempAsArr(&ctx.lambdas), i + 1);
 
-				for (const Local* local : tempAsArr(lambda->locals))
+				for (const Local* local : tempAsArr(&lambda->locals))
 					if (symEq(local->name, name))
 						return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, passedLambdas, expected);
 
@@ -327,15 +327,15 @@ namespace {
 						return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, passedLambdas, expected);
 
 				// Check if we've already added something with this name to closureFields to avoid adding it twice.
-				for (const ClosureField* field : tempAsArr(lambda->closureFields))
+				for (const ClosureField* field : tempAsArr(&lambda->closureFields))
 					if (symEq(field->name, name))
 						return checkRef(ctx, Expr{range, Expr::ClosureFieldRef{field}}, range, name, field->type, passedLambdas, expected);
 			}
 		}
 
-		const Arr<LambdaInfo*> allLambdas = tempAsArr(ctx.lambdas);
+		const Arr<LambdaInfo*> allLambdas = tempAsArr(&ctx.lambdas);
 
-		for (const Local* local : tempAsArr(ctx.messageOrFunctionLocals))
+		for (const Local* local : tempAsArr(&ctx.messageOrFunctionLocals))
 			if (symEq(local->name, name))
 				return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, allLambdas, expected);
 
@@ -373,9 +373,9 @@ namespace {
 
 	template <typename Cb>
 	auto checkWithLocal_worker(ExprCtx& ctx, const Local* local, Cb cb) {
-		MutArr<const Local*>& locals = isEmpty(ctx.lambdas)
-			? ctx.messageOrFunctionLocals
-			: mustPeek(ctx.lambdas)->locals;
+		MutArr<const Local*>* locals = mutArrIsEmpty(&ctx.lambdas)
+			? &ctx.messageOrFunctionLocals
+			: &mustPeek(ctx.lambdas)->locals;
 		push(ctx.arena(), locals, local);
 		auto res = cb();
 		const Local* popped = mustPop(locals);
@@ -454,7 +454,7 @@ namespace {
 			const Expr::Lambda lambda = Expr::Lambda{
 				params,
 				body,
-				freeze(info.closureFields),
+				freeze(&info.closureFields),
 				instFunStruct,
 				et.nonSendFunStruct,
 				et.isSendFun,

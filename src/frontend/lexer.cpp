@@ -51,13 +51,9 @@ namespace {
 		return range(lexer, safeSizeTToUint(begin - lexer->sourceBegin));
 	}
 
-	const Str copyStr(Lexer* lexer, const CStr begin, const CStr end) {
-		return ::copyStr(lexer->arena, arrOfRange(begin, end));
-	}
-
 	const ExpressionToken takeNumber(Lexer* lexer, const CStr begin)  {
 		while (isDigit(*lexer->ptr) || *lexer->ptr == '.') lexer->ptr++;
-		return ExpressionToken{copyStr(lexer, begin, lexer->ptr)};
+		return ExpressionToken{copyStr(lexer->arena, arrOfRange(begin, lexer->ptr))};
 	}
 
 	const Str takeOperatorRest(Lexer* lexer, const CStr begin)  {
@@ -107,10 +103,10 @@ namespace {
 							return throwUnexpected<char>(lexer);
 					}
 				}();
-				setAt<const char>(res, outI, c);
+				setAt<const char>(&res, outI, c);
 				outI++;
 			} else {
-				setAt<const char>(res, outI, *lexer->ptr);
+				setAt<const char>(&res, outI, *lexer->ptr);
 				outI++;
 			}
 			lexer->ptr++;
@@ -118,8 +114,8 @@ namespace {
 
 		lexer->ptr++; // Skip past the closing '"'
 
-		assert(outI == res.size());
-		return freeze(res);
+		assert(outI == mutArrSize(&res));
+		return freeze(&res);
 	}
 
 	const Str takeNameRest(Lexer* lexer, const CStr begin) {

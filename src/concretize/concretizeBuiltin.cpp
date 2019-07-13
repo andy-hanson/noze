@@ -356,8 +356,8 @@ namespace {
 		return LocalAndExpr{cmpFirstLocal, res};
 	}
 
-	const ConcreteFunExprBody generateCompare(ConcretizeCtx& ctx, const ConcreteFunInst concreteFunInst, const ConcreteFun* fun) {
-		Arena* arena = ctx.arena;
+	const ConcreteFunExprBody generateCompare(ConcretizeCtx* ctx, const ConcreteFunInst concreteFunInst, const ConcreteFun* fun) {
+		Arena* arena = ctx->arena;
 		const ComparisonTypes types = getComparisonTypes(fun->returnType(), concreteFunInst.typeArgs);
 
 		auto getExpr = [&](const size_t memberIndex, const ConcreteType memberType) -> const ConcreteExpr* {
@@ -384,7 +384,7 @@ namespace {
 			return getOrAddConcreteFunAndFillBody(ctx, key);
 		};
 
-		const ConcreteType boolType = ctx.boolType();
+		const ConcreteType boolType = ctx->boolType();
 
 		if (types.t.isPointer != types.t.strukt->defaultIsPointer())
 			todo<void>("compare by value -- just take a ref and compare by ref");
@@ -454,14 +454,14 @@ namespace {
 	}
 }
 
-const ConcreteFunBody getBuiltinFunBody(ConcretizeCtx& ctx, const ConcreteFunSource source, const ConcreteFun* cf) {
+const ConcreteFunBody getBuiltinFunBody(ConcretizeCtx* ctx, const ConcreteFunSource source, const ConcreteFun* cf) {
 	const BuiltinFunInfo info = getBuiltinFunInfo(source.containingFunDecl()->sig);
 	const Arr<const ConcreteType> typeArgs = source.typeArgs();
-	const Opt<const Arr<const Constant*>> allConstant = tryGetAllConstant(ctx.arena, source.paramsSpecialize);
+	const Opt<const Arr<const Constant*>> allConstant = tryGetAllConstant(ctx->arena, source.paramsSpecialize);
 	if (has(allConstant)) {
 		const Opt<const Constant*> c = tryEvalBuiltinAsConst(
-			ctx.arena,
-			ctx.allConstants,
+			ctx->arena,
+			ctx->allConstants,
 			info,
 			typeArgs,
 			force(allConstant),

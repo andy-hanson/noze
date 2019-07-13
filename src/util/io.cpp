@@ -86,9 +86,9 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath p
 	if (nBytesRead != fileSize)
 		return todo<Ret>("nBytesRead not right?");
 
-	setAt<const char>(res, res.size() - 1, '\0');
+	setAt<const char>(&res, mutArrSize(&res) - 1, '\0');
 
-	return some<const NulTerminatedStr>(NulTerminatedStr{freeze(res)});
+	return some<const NulTerminatedStr>(NulTerminatedStr{freeze(&res)});
 }
 
 

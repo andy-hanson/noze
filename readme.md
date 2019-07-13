@@ -11,6 +11,8 @@ cd ..
 ```
 
 You can do a simple build using `./build-once.sh`, or incremental builds using `scons`.
+libfirm is currently not used at runtime, noze compiles to C instead. But libfirm support is planned and you can't build without it.
+
 
 ### Running
 

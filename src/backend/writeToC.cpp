@@ -2,6 +2,7 @@
 
 #include "../concretize/concretizeUtil.h" // writeConcreteTypeForMangle
 #include "../util/arrUtil.h"
+#include "../util/mutSet.h"
 #include "../util/writer.h"
 
 namespace {
@@ -361,11 +362,11 @@ namespace {
 				writeStatic(writer, "0");
 			},
 			[&](const ConstantKind::Ptr p) {
-				writeChar(writer, '&');
-				writeConstantReference(writer, p.array);
-				writeStatic(writer, ".data[");
+				writeStatic(writer, "(_constantArrBacking");
+				writeNat(writer, p.array->id);
+				writeStatic(writer, " + ");
 				writeNat(writer, p.index);
-				writeChar(writer, ']');
+				writeChar(writer, ')');
 			},
 			[&](const ConstantKind::Record r) {
 				if (r.type.isPointer)
@@ -387,7 +388,19 @@ namespace {
 		});
 	}
 
-	void writeConstantDecl(Writer* writer, const Constant* c) {
+	struct WrittenConstants {
+		Arena arena {};
+		MutSet<const Constant*, comparePtr<const Constant>> written {};
+	};
+
+	void ensureWrittenConstantDecl(Writer* writer, WrittenConstants* written, const Constant* c);
+
+	void ensureWrittenConstantDecls(Writer* writer, WrittenConstants* written, const Arr<const Constant*> elements) {
+		for (const Constant* e : elements)
+			ensureWrittenConstantDecl(writer, written, e);
+	}
+
+	void writeConstantDecl(Writer* writer, WrittenConstants* written, const Constant* c) {
 		const ConcreteType type = c->type();
 		c->kind.match(
 			[&](const ConstantKind::Array a) {
@@ -397,19 +410,27 @@ namespace {
 				// Strings are special:
 				// static arr_char _constantArr123 = arr_char{5, const_cast<char*>("hello")};
 
+				ensureWrittenConstantDecls(writer, written, a.elements());
+
 				const size_t size = a.size();
 				const Bool isStr = first(a.elements())->kind.isChar();
 				const size_t id = c->id;
-				if (size != 0 && !isStr) {
+				if (size != 0) {
 					writeStatic(writer, "static ");
 					writeType(writer, a.elementType());
 					writeStatic(writer, " _constantArrBacking");
 					writeNat(writer, id);
 					writeChar(writer, '[');
 					writeNat(writer, size);
-					writeStatic(writer, "] = {");
-					writeConstantReferencesWithCommas(writer, a.elements());
-					writeStatic(writer, "};\n");
+					writeStatic(writer, "] = ");
+					if (isStr)
+						writeQuotedString(writer, a.elements());
+					else {
+						writeChar(writer, '{');
+						writeConstantReferencesWithCommas(writer, a.elements());
+						writeChar(writer, '}');
+					}
+					writeStatic(writer, ";\n");
 				}
 
 				writeStatic(writer, "static ");
@@ -418,14 +439,8 @@ namespace {
 				writeNat(writer, id);
 				writeStatic(writer, " = { ");
 				writeNat(writer, size);
-				writeStatic(writer, ", ");
-				if (isStr) {
-					writeStatic(writer, "(char*) ");
-					writeQuotedString(writer, a.elements());
-				} else {
-					writeStatic(writer, "_constantArrBacking");
-					writeNat(writer, id);
-				}
+				writeStatic(writer, ", _constantArrBacking");
+				writeNat(writer, id);
 				writeStatic(writer, " };\n");
 			},
 			[](const Bool) {},
@@ -436,9 +451,12 @@ namespace {
 			[](const ConstantKind::Lambda) {},
 			[](const Nat64) {},
 			[](const ConstantKind::Null) {},
-			// ptr will be written inlien as `&arr.data[3]`
-			[](const ConstantKind::Ptr) {},
+			[&](const ConstantKind::Ptr p) {
+				ensureWrittenConstantDecl(writer, written, p.array);
+			},
 			[&](const ConstantKind::Record r) {
+				ensureWrittenConstantDecls(writer, written, r.args);
+
 				writeStatic(writer, "static ");
 				writeType(writer, r.type);
 				writeChar(writer, ' ');
@@ -452,6 +470,8 @@ namespace {
 				writeStatic(writer, " };\n");
 			},
 			[&](const ConstantKind::Union u) {
+				ensureWrittenConstantDecl(writer, written, u.member);
+
 				writeStatic(writer, "static ");
 				writeValueType(writer, u.unionType);
 				writeChar(writer, ' ');
@@ -463,6 +483,18 @@ namespace {
 				writeStatic(writer, ");\n");
 			},
 			[](const ConstantKind::Void) {});
+	}
+
+	void ensureWrittenConstantDecl(Writer* writer, WrittenConstants* written, const Constant* c) {
+		if (tryAddToMutSet(&written->arena, &written->written, c))
+			writeConstantDecl(writer, written, c);
+	}
+
+	void writeConstants(Writer* writer, const Arr<const Constant*> allConstants) {
+		// Unlike structs, constants can't have circular references.
+		// So we'll just make sure to write a constant's dependencies immediately before writing it.
+		WrittenConstants written {};
+		ensureWrittenConstantDecls(writer, &written, allConstants);
 	}
 
 	void writeNewIfaceImpl(Writer* writer, const ConcreteExpr::NewIfaceImpl impl) {
@@ -1068,13 +1100,8 @@ const Str writeToC(Arena* arena, const ConcreteProgram program) {
 	writeStatic(&writer, "#include <assert.h>\n");
 	writeStatic(&writer, "#include <stdint.h>\n");
 
-	// Problem: pointer and function pointer types are declared using 'using' and can't be predeclared.
-	// But those may refer to other types. So may not be able to write them yet.
 	writeStructs(&writer, program.allStructs);
-
-	for (const Constant* c : program.allConstants)
-		writeConstantDecl(&writer, c);
-
+	writeConstants(&writer, program.allConstants);
 	writeInitAndFailFuns(&writer, program.allStructs);
 
 	for (const ConcreteExpr::NewIfaceImpl impl : program.allNewIfaceImpls)

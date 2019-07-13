@@ -16,7 +16,7 @@ struct Dict {
 
 template <typename K, typename V, Cmp<K> cmp>
 const Opt<V> getAt(const Dict<K, V, cmp> d, const K key) {
-	for (const KeyValuePair<K, V>& pair : d.pairs)
+	for (const KeyValuePair<K, V> pair : d.pairs)
 		if (cmp(pair.key, key) == Comparison::equal)
 			return some<V>(pair.value);
 	return none<V>();

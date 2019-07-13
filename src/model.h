@@ -305,10 +305,10 @@ public:
 		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams} {}
 
 	inline const StructInst* target() const {
-		return _target.get();
+		return lateGet(&_target);
 	}
 	inline void setTarget(const StructInst* value) {
-		_target.set(value);
+		lateSet(&_target, value);
 	}
 };
 
@@ -325,15 +325,15 @@ private:
 	Late<const StructBody> _body {};
 public:
 	inline const Bool bodyIsSet() const {
-		return _body.isSet();
+		return lateIsSet(&_body);
 	}
 	inline StructBody body() const {
-		return _body.get();
+		return lateGet(&_body);
 	}
 	inline void setBody(StructBody value) {
 		if (value.isIface())
 			assert(purity == Purity::sendable);
-		_body.set(value);
+		lateSet<const StructBody>(&_body, value);
 	}
 
 	// TODO: why do I need to specify a constructor here?
@@ -353,10 +353,10 @@ public:
 		assert(sizeEq(d->typeParams, t));
 	}
 	inline StructBody body() const {
-		return _body.get();
+		return lateGet(&_body);
 	}
 	inline void setBody(StructBody value) {
-		_body.set(value);
+		lateSet(&_body, value);
 	}
 };
 
@@ -451,22 +451,22 @@ struct FunDecl {
 	const Sig sig;
 	const Arr<const TypeParam> typeParams;
 	const Arr<const SpecInst*> specs;
-	Late<FunBody> _body {};
+	Late<const FunBody> _body {};
 	Late<const Module*> _containingModule {};
 	mutable MutArr<const FunInst*> insts {};
 
 	inline const FunBody body() const {
-		return _body.get();
+		return lateGet(&_body);
 	}
 	inline void setBody(const FunBody body) {
-		_body.set(body);
+		lateSet<const FunBody>(&_body, body);
 	}
 
 	inline const Module* containingModule() const {
-		return _containingModule.get();
+		return lateGet(&_containingModule);
 	}
 	inline void setContainingModule(const Module* m) {
-		_containingModule.set(m);
+		lateSet<const Module*>(&_containingModule, m);
 	}
 
 	inline const SourceRange range() const {

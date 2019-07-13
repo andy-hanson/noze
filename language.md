@@ -2,42 +2,233 @@
 
 A few interesting aspects of noze:
 
-* There is no global state. A function can access only its arguments.
-* Normally, functions cannot have side-effects, except through interfaces. (See the section on interfaces). A normal function with no interface parameters performs no I/O, and a function with no mutable parameters is a pure function. (A "normal" function is a non-`summon` non-`unsafe` one -- see the section on function attributes.)
+* There normally is no global state. A normal function can access only its arguments.
+  The exception is `summon` functions, which can only be called by other `summon` functions.
+  Similarly, a normal function can not perform I/O, except through an argument of interface types.
+  A normal function with no interface parameters performs no I/O, and a normal function with no mutable parameters is a pure function.
 
 
-## Expressions
 
-#### Call expression
+## Syntax
 
-Call expressions are normally written in infix syntax, like `x + y`.
+A noze file consists of declarations. Each declaration is declared like `name type`, with an indented block following.
+The language is fairly strict with whitespace -- an indentation must be exactly one tab, and leading / trailing spaces on a line are illegal.
+It is also a syntax error to have multiple spaces in a row or to fail to put spaces around an operator (which is parsed much like a regular name).
+
+
+Noze is an expression-based langage -- it has only expressions and no concept of a statement.
+A function body is an expression and no `return` is necessary.
+Functions that return "nothing" return `void`, which is an empty type.
+
+#### Names
+
+A name may be *either* alpha *or* an operator. Mixing alpha and operator characters is not allowed, e.g. `a/b` is not a valid name.
+
+An alpha name consists of `a-z`, `0-9`, hyphens `-`, and may optionally end in a `?`. Upper-case letters and underscores are illegal. The name must begin with `a-z`.
+
+An operator name consists of a sequence the characters `+-*/<>=`. You can build any operator you want, e.g. `+/<`. Try not to abuse this!
+`=` is not an operator though, it is a keyword. But `==` is an operator, an ordinary name.
+There is no `!=` operator since `!` is used for other purposes (see the section on interfaces).
+
+Despite having an alpha / operator distinction, there *must* be spaces around operators. `a+b` is a syntax error, it must be `a + b`.
+
+
+#### Call syntax
+
+The most common expression is a call expression, so there are a number of ways to write it for convenience.
+
+Normally, prefer to write call expressions using infix syntax, like `x + y`.
+Note this is not binary only, so you can write `x +` for a 1-argument function or or `x + y, z` for a 3-argument function.
 There is no operator precedence, and calls usually associate to the left,
 so `x + y * z` is the same as `(x + y) * z`.
+Alpha names are treated the same as operator names by the parser, so you could write `x plus y` too.
 
-To indicate that there are no subsequent calls, add a colon after the function name:
-`x +: y * z` is the same as `x + (y * z)`.
+
+If you put a colon `:` after the function name, that makes this the last call on the line -- any other calls happen within the arguments to this call. So `x +: y * z` is the same as `x + (y * z)`.
 
 If you prefer a prefix syntax for a call, you can put the function name first and then a colon: `+: x, *: y, z` is the same as `x + (y * z)`.
 
 A function with no arguments can be called without parentheses.
-Noze has no construct for constants, instead just use a function of no arguments.
+Noze has no global variables, and thus no global constants, instead just use a function of no arguments.
 
 A function of one argument can be written with a `.`. `x.abs + y` is equivalent to `(x abs) + y`.
+The `.` is tightly binding, so `x + y.abs` is parsed as `x + (y.abs)` rather than `(x + y).abs`.
 
+
+
+#### Comments
+
+A regular comment is a line beginning with `| ` (the `|` must be followed by a space).
+One may also replace `|` with `region` for a comment indicating that the following code forms a logical group.
+A line may not mix comment and non-comment content -- a comment must go on its own line.
+
+
+## Types
+
+There are only a few basic kinds of types -- records, unions, and interfaces.
+There are also type parameters, though those of course must resolve to one of the above eventually. See the section on [templates](#templates) for those.
+
+
+### Record types
+
+A record type is declared like so:
+
+```nz
+point-2d record
+	x float
+	y float
+```
+
+A record is created with a `new` expression.
+Where the type is not clear from context, this may be provided with type argument syntax.
+
+```nz
+zero point-2d()
+	| Type is obvious from context (return type of the function)
+	new 0, 0
+
+zero2 point-2d()
+	| Need to provide the type
+	p = new<point-2d> 0, 0
+	p
+```
+
+For each field of the record, it's as if there is a function with that field's name, taking a record and returning the field value. So you can access the `x` value of a point with `p x` (or `p.x`).
+
+A field can be mutable:
+
+```nz
+mutable-point2d record mut
+	x mut float
+	y mut float
+```
+
+(Why the `mut` at the top? See the section on [#purity](purity) later.)
+
+You can change the value of a field using `:=`, as in `p.x := 0`. (There is no `+=` or the like.)
+
+Normally the compiler is free to choose whether a record is by-value or by-reference. However, a mutable record is always by-reference, so you can be guaranteed mutations you make are seen everywhere rather than just mutating a copy.
+
+
+
+
+### Union types
+
+A union type is declared like so:
+
+```nz
+circle record
+	radius float
+
+square record
+	width float
+
+shape union
+	circle
+	square
+```
+
+The members of a union can be records or interfaces, but not other unions.
+
+A member of the union implicitly converts to the union, and this is actually the only way to create a union value.
+Where there is no expected type, you can create it using the function `as` which is just the identify function: `my-circle as<shape>` will have the correct type `shape` rather than `circle`.
+
+Note that this is a *conversion* and not a subtyping relationship.
+It's not that a circle "is-a" shape.
+So a `circle` argument can be passed to a `shape` parameter because the compiler will fill in the conversion,
+but an `arr circle` will not convert to an `arr shape`. (`arr` is a template type, see the section on [templates](#templates))
+
+Unlike some other languages with unions, the members of the union are independent of the union. They can be used alone, or in other unions.
+It's planned for a smaller union to implicitly convert to a bigger union that contains all its members (e.g. shape could convert to a union of circle, square, or triangle), but this is not implemented.
+
+The only thing you can do with a union is to use a `match` expression to handle each of its members:
+
+```nz
+area float(s shape)
+	match s
+		circle c
+			pi * c.radius.squared
+
+		square s
+			s.width.squared
+```
+
+The match cases must match the order the types were declared in the union.
+Each match case consists of a type name, an optional name of a local variable of that type, then an indented block providing a result for that type.
+
+There are no enum types, but a union of empty records can be used instead. (This is why the match case's local variable name is optional -- it's useless for an empty type.)
+
+
+### Interface types
+
+WARN: Interfaces are not finished yet, this section is merely a plan.
+
+An interface type is declared like so:
+
+```nz
+printer iface
+	print void(s str)
+```
+
+An interface has a set of signatures which may be implemented by a new actor.
+
+```nz
+stdout-printer printer() summon
+	new-actor
+		print(s)
+			s print-sync
+```
+
+And called like:
+
+```nz
+callit fut void(p printer)
+	p !print "hello"
+```
+
+The implementation of an interface will run in parallel, meaning the caller of the interface will keep running rather than wait for the implementation to run.
+All interface methods implicitly return a `fut` (a future) -- interfaces are never synchronous.
+
+Interfaces in noze are very different from those in Java -- interfaces are not implemented by types, they are implemented by `new-actor` expressions.
+There is no subtyping involved -- an interface is a concrete type.
+Interfaces cannot currently subtype each other.
+
+In the above example the `new-actor` doesn't use anything from the outer context. A `new-actor` can also close over outer variables, though unlike lambdas this must be explicit.
+
+```nz
+printer-to-mut-arr printer(m mut-arr char) summon
+	new-actor(mut m)
+		print(s)
+			m push-all s
+```
+
+This actor closes over `m`, which is a `mut-arr` and is not thread safe.
+So, it will be tagged with the same ID as the current actor (the one that called `printer-to-mut-arr`), so that it can't run in parallel with that.
+The actor may still run in parallel to its *caller* though.
+
+For interfaces with a single method, you might just use a `send-fun` type and implement it using a [lambda](#lambdas).
+
+Interfaces are also the normal way to perform I/O (without `summon`). Since I/O operations may take a long time, it's useful that interfaces always return `fut`.
+The exceptional functions that run synchronously usually have names that end in `sync` (and are usually `summon`).
+However, it's not considered unsafe behavior for a function to take a long time, since that's possible without performing any I/O at all -- to handle that interrupts should be added to the runtime.
+
+
+
+## Other expressions
 
 #### `when` expression
 
 First, there is a function `if` that is suitable for small conditional expressions, as in `a < b if a, b`.
 For longer conditional expressions there is a multi-line form:
 
-```
+```nz
 when
 	x < 0
 		"negative"
 	x > 0
 		"positive"
 	else
-			"zero"
+		"zero"
 ```
 
 This is equivalent to `x < 0 if: "negative", x > 0 if: "positive", "zero"`.
@@ -50,151 +241,52 @@ The `else` *must* be present.
 
 
 
-## Types
-
-### Common types
-
-
-### Record types
-
-A record type is declared like so:
-
-```
-point-2d record
-	x float64
-	y float64
-```
-
-A record is created with a `new` expression.
-Where the type is not clear from context, this may be provided with type argument syntax.
-
-```
-zero point-2d()
-	| Type is obvious from context
-	new 0, 0
-```
-
-```
-zero2 point-2d()
-	| Need to provide the type
-	p = new<point-2d> 0, 0
-	p
-```
-
-For each field of the record, it's as if there is a function with that field's name, taking a record and returning the field value. So you can access the `x` value of a point with `p x` (or `p.x`).
-
-A field can be mutable:
-
-```
-mutable-point2d record mut
-	x mut float64
-	y mut float64
-```
-
-(For the `mut` at the top, see the section on purity later.)
-
-You can change the value of a field using `:=`, as in `p.x := 0`. (There is no `+=` or the like.)
-
-Normally the compiler is free to choose whether a record is by-value or by-reference. However, a mutable record is always by-reference, so you can be guaranteed mutations you make are seen everywhere.
-
-
-### Union types
-
-A union type is declared like so:
-
-```
-circle record
-	radius float64
-
-square record
-	width float64
-
-shape union
-	circle
-	square
-```
-
-A member of the union implicitly converts to the union, and this is actually the only way to create a union value.
-Where there is no expected type, you can create it using the function `as` which is just the identify function: `my-circle as<shape>` will have the correct type `shape` rather than `circle`.
-
-Note that this is a *conversion* -- it's not that a circle "is-a" shape. So a `circle` argument can be passed to a `shape` parameter, but an `arr circle` will not convert to an `arr shape`. (`arr` is a template type, there will be a section on those later.)
-
-Note that unlike some other languages with unions, the members of the union are independent of the union. They can be used alone, or in other unions.
-It's planned for a smaller union to implicitly convert to a bigger union that contains all its members (e.g. one with circle, square, or triangle), but this is not implemented.
-
-To get the members of the union back, use `match`:
-
-```
-area float64(s shape)
-	match s
-		circle c
-			pi * c.radius.squared
-
-		square s
-			s.width.squared
-```
-
-
-### Interface types
-
-Note: type-checking is implemented for these, but code generation is not.
-
-An interface type is declared like so:
-
-```
-printer iface
-	print void(s str)
-```
-
-An interface is a set of signatures which may be implemented by an interface implementation.
-
-```
-stdout-printer printer() summon
-	actor
-		print(s)
-			s print-sync
-```
-
-And called like:
-
-```
-callit fut void(p printer)
-	p !print "hello"
-```
-
-The implementation of an interface will run in parallel, meaning the caller of the interface will keep running rather than wait for the implementation to run.
-All interface methods implicitly return a `fut` (a future) -- interfaces are never synchronous.
-
-Note that interfaces in noze are very different from those in Java -- interfaces are not implemented by types, they are implemented by interface-implementation expressions. There is no subtyping involved -- an interface is itself a particular type. Interfaces cannot subtype each other either.
-
-Interfaces are also the normal way to perform I/O (without `summon`). Most I/O operations could take an arbitrarily long amount of time, so it's nice to know that they generally run in parallel. Functions that run synchronously usually have names that end in `sync` (and are usually `summon`). But note that it's not considered unsafe behavior for a function to take a long time, since that's possible without performing any I/O at all -- to handle that interrupts should be added to the language.
-
-
 ## Functions
 
-Mention: how expression syntax works
+A normal function declaration looks like:
 
-Describe all the expressions
+```nz
+add-em nat(a nat, b nat)
+	a + b
+```
+
+The function is written name-first, type-second: the name is `add-em` and the return type is `nat`.
+Parameters work the same way.
 
 
 ## Function attributes
 
-A normal function has no attributes. This function cannot perform I/O except through interfaces and cannot do dangerous things like pointer arithmetic.
+A normal function has no attributes. It cannot perform I/O except through interfaces and cannot do dangerous things like pointer arithmetic.
 
-Function attributes share the same syntax as specs -- they are written after the parentheses on a function declaration.
+Function attributes share the same syntax as [specs](#specs) -- they are written after the parentheses on a function declaration.
 
-A `summon` function is allowed to perform I/O without being passed an interface -- it summons the ability to perform I/O out of thin air.
+#### summon
 
-```
+A `summon` function is allowed to perform I/O without being passed an interface -- it "summon"s the ability to perform I/O out of thin air.
+
+```nz
 say-hi void() summon
 	print-sync "hello world"
 ```
 
-Usually a `summon` function should return an interface, and the rest of the code should use that interface. Only `summon` functions can call `summon` functions. (Meaning, `main` will have to be summon for your program to do anything.)
+Only `summon` functions can call `summon` functions. (Meaning, `main` will have to be summon for your program to do anything.)
+However, a `summon` function can return an interface, and normal functinos can perform I/O through that interface.
 
-`unsafe` functions are used to implement the runtime. Only `unsafe` or `trusted` functions can call unsafe functions. Any function can call a `trusted` function.
+#### unsafe / trusted
 
-`noctx` functions are similarly used to implement the runtime. Normal functions have an implicit `ctx` parameter that lets them use the runtime to do things like allocate memory, throw exceptions, create new actors, and enqueue new tasks. `noctx` functions effectively have no runtime, making it possible to implement the runtime in noze itself.
+`unsafe` functions are used to implement the runtime. These can do things like pointer arithmetic or allocating uninitialized memory.
+Only `unsafe` or `trusted` functions can call unsafe functions.
+Any function can call a `trusted` function.
+
+#### noctx
+
+`noctx` functions are similarly used to implement the runtime.
+Normal functions have an implicit `ctx` parameter that lets them use the runtime to do things like allocate memory, throw exceptions, create new actors, and enqueue new tasks.
+The vast majority of functions require a ctx, even `+` since that may throw an exception on overflow.
+`noctx` functions effectively have no runtime, making it possible to implement the runtime in noze itself.
+
+
+#### extern
 
 `extern` functions are implicitly `unsafe` and `summon`. These are like `extern` functions in C -- they should be implemented in a library that is linked in.
 (Currently there is no way to specify libraries to link, so the only `extern` functions are from the C standard library.)
@@ -202,21 +294,99 @@ Usually a `summon` function should return an interface, and the rest of the code
 
 ## Purity
 
-TODO:MORE
-An interface can only use `sendable` types.
+Every type (except type parameters) has a purity. The three values of purity are `data`, `sendable`, and `mut`.
+
+`data` is ordinary immutable data. This is safe to share with other parallel tasks.
+`sendable` is not immutable, but has been specially designed to be safe to send to another parallel task.
+`mut` is ordinary mutable data, not parallel-safe.
+
+`data` is more pure than `sendable`, which is more pure than `mut`.
+
+The purity specifier goes after specifying the kind of type, e.g. `r record mut` or `u union sendable`. `data` is the default.
+You can't specify purity for an interfaces because those are all `sendable`.
+
+The constituents of a type must be at least as pure as that type. This applies transitively.
+
+```nz
+im-mutable record mut
+	x mut nat
+
+what-am-i record
+	m im-mutable
+```
+
+The above example is a compile error: `what-am-i` should be marked `mut` even though it has no `mut` fields itself, because `mut` data is eventually reachable through it.
+
+(It may also be marked `force-sendable` which is used internally by the runtime to create the primitive sendable types.)
+
+Everything in an interface must be sendable -- meaning the return types and parameter types of all of its signatures.
 
 
 ## Templates
 
-Mention: how to write your own templates,
-how to explicitly provide type arguments
+Instead of using a particular type, a function may specify a type parameter to be filled in by the caller.
 
+```nz
+choose ?t(b bool, a ?t, b ?t)
+	b if a, b
 
+call-on-nat nat(b bool)
+	b choose 1, 2
+
+call-on-float float(b bool)
+	b choose 1.0, 2.0
+```
+
+Type arguments can be provided explicitly, as in `b choose<float> 1.0, 2.0`.
+
+For a function, there's no need to declare your intention to use type parameters, you just start using them.
+You can choose to specify them explicitly though, as in `choose<?t> ?t(b bool, a ?t, b ?t)`.
+This can be useful for controlling their order (which affects the syntax when type arguments are provided explicitly).
+
+A type can also be a template. In this case type parameters must be listed explicitly.
+
+```nz
+pair<?t> record
+	a ?t
+	b ?t
+
+get-nats pair nat()
+	new 1, 2
+```
+
+Type arguments to a type are normally just provided with a space in between.
+But to provide nested type arguments to a type argument angle brackets must be used, as in `pair pair<nat>`.
+
+Type arguments are *opaque*, meaning nothing about the type is known.
+However, you can use specs to ensure that some functions will exist.
 
 
 ## Specs
 
+Often a template function needs to rely on some functionality existing for a type.
+It can specify what functions it expects to exist using a spec.
+
+```nz
+my-spec<?t> spec
+	zero ?t()
+	+ ?t(a ?t, b ?t)
+
+my-sum ?t(a arr ?t) my-spec<?t>
+	when
+		a empty?
+			zero
+		else
+			a.first + a.tail.my-sum
+
+six nat()
+	(new-arr<nat> 1, 2, 3) my-sum
+```
+
+The implementations for the spec functions are provided by the *caller* and don't need to exist in the spec user's scope.
+Specs don't constain a *type*, they constrain the functions that the caller must have in scope.
+Different callers might have different implementations of the spec for the same type, depending on what functions they have in scope.
 
 
+## Modules
 
-
+TODO

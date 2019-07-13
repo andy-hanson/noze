@@ -210,7 +210,7 @@ struct ConcreteStruct {
 		: mangledName{mn}, special{sp}, _info{info} {}
 
 	inline const ConcreteStructInfo info() const {
-		return _info.get();
+		return lateGet(&_info);
 	}
 
 	inline const ConcreteStructBody body() const {
@@ -877,10 +877,10 @@ struct ConcreteFun {
 		: needsCtx{_needsCtx}, closureParam{_closureParam}, sig{_sig}, isCallFun{_isCallFun} {}
 
 	inline const ConcreteFunBody body() const {
-		return _body.get();
+		return lateGet(&_body);
 	}
 	inline void setBody(const ConcreteFunBody value) {
-		_body.set(value);
+		lateSet<const ConcreteFunBody>(&_body, value);
 	}
 
 	inline const Str mangledName() const {

@@ -19,6 +19,23 @@ inline T only(const Arr<T> a) {
 }
 
 template <typename T>
+inline const T* onlyPtr(const Arr<T> a) {
+	assert(size(a) == 1);
+	return getPtr(a, 0);
+}
+
+template <typename T, typename Cb>
+inline size_t sum(const Arr<T> a, Cb cb) {
+	size_t res = 0;
+	for (const T x : a) {
+		const size_t n = cb(x);
+		res += n;
+	}
+	return res;
+}
+
+
+template <typename T>
 struct PtrsIter {
 	T* ptr;
 
@@ -127,26 +144,20 @@ const T last(const Arr<T> a) {
 }
 
 template <typename T>
-const T last(const MutArr<T>& a) {
-	assert(!isEmpty(a));
-	return at(a, size(a)() - 1);
-}
-
-template <typename T>
 Arr<T> cat(Arena* arena, const Arr<T> a, const Arr<T> b) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, size(a) + size(b));
-	copyFrom(res, 0, a);
-	copyFrom(res, size(a), b);
-	return freeze(res);
+	copyFrom(&res, 0, a);
+	copyFrom(&res, size(a), b);
+	return freeze(&res);
 }
 
 template <typename T>
 Arr<T> cat(Arena* arena, const Arr<T> a, const Arr<T> b, const Arr<T> c) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, size(a) + size(b) + size(c));
-	copyFrom(res, 0, a);
-	copyFrom(res, size(a), b);
-	copyFrom(res, size(a) + size(b), c);
-	return freeze(res);
+	copyFrom(&res, 0, a);
+	copyFrom(&res, size(a), b);
+	copyFrom(&res, size(a) + size(b), c);
+	return freeze(&res);
 }
 
 template <typename T>
@@ -162,10 +173,10 @@ Arr<T> cat(Arena* arena, const Arr<T> a, const Arr<T> b, const Arr<T> c, const A
 template <typename T>
 Arr<T> prepend(Arena* arena, const T a, const Arr<T> b) {
 	MutArr<T> res = newUninitializedMutArr<T>(arena, 1 + size(b));
-	setAt<T>(res, 0, a);
+	setAt<T>(&res, 0, a);
 	for (const size_t i : Range{size(b)})
-		setAt<T>(res, 1 + i, at(b, i));
-	return freeze(res);
+		setAt<T>(&res, 1 + i, at(b, i));
+	return freeze(&res);
 }
 
 template<typename T>
@@ -491,29 +502,29 @@ const Arr<const Arr<T>> sortAndGroup(Arena* arena, const Arr<T> a, Cmp cmp) {
 	MutArr<MutArr<T>> res;
 
 	auto addSingle = [&](const T x) -> void {
-		for (const size_t i : Range{res.size()}) {
+		for (const size_t i : Range{mutArrSize(&res)}) {
 			// Each in res[i] should be equivalent, so just use 0th
-			const Comparison c = cmp(x, first(at(res, i)));
+			const Comparison c = cmp(x, mutArrFirst(mutArrPtrAt(&res, i)));
 			switch (c) {
 				case Comparison::less:
 					todo<void>("insert a new arr here");
 					return;
 				case Comparison::equal:
-					push<T>(arena, at(res, i), x);
+					push<T>(arena, mutArrPtrAt(&res, i), x);
 					return;
 				case Comparison::greater:
 					break;
 			}
 		}
 		// Greater than everything in the list -- add it to the end
-		push(arena, res, MutArr<T>{arena, x});
+		push(arena, &res, MutArr<T>{arena, x});
 	};
 
 	for (const T x : a)
 		addSingle(x);
 
-	const Arr<const Arr<T>> arrRes = mapPtrs<const Arr<T>>{}(arena, freeze(res), [&](MutArr<T>* m) {
-		return freeze(*m);
+	const Arr<const Arr<T>> arrRes = mapPtrs<const Arr<T>>{}(arena, freeze(&res), [&](MutArr<T>* m) {
+		return freeze(m);
 	});
 
 	// Check that result size == input size
@@ -525,13 +536,13 @@ const Arr<const Arr<T>> sortAndGroup(Arena* arena, const Arr<T> a, Cmp cmp) {
 }
 
 template <typename T, typename Pred>
-void filterUnordered(MutArr<T>& a, Pred pred) {
+void filterUnordered(MutArr<T>* a, Pred pred) {
 	size_t i = 0;
-	while (i < a.size()) {
-		const Bool b = pred(at(a, i));
+	while (i < mutArrSize(a)) {
+		const Bool b = pred(mutArrPtrAt(a, i));
 		if (b)
 			i++;
-		else if (i == a.size() - 1)
+		else if (i == mutArrSize(a) - 1)
 			mustPop(a);
 		else {
 			T t = mustPop(a);
@@ -541,8 +552,8 @@ void filterUnordered(MutArr<T>& a, Pred pred) {
 }
 
 template <typename T>
-void copyFrom(MutArr<T>& m, const size_t index, const Arr<T> arr) {
-	assert(index + size(arr) <= m.size());
+void copyFrom(MutArr<T>* m, const size_t index, const Arr<T> arr) {
+	assert(index + size(arr) <= mutArrSize(m));
 	for (const size_t i : Range{size(arr)})
 		setAt<T>(m, index + i, at(arr, i));
 }

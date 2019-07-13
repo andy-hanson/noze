@@ -84,11 +84,11 @@ namespace {
 		MutSet<const PathAndStorageKind, comparePathAndStorageKind> seenSet {};
 
 		const PathAndStorageKind firstPathAndStorageKind = PathAndStorageKind{mainPath, StorageKind::local};
-		push<const PathAndStorageKind>(&tempArena, toParse, firstPathAndStorageKind);
-		seenSet.add(&tempArena, firstPathAndStorageKind);
+		push<const PathAndStorageKind>(&tempArena, &toParse, firstPathAndStorageKind);
+		addToMutSet<const PathAndStorageKind, comparePathAndStorageKind>(&tempArena, &seenSet, firstPathAndStorageKind);
 
 		for (;;) {
-			const Opt<const PathAndStorageKind> opPath = pop(toParse);
+			const Opt<const PathAndStorageKind> opPath = pop(&toParse);
 			if (!has(opPath))
 				break;
 
@@ -104,8 +104,8 @@ namespace {
 				if (!has(opDependencyPath))
 					todo<void>("diagnostic: import resolution failed");
 				const PathAndStorageKind dependencyPath = force(opDependencyPath);
-				if (seenSet.tryAdd(&tempArena, dependencyPath))
-					push<const PathAndStorageKind>(&tempArena, toParse, dependencyPath);
+				if (tryAddToMutSet<const PathAndStorageKind, comparePathAndStorageKind>(&tempArena, &seenSet, dependencyPath))
+					push<const PathAndStorageKind>(&tempArena, &toParse, dependencyPath);
 			}
 		}
 
@@ -116,12 +116,12 @@ namespace {
 		Arena* modelArena,
 		const Arr<const ImportAst> imports,
 		const PathAndStorageKind curPath,
-		const MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>& compiled
+		const MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>* compiled
 	) {
 		return mapOrFail<const Module*, const Arr<const Diagnostic>>{}(modelArena, imports, [&](const ImportAst ast) {
 			// resolveImport should succeed because we already did this in parseEverything. (TODO: then keep it around with the ast?)
 			const PathAndStorageKind importPath = force(resolveImport(modelArena, curPath, ast));
-			const Opt<const Module*> i = getAt_mut<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(&compiled, importPath);
+			const Opt<const Module*> i = getAt_mut<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(compiled, importPath);
 			if (has(i))
 				return success<const Module*, const Arr<const Diagnostic>>(force(i));
 			else {
@@ -173,7 +173,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 			modelArena,
 			fileAsts,
 			[&](const PathAndAst ast) {
-				const Result<const Arr<const Module*>, const Arr<const Diagnostic>> resultImports = getImports(modelArena, ast.ast.imports, ast.pathAndStorageKind, compiled);
+				const Result<const Arr<const Module*>, const Arr<const Diagnostic>> resultImports = getImports(modelArena, ast.ast.imports, ast.pathAndStorageKind, &compiled);
 				return flatMapSuccess<const Module*, const Arr<const Diagnostic>>{}(
 					resultImports,
 					[&](const Arr<const Module*> imports) {

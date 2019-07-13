@@ -4,61 +4,49 @@
 
 namespace {
 	template <typename T>
-	void pushIfNotContained(Arena* arena, MutArr<const T*>& all, const T* t) {
+	void pushIfNotContained(Arena* arena, MutArr<const T*>* all, const T* t) {
 		if (!contains<const T*, ptrEquals<const T>>(tempAsArr(all), t))
 			push(arena, all, t);
 	}
 
 	struct SetReferencedCtx {
 		Arena* arena;
-
-		// For each of these -- we are collecting an array of all of them, and advancing an index of the ones we've scanned.
-		// When the index reaches the array's length we are done (at least until another is pushed)
-
 		MutArr<const ConcreteStruct*> allReferencedStructs {};
-		size_t nextStructIndexToScan = 0;
-
 		MutArr<const Constant*> allReferencedConstants {};
-		size_t nextConstantIndexToScan = 0;
-
 		MutArr<const ConcreteFun*> allReferencedFuns {};
-		size_t nextFunIndexToScan = 0;
-
 		// TODO: these should just be several ConcreteFuns
 		MutArr<const ConcreteExpr::NewIfaceImpl> allReferencedNewIfaceImpls {};
-		size_t nextNewIfaceImplIndexToScan = 0;
-
-		SetReferencedCtx(const SetReferencedCtx&) = delete;
-
-		void addStruct(const ConcreteStruct* s) {
-			pushIfNotContained(arena, allReferencedStructs, s);
-		}
-
-		void addConstant(const Constant* c) {
-			pushIfNotContained(arena, allReferencedConstants, c);
-		}
-
-		void addFun(const ConcreteFun* f) {
-			pushIfNotContained(arena, allReferencedFuns, f);
-		}
-
-		void addNewIfaceImpl(const ConcreteExpr::NewIfaceImpl impl) {
-			// These don't have isReferenced, but we'll only walk the function containing them once.
-			push<const ConcreteExpr::NewIfaceImpl>(arena, allReferencedNewIfaceImpls, impl);
-		}
+		SetReferencedCtx(const SetReferencedCtx*) = delete;
 	};
 
-	void setReferencedInType(SetReferencedCtx& ctx, const ConcreteType t) {
-		ctx.addStruct(t.strukt);
+	void addStruct(SetReferencedCtx* ctx, const ConcreteStruct* s) {
+		pushIfNotContained(ctx->arena, &ctx->allReferencedStructs, s);
 	}
 
-	void setReferencedInSig(SetReferencedCtx& ctx, const ConcreteSig sig) {
+	void addConstant(SetReferencedCtx* ctx, const Constant* c) {
+		pushIfNotContained(ctx->arena, &ctx->allReferencedConstants, c);
+	}
+
+	void addFun(SetReferencedCtx* ctx, const ConcreteFun* f) {
+		pushIfNotContained(ctx->arena, &ctx->allReferencedFuns, f);
+	}
+
+	void addNewIfaceImpl(SetReferencedCtx* ctx, const ConcreteExpr::NewIfaceImpl impl) {
+		// These don't have isReferenced, but we'll only walk the function containing them once.
+		push<const ConcreteExpr::NewIfaceImpl>(ctx->arena, &ctx->allReferencedNewIfaceImpls, impl);
+	}
+
+	void setReferencedInType(SetReferencedCtx* ctx, const ConcreteType t) {
+		addStruct(ctx, t.strukt);
+	}
+
+	void setReferencedInSig(SetReferencedCtx* ctx, const ConcreteSig sig) {
 		setReferencedInType(ctx, sig.returnType);
 		for (const ConcreteParam p : sig.params)
 			setReferencedInType(ctx, p.type);
 	}
 
-	void setReferencedInStruct(SetReferencedCtx& ctx, const ConcreteStruct* s) {
+	void setReferencedInStruct(SetReferencedCtx* ctx, const ConcreteStruct* s) {
 		return s->body().match(
 			[&](const ConcreteStructBody::Builtin b) {
 				for (const ConcreteType s : b.typeArgs)
@@ -78,34 +66,34 @@ namespace {
 			});
 	}
 
-	void setReferencedInExpr(SetReferencedCtx& ctx, const ConcreteExpr ce);
+	void setReferencedInExpr(SetReferencedCtx* ctx, const ConcreteExpr ce);
 
-	void setReferencedInConstantOrExpr(SetReferencedCtx& ctx, const ConstantOrExpr ce) {
+	void setReferencedInConstantOrExpr(SetReferencedCtx* ctx, const ConstantOrExpr ce) {
 		ce.match(
 			[&](const Constant* c) {
-				ctx.addConstant(c);
+				addConstant(ctx, c);
 			},
 			[&](const ConcreteExpr* ce) {
 				setReferencedInExpr(ctx, *ce);
 			});
 	}
 
-	void setReferencedInConstantOrExprs(SetReferencedCtx& ctx, const Arr<const ConstantOrExpr> args) {
+	void setReferencedInConstantOrExprs(SetReferencedCtx* ctx, const Arr<const ConstantOrExpr> args) {
 		for (const ConstantOrExpr arg : args)
 			setReferencedInConstantOrExpr(ctx, arg);
 	}
 
-	void setReferencedInExpr(SetReferencedCtx& ctx, const ConcreteExpr ce) {
+	void setReferencedInExpr(SetReferencedCtx* ctx, const ConcreteExpr ce) {
 		ce.match(
 			[](const ConcreteExpr::Bogus) {
 				unreachable<void>();
 			},
 			[&](const ConcreteExpr::Alloc e) {
-				ctx.addFun(e.alloc);
+				addFun(ctx, e.alloc);
 				setReferencedInExpr(ctx, *e.inner);
 			},
 			[&](const ConcreteExpr::Call e) {
-				ctx.addFun(e.called);
+				addFun(ctx, e.called);
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
 			[&](const ConcreteExpr::Cond e) {
@@ -114,8 +102,8 @@ namespace {
 				setReferencedInConstantOrExpr(ctx, e.elze);
 			},
 			[&](const ConcreteExpr::CreateArr e) {
-				ctx.addStruct(e.arrType);
-				ctx.addFun(e.alloc);
+				addStruct(ctx, e.arrType);
+				addFun(ctx, e.alloc);
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
 			[&](const ConcreteExpr::CreateRecord e) {
@@ -130,7 +118,7 @@ namespace {
 				setReferencedInConstantOrExprs(ctx, e.closureInit);
 			},
 			[&](const ConcreteExpr::LambdaToDynamic e) {
-				ctx.addFun(e.fun);
+				addFun(ctx, e.fun);
 				setReferencedInConstantOrExpr(ctx, e.closure);
 			},
 			[&](const ConcreteExpr::Let e) {
@@ -148,7 +136,7 @@ namespace {
 				setReferencedInConstantOrExprs(ctx, e.args);
 			},
 			[&](const ConcreteExpr::NewIfaceImpl e) {
-				ctx.addNewIfaceImpl(e);
+				addNewIfaceImpl(ctx, e);
 			},
 			[](const ConcreteExpr::ParamRef) {},
 			[&](const ConcreteExpr::Seq e) {
@@ -168,7 +156,7 @@ namespace {
 			});
 	}
 
-	void setReferencedInFun(SetReferencedCtx& ctx, const ConcreteFun* f) {
+	void setReferencedInFun(SetReferencedCtx* ctx, const ConcreteFun* f) {
 		if (has(f->closureParam))
 			setReferencedInType(ctx, force(f->closureParam).type);
 		setReferencedInSig(ctx, f->sig);
@@ -179,15 +167,18 @@ namespace {
 			[](const ConcreteFunBody::Builtin) {},
 			[](const ConcreteFunBody::Extern) {},
 			[&](const Constant* c) {
-				ctx.addConstant(c);
+				addConstant(ctx, c);
 			},
 			[&](const ConcreteFunExprBody e) {
+				for (const ConcreteLocal* l : e.allLocals) {
+					setReferencedInType(ctx, l->type);
+				}
 				setReferencedInExpr(ctx, *e.expr);
 			});
 	}
 
-	void setReferencedInNewIfaceImpl(SetReferencedCtx& ctx, const ConcreteExpr::NewIfaceImpl impl) {
-		ctx.addStruct(impl.iface);
+	void setReferencedInNewIfaceImpl(SetReferencedCtx* ctx, const ConcreteExpr::NewIfaceImpl impl) {
+		addStruct(ctx, impl.iface);
 		if (has(impl.fieldsStruct))
 			setReferencedInType(ctx, force(impl.fieldsStruct));
 		for (const ConstantOrExpr ce : impl.fieldInitializers)
@@ -196,17 +187,17 @@ namespace {
 			setReferencedInConstantOrExpr(ctx, m.body);
 	}
 
-	void setReferencedInConstant(SetReferencedCtx& ctx, const Constant* c) {
+	void setReferencedInConstant(SetReferencedCtx* ctx, const Constant* c) {
 		c->kind.match(
 			[&](const ConstantKind::Array a) {
 				setReferencedInType(ctx, c->type());
 				for (const Constant* element : a.elements())
-					ctx.addConstant(element);
+					addConstant(ctx, element);
 			},
 			[](const Bool) {},
 			[](const char) {},
 			[&](const ConstantKind::FunPtr f) {
-				ctx.addFun(f.fun);
+				addFun(ctx, f.fun);
 			},
 			[](const Int64) {},
 			// When we *call* this or convert to fn, then we'll mark its fun as referenced
@@ -214,14 +205,14 @@ namespace {
 			[](const Nat64) {},
 			[](const ConstantKind::Null) {},
 			[&](const ConstantKind::Ptr p) {
-				ctx.addConstant(p.array);
+				addConstant(ctx, p.array);
 			},
 			[&](const ConstantKind::Record r) {
 				for (const Constant* arg : r.args)
-					ctx.addConstant(arg);
+					addConstant(ctx, arg);
 			},
 			[&](const ConstantKind::Union u) {
-				ctx.addConstant(u.member);
+				addConstant(ctx, u.member);
 			},
 			[](const ConstantKind::Void) {});
 	}
@@ -229,24 +220,32 @@ namespace {
 
 const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun, const ConcreteStruct* ctxStruct) {
 	SetReferencedCtx ctx { arena };
-	ctx.addFun(mainFun);
+	addFun(&ctx, mainFun);
+
+	// For each of these -- we are collecting an array of all of them, and advancing an index of the ones we've scanned.
+	// When the index reaches the array's length we are done (at least until another is pushed)
+	size_t nextStructIndexToScan = 0;
+	size_t nextConstantIndexToScan = 0;
+	size_t nextFunIndexToScan = 0;
+	size_t nextNewIfaceImplIndexToScan = 0;
+
 	for (;;) {
-		if (ctx.nextStructIndexToScan < ctx.allReferencedStructs.size())
-			setReferencedInStruct(ctx, at(ctx.allReferencedStructs, ctx.nextStructIndexToScan++));
-		else if (ctx.nextConstantIndexToScan < ctx.allReferencedConstants.size())
-			setReferencedInConstant(ctx, at(ctx.allReferencedConstants, ctx.nextConstantIndexToScan++));
-		else if (ctx.nextFunIndexToScan < ctx.allReferencedFuns.size())
-			setReferencedInFun(ctx, at(ctx.allReferencedFuns, ctx.nextFunIndexToScan++));
-		else if (ctx.nextNewIfaceImplIndexToScan < ctx.allReferencedNewIfaceImpls.size())
-			setReferencedInNewIfaceImpl(ctx, at(ctx.allReferencedNewIfaceImpls, ctx.nextNewIfaceImplIndexToScan++));
+		if (nextStructIndexToScan < mutArrSize(&ctx.allReferencedStructs))
+			setReferencedInStruct(&ctx, mutArrAt(&ctx.allReferencedStructs, nextStructIndexToScan++));
+		else if (nextConstantIndexToScan < mutArrSize(&ctx.allReferencedConstants))
+			setReferencedInConstant(&ctx, mutArrAt(&ctx.allReferencedConstants, nextConstantIndexToScan++));
+		else if (nextFunIndexToScan < mutArrSize(&ctx.allReferencedFuns))
+			setReferencedInFun(&ctx, mutArrAt(&ctx.allReferencedFuns, nextFunIndexToScan++));
+		else if (nextNewIfaceImplIndexToScan < mutArrSize(&ctx.allReferencedNewIfaceImpls))
+			setReferencedInNewIfaceImpl(&ctx, mutArrAt(&ctx.allReferencedNewIfaceImpls, nextNewIfaceImplIndexToScan++));
 		else
 			break;
 	}
 
 	return ConcreteProgram{
-		freeze(ctx.allReferencedStructs),
-		freeze(ctx.allReferencedConstants),
-		freeze(ctx.allReferencedFuns),
-		freeze(ctx.allReferencedNewIfaceImpls),
+		freeze(&ctx.allReferencedStructs),
+		freeze(&ctx.allReferencedConstants),
+		freeze(&ctx.allReferencedFuns),
+		freeze(&ctx.allReferencedNewIfaceImpls),
 		ctxStruct};
 }

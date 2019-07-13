@@ -19,18 +19,20 @@ Dict<K, V, cmp> finishDict(Arena* arena, DictBuilder<K, V, cmp>* db, CbConflict 
 	MutArr<KeyValuePair<K, V>> res;
 	Arr<KeyValuePair<K, V>> allPairs = finishArr(&db->builder);
 	for (const size_t i : Range{size(allPairs)}) {
+		const KeyValuePair<K, V> pair = at(allPairs, i);
 		Cell<const Bool> isConflict { False };
-		for (const size_t j : Range{res.size()}) {
-			if (cmp(at(allPairs, i).key, at(res, j).key) == Comparison::equal) {
-				cbConflict(at(allPairs, i).key, at(res, j).value, at(allPairs, i).value);
+		for (const size_t j : Range{mutArrSize(&res)}) {
+			const KeyValuePair<K, V> resPair = mutArrAt(&res, j);
+			if (cmp(pair.key, resPair.key) == Comparison::equal) {
+				cbConflict(pair.key, resPair.value, pair.value);
 				cellSet<const Bool>(&isConflict, True);
 				break;
 			}
 		}
 		if (!cellGet(&isConflict))
-			push(arena, res, at(allPairs, i));
+			push(arena, &res, pair);
 	}
-	return Dict<K, V, cmp>{freeze(res)};
+	return Dict<K, V, cmp>{freeze(&res)};
 }
 
 template <typename K, typename V, Cmp<K> cmp>

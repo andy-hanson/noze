@@ -2,7 +2,7 @@
 #include "./concretizeCtx.h"
 
 const ConcreteFunBody doConcretizeExpr(
-	ConcretizeCtx& ctx,
+	ConcretizeCtx* ctx,
 	const ConcreteFunSource source,
 	ConcreteFun* cf,
 	const Expr e);

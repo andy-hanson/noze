@@ -9,26 +9,27 @@ struct ArrBuilder {
 	inline ArrBuilder() : inner{} {}
 
 	inline const Arr<T> tempAsArr() const {
-		return ::tempAsArr(inner);
-	}
-
-	inline size_t size() const {
-		return inner.size();
+		return ::tempAsArr(&inner);
 	}
 };
 
 template <typename T>
+inline size_t arrBuilderSize(const ArrBuilder<T>* builder) {
+	return mutArrSize(&builder->inner);
+}
+
+template <typename T>
 inline void add(Arena* arena, ArrBuilder<T>* builder, T value) {
-	push<T>(arena, builder->inner, value);
+	push<T>(arena, &builder->inner, value);
 }
 
 template <typename T>
 const Arr<T> finishArr(ArrBuilder<T>* builder) {
-	return freeze(builder->inner);
+	return freeze(&builder->inner);
 }
 
 template <typename T>
-inline const Bool isEmpty(const ArrBuilder<T>& a) {
-	return isEmpty(a.inner);
+inline const Bool arrBuilderIsEmpty(const ArrBuilder<T>* a) {
+	return mutArrIsEmpty(&a->inner);
 }
 

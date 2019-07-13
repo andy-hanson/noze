@@ -58,7 +58,7 @@ namespace {
 					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
 					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(at(explicitTypeArgs, i))};
 				});
-				push(ctx.arena(), res, Candidate{called, inferringTypeArgs});
+				push(ctx.arena(), &res, Candidate{called, inferringTypeArgs});
 			}
 		});
 		return res;
@@ -72,13 +72,13 @@ namespace {
 		return finishArr(&res);
 	}
 
-	const Type getCandidateExpectedParameterTypeRecur(Arena* arena, const Candidate& candidate, const Type candidateParamType) {
+	const Type getCandidateExpectedParameterTypeRecur(Arena* arena, const Candidate* candidate, const Type candidateParamType) {
 		return candidateParamType.match(
 			[](const Type::Bogus) {
 				return Type{Type::Bogus{}};
 			},
 			[&](const TypeParam* p) {
-				const Opt<SingleInferringType*> sit = tryGetTypeArg(InferringTypeArgs{candidate.called.typeParams(), candidate.typeArgs}, p);
+				const Opt<SingleInferringType*> sit = tryGetTypeArg(InferringTypeArgs{candidate->called.typeParams(), candidate->typeArgs}, p);
 				const Opt<const Type> inferred = has(sit) ? force(sit)->tryGetInferred() : none<const Type>();
 				return has(inferred) ? force(inferred) : Type{p};
 			},
@@ -91,8 +91,8 @@ namespace {
 			});
 	}
 
-	const Type getCandidateExpectedParameterType(Arena* arena, const Candidate& candidate, const size_t argIdx) {
-		return getCandidateExpectedParameterTypeRecur(arena, candidate, at(candidate.called.params(), argIdx).type);
+	const Type getCandidateExpectedParameterType(Arena* arena, const Candidate* candidate, const size_t argIdx) {
+		return getCandidateExpectedParameterTypeRecur(arena, candidate, at(candidate->called.params(), argIdx).type);
 	}
 
 	struct CommonOverloadExpected {
@@ -105,14 +105,14 @@ namespace {
 			case 0:
 				return CommonOverloadExpected{Expected::infer(), False};
 			case 1: {
-				const Candidate& candidate = only(candidates);
+				const Candidate* candidate = onlyPtr(candidates);
 				const Type t = getCandidateExpectedParameterType(arena, candidate, argIdx);
-				return CommonOverloadExpected{Expected{some<const Type>(t), candidate.inferringTypeArgs()}, True};
+				return CommonOverloadExpected{Expected{some<const Type>(t), candidate->inferringTypeArgs()}, True};
 			}
 			default:
 				// For multiple candidates, only have an expected type if they have exactly the same param type
 				Cell<const Opt<const Type>> expected { none<const Type>() };
-				for (const Candidate& candidate : candidates) {
+				for (const Candidate* candidate : ptrsRange(candidates)) {
 					// If we get a template candidate and haven't inferred this param type yet, no expected type.
 					const Type paramType = getCandidateExpectedParameterType(arena, candidate, argIdx);
 					if (has(cellGet(&expected))) {
@@ -161,23 +161,23 @@ namespace {
 			});
 	}
 
-	void filterByReturnType(Arena* arena, MutArr<Candidate>& candidates, const Type expectedReturnType) {
+	void filterByReturnType(Arena* arena, MutArr<Candidate>* candidates, const Type expectedReturnType) {
 		// Filter by return type. Also does type argument inference on the candidate.
-		filterUnordered(candidates, [&](Candidate& candidate) {
+		filterUnordered(candidates, [&](Candidate* candidate) {
 			return matchTypesNoDiagnostic(
 				arena,
-				candidate.called.returnType(),
+				candidate->called.returnType(),
 				expectedReturnType,
-				candidate.inferringTypeArgs(),
+				candidate->inferringTypeArgs(),
 				/*allowConvertAToBUnion*/ True);
 		});
 	}
 
-	void filterByParamType(Arena* arena, MutArr<Candidate>& candidates, const Type actualArgType, const size_t argIdx) {
+	void filterByParamType(Arena* arena, MutArr<Candidate>* candidates, const Type actualArgType, const size_t argIdx) {
 		// Remove candidates that can't accept this as a param. Also does type argument inference on the candidate.
-		filterUnordered(candidates, [&](Candidate& candidate) {
+		filterUnordered(candidates, [&](Candidate* candidate) {
 			const Type expectedArgType = getCandidateExpectedParameterType(arena, candidate, argIdx);
-			return matchTypesNoDiagnostic(arena, expectedArgType, actualArgType, candidate.inferringTypeArgs());
+			return matchTypesNoDiagnostic(arena, expectedArgType, actualArgType, candidate->inferringTypeArgs());
 		});
 	}
 
@@ -185,12 +185,12 @@ namespace {
 
 	const Opt<const Called> findSpecSigImplementation(ExprCtx& ctx, const SourceRange range, const Sig specSig) {
 		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), arity(specSig));
-		filterByReturnType(ctx.arena(), candidates, specSig.returnType);
+		filterByReturnType(ctx.arena(), &candidates, specSig.returnType);
 		for (const size_t argIdx : Range{arity(specSig)})
-			filterByParamType(ctx.arena(), candidates, at(specSig.params, argIdx).type, argIdx);
+			filterByParamType(ctx.arena(), &candidates, at(specSig.params, argIdx).type, argIdx);
 
 		// If any candidates left take specs -- leave as a TODO
-		const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(candidates));
+		const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(&candidates));
 		switch (size(candidatesArr)) {
 			case 0:
 				ctx.addDiag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
@@ -206,14 +206,9 @@ namespace {
 	// On failure, returns none.
 	const Opt<const Arr<const Called>> checkSpecImpls(ExprCtx& ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
 		// We store the impls in a flat array. Calculate the size ahead of time.
-		const size_t nImpls = [&]() {
-			//TODO:SUM
-			size_t s = 0;
-			for (const SpecInst* specInst : called->specs)
-				s += size(specInst->sigs);
-			return s;
-		}();
-
+		const size_t nImpls = sum(called->specs, [](const SpecInst* specInst) {
+			return size(specInst->sigs);
+		});
 		if (nImpls != 0 && !allowSpecs) {
 			ctx.addDiag(range, Diag{Diag::SpecImplHasSpecs{}});
 			return none<const Arr<const Called>>();
@@ -228,12 +223,12 @@ namespace {
 					const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
 					if (!has(impl))
 						return none<const Arr<const Called>>();
-					setAt<const Called>(res, outI, force(impl));
+					setAt<const Called>(&res, outI, force(impl));
 					outI++;
 				}
 			}
 			assert(outI == nImpls);
-			return some<const Arr<const Called>>(freeze(res));
+			return some<const Arr<const Called>>(freeze(&res));
 		}
 	}
 
@@ -298,17 +293,17 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 	// TODO: may not need to be deeply instantiated to do useful filtering here
 	const Opt<const Type> expectedReturnType = expected.tryGetDeeplyInstantiatedType(ctx.arena());
 	if (has(expectedReturnType))
-		filterByReturnType(ctx.arena(), candidates, force(expectedReturnType));
+		filterByReturnType(ctx.arena(), &candidates, force(expectedReturnType));
 
 	ArrBuilder<const Type> actualArgTypes;
 
 	Cell<const Bool> someArgIsBogus { False };
 	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx.arena(), arity, [&](const size_t argIdx) {
-		if (isEmpty(candidates) && !mightBePropertyAccess)
+		if (mutArrIsEmpty(&candidates) && !mightBePropertyAccess)
 			// Already certainly failed.
 			return none<const Expr>();
 
-		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx.arena(), tempAsArr(candidates), argIdx);
+		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx.arena(), tempAsArr(&candidates), argIdx);
 		Expr arg = checkExpr(ctx, at(ast.args, argIdx), common.expected);
 
 		// If it failed to check, don't continue, just stop there.
@@ -321,14 +316,14 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		add<const Type>(ctx.arena(), &actualArgTypes, actualArgType);
 		// If the Inferring already came from the candidate, no need to do more work.
 		if (!common.isExpectedFromCandidate)
-			filterByParamType(ctx.arena(), candidates, actualArgType, argIdx);
+			filterByParamType(ctx.arena(), &candidates, actualArgType, argIdx);
 		return some<const Expr>(arg);
 	});
 
 	if (cellGet(&someArgIsBogus))
 		return expected.bogus(range);
 
-	const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(candidates));
+	const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(&candidates));
 
 	if (mightBePropertyAccess && arity == 1 && has(args)) {
 		// Might be a struct field access

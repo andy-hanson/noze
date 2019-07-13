@@ -44,9 +44,11 @@ namespace {
 const Constant* AllConstants::ptr(Arena* arena, const ConcreteType pointerType, const Constant* array, const size_t index) {
 	assertIsPointer(pointerType);
 	const ConstantKind::Array a = array->kind.asArray();
-	assert(index < a.size());
+	// Pointer may point to the end of the array
+	const size_t nPtrs = a.size() + 1;
+	assert(index < nPtrs);
 	const Arr<const Constant*> ptrs = getOrAdd<const Constant*, Arr<const Constant*>, comparePtr<const Constant>>{}(arena, &arrayToPtrs, array, [&]() {
-		return fillArr<const Constant*>{}(arena, a.size(), [&](const size_t idx) {
+		return fillArr<const Constant*>{}(arena, nPtrs, [&](const size_t idx) {
 			return _nuConstant(arena, pointerType, ConstantKind{ConstantKind::Ptr{array, idx}}, nextPtrId++);
 		});
 	});
@@ -62,17 +64,17 @@ const Constant* AllConstants::_null(Arena* arena, const ConcreteType pointerType
 
 const Constant* AllConstants::_bool(Arena* arena, const ConcreteType boolType, const Bool value)  {
 	if (value)
-		return lazilySet(_true, [&]() {
+		return lazilySet(&_true, [&]() {
 			return _nuConstant(arena, boolType, ConstantKind{True}, 0);
 		});
 	else
-		return lazilySet(_false, [&]() {
+		return lazilySet(&_false, [&]() {
 			return _nuConstant(arena, boolType, ConstantKind{False}, 1);
 		});
 }
 
 const Constant* AllConstants::_void(Arena* arena, const ConcreteType voidType) {
-	return lazilySet(__void, [&]() {
+	return lazilySet(&__void, [&]() {
 		return _nuConstant(arena, voidType, ConstantKind{ConstantKind::Void{}}, 0);
 	});
 }
