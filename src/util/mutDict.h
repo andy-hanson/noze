@@ -10,7 +10,7 @@ struct MutDict {
 
 template <typename K, typename V, Cmp<K> cmp>
 const Opt<V> getAt_mut(const MutDict<K, V, cmp>* d, const K key) {
-	for (const KeyValuePair<K, V>& pair : tempAsArr(&d->pairs))
+	for (const KeyValuePair<K, V> pair : tempAsArr(&d->pairs))
 		if (cmp(pair.key, key) == Comparison::equal)
 			return some<V>(pair.value);
 	return none<V>();
@@ -62,7 +62,7 @@ template <typename K, typename V, Cmp<K> cmp>
 struct getOrAddAndCopyKey {
 	template <typename GetKeyCopy, typename GetValue>
 	const V operator()(Arena* arena, MutDict<K, V, cmp>* d, const K key, GetKeyCopy getKeyCopy, GetValue getValue) {
-		for (const KeyValuePair<K, V>& pair : tempAsArr(&d->pairs))
+		for (const KeyValuePair<K, V> pair : tempAsArr(&d->pairs))
 			if (cmp(pair.key, key) == Comparison::equal)
 				return pair.value;
 

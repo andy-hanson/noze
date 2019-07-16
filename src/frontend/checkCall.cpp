@@ -8,8 +8,10 @@ namespace {
 		return tryGetTypeArg(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
 	}
 
-	const Arr<const Type> typeArgsFromAsts(ExprCtx& ctx, const Arr<const TypeAst> typeAsts) {
-		return map<const Type>{}(ctx.arena(), typeAsts, [&](const TypeAst it) { return typeFromAst(ctx, it); });
+	const Arr<const Type> typeArgsFromAsts(ExprCtx* ctx, const Arr<const TypeAst> typeAsts) {
+		return map<const Type>{}(ctx->arena(), typeAsts, [&](const TypeAst it) {
+			return typeFromAst(ctx, it);
+		});
 	}
 
 	// If we call `foo \x ...` where `foo` is a function that doesn't exist,
@@ -48,26 +50,26 @@ namespace {
 		}
 	};
 
-	MutArr<Candidate> getInitialCandidates(ExprCtx& ctx, const Sym funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
+	MutArr<Candidate> getInitialCandidates(ExprCtx* ctx, const Sym funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
 		MutArr<Candidate> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			const size_t nTypeParams = size(called.typeParams());
 			if (arity(called) == actualArity &&
 				(isEmpty(explicitTypeArgs) || nTypeParams == size(explicitTypeArgs))) {
-				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx.arena(), nTypeParams, [&](const size_t i) {
+				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx->arena(), nTypeParams, [&](const size_t i) {
 					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
 					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(at(explicitTypeArgs, i))};
 				});
-				push(ctx.arena(), &res, Candidate{called, inferringTypeArgs});
+				push(ctx->arena(), &res, Candidate{called, inferringTypeArgs});
 			}
 		});
 		return res;
 	}
 
-	const Arr<const CalledDecl> getAllCandidatesAsCalledDecls(ExprCtx& ctx, const Sym funName) {
+	const Arr<const CalledDecl> getAllCandidatesAsCalledDecls(ExprCtx* ctx, const Sym funName) {
 		ArrBuilder<const CalledDecl> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
-			add<const CalledDecl>(ctx.arena(), &res, called);
+			add<const CalledDecl>(ctx->arena(), &res, called);
 		});
 		return finishArr(&res);
 	}
@@ -128,20 +130,20 @@ namespace {
 		}
 	}
 
-	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx& ctx, const Sym funName, const Expr arg) {
-		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx.arena(), ctx.commonTypes), funName);
+	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx* ctx, const Sym funName, const Expr arg) {
+		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx->arena(), ctx->commonTypes), funName);
 		return has(field)
-			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx.alloc(arg), force(field).structInst, force(field).field})
+			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx->alloc(arg), force(field).structInst, force(field).field})
 			: none<const Expr::StructFieldAccess>();
 	}
 
-	void checkCallFlags(CheckCtx& ctx, const SourceRange range, const FunFlags calledFlags, const FunFlags callerFlags) {
+	void checkCallFlags(CheckCtx* ctx, const SourceRange range, const FunFlags calledFlags, const FunFlags callerFlags) {
 		if (!calledFlags.noCtx && callerFlags.noCtx)
-			ctx.addDiag(range, Diag{Diag::CantCallNonNoCtx{}});
+			addDiag(ctx, range, Diag{Diag::CantCallNonNoCtx{}});
 		if (calledFlags.summon && !callerFlags.summon)
-			ctx.addDiag(range, Diag{Diag::CantCallSummon{}});
+			addDiag(ctx, range, Diag{Diag::CantCallSummon{}});
 		if (calledFlags.unsafe && !callerFlags.trusted && !callerFlags.unsafe)
-			ctx.addDiag(range, Diag{Diag::CantCallUnsafe{}});
+			addDiag(ctx, range, Diag{Diag::CantCallUnsafe{}});
 	}
 
 	template <typename TypeArgsEqual>
@@ -151,10 +153,10 @@ namespace {
 			eachCorresponds(a->typeArgs, b->typeArgs, typeArgsEqual));
 	}
 
-	void checkCalledDeclFlags(ExprCtx& ctx, const CalledDecl res, const SourceRange range) {
+	void checkCalledDeclFlags(ExprCtx* ctx, const CalledDecl res, const SourceRange range) {
 		res.match(
 			[&](const FunDecl* f) {
-				checkCallFlags(ctx.checkCtx, range, f->flags, ctx.outermostFun->flags);
+				checkCallFlags(ctx->checkCtx, range, f->flags, ctx->outermostFun->flags);
 			},
 			[](const SpecSig) {
 				// For a spec, we check the flags when providing the spec impl
@@ -181,19 +183,19 @@ namespace {
 		});
 	}
 
-	const Opt<const Called> getCalledFromCandidate(ExprCtx& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
+	const Opt<const Called> getCalledFromCandidate(ExprCtx* ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
 
-	const Opt<const Called> findSpecSigImplementation(ExprCtx& ctx, const SourceRange range, const Sig specSig) {
+	const Opt<const Called> findSpecSigImplementation(ExprCtx* ctx, const SourceRange range, const Sig specSig) {
 		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), arity(specSig));
-		filterByReturnType(ctx.arena(), &candidates, specSig.returnType);
+		filterByReturnType(ctx->arena(), &candidates, specSig.returnType);
 		for (const size_t argIdx : Range{arity(specSig)})
-			filterByParamType(ctx.arena(), &candidates, at(specSig.params, argIdx).type, argIdx);
+			filterByParamType(ctx->arena(), &candidates, at(specSig.params, argIdx).type, argIdx);
 
 		// If any candidates left take specs -- leave as a TODO
 		const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(&candidates));
 		switch (size(candidatesArr)) {
 			case 0:
-				ctx.addDiag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
+				ctx->addDiag(range, Diag{Diag::SpecImplNotFound{specSig.name}});
 				return none<const Called>();
 			case 1:
 				return getCalledFromCandidate(ctx, range, only(candidatesArr), /*allowSpecs*/ false);
@@ -204,21 +206,21 @@ namespace {
 	}
 
 	// On failure, returns none.
-	const Opt<const Arr<const Called>> checkSpecImpls(ExprCtx& ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
+	const Opt<const Arr<const Called>> checkSpecImpls(ExprCtx* ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
 		// We store the impls in a flat array. Calculate the size ahead of time.
 		const size_t nImpls = sum(called->specs, [](const SpecInst* specInst) {
 			return size(specInst->sigs);
 		});
 		if (nImpls != 0 && !allowSpecs) {
-			ctx.addDiag(range, Diag{Diag::SpecImplHasSpecs{}});
+			ctx->addDiag(range, Diag{Diag::SpecImplHasSpecs{}});
 			return none<const Arr<const Called>>();
 		} else {
-			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx.arena(), nImpls);
+			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx->arena(), nImpls);
 			size_t outI = 0;
 			for (const SpecInst* specInst : called->specs) {
 				// Note: specInst was instantiated potentialyl based on f's params.
 				// Meed to instantiate it again.
-				const SpecInst* specInstInstantiated = instantiateSpecInst(ctx.arena(), specInst, TypeParamsAndArgs{called->typeParams, typeArgs});
+				const SpecInst* specInstInstantiated = instantiateSpecInst(ctx->arena(), specInst, TypeParamsAndArgs{called->typeParams, typeArgs});
 				for (const Sig sig : specInstInstantiated->sigs) {
 					const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
 					if (!has(impl))
@@ -232,19 +234,19 @@ namespace {
 		}
 	}
 
-	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprCtx& ctx, const SourceRange range, const Candidate candidate) {
+	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprCtx* ctx, const SourceRange range, const Candidate candidate) {
 		const Opt<const Arr<const Type>> res = mapPtrsOrNone<const Type>{}(
-			ctx.arena(),
+			ctx->arena(),
 			candidate.typeArgs,
 			[](const SingleInferringType* i) {
 				return i->tryGetInferred();
 			});
 		if (!has(res))
-			ctx.addDiag(range, Diag{Diag::CantInferTypeArguments{}});
+			ctx->addDiag(range, Diag{Diag::CantInferTypeArguments{}});
 		return res;
 	}
 
-	const Opt<const Called> getCalledFromCandidate(ExprCtx& ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
+	const Opt<const Called> getCalledFromCandidate(ExprCtx* ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
 		checkCalledDeclFlags(ctx, candidate.called, range);
 		const Opt<const Arr<const Type>> candidateTypeArgs = finishCandidateTypeArgs(ctx, range, candidate);
 		if (has(candidateTypeArgs)) {
@@ -253,7 +255,7 @@ namespace {
 				[&](const FunDecl* f) {
 					const Opt<const Arr<const Called>> specImpls = checkSpecImpls(ctx, range, f, typeArgs, allowSpecs);
 					if (has(specImpls))
-						return some<const Called>(Called{instantiateFun(ctx.arena(), f, typeArgs, force(specImpls))});
+						return some<const Called>(Called{instantiateFun(ctx->arena(), f, typeArgs, force(specImpls))});
 					else
 						return none<const Called>();
 				},
@@ -265,24 +267,24 @@ namespace {
 	}
 
 	const CheckedExpr checkCallAfterChoosingOverload(
-		ExprCtx& ctx,
+		ExprCtx* ctx,
 		const Candidate candidate,
 		const SourceRange range,
 		const Arr<const Expr> args,
-		Expected& expected
+		Expected* expected
 	) {
 		const Opt<const Called> opCalled = getCalledFromCandidate(ctx, range, candidate, /*allowSpecs*/ true);
 		if (has(opCalled)) {
 			const Called called = force(opCalled);
 			//TODO: PERF second return type check may be unnecessary if we already filtered by return type at the beginning
-			return expected.check(ctx, called.returnType(), Expr{range, Expr::Call{called, args}});
+			return check(ctx, expected, called.returnType(), Expr{range, Expr::Call{called, args}});
 		}
 		else
-			return expected.bogus(range);
+			return bogus(expected, range);
 	}
 }
 
-const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst ast, Expected& expected) {
+const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst ast, Expected* expected) {
 	const Sym funName = ast.funName;
 	const size_t arity = size(ast.args);
 
@@ -291,37 +293,37 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 	const Arr<const Type> explicitTypeArgs = typeArgsFromAsts(ctx, ast.typeArgs);
 	MutArr<Candidate> candidates = getInitialCandidates(ctx, funName, explicitTypeArgs, arity);
 	// TODO: may not need to be deeply instantiated to do useful filtering here
-	const Opt<const Type> expectedReturnType = expected.tryGetDeeplyInstantiatedType(ctx.arena());
+	const Opt<const Type> expectedReturnType = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
 	if (has(expectedReturnType))
-		filterByReturnType(ctx.arena(), &candidates, force(expectedReturnType));
+		filterByReturnType(ctx->arena(), &candidates, force(expectedReturnType));
 
 	ArrBuilder<const Type> actualArgTypes;
 
 	Cell<const Bool> someArgIsBogus { False };
-	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx.arena(), arity, [&](const size_t argIdx) {
+	const Opt<const Arr<const Expr>> args = fillArrOrFail<const Expr>{}(ctx->arena(), arity, [&](const size_t argIdx) {
 		if (mutArrIsEmpty(&candidates) && !mightBePropertyAccess)
 			// Already certainly failed.
 			return none<const Expr>();
 
-		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx.arena(), tempAsArr(&candidates), argIdx);
-		Expr arg = checkExpr(ctx, at(ast.args, argIdx), common.expected);
+		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx->arena(), tempAsArr(&candidates), argIdx);
+		Expr arg = checkExpr(ctx, at(ast.args, argIdx), &common.expected);
 
 		// If it failed to check, don't continue, just stop there.
-		if (arg.typeIsBogus(ctx.arena())) {
+		if (arg.typeIsBogus(ctx->arena())) {
 			cellSet<const Bool>(&someArgIsBogus, True);
 			return none<const Expr>();
 		}
 
-		const Type actualArgType = common.expected.inferred();
-		add<const Type>(ctx.arena(), &actualArgTypes, actualArgType);
+		const Type actualArgType = inferred(&common.expected);
+		add<const Type>(ctx->arena(), &actualArgTypes, actualArgType);
 		// If the Inferring already came from the candidate, no need to do more work.
 		if (!common.isExpectedFromCandidate)
-			filterByParamType(ctx.arena(), &candidates, actualArgType, argIdx);
+			filterByParamType(ctx->arena(), &candidates, actualArgType, argIdx);
 		return some<const Expr>(arg);
 	});
 
 	if (cellGet(&someArgIsBogus))
-		return expected.bogus(range);
+		return bogus(expected, range);
 
 	const Arr<const Candidate> candidatesArr = asConstArr<Candidate>(freeze(&candidates));
 
@@ -331,22 +333,22 @@ const CheckedExpr checkCall(ExprCtx& ctx, const SourceRange range, const CallAst
 		if (has(sfa)) {
 			if (!isEmpty(candidatesArr))
 				todo<void>("ambiguous call vs property access");
-			return expected.check(ctx, force(sfa).accessedFieldType(), Expr{range, force(sfa)});
+			return check(ctx, expected, force(sfa).accessedFieldType(), Expr{range, force(sfa)});
 		}
 	}
 
 	if (!has(args) || size(candidatesArr) != 1) {
 		if (isEmpty(candidatesArr)) {
 			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
-			ctx.addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, finishArr(&actualArgTypes), allCandidates}});
+			ctx->addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, finishArr(&actualArgTypes), allCandidates}});
 		} else {
 			const Arr<const CalledDecl> matches = map<const CalledDecl>{}(
-				ctx.arena(),
+				ctx->arena(),
 				candidatesArr,
 				[](const Candidate c) { return c.called; });
-			ctx.addDiag(range, Diag{Diag::CallMultipleMatches{funName, matches}});
+			ctx->addDiag(range, Diag{Diag::CallMultipleMatches{funName, matches}});
 		}
-		return expected.bogus(range);
+		return bogus(expected, range);
 	} else
 		return checkCallAfterChoosingOverload(ctx, only(candidatesArr), range, force(args), expected);
 }

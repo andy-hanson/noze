@@ -61,7 +61,7 @@ namespace {
 		Arena* arena,
 		const Type a,
 		const Type b,
-		InferringTypeArgs& aInferringTypeArgs,
+		const InferringTypeArgs aInferringTypeArgs,
 		const Bool allowConvertAToBUnion
 	);
 
@@ -70,7 +70,7 @@ namespace {
 		const StructDecl* decl,
 		const Arr<const Type> as,
 		const Arr<const Type> bs,
-		InferringTypeArgs& aInferringTypeArgs
+		const InferringTypeArgs aInferringTypeArgs
 	) {
 		// If we need to set at least one type arg, return Set.
 		// If all passed, return Keep.
@@ -105,7 +105,7 @@ namespace {
 		Arena* arena,
 		const StructInst* a,
 		const StructInst* b,
-		InferringTypeArgs& aInferringTypeArgs,
+		const InferringTypeArgs aInferringTypeArgs,
 		const Bool allowConvertAToBUnion
 	) {
 		// Handling a union expected type is done in Expected::check
@@ -132,23 +132,17 @@ namespace {
 		}
 	}
 
-	inline Opt<SingleInferringType*> tryGetTypeArg(InferringTypeArgs& inferringTypeArgs, const TypeParam* typeParam) {
+	inline const Opt<SingleInferringType*> tryGetTypeArg(const InferringTypeArgs inferringTypeArgs, const TypeParam* typeParam) {
 		return ::tryGetTypeArg<SingleInferringType>(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
 	}
-	inline Opt<const SingleInferringType*> tryGetTypeArg(const InferringTypeArgs& inferringTypeArgs, const TypeParam* typeParam) {
-		return ::tryGetTypeArg<const SingleInferringType>(
-			inferringTypeArgs.params,
-			asConstArr<SingleInferringType>(inferringTypeArgs.args),
-			typeParam);
-	}
 
-	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena* arena, const Type t, const InferringTypeArgs& inferringTypeArgs) {
+	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena* arena, const Type t, const InferringTypeArgs inferringTypeArgs) {
 		return t.match(
 			[](const Type::Bogus) {
 				return some<const Type>(Type{Type::Bogus{}});
 			},
 			[&](const TypeParam* p) {
-				const Opt<const SingleInferringType*> ta = tryGetTypeArg(inferringTypeArgs, p);
+				const Opt<SingleInferringType*> ta = tryGetTypeArg(inferringTypeArgs, p);
 				// If it's not one of the inferring types, it's instantiated enough to return.
 				return has(ta) ? force(ta)->tryGetInferred() : some<const Type>(t);
 			},
@@ -166,7 +160,7 @@ namespace {
 		Arena* arena,
 		const Opt<const Type> a,
 		const Type b,
-		InferringTypeArgs& aInferringTypeArgs
+		const InferringTypeArgs aInferringTypeArgs
 	) {
 		return has(a)
 			? setTypeNoDiagnosticWorkerWorkerWorker(arena, force(a), b, aInferringTypeArgs, False)
@@ -174,8 +168,7 @@ namespace {
 	}
 
 	const SetTypeResult setTypeNoDiagnosticWorker_forSingleInferringType(Arena* arena, SingleInferringType& sit, const Type setType) {
-		InferringTypeArgs ita = InferringTypeArgs::none();
-		const SetTypeResult res = setTypeNoDiagnosticWorkerWorker(arena, cellGet(&sit.type), setType, ita);
+		const SetTypeResult res = setTypeNoDiagnosticWorkerWorker(arena, cellGet(&sit.type), setType, InferringTypeArgs::none());
 		res.match(
 			[&](const SetTypeResult::Set s) {
 				cellSet<const Opt<const Type>>(&sit.type, some<const Type>(s.type));
@@ -193,7 +186,7 @@ namespace {
 		Arena* arena,
 		const Type a,
 		const Type b,
-		InferringTypeArgs& aInferringTypeArgs,
+		const InferringTypeArgs aInferringTypeArgs,
 		const Bool allowConvertAToBUnion
 	) {
 		return a.match(
@@ -229,8 +222,7 @@ namespace {
 }
 
 const Bool SingleInferringType::setTypeNoDiagnostic(Arena* arena, const Type setType) {
-	InferringTypeArgs ita = InferringTypeArgs::none();
-	return setTypeNoDiagnosticWorkerWorker(arena, cellGet(&type), setType, ita).match(
+	return setTypeNoDiagnosticWorkerWorker(arena, cellGet(&type), setType, InferringTypeArgs::none()).match(
 		[&](const SetTypeResult::Set s) {
 			cellSet<const Opt<const Type>>(&type, some<const Type>(s.type));
 			return True;
@@ -244,10 +236,10 @@ const Bool SingleInferringType::setTypeNoDiagnostic(Arena* arena, const Type set
 }
 
 
-const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr expr) {
+const CheckedExpr check(ExprCtx* ctx, Expected* expected, const Type exprType, const Expr expr) {
 	// Allow implicitly converting to union
 	// TODO: implicitly convert to Fut by wrapping in 'resolved'
-	const Opt<const Type> t = cellGet(&type);
+	const Opt<const Type> t = cellGet(&expected->type);
 	if (has(t) && force(t).isStructInst() && exprType.isStructInst()) {
 		const StructInst* expectedStruct = force(t).asStructInst();
 		const StructInst* exprStruct = exprType.asStructInst();
@@ -262,13 +254,13 @@ const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr 
 				});
 			if (has(opMemberIndex)) {
 				const size_t memberIndex = force(opMemberIndex);
-				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(ctx.arena(), at(members, memberIndex), expectedStruct);
+				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(ctx->arena(), at(members, memberIndex), expectedStruct);
 
 				const SetTypeResult setTypeResult = setTypeNoDiagnosticWorker_forStructInst(
-					ctx.arena(),
+					ctx->arena(),
 					instantiatedExpectedUnionMember,
 					exprStruct,
-					inferringTypeArgs,
+					expected->inferringTypeArgs,
 					/*allowConvertAToBUnion*/ False);
 
 				return setTypeResult.match(
@@ -276,35 +268,39 @@ const CheckedExpr Expected::check(ExprCtx& ctx, const Type exprType, const Expr 
 						return todo<const CheckedExpr>("should never happen?");
 					},
 					[&](const SetTypeResult::Keep) {
-						const Opt<const Type> opU = tryGetDeeplyInstantiatedType(ctx.arena());
+						const Opt<const Type> opU = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
 						if (!has(opU))
 							return todo<const CheckedExpr>("expected check -- not deeply instantiated");
 
-						const Expr::ImplicitConvertToUnion toU {force(opU).asStructInst(), memberIndex, ctx.alloc(expr)};
+						const Expr::ImplicitConvertToUnion toU {force(opU).asStructInst(), memberIndex, ctx->alloc(expr)};
 						return CheckedExpr{Expr{expr.range(), toU}};
 					},
 					[&](const SetTypeResult::Fail) {
-						ctx.addDiag(expr.range(), Diag{Diag::TypeConflict{force(t), exprType}});
+						ctx->addDiag(expr.range(), Diag{Diag::TypeConflict{force(t), exprType}});
 						return CheckedExpr{Expr{expr.range(), Expr::Bogus{}}};
 					});
 			}
 		}
 	}
 
-	if (setTypeNoDiagnostic(ctx.arena(), exprType))
+	if (setTypeNoDiagnostic(ctx->arena(), expected, exprType))
 		return CheckedExpr{expr};
 	else {
 		// Failed to set type. This happens if there was already an inferred type.
-		ctx.addDiag(expr.range(), Diag{Diag::TypeConflict{force(t), exprType}});
-		return bogus(expr.range());
+		ctx->addDiag(expr.range(), Diag{Diag::TypeConflict{force(t), exprType}});
+		return bogus(expected, expr.range());
 	}
 }
 
-const Bool Expected::setTypeNoDiagnostic(Arena* arena, const Type setType) {
-	const SetTypeResult typeToSet = setTypeNoDiagnosticWorkerWorker(arena, cellGet(&type), setType, inferringTypeArgs);
+const Bool setTypeNoDiagnostic(Arena* arena, Expected* expected, const Type setType) {
+	const SetTypeResult typeToSet = setTypeNoDiagnosticWorkerWorker(
+		arena,
+		cellGet(&expected->type),
+		setType,
+		expected->inferringTypeArgs);
 	return typeToSet.match(
 		[&](const SetTypeResult::Set s) {
-			cellSet<const Opt<const Type>>(&type, some<const Type>(s.type));
+			cellSet<const Opt<const Type>>(&expected->type, some<const Type>(s.type));
 			return True;
 		},
 		[](const SetTypeResult::Keep) {
@@ -315,20 +311,20 @@ const Bool Expected::setTypeNoDiagnostic(Arena* arena, const Type setType) {
 		});
 }
 
-const Opt<const Type> Expected::shallowInstantiateType() const {
-	const Opt<const Type> t = cellGet(&type);
+const Opt<const Type> shallowInstantiateType(const Expected* expected) {
+	const Opt<const Type> t = cellGet(&expected->type);
 	if (has(t) && force(t).isTypeParam()) {
-		const Opt<const SingleInferringType*> typeArg = tryGetTypeArg(inferringTypeArgs, force(t).asTypeParam());
+		const Opt<SingleInferringType*> typeArg = tryGetTypeArg(expected->inferringTypeArgs, force(t).asTypeParam());
 		return has(typeArg) ? force(typeArg)->tryGetInferred() : none<const Type>();
 	} else
 		return t;
 }
 
-const Opt<const Type> Expected::tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Type t) const {
-	return tryGetDeeplyInstantiatedTypeWorker(arena, t, inferringTypeArgs);
+const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Expected* expected, const Type t) {
+	return tryGetDeeplyInstantiatedTypeWorker(arena, t, expected->inferringTypeArgs);
 }
 
-const Bool matchTypesNoDiagnostic(Arena* arena, const Type expectedType, const Type setType, InferringTypeArgs inferringTypeArgs, const Bool allowConvertToUnion) {
+const Bool matchTypesNoDiagnostic(Arena* arena, const Type expectedType, const Type setType, const InferringTypeArgs inferringTypeArgs, const Bool allowConvertToUnion) {
 	return setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType, setType, inferringTypeArgs, allowConvertToUnion).match(
 		[](const SetTypeResult::Set) {
 			return True;

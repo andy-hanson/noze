@@ -6,7 +6,7 @@
 #include "./inferringType.h"
 
 const Expr* checkFunctionBody(
-	CheckCtx& checkCtx,
+	CheckCtx* checkCtx,
 	const ExprAst ast,
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const FunsMap funsMap,
@@ -14,4 +14,4 @@ const Expr* checkFunctionBody(
 	const CommonTypes& commonTypes
 );
 
-const Expr checkExpr(ExprCtx& ctx, const ExprAst ast, Expected& expected);
+const Expr checkExpr(ExprCtx* ctx, const ExprAst ast, Expected* expected);

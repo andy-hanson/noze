@@ -69,7 +69,17 @@ other-main void() trusted summon
 	n = (new-arr<nat> 1, 2, 3) my-sum
 	print-sync: n.to-str
 
+	count-down
+
 	pass
+
+n-times void(n nat, f fun1 void nat)
+	f call n
+	n == 0 if: pass, n.decr n-times f
+
+count-down void() summon
+	10 n-times {it.to-str print-sync}
+
 
 test void() trusted summon
 	a = new-arr<nat> one, one, one

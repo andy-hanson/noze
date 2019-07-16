@@ -14,15 +14,23 @@ struct MutArr {
 	size_t _size;
 
 	inline MutArr() : isFrozen{false}, _begin{nullptr}, capacity{0}, _size{0} {}
+	inline MutArr(bool _isFrozen, T* begin, size_t _capacity, size_t size)
+		: isFrozen{_isFrozen}, _begin{begin}, capacity{_capacity}, _size{size} {}
 	MutArr(const MutArr&) = delete;
 	MutArr(MutArr&&) = default;
 	inline MutArr(T* begin, const size_t len) : isFrozen{false}, _begin{begin}, capacity{len}, _size{len} {}
-	inline MutArr(Arena* arena, T value) : isFrozen{false}, _begin{nu<T>{}(arena, value)}, capacity{1}, _size{1} {}
 
-	const T* begin() const {
-		return _begin;
-	}
 };
+
+template <typename T>
+inline T* mutArrBegin(MutArr<T>* m) {
+	return m->_begin;
+}
+
+template <typename T>
+inline MutArr<T> mutArrOfOneElement(Arena* arena, const T value) {
+	return MutArr<T>{false, nu<T>{}(arena, value), 1, 1};
+}
 
 template <typename T>
 inline size_t mutArrSize(const MutArr<T>* m) {
@@ -83,14 +91,14 @@ inline const T mustPop(MutArr<T>* m) {
 }
 
 template <typename T>
-inline const Opt<T> peek(const MutArr<T>& m) {
-	return m._size == 0
+inline const Opt<T> peek(const MutArr<T>* m) {
+	return m->_size == 0
 		? none<T>()
-		: some<T>(m._begin[m._size - 1]);
+		: some<T>(m->_begin[m->_size - 1]);
 }
 
 template <typename T>
-inline const T mustPeek(const MutArr<T>& m) {
+inline const T mustPeek(const MutArr<T>* m) {
 	return force(peek(m));
 }
 

@@ -20,7 +20,7 @@ namespace {
 			todo<void>("checkMainSignature");
 	}
 
-	const FunDecl* getMainFun(const Program& program) {
+	const FunDecl* getMainFun(const Program program) {
 		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.mainModule->funsMap, shortSymAlphaLiteral("main"));
 		if (size(mainFuns) != 1)
 			todo<void>("wrong number main funs");
@@ -29,7 +29,7 @@ namespace {
 		return mainFun;
 	}
 
-	const FunDecl* getAllocFun(const Program& program) {
+	const FunDecl* getAllocFun(const Program program) {
 		const Arr<const FunDecl*> allocFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
 		if (size(allocFuns) != 1)
 			todo<void>("wrong number allocate-bytes funs");
@@ -40,7 +40,7 @@ namespace {
 
 	// Gets 'call' for 'fun'
 	// 'call' for 'fun-ptr' is a builtin already so no need to handle that here
-	const Arr<const FunDecl*> getCallFuns(Arena* arena, const Program& program) {
+	const Arr<const FunDecl*> getCallFuns(Arena* arena, const Program program) {
 		const Arr<const FunDecl*> allCallFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("call"));
 		const Arr<const FunDecl*> res = filter(arena, allCallFuns, [&](const FunDecl* f) {
 			const StructDecl* decl = first(f->params()).type.asStructInst()->decl;

@@ -47,9 +47,7 @@ inline T todo(const char* message) {
 inline void debugger() {}
 
 template <typename T>
-inline void unused(T&) {}
-template <typename T, typename U>
-inline void unused(T&, U&) {}
+inline void unused(const T) {}
 
 template <typename T>
 inline T unreachable() {

@@ -78,7 +78,7 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath p
 	assert(off == 0);
 
 	MutStr res = newUninitializedMutArr<const char>(arena, fileSize + 1); // + 1 for the '\0'
-	const ssize_t nBytesRead = read(fd, const_cast<char*>(res.begin()), fileSize);
+	const ssize_t nBytesRead = read(fd, const_cast<char*>(mutArrBegin(&res)), fileSize);
 
 	if (nBytesRead == -1)
 		return todo<Ret>("read failed");

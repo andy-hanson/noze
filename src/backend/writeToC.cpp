@@ -205,8 +205,8 @@ namespace {
 
 	using StructStates = MutDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>;
 
-	const Bool canReferenceType(const ConcreteType t, const StructStates& structStates) {
-		const Opt<const StructState> state = getAt_mut(&structStates, t.strukt);
+	const Bool canReferenceType(const ConcreteType t, const StructStates* structStates) {
+		const Opt<const StructState> state = getAt_mut(structStates, t.strukt);
 		if (has(state))
 			switch (force(state)) {
 				case StructState::declared:
@@ -220,7 +220,7 @@ namespace {
 			return False;
 	}
 
-	const Bool sigCanReferenceTypes(const ConcreteSig s, const StructStates& structStates) {
+	const Bool sigCanReferenceTypes(const ConcreteSig s, const StructStates* structStates) {
 		return _and(
 			canReferenceType(s.returnType, structStates),
 			every(s.params, [&](const ConcreteParam p) {
@@ -237,9 +237,9 @@ namespace {
 	}
 
 	// Returns any new work it did -- if we declared or defined the struct
-	const Opt<const StructState> writeStructDeclarationOrDefinition(Writer* writer, const ConcreteStruct* strukt, const StructStates& structStates) {
+	const Opt<const StructState> writeStructDeclarationOrDefinition(Writer* writer, const ConcreteStruct* strukt, const StructStates* structStates) {
 		auto declare = [&]() -> const Opt<const StructState> {
-			if (!hasKey_mut(&structStates, strukt)) {
+			if (!hasKey_mut(structStates, strukt)) {
 				declareStruct(writer, strukt);
 				return some<const StructState>(StructState::declared);
 			} else
@@ -290,7 +290,7 @@ namespace {
 			for (const ConcreteStruct* strukt : allStructs) {
 				const Opt<const StructState> curState = getAt_mut(&structStates, strukt);
 				if (!has(curState) || force(curState) != StructState::defined) {
-					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, structStates);
+					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, &structStates);
 					if (has(didWork)) {
 						setInDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>(&tempArena, &structStates, strukt, force(didWork));
 						cellSet<const Bool>(&madeProgress, True);
@@ -348,6 +348,7 @@ namespace {
 			},
 			[&](const Int64 i) {
 				writeInt(writer, i);
+				writeStatic(writer, "ll");
 			},
 			[&](const ConstantKind::Lambda l) {
 				unused(l);
@@ -357,6 +358,7 @@ namespace {
 			},
 			[&](const Nat64 n) {
 				writeNat(writer, n);
+				writeStatic(writer, "ull");
 			},
 			[&](const ConstantKind::Null) {
 				writeStatic(writer, "0");
@@ -498,7 +500,8 @@ namespace {
 	}
 
 	void writeNewIfaceImpl(Writer* writer, const ConcreteExpr::NewIfaceImpl impl) {
-		unused(writer, impl);
+		unused(writer);
+		unused(impl);
 		todo<void>("writeNewIfaceImpl");
 	}
 
@@ -775,7 +778,8 @@ namespace {
 	}
 
 	void writeNewIfaceImpl(WriterWithIndent* writer, const ConcreteExpr::NewIfaceImpl e) {
-		unused(writer, e);
+		unused(writer);
+		unused(e);
 		todo<void>("writenewifaceimpl");
 	}
 

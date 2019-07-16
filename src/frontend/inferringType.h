@@ -18,7 +18,7 @@ struct LambdaInfo {
 struct ExprCtx {
 	ExprCtx(const ExprCtx&) = delete;
 
-	CheckCtx& checkCtx;
+	CheckCtx* checkCtx;
 	const StructsAndAliasesMap structsAndAliasesMap;
 	const FunsMap funsMap;
 	const CommonTypes& commonTypes;
@@ -32,16 +32,13 @@ struct ExprCtx {
 	// TODO: these are pointers because MutArr currently only works on copyable values, and LambdaInfo should not be copied.
 	MutArr<LambdaInfo*> lambdas = MutArr<LambdaInfo*>{};
 
-	inline const Str copyStr(const Str s) {
-		return checkCtx.copyStr(s);
-	}
 
 	inline Arena* arena() {
-		return checkCtx.arena;
+		return checkCtx->arena;
 	}
 
 	inline void addDiag(const SourceRange range, const Diag diag) {
-		checkCtx.addDiag(range, diag);
+		::addDiag(checkCtx, range, diag);
 	}
 
 	inline Type makeFutType(const Type type) {
@@ -53,12 +50,12 @@ struct ExprCtx {
 	}
 };
 
-inline const Type typeFromAst(ExprCtx& ctx, const TypeAst typeAst) {
+inline const Type typeFromAst(ExprCtx* ctx, const TypeAst typeAst) {
 	return typeFromAst(
-		ctx.checkCtx,
+		ctx->checkCtx,
 		typeAst,
-		ctx.structsAndAliasesMap,
-		TypeParamsScope{ctx.outermostFun->typeParams},
+		ctx->structsAndAliasesMap,
+		TypeParamsScope{ctx->outermostFun->typeParams},
 		none<MutArr<StructInst*>*>());
 }
 
@@ -98,79 +95,79 @@ const Bool matchTypesNoDiagnostic(
 	Arena* arena,
 	const Type a,
 	const Type b,
-	InferringTypeArgs aInferringTypeArgs,
+	const InferringTypeArgs aInferringTypeArgs,
 	const Bool allowConvertAToBUnion);
-inline const Bool matchTypesNoDiagnostic(Arena* arena, const Type a, const Type b, InferringTypeArgs aInferringTypeArgs) {
+inline const Bool matchTypesNoDiagnostic(Arena* arena, const Type a, const Type b, const InferringTypeArgs aInferringTypeArgs) {
 	return matchTypesNoDiagnostic(arena, a, b, aInferringTypeArgs, /*allowConvertAToBUnion*/ False);
 }
 
 struct Expected {
-private:
 	Cell<const Opt<const Type>> type;
 	InferringTypeArgs inferringTypeArgs;
 
-public:
 	inline Expected(const Opt<const Type> init)
 		: type{init}, inferringTypeArgs{InferringTypeArgs::none()} {}
 	inline Expected(const Opt<const Type> init, InferringTypeArgs ita)
 		: type{init}, inferringTypeArgs{ita} {}
 
-	// TODO: if we have a bogus expected type we should probably not be doing any more checking at all?
-	inline const Bool isBogus() const {
-		const Opt<const Type> t = tryGetInferred();
-		return _and(has(t), force(t).isBogus());
-	}
-
 	static inline Expected infer() {
 		return Expected{none<const Type>()};
 	}
-
-	inline Expected copyWithNewExpectedType(const Type type) {
-		return Expected{some<const Type>(type), inferringTypeArgs};
-	}
-
-	const Opt<const Type> shallowInstantiateType() const;
-	inline const Opt<const Type> tryGetDeeplyInstantiatedType(Arena* arena) const {
-		const Opt<const Type> t = tryGetInferred();
-		return has(t)
-			? tryGetDeeplyInstantiatedTypeFor(arena, force(t))
-			: none<const Type>();
-	}
-	const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Type t) const;
-
-	inline const Bool hasExpected() const {
-		return has(tryGetInferred());
-	}
-
-	inline const CheckedExpr bogus(const SourceRange range) {
-		return bogusWithType(range, Type{Type::Bogus{}});
-	}
-
-	inline const CheckedExpr bogusWithType(const SourceRange range, const Type setType) {
-		cellSet<const Opt<const Type>>(&type, some<const Type>(setType));
-		return bogusWithoutAffectingExpected(range);
-	}
-
-	inline const Type inferred() const {
-		return force(tryGetInferred());
-	}
-
-	inline const Opt<const Type> tryGetInferred() const {
-		return cellGet(&type);
-	}
-
-	inline const Bool isExpectingString(const StructInst* stringType) const {
-		const Opt<const Type> t = tryGetInferred();
-		return _and(
-			has(t),
-			typeEquals(force(t), Type{stringType}));
-	}
-
-	const CheckedExpr check(ExprCtx& ctx, const Type exprType, const Expr expr);
-
-	// Note: this may infer type parameters
-	const Bool setTypeNoDiagnostic(Arena* arena, const Type setType);
 };
+
+inline const Opt<const Type> tryGetInferred(const Expected* expected) {
+	return cellGet(&expected->type);
+}
+
+// TODO: if we have a bogus expected type we should probably not be doing any more checking at all?
+inline const Bool isBogus(const Expected* expected) {
+	const Opt<const Type> t = tryGetInferred(expected);
+	return _and(has(t), force(t).isBogus());
+}
+
+inline Expected copyWithNewExpectedType(const Expected* expected, const Type type) {
+	return Expected{some<const Type>(type), expected->inferringTypeArgs};
+}
+
+const Opt<const Type> shallowInstantiateType(const Expected* expected);
+
+const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Expected* expected, const Type t);
+
+inline const Opt<const Type> tryGetDeeplyInstantiatedType(Arena* arena, const Expected* expected) {
+	const Opt<const Type> t = tryGetInferred(expected);
+	return has(t)
+		? tryGetDeeplyInstantiatedTypeFor(arena, expected, force(t))
+		: none<const Type>();
+}
+
+inline const Bool hasExpected(const Expected* expected) {
+	return has(tryGetInferred(expected));
+}
+
+inline const CheckedExpr bogusWithType(Expected* expected, const SourceRange range, const Type setType) {
+	cellSet<const Opt<const Type>>(&expected->type, some<const Type>(setType));
+	return bogusWithoutAffectingExpected(range);
+}
+
+inline const CheckedExpr bogus(Expected* expected, const SourceRange range) {
+	return bogusWithType(expected, range, Type{Type::Bogus{}});
+}
+
+inline const Type inferred(const Expected* expected) {
+	return force(tryGetInferred(expected));
+}
+
+inline const Bool isExpectingString(const Expected* expected, const StructInst* stringType) {
+	const Opt<const Type> t = tryGetInferred(expected);
+	return _and(
+		has(t),
+		typeEquals(force(t), Type{stringType}));
+}
+
+const CheckedExpr check(ExprCtx* ctx, Expected* expected, const Type exprType, const Expr expr);
+
+// Note: this may infer type parameters
+const Bool setTypeNoDiagnostic(Arena* arena, Expected* expected, const Type setType);
 
 struct StructAndField {
 	const StructInst* structInst;

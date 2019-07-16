@@ -1,4 +1,4 @@
-## Overview
+# overview
 
 A few interesting aspects of noze:
 
@@ -8,10 +8,10 @@ A few interesting aspects of noze:
   A normal function with no interface parameters performs no I/O, and a normal function with no mutable parameters is a pure function.
 
 
+## syntax
 
-## Syntax
-
-A noze file consists of declarations. Each declaration is declared like `name type`, with an indented block following.
+A noze file consists of many top-level declarations. There are no nested declarations. (Local variables may appear in nested expressions but those are not considered declarations for this purpose.)
+Each declaration is declared like `name type`, with an indented block following.
 The language is fairly strict with whitespace -- an indentation must be exactly one tab, and leading / trailing spaces on a line are illegal.
 It is also a syntax error to have multiple spaces in a row or to fail to put spaces around an operator (which is parsed much like a regular name).
 
@@ -20,9 +20,10 @@ Noze is an expression-based langage -- it has only expressions and no concept of
 A function body is an expression and no `return` is necessary.
 Functions that return "nothing" return `void`, which is an empty type.
 
-#### Names
+#### names
 
 A name may be *either* alpha *or* an operator. Mixing alpha and operator characters is not allowed, e.g. `a/b` is not a valid name.
+The compiler treads alpha and operator names the same -- the difference exists only in the lexer.
 
 An alpha name consists of `a-z`, `0-9`, hyphens `-`, and may optionally end in a `?`. Upper-case letters and underscores are illegal. The name must begin with `a-z`.
 
@@ -33,9 +34,13 @@ There is no `!=` operator since `!` is used for other purposes (see the section 
 Despite having an alpha / operator distinction, there *must* be spaces around operators. `a+b` is a syntax error, it must be `a + b`.
 
 
-#### Call syntax
+#### call syntax
 
 The most common expression is a call expression, so there are a number of ways to write it for convenience.
+Common operators such as `+` are just call exprsesions.
+Special functions like `and` and `if` are also just call expressions,
+though the compiler treats them specially as their arguments are lazily evaluated.
+
 
 Normally, prefer to write call expressions using infix syntax, like `x + y`.
 Note this is not binary only, so you can write `x +` for a 1-argument function or or `x + y, z` for a 3-argument function.
@@ -55,21 +60,20 @@ A function of one argument can be written with a `.`. `x.abs + y` is equivalent 
 The `.` is tightly binding, so `x + y.abs` is parsed as `x + (y.abs)` rather than `(x + y).abs`.
 
 
-
-#### Comments
+#### comments
 
 A regular comment is a line beginning with `| ` (the `|` must be followed by a space).
 One may also replace `|` with `region` for a comment indicating that the following code forms a logical group.
 A line may not mix comment and non-comment content -- a comment must go on its own line.
 
 
-## Types
+## type
 
-There are only a few basic kinds of types -- records, unions, and interfaces.
+There are only a few basic kinds of types -- [records](#record), [unions](#union), and [interfaces](#iface).
 There are also type parameters, though those of course must resolve to one of the above eventually. See the section on [templates](#templates) for those.
 
 
-### Record types
+### record
 
 A record type is declared like so:
 
@@ -112,7 +116,7 @@ Normally the compiler is free to choose whether a record is by-value or by-refer
 
 
 
-### Union types
+### union
 
 A union type is declared like so:
 
@@ -159,9 +163,9 @@ Each match case consists of a type name, an optional name of a local variable of
 There are no enum types, but a union of empty records can be used instead. (This is why the match case's local variable name is optional -- it's useless for an empty type.)
 
 
-### Interface types
+### iface
 
-WARN: Interfaces are not finished yet, this section is merely a plan.
+WARNING: Interfaces are not finished yet (though they should get past the type-checker at least), this section is merely a plan.
 
 An interface type is declared like so:
 
@@ -214,7 +218,7 @@ However, it's not considered unsafe behavior for a function to take a long time,
 
 
 
-## Other expressions
+## other expressions
 
 #### `when` expression
 
@@ -237,11 +241,52 @@ With the exception of the `else`, each condition may be any (one-line) expressio
 The `else` *must* be present.
 
 
+#### literals
+
+For a literal expression like `123` or `"hello"`:
+
+* If there is no expected type, it's a string.
+* If there is an expected type, it's a call to a function named `literal` taking that string.
+
+The syntax for literals is that it must either be `[0-9]+(\.[0-9]+)`, or a quoted string literal. String literals support escapes similar to C.
+
+Calling a `literal` function ensures that we don't need to have suffixes on number literals to indicate their type, and users can define their own number types.
+It also means that converting a string to a number is in the runtime rather than the compiler.
+Other languages solve this problem with implicit conversion between number types, but this is a common source of bugs and doesn't allow for number types bigger than the compiler's default.
+
+
+#### lambdas
+
+Noze has two different kinds of dynamically-invocable function types:
+
+`fun`: This is a `mut` type for a function that will be synchronously invoked.
+  It's `mut` because the function might close over `mut` objects.
+  This is the more common kind of fun, used to e.g. map over an array.
+`send-fun`: This is a `sendable` type that acts like an interface.
+  It may close over `mut` objects, but like with `new-actor`, it won't be run synchronously, it will run in the appropriate context with exclusive access to any `mut` things it closes over.
+
+The same syntactical kind of expression handles both depending on the expected type, and looks like this:
+
+```nz
+n-times void(n nat, f fun1 void nat)
+	f call n
+	n == 0 if: pass, n.decr n-times f
+
+count-down void() summon
+	10 n-times \i
+		i.to-str print-sync
+```
+
+This could also be written as `10 n-times {it.to-str print-sync}`.
+`{}` marks special shorthand for a lambda -- if it contains the identifier `it` it takes that as one parameter, otherwise it has no parameters.
+
+If a lambda would be equivalent to an existing function, you can write `&f` where `f` is the function name.
+
+There is no way to explicitly provide a parameter type in a lambda; an expected type is mandatory. (You can always use `as<fun1<void, nat>>:` to provide an expected type.)
 
 
 
-
-## Functions
+## functions
 
 A normal function declaration looks like:
 
@@ -254,7 +299,7 @@ The function is written name-first, type-second: the name is `add-em` and the re
 Parameters work the same way.
 
 
-## Function attributes
+## function attributes
 
 A normal function has no attributes. It cannot perform I/O except through interfaces and cannot do dangerous things like pointer arithmetic.
 
@@ -292,7 +337,7 @@ The vast majority of functions require a ctx, even `+` since that may throw an e
 (Currently there is no way to specify libraries to link, so the only `extern` functions are from the C standard library.)
 
 
-## Purity
+## purity
 
 Every type (except type parameters) has a purity. The three values of purity are `data`, `sendable`, and `mut`.
 
@@ -322,7 +367,7 @@ The above example is a compile error: `what-am-i` should be marked `mut` even th
 Everything in an interface must be sendable -- meaning the return types and parameter types of all of its signatures.
 
 
-## Templates
+## templates
 
 Instead of using a particular type, a function may specify a type parameter to be filled in by the caller.
 
@@ -361,7 +406,7 @@ Type arguments are *opaque*, meaning nothing about the type is known.
 However, you can use specs to ensure that some functions will exist.
 
 
-## Specs
+## specs
 
 Often a template function needs to rely on some functionality existing for a type.
 It can specify what functions it expects to exist using a spec.
@@ -387,6 +432,24 @@ Specs don't constain a *type*, they constrain the functions that the caller must
 Different callers might have different implementations of the spec for the same type, depending on what functions they have in scope.
 
 
-## Modules
+## modules
 
-TODO
+A noze program consists of multiple files.
+But when you run a program you specify only the main file.
+That file must name all other modules it wants to import, except for `include.nz` which is always included.
+
+When module A imports module B, all declarations in B become visible in A. This is not transitive, so B can import things without affecting its callers.
+Module import cycles are not allowed.
+If two functinos depend on each other but for some reason you want them in different modules, you could use a spec to allow each to declare their dependency on the other without a direct import. You could also define them to take a lambda (or interface) instead of a direct dependency.
+
+Import syntax looks like so:
+
+`import a .b ..c.d`
+
+This will import files from:
+
+* `a`: This is a global import. Currently global imports can only import things from the `noze/include` directory, but it's planned to support other global import paths too.
+* `.b`: This is a local import. The compiler will expect a file `./b.nz` to exist or it will be a compile error.
+* `..c.d`: This is also a local import from `../c/d.nz`. The number of leading `.` is the number of parent directories to climb, minus one.
+  `...c.d` would import from `../../c/d.nz`.
+

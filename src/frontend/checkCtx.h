@@ -45,24 +45,20 @@ struct CheckCtx {
 	ArrBuilder<const Diagnostic> diagsBuilder {};
 
 	CheckCtx(const CheckCtx&) = delete;
-
-	inline void addDiag(const SourceRange range, const Diag diag) {
-		add<const Diagnostic>(arena, &diagsBuilder, Diagnostic{path, range, diag});
-	}
-
-	inline const Bool hasDiags() const {
-		return _not(arrBuilderIsEmpty(&diagsBuilder));
-	}
-
-	inline const Arr<const Diagnostic> diags() {
-		return finishArr(&diagsBuilder);
-	}
-
-	inline IncludeAndImportsRange includeAndImportsRange() const {
-		return IncludeAndImportsRange{include, imports};
-	}
-
-	inline const Str copyStr(const Str s) const {
-		return ::copyStr(arena, s);
-	}
 };
+
+inline void addDiag(CheckCtx* ctx, const SourceRange range, const Diag diag) {
+	add<const Diagnostic>(ctx->arena, &ctx->diagsBuilder, Diagnostic{ctx->path, range, diag});
+}
+
+inline const Bool hasDiags(const CheckCtx* ctx) {
+	return _not(arrBuilderIsEmpty(&ctx->diagsBuilder));
+}
+
+inline const Arr<const Diagnostic> diags(CheckCtx* ctx) {
+	return finishArr(&ctx->diagsBuilder);
+}
+
+inline IncludeAndImportsRange includeAndImportsRange(const CheckCtx* ctx) {
+	return IncludeAndImportsRange{ctx->include, ctx->imports};
+}

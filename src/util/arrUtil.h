@@ -517,7 +517,7 @@ const Arr<const Arr<T>> sortAndGroup(Arena* arena, const Arr<T> a, Cmp cmp) {
 			}
 		}
 		// Greater than everything in the list -- add it to the end
-		push(arena, &res, MutArr<T>{arena, x});
+		push(arena, &res, mutArrOfOneElement<T>(arena, x));
 	};
 
 	for (const T x : a)
@@ -595,7 +595,7 @@ inline Reverse<T> reverse(const Arr<T> a) {
 }
 
 template <typename T, Eq<T> eq>
-inline const Bool contains(const Arr<T>& arr, const T t) {
+inline const Bool contains(const Arr<T> arr, const T t) {
 	return exists(arr, [&](const T value) {
 		return eq(value, t);
 	});

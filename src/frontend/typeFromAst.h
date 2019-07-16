@@ -6,14 +6,14 @@
 #include "../model.h"
 
 const Opt<const StructInst*> instStructFromAst(
-	CheckCtx& ctx,
+	CheckCtx* ctx,
 	const TypeAst::InstStruct ast,
 	const StructsAndAliasesMap& structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts);
 
 inline const Opt<const StructInst*> instStructFromAstNeverDelay(
-	CheckCtx& ctx,
+	CheckCtx* ctx,
 	const TypeAst::InstStruct ast,
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope
@@ -22,7 +22,7 @@ inline const Opt<const StructInst*> instStructFromAstNeverDelay(
 }
 
 const Type typeFromAst(
-	CheckCtx& ctx,
+	CheckCtx* ctx,
 	const TypeAst ast,
 	const StructsAndAliasesMap& structsAndAliasesMap,
 	const TypeParamsScope& typeParamsScope,
@@ -30,13 +30,13 @@ const Type typeFromAst(
 );
 
 const Opt<const SpecDecl*> tryFindSpec(
-	CheckCtx& ctx,
+	CheckCtx* ctx,
 	const Sym name,
 	const SourceRange range,
 	const SpecsMap specsMap);
 
 const Arr<const Type> typeArgsFromAsts(
-	CheckCtx& ctx,
+	CheckCtx* ctx,
 	const Arr<const TypeAst> typeAsts,
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope,
