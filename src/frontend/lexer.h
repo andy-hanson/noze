@@ -7,7 +7,7 @@
 
 struct Lexer {
 	Arena* arena;
-	Symbols* symbols;
+	AllSymbols* allSymbols;
 	// Null-terminated.
 	const CStr sourceBegin;
 	// Starts at sourceBegin and proceeds until it hits NUL
@@ -113,4 +113,4 @@ const ExpressionToken takeExpressionToken(Lexer* lexer);
 
 const Bool tryTakeElseIndent(Lexer* lexer);
 
-Lexer createLexer(Arena* astArena, Symbols* symbols, const NulTerminatedStr source);
+Lexer createLexer(Arena* astArena, AllSymbols* allSymbols, const NulTerminatedStr source);

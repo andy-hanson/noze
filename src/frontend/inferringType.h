@@ -21,7 +21,7 @@ struct ExprCtx {
 	CheckCtx* checkCtx;
 	const StructsAndAliasesMap structsAndAliasesMap;
 	const FunsMap funsMap;
-	const CommonTypes& commonTypes;
+	const CommonTypes* commonTypes;
 	const FunDecl* outermostFun;
 	const Opt<const NewAndMessageInfo> newAndMessageInfo;
 

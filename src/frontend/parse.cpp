@@ -395,9 +395,13 @@ namespace {
 	}
 }
 
-const Result<const FileAst, const ParseDiagnostic> parseFile(Arena* astArena, Symbols* symbols, const NulTerminatedStr source) {
+const Result<const FileAst, const ParseDiagnostic> parseFile(
+	Arena* astArena,
+	AllSymbols* allSymbols,
+	const NulTerminatedStr source
+) {
 	try {
-		Lexer lexer = createLexer(astArena, symbols, source);
+		Lexer lexer = createLexer(astArena, allSymbols, source);
 		return success<const FileAst, const ParseDiagnostic>(parseFileMayThrow(&lexer));
 	} catch (ParseDiagnostic p) {
 		return failure<const FileAst, const ParseDiagnostic>(p);

@@ -7,11 +7,12 @@ struct ArrBuilder {
 	MutArr<T> inner;
 	ArrBuilder(const ArrBuilder<T>&) = delete;
 	inline ArrBuilder() : inner{} {}
-
-	inline const Arr<T> tempAsArr() const {
-		return ::tempAsArr(&inner);
-	}
 };
+
+template <typename T>
+inline const Arr<T> arrBuilderTempAsArr(const ArrBuilder<T>* a) {
+	return tempAsArr(&a->inner);
+}
 
 template <typename T>
 inline size_t arrBuilderSize(const ArrBuilder<T>* builder) {

@@ -1,9 +1,13 @@
 This file contains things that are *not* implemented but planned.
-Most of these will probably take a lot of work. Vats / GC are a priority as these are central to the runtime.
+Read [implementation](./implementation.md) and [language](./language.md) before reading this.
+
+Most of these will probably take a lot of work and require changes to the plan.
+Vats / GC are a priority as these are central to the runtime.
+
 
 ## Vats
 
-A noze program consists of several vats.
+The noze runtime is distributed across several vats.
 Vats are somewhat like processes in an operating system, in that they can have limited access to resources (memory / time). Unlike with an operating system, the vat system does not limit access to I/O; instead interfaces do.
 
 Unlike memory protection between processes in an operating system, vats also do not require virtual addressing to safely separate memory, instead relying on the language's own safety. This makes them suitable for simple systems with no OS or virtual addressing hardware, e.g. a TLB.
@@ -16,11 +20,13 @@ A *vat* consists of:
 
 Although vats have separate garbage collection, they do not have segregated memory -- they can all look at objects the others have allocated. Vats communicate using `sendable` things like interfaces and futures. This means that we'll have to use a non-moving garbage collector, as garbage collection in one vat shouldn't prevent other vats from proceeding.
 
-Vats allow you to have realtime requirements without having to write your entire program in a constrained way. If you have a high-priority task, you can put it in its own vat. This guarantees it:
+Vats allow you to have realtime requirements on parts of a program without having to write your entire program in a constrained way. If you have a high-priority task, you can put it in its own vat. This guarantees it:
 
 * A minimum number of threads, to ensure that this vat is always able to run.
-* Since it has its own collection of tasks, it won't be pre-empted by anything else.
+* Since it has its own collection of tasks, it won't be preempted by anything else.
 * Since it has its own garbage collector, it will only pay for what it allocates. It may also be `nogc` ensuring that its tasks are never blocked by garbage collection.
+
+Note, the minimum number of threads won't work on single-processor systems. Guaranteeing a certain share of time on a single-processor system would still be possible using interrupts, so it could be specified as fractions of a thread.
 
 
 ## I/O
@@ -30,7 +36,7 @@ There is no single solution good for all kinds of I/O, this needs to be consider
 
 The language does this already by normally only allowing one to do I/O through and interface;
 the provider of that interface could set a limit, such as only allowing a certain number of calls.
-Different iface instances could be provided to different users so that each user will have their own limits.
+Different interface instances could be provided to different users so that each user will have their own limits.
 
 I/O libraries should be written with the principle of least authority in mind; the interface for reading files should only have access to a certain directory, the interface for making HTTP requests should only have access to certain URLs. Very few APIs should be limitless by default.
 
@@ -57,19 +63,55 @@ Due to this design, there's no reason arbitrary parts of memory couldn't be `mal
 
 Since detecting what vat memory belongs to will be a common operation, it needs to be efficient. Luckily a virtual address usually has 48 usable bits, which is enough to encode the vat ID in there -- say there's a maximum of 255 vats. Static could be the only one allowed to have objects starting with 0x00..., vat 1 would have objects starting with 0x01..., vat 2 would have 0x02..., etc. Most objects that the GC traverses over (and only the GC cares about which vat an object belongs to) will be in the current vat or in static memory, so we would have those two as the fast path, then fall back to the slow path where we need to add an external root for another vat.
 
-This design does not take care of circular references between vats. However, those are pretty hard to create -- mutable objects are generally not sendable. `fut` is, though, and it's possible that vat A's `fut` will be resolved by an object containing a pointer to vat B's `fut` which will be resolved by an object containing a pointer to the original `fut`. Vat A would never free its fut since vat B points to it, and the same goes for vat B. Solving this problem would require inter-vat cycle detection; perhaps some core runtime thread would look for these. This would require a vat during GC to mark which objects were reachable by itself as opposed to which ones were reachable by external roots only. Then if the cycle-detector sees that if vat A's objects are external-only, and so are vat B's, then it could unmark all of them. This is a hard problem though, and won't come up often in real code. So I'll hold of on trying to solve this.
+This design does not take care of circular references between vats. However, those are pretty hard to create -- circular references require mutable objects which are generally not sendable. `fut` is, though, and it's possible that vat A's `fut` will be resolved by an object containing a pointer to vat B's `fut` which will be resolved by an object containing a pointer to the original `fut`. Vat A would never free its fut since vat B points to it, and the same goes for vat B. Solving this problem would require inter-vat cycle detection. This would require a vat during GC to mark which objects were reachable by itself as opposed to which ones were reachable by external roots only. Then if we see that vat A's objects are external-only, and so are vat B's, objects reachable from it, then it could unmark all of them. This is a hard problem though, and won't come up often in real code. So I'll hold of on trying to solve this.
 
 
-### Stack allocation
+## Stack allocation
 
 Since noze has no globals, it's often easy to tell when a function can't possibly leak something.
-If a function takes a type `t` and returns `u`, and the type `u` recursively can never contain a `t`, then the parameter of type `t` can never leak. I suspect this will cover 90% of cases.
+If a function takes a type `t`:
+* The return type is `r`. `t` will leak if `r` can recursively contain a `t`, meaning it is one of:
+	- Is itself `t`
+	- Is an iface or fun, since these can close over anything
+	- Is a record with a field that can recursively contain `t`
+	- A union with `t` as one of the possibilities
+	- Is a `ptr t`.
+  If none of the above are true, `t` can't escape by the return type. (It can't escape by a type parameter since type parameters are opaque, so a type is never assignable to a type parameter unless it's identical to that type parameter.)
+* For each parameter type `p`: It's OK for `p` to contain `t`, it's only a problem if `p` is mutable and `t` could be written to it.
+  This can happen if:
+    - Is a record with a `mut` field of type `t`
+    - Is an iface or fun with a parameter that may recursively contain `t`
+    - Is a `mut-arr` or similar collection type.
+      These can be detected as they contain `ptr` which is mutable.
+      However, so does `arr` which is not.
+      There should probably be a `const-ptr` type then which is known not to be mutable, thus `t` can't leak into it.
+    - Is a record / union / ptr with a field / member / target that may leak `t` recursively
+  In all other cases, `t` can't leak into `p`.
+
+So there are two relationships, `r` can-contain `t` and `p` can-be-written `t`. We can memoize the calculation of these.
+
 So, if we see a `new` expression:
 * If it's passed to a parameter and that parameter does not leak: we can stack-allocate it.
 * If it's assigned to a local variable and that local variable does not have any use that leaks: we can stack-allocate it.
 * Finally, if it's passed to a function that *does* leak: We can still check if that function's return value leaks, if not, we can stack-allocate this.
 
-We might want add a `nogc` function attribute (the D language has the same keyword); these functions would be required to only use stack-allocated memory, or manually allocate and deallocate memory. (Manual allocation could still use the GC heap, or it could use malloc.) These would not be `noctx` as they could still throw exceptions and add tasks (tasks can be manually deallocated then they are taken out of the tasks collection).
+Stack-allocating a variable `x` means creating `Foo _storage_x = (Foo) { ... };` and then `Foo* x = &_storage_x;`.
+
+This scheme isn't perfect as it can fail to detect things which *could* leak given the types, but don't actually given the implementation. But it has the advantage of being calculable with the model rather than the concrete-model, which means we can use this information in the frontend.
+
+We might want add a `nogc` function attribute (the D language has the same keyword); these functions would be required to only use value types, stack-allocated memory, or manually allocate and deallocate memory. They could also use constants as these are statically-allocated. (Manual allocation could still use the GC heap, or it could use malloc.) These would not be `noctx` as they could still throw exceptions and add tasks (tasks can be manually deallocated then they are taken out of the tasks collection). The drawback is this would force us to expose from the back-end which types are value types and what is evaluated to a constant.
+
+Since the garbage collector is non-interrupting, it will never see a stack-allocated object.
+
+
+## Exceptions
+
+* Basically any code that's not `noctx` can throw exceptions. If it allocates memory or does potentially-overflowing arithmetic, it can throw exceptions.
+* `fut` should be extended to handle exceptions and treat this as a rejected state.
+* Instead of a synchronous `try` / `catch`, if you think a piece of code may throw an exception, `delay` it to run it in its own task, then check to see if the returned `fut` was rejected.
+* I/O code will of course throw exceptions, and I/O code usually returns `fut` anyway, so it's appropriate for `fut` and exceptions to be linked. You don't need `fut<result<foo, error>>` unless you want a more specific `error` type.
+* Deallocating memory is optional in noze so it's unnecessary to have `finally` for that. Low-level resource handling like closing a file should be done in `noctx` code which can't possibly throw exceptions. This means we don't need stack-walking for exceptions, we just immediately jump to the exception handler in the function that runs the task.
+
 
 
 ## Reflection
@@ -93,11 +135,13 @@ A `type` is a record, union, or iface, but never a type parameter because we con
 
 The compiler can already handle constants well; since `type-of<?t>` is a constant, we can eliminate all but one branch of the `match`.
 Similarly, `r.fields` should be a constant, so we should be able to unroll the `each` loop.
-This means that the generated could should ultimately resumble hand-written code.
+This means that the generated could should ultimately resemble hand-written code.
 
 The ultimate goal is to be able to write a function that takes any iface as input, and hosts it at a URL.
 To be able to do this, it needs to be able to either serialize, or also host, any parameter to the iface.
 This will be hard to write, but would ultimately allow noze to be used for distributed computation.
+
+There could also be an `any` type consisting of a `data-type type` and `data any-ptr`. Using that one can write a `try-cast-any opt ?t(a any)` function.
 
 
 ## Linting
@@ -132,3 +176,15 @@ Otherwise it should be a lint error to leave debugging code in.
 This allows one to call `summon` even in a non-`summon` function.
 The compiler should not optimize `debug` statements away, so either the function has to be considered as-if `summon`, or we should simply never optimize things away when `--debug` is on.
 
+
+## Global module imports
+
+Currently a global import `import foo` will only resolve to `noze/include/foo`.
+There should be a way to set up global imports for third-party libraries that have been installed.
+One option is to set up an `nz.imports` file:
+
+```
+foo = ./dependencies/foo/foo.nz
+```
+
+When resolving a global import in a file, if that global import cannot be resolved to `noze/include`, the compiler would look in that and all parent directories for a `nz.imports` file. (It would not be allowed to override a name from `nz/include`.)

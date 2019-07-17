@@ -30,7 +30,7 @@ template <typename K, typename V, Cmp<K> cmp>
 void setInDict(Arena* arena, MutDict<K, V, cmp>* d, const K key, const V value) {
 	for (KeyValuePair<K, V>* pair : ptrsRange(tempAsArr(&d->pairs)))
 		if (cmp(pair->key, key) == Comparison::equal) {
-			overwriteConst(pair->value, value);
+			overwriteConst(&pair->value, value);
 			return;
 		}
 	push(arena, &d->pairs, KeyValuePair<K, V>{key, value});

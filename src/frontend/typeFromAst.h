@@ -8,7 +8,7 @@
 const Opt<const StructInst*> instStructFromAst(
 	CheckCtx* ctx,
 	const TypeAst::InstStruct ast,
-	const StructsAndAliasesMap& structsAndAliasesMap,
+	const StructsAndAliasesMap structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts);
 
@@ -24,8 +24,8 @@ inline const Opt<const StructInst*> instStructFromAstNeverDelay(
 const Type typeFromAst(
 	CheckCtx* ctx,
 	const TypeAst ast,
-	const StructsAndAliasesMap& structsAndAliasesMap,
-	const TypeParamsScope& typeParamsScope,
+	const StructsAndAliasesMap structsAndAliasesMap,
+	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts
 );
 
@@ -45,4 +45,4 @@ const Arr<const Type> typeArgsFromAsts(
 
 const Bool typeIsPossiblySendable(const Type type);
 
-const Type makeFutType(Arena* arena, const CommonTypes& commonTypes, const Type type);
+const Type makeFutType(Arena* arena, const CommonTypes* commonTypes, const Type type);

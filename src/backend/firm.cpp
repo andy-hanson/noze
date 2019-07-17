@@ -64,7 +64,11 @@ namespace {
 				ir_type* valueType = initValueType(s);
 				ir_type* pointerType = new_type_pointer(valueType);
 				set_pointer_points_to_type(pointerType, valueType);
-				addToDict<const ConcreteStruct*, const TypesForStruct, comparePtr<const ConcreteStruct>>(arena, &allTypes, s, TypesForStruct{valueType, pointerType});
+				addToDict<
+					const ConcreteStruct*,
+					const TypesForStruct,
+					comparePtr<const ConcreteStruct>
+				>(arena, &allTypes, s, TypesForStruct{valueType, pointerType});
 			}
 			return finishDictShouldBeNoConflict(&allTypes);
 		}();

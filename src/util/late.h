@@ -11,6 +11,7 @@ struct Late {
 		T _value;
 	};
 	Late(const Late&) = delete;
+	Late(Late&&) = default;
 	inline Late() : _isSet{False} {}
 	inline Late(const T value) : _isSet{True}, _value{value} {}
 };
@@ -29,14 +30,14 @@ inline const T& lateGet(const Late<T>* late) {
 template <typename T>
 inline void lateSet(Late<T>* late, T v) {
 	assert(!lateIsSet(late));
-	initMemory(late->_value, v);
+	initMemory(&late->_value, v);
 	cellSet<const Bool>(&late->_isSet, True);
 }
 
 template <typename T>
 inline void lateSetOverwrite(Late<T>* late, T v) {
 	assert(lateIsSet(late));
-	overwriteConst(late->_value, v);
+	overwriteConst(&late->_value, v);
 }
 
 template <typename T, typename Cb>

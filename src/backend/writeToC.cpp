@@ -58,7 +58,12 @@ namespace {
 		}
 	}
 
-	void writeBuiltinAliasForStruct(Writer* writer, const Str name, const BuiltinStructKind kind, const Arr<const ConcreteType> typeArgs) {
+	void writeBuiltinAliasForStruct(
+		Writer* writer,
+		const Str name,
+		const BuiltinStructKind kind,
+		const Arr<const ConcreteType> typeArgs
+	) {
 		switch (kind) {
 			case BuiltinStructKind::_char:
 				// "char" shares the same name as in C, so no need for an alias.
@@ -237,7 +242,11 @@ namespace {
 	}
 
 	// Returns any new work it did -- if we declared or defined the struct
-	const Opt<const StructState> writeStructDeclarationOrDefinition(Writer* writer, const ConcreteStruct* strukt, const StructStates* structStates) {
+	const Opt<const StructState> writeStructDeclarationOrDefinition(
+		Writer* writer,
+		const ConcreteStruct* strukt,
+		const StructStates* structStates
+	) {
 		auto declare = [&]() -> const Opt<const StructState> {
 			if (!hasKey_mut(structStates, strukt)) {
 				declareStruct(writer, strukt);
@@ -290,9 +299,14 @@ namespace {
 			for (const ConcreteStruct* strukt : allStructs) {
 				const Opt<const StructState> curState = getAt_mut(&structStates, strukt);
 				if (!has(curState) || force(curState) != StructState::defined) {
-					const Opt<const StructState> didWork = writeStructDeclarationOrDefinition(writer, strukt, &structStates);
+					const Opt<const StructState> didWork =
+						writeStructDeclarationOrDefinition(writer, strukt, &structStates);
 					if (has(didWork)) {
-						setInDict<const ConcreteStruct*, const StructState, comparePtr<const ConcreteStruct>>(&tempArena, &structStates, strukt, force(didWork));
+						setInDict<
+							const ConcreteStruct*,
+							const StructState,
+							comparePtr<const ConcreteStruct>
+						>(&tempArena, &structStates, strukt, force(didWork));
 						cellSet<const Bool>(&madeProgress, True);
 					} else
 						cellSet<const Bool>(&someIncomplete, True);
@@ -551,38 +565,52 @@ namespace {
 		writeConcreteExpr(writer, *e.matchedValue);
 		writeChar(writer, ',');
 		indent(writer);
-		zipWithIndex(e.matchedUnionMembers(), e.cases, [&](const ConcreteType member, const ConcreteExpr::Match::Case kase, const size_t i) {
-			const Str memberName = member.strukt->mangledName;
-			writeLocalRef(writer->writer, matchedLocal);
-			writeStatic(writer, ".kind == ");
-			writeNat(writer->writer, i);
-			newline(writer);
-			writeStatic(writer, "? ");
-			if (has(kase.local)) {
-				writeStatic(writer, "(");
-				writeLocalAssignment(writer->writer, force(kase.local));
-				writeStatic(writer, "matched.as_");
-				writeStr(writer, memberName);
-				writeStatic(writer, ",");
+		zipWithIndex(
+			e.matchedUnionMembers(),
+			e.cases,
+			[&](const ConcreteType member, const ConcreteExpr::Match::Case kase, const size_t i) {
+				const Str memberName = member.strukt->mangledName;
+				writeLocalRef(writer->writer, matchedLocal);
+				writeStatic(writer, ".kind == ");
+				writeNat(writer->writer, i);
 				newline(writer);
-			}
-			writeConstantOrExpr(writer, kase.then);
-			newline(writer);
-			if (has(kase.local))
-				writeStatic(writer, ")");
-			writeStatic(writer, ": ");
-		});
-		writeFailForType(writer->writer, ce.typeWithoutKnownLambdaBody());
+				writeStatic(writer, "? ");
+				if (has(kase.local)) {
+					writeStatic(writer, "(");
+					writeLocalAssignment(writer->writer, force(kase.local));
+					writeStatic(writer, "matched.as_");
+					writeStr(writer, memberName);
+					writeStatic(writer, ",");
+					newline(writer);
+				}
+				writeConstantOrExpr(writer, kase.then);
+				newline(writer);
+				if (has(kase.local))
+					writeStatic(writer, ")");
+				writeStatic(writer, ": ");
+			});
+			writeFailForType(writer->writer, ce.typeWithoutKnownLambdaBody());
 		decrIndent(writer);
 	}
 
-	void writeFieldAccess(WriterWithIndent* writer, const Bool targetIsPointer, const ConstantOrExpr target, const ConcreteField* field) {
+	void writeFieldAccess(
+		WriterWithIndent* writer,
+		const Bool targetIsPointer,
+		const ConstantOrExpr target,
+		const ConcreteField* field
+	) {
 		writeConstantOrExpr(writer, target);
 		writeStatic(writer, targetIsPointer ? "->" : ".");
 		writeStr(writer, field->mangledName);
 	}
 
-	void writeCallOperator(WriterWithIndent* writer, const BuiltinFunInfo bf, __attribute__((unused)) const Arr<const ConcreteType> typeArgs, const ConcreteExpr ce, const ConcreteExpr::Call e) {
+	void writeCallOperator(
+		WriterWithIndent* writer,
+		const BuiltinFunInfo bf,
+		__attribute__((unused)) const Arr<const ConcreteType> typeArgs,
+		const ConcreteExpr ce,
+		const ConcreteExpr::Call e
+	) {
 		auto writeArg = [&](const size_t index) -> void {
 			writeConstantOrExpr(writer, at(e.args, index));
 		};
@@ -712,7 +740,7 @@ namespace {
 				break;
 
 			default:
-				printf("Unhandled BuiltinFunKind: %d\n", bf.kind);
+				printf("Unhandled BuiltinFunKind: %d\n", static_cast<int>(bf.kind));
 				assert(0);
 		}
 	}
@@ -933,7 +961,12 @@ namespace {
 			});
 	}
 
-	void writeSigParams(Writer* writer, const Bool needsCtx, const Opt<const ConcreteParam> closure, const Arr<const ConcreteParam> params) {
+	void writeSigParams(
+		Writer* writer,
+		const Bool needsCtx,
+		const Opt<const ConcreteParam> closure,
+		const Arr<const ConcreteParam> params
+	) {
 		writeChar(writer, '(');
 		if (needsCtx)
 			writeStatic(writer, "ctx* ctx");
@@ -1013,7 +1046,7 @@ namespace {
 				break;
 
 			default:
-				printf("Other special? %d\n", kind);
+				printf("Other special? %d\n", static_cast<int>(kind));
 				assert(0);
 		}
 	}

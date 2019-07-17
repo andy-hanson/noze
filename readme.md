@@ -1,18 +1,29 @@
-The readme describes the respository -- see [doc/language.md](doc/language.md) for a description of the language.
+The readme describes the repository -- see [doc/language.md](doc/language.md) for a description of the language.
+
+WARN: The language is not usable yet. Most programs you might try writing will result in a compiler crash on a `todo`.
+
 
 ### Building
 
-First set up libfirm:
+First set up libFIRM:
 
-```
+```sh
 cd libfirm
 make
 cd ..
 ```
 
-You can do a simple build using `./build-once.sh`, or incremental builds using `scons`.
-libfirm is currently not used at runtime, noze compiles to C instead. But libfirm support is planned and you can't build without it.
+You can then do a simple build using `./build-once.sh`, or incremental builds using `scons`.
+You can do an optimized build using `./build-optimized.sh` -- this is not recommended as it removes assertions, making it less safe.
+(libFIRM is currently not used at runtime, noze compiles to C instead. But libfirm support is planned and you can't build without it.)
 
+
+#### Linting
+
+```sh
+sudo luarocks install lfs lfs moonscript
+./lint.moon
+```
 
 
 ### Running
@@ -23,7 +34,8 @@ libfirm is currently not used at runtime, noze compiles to C instead. But libfir
 * `noze run foo.nz -- arg` provides an argument `arg` to the program. The `--` is mandatory.
 * `noze test` is shorthand to run the test program in `test/a.nz`.
 
-The directory of the file you pass in must be the root of the whole program -- you can't import from any parent directory of that. (Excluding the modules in `noze/include` which are always available.)
+The directory of the file you pass in must be the root of the whole program -- you can't import from any parent directory of that.
+(Excluding the modules in `noze/include` which are always available.)
 
 
 ### Editing

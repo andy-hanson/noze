@@ -46,7 +46,7 @@ namespace {
 const Opt<const StructInst*> instStructFromAst(
 	CheckCtx* ctx,
 	const TypeAst::InstStruct ast,
-	const StructsAndAliasesMap& structsAndAliasesMap,
+	const StructsAndAliasesMap structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts) {
 	const Opt<const StructOrAlias> opDecl = tryFindT(
@@ -88,8 +88,8 @@ const Opt<const StructInst*> instStructFromAst(
 const Type typeFromAst(
 	CheckCtx* ctx,
 	const TypeAst ast,
-	const StructsAndAliasesMap& structsAndAliasesMap,
-	const TypeParamsScope& typeParamsScope,
+	const StructsAndAliasesMap structsAndAliasesMap,
+	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts
 ) {
 	return ast.match(
@@ -148,6 +148,6 @@ const Bool typeIsPossiblySendable(const Type type) {
 		});
 }
 
-const Type makeFutType(Arena* arena, const CommonTypes& commonTypes, const Type type) {
-	return Type{instantiateStructNeverDelay(arena, commonTypes.fut, arrLiteral<const Type>(arena, type))};
+const Type makeFutType(Arena* arena, const CommonTypes* commonTypes, const Type type) {
+	return Type{instantiateStructNeverDelay(arena, commonTypes->fut, arrLiteral<const Type>(arena, { type }))};
 }

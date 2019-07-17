@@ -50,7 +50,7 @@ template <typename T>
 inline void unused(const T) {}
 
 template <typename T>
-inline T unreachable() {
+inline constexpr T unreachable() {
 	assert(0);
 }
 

@@ -6,6 +6,6 @@
 
 const Result<const Program, const Diagnostics> frontendCompile(
 	Arena* modelArena,
-	Symbols* symbols,
+	AllSymbols* allSymbols,
 	const ReadOnlyStorages storages,
 	const Path* mainPath);

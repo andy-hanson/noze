@@ -63,11 +63,11 @@ namespace {
 		return finishWriter(&writer);
 	}
 
-	const Opt<const SpecialStructKind> getSpecialStructKind(const StructInst* i, const CommonTypes& commonTypes) {
+	const Opt<const SpecialStructKind> getSpecialStructKind(const StructInst* i, const CommonTypes* commonTypes) {
 		const StructDecl* decl = i->decl;
-		if (ptrEquals(decl, commonTypes.arr))
+		if (ptrEquals(decl, commonTypes->arr))
 			return some<const SpecialStructKind>(SpecialStructKind::arr);
-		else if (ptrEquals(decl, commonTypes.mutArr))
+		else if (ptrEquals(decl, commonTypes->mutArr))
 			return some<const SpecialStructKind>(SpecialStructKind::mutArr);
 		else
 			return none<const SpecialStructKind>();
@@ -383,31 +383,31 @@ Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b)
 
 const ConcreteType ConcretizeCtx::boolType() {
 	return lazilySet(&_boolType, [&]() {
-		return getConcreteType_forStructInst(this, commonTypes._bool, TypeArgsScope::empty());
+		return getConcreteType_forStructInst(this, commonTypes->_bool, TypeArgsScope::empty());
 	});
 }
 
 const ConcreteType ConcretizeCtx::charType() {
 	return lazilySet(&_charType, [&]() {
-		return getConcreteType_forStructInst(this, commonTypes._char, TypeArgsScope::empty());
+		return getConcreteType_forStructInst(this, commonTypes->_char, TypeArgsScope::empty());
 	});
 }
 
 const ConcreteType ConcretizeCtx::voidType() {
 	return lazilySet(&_voidType, [&]() {
-		return getConcreteType_forStructInst(this, commonTypes._void, TypeArgsScope::empty());
+		return getConcreteType_forStructInst(this, commonTypes->_void, TypeArgsScope::empty());
 	});
 }
 
 const ConcreteType ConcretizeCtx::anyPtrType() {
 	return lazilySet(&_anyPtrType, [&]() {
-		return getConcreteType_forStructInst(this, commonTypes.anyPtr, TypeArgsScope::empty());
+		return getConcreteType_forStructInst(this, commonTypes->anyPtr, TypeArgsScope::empty());
 	});
 }
 
 const ConcreteType ConcretizeCtx::ctxPtrType() {
 	return lazilySet(&_ctxPtrType, [&]() {
-		const ConcreteType res = getConcreteType_forStructInst(this, commonTypes.ctx, TypeArgsScope::empty());
+		const ConcreteType res = getConcreteType_forStructInst(this, commonTypes->ctx, TypeArgsScope::empty());
 		assert(res.isPointer);
 		return res;
 	});
@@ -454,7 +454,7 @@ const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx* ctx, cons
 
 const ConcreteType getConcreteType_forStructInst(ConcretizeCtx* ctx, const StructInst* i, const TypeArgsScope typeArgsScope) {
 	const Arr<const ConcreteType> typeArgs = typesToConcreteTypes(ctx, i->typeArgs, typeArgsScope);
-	if (ptrEquals(i->decl, ctx->commonTypes.byVal))
+	if (ptrEquals(i->decl, ctx->commonTypes->byVal))
 		return getConcreteType(ctx, only(i->typeArgs), typeArgsScope).byVal();
 	else {
 		const ConcreteStructKey key = ConcreteStructKey{i->decl, typeArgs};

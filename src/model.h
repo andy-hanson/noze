@@ -337,8 +337,20 @@ public:
 	}
 
 	// TODO: why do I need to specify a constructor here?
-	inline StructDecl(const SourceRange _range, const Bool _isPublic, const Sym _name, const Arr<const TypeParam> _typeParams, const Purity _purity, const Bool _forceSendable)
-		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams}, purity{_purity}, forceSendable{_forceSendable} {}
+	inline StructDecl(
+		const SourceRange _range,
+		const Bool _isPublic,
+		const Sym _name,
+		const Arr<const TypeParam> _typeParams,
+		const Purity _purity,
+		const Bool _forceSendable
+	) :
+		range{_range},
+		isPublic{_isPublic},
+		name{_name},
+		typeParams{_typeParams},
+		purity{_purity},
+		forceSendable{_forceSendable} {}
 };
 
 struct StructInst {
@@ -1199,7 +1211,7 @@ public:
 	}
 
 	const Bool typeIsBogus(Arena* arena) const;
-	const Type getType(Arena* arena, const CommonTypes& commonTypes) const;
+	const Type getType(Arena* arena, const CommonTypes* commonTypes) const;
 };
 
 void writeStructInst(Writer* writer, const StructInst* s);

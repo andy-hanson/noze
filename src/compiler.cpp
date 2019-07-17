@@ -63,10 +63,11 @@ namespace {
 		const Environ environ
 	) {
 		Arena modelArena {};
-		Symbols symbols {};
+		AllSymbols allSymbols {};
 		const AbsolutePath include = childPath(&modelArena, nozeDir, strLiteral("include"));
 		const ReadOnlyStorages storages = ReadOnlyStorages{ReadOnlyStorage{include}, ReadOnlyStorage{programDir}};
-		const Result<const Program, const Diagnostics> programResult = frontendCompile(&modelArena, &symbols, storages, mainPath);
+		const Result<const Program, const Diagnostics> programResult =
+			frontendCompile(&modelArena, &allSymbols, storages, mainPath);
 
 		return programResult.match(
 			[&](const Program program) {

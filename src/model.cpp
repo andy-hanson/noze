@@ -119,7 +119,7 @@ const Bool Expr::typeIsBogus(Arena* arena) const {
 		});
 }
 
-const Type Expr::getType(Arena* arena, const CommonTypes& commonTypes) const {
+const Type Expr::getType(Arena* arena, const CommonTypes* commonTypes) const {
 	return match(
 		[](const Expr::Bogus) {
 			return Type{Type::Bogus{}};
@@ -173,13 +173,13 @@ const Type Expr::getType(Arena* arena, const CommonTypes& commonTypes) const {
 			return e.then->getType(arena, commonTypes);
 		},
 		[&](const Expr::StringLiteral) {
-			return Type(commonTypes.str);
+			return Type(commonTypes->str);
 		},
 		[](const Expr::StructFieldAccess e) {
 			return e.accessedFieldType();
 		},
 		[&](const Expr::StructFieldSet) {
-			return Type{commonTypes._void};
+			return Type{commonTypes->_void};
 		});
 }
 
@@ -216,11 +216,12 @@ namespace {
 			shortSymAlphaLiteral("structinst"),
 			arrLiteral<const Sexpr>(
 				arena,
-				Sexpr{si->decl->name},
-				arrToSexpr<const Type>(arena, si->typeArgs, [&](const Type t) {
-					return typeToSexpr(arena, t);
-				}))
-		}};
+				{
+					Sexpr{si->decl->name},
+					arrToSexpr<const Type>(arena, si->typeArgs, [&](const Type t) {
+						return typeToSexpr(arena, t);
+					})
+				})}};
 	}
 }
 

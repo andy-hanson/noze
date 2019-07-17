@@ -1,16 +1,16 @@
 #include "./sym.h"
 
 namespace {
-	const Sym getSymFromLongStr(Symbols* symbols, const Str str, const Bool isOperator) {
+	const Sym getSymFromLongStr(AllSymbols* allSymbols, const Str str, const Bool isOperator) {
 		const CStr cstr = getOrAddAndCopyKey<const Str, const CStr, compareStr>{}(
-			&symbols->arena,
-			&symbols->largeStrings,
+			&allSymbols->arena,
+			&allSymbols->largeStrings,
 			str,
 			[&]() {
-				return copyStr(&symbols->arena, str);
+				return copyStr(&allSymbols->arena, str);
 			},
 			[&]() {
-				return strToCStr(&symbols->arena, str);
+				return strToCStr(&allSymbols->arena, str);
 			});
 		const Nat64 res = reinterpret_cast<const Nat64>(cstr) | (isOperator ? symImpl::shortOrLongOperatorMarker : symImpl::shortOrLongAlphaMarker);
 		assert((res & (symImpl::shortAlphaOrOperatorMarker)) == 0);
@@ -28,18 +28,18 @@ namespace {
 	}
 }
 
-const Sym getSymFromAlphaIdentifier(Symbols* symbols, const Str str) {
+const Sym getSymFromAlphaIdentifier(AllSymbols* allSymbols, const Str str) {
 	const Sym res = size(str) <= symImpl::maxShortAlphaIdentifierSize
 		? Sym{symImpl::packAlphaIdentifier(str)}
-		: getSymFromLongStr(symbols, str, False);
+		: getSymFromLongStr(allSymbols, str, False);
 	assertSym(res, str);
 	return res;
 }
 
-const Sym getSymFromOperator(Symbols* symbols, const Str str) {
+const Sym getSymFromOperator(AllSymbols* allSymbols, const Str str) {
 	const Sym res = size(str) <= symImpl::maxShortOperatorSize
 		? Sym{symImpl::packOperator(str)}
-		: getSymFromLongStr(symbols, str, True);
+		: getSymFromLongStr(allSymbols, str, True);
 	assertSym(res, str);
 	return res;
 }

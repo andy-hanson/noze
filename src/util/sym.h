@@ -16,7 +16,7 @@ struct Sym {
 	Nat64 value;
 };
 
-struct Symbols {
+struct AllSymbols {
 	Arena arena;
 	MutDict<const Str, const CStr, compareStr> largeStrings;
 };
@@ -186,9 +186,9 @@ inline constexpr const Bool isShortOperator(const Sym a) {
 
 // Get symbol from characters 'a'-'z' '0'-'9' '-' '?'
 // str is temporary, we'll make a copy
-const Sym getSymFromAlphaIdentifier(Symbols* symbols, const Str str);
+const Sym getSymFromAlphaIdentifier(AllSymbols* allSymbols, const Str str);
 // str is temporary, we'll make a copy
-const Sym getSymFromOperator(Symbols* symbols, const Str str);
+const Sym getSymFromOperator(AllSymbols* allSymbols, const Str str);
 
 inline constexpr Comparison compareSym(const Sym a, const Sym b) {
 	return comparePrimitive(a.value, b.value);

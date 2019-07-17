@@ -101,16 +101,16 @@ namespace {
 					force(str),
 					force(_void),
 					force(anyPtr),
-					arrLiteral<const StructDecl*>(ctx->arena, force(opt), force(some), force(none)),
+					arrLiteral<const StructDecl*>(ctx->arena, { force(opt), force(some), force(none) }),
 					force(byVal),
 					force(arr),
 					force(mutArr),
 					force(fut),
-					arrLiteral<const StructDecl*>(ctx->arena, force(fun0), force(fun1), force(fun2)),
-					arrLiteral<const StructDecl*>(ctx->arena, force(sendFun0), force(sendFun1), force(sendFun2))});
+					arrLiteral<const StructDecl*>(ctx->arena, { force(fun0), force(fun1), force(fun2) }),
+					arrLiteral<const StructDecl*>(ctx->arena, { force(sendFun0), force(sendFun1), force(sendFun2) })});
 		else {
 			const Diagnostic diag = Diagnostic{path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
-			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx->arena, diag));
+			return failure<const CommonTypes, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(ctx->arena, { diag }));
 		}
 	}
 
@@ -128,7 +128,7 @@ namespace {
 	void collectTypeParamsInAst(Arena* arena, const TypeAst ast, ArrBuilder<const TypeParam>* res) {
 		return ast.match(
 			[&](const TypeAst::TypeParam tp) {
-				if (!exists(res->tempAsArr(), [&](const TypeParam it) { return symEq(it.name, tp.name); }))
+				if (!exists(arrBuilderTempAsArr(res), [&](const TypeParam it) { return symEq(it.name, tp.name); }))
 					add<const TypeParam>(arena, res, TypeParam{tp.range, tp.name, arrBuilderSize(res)});
 			},
 			[&](const TypeAst::InstStruct i) {
@@ -149,7 +149,7 @@ namespace {
 		CheckCtx* ctx,
 		const Arr<const ParamAst> asts,
 		const StructsAndAliasesMap structsAndAliasesMap,
-		const TypeParamsScope& typeParamsScope,
+		const TypeParamsScope typeParamsScope,
 		DelayStructInsts delayStructInsts
 	) {
 		const Arr<const Param> params = mapWithIndex<const Param>{}(ctx->arena, asts, [&](const ParamAst ast, const size_t index) {
@@ -327,7 +327,7 @@ namespace {
 
 	void checkStructBodies(
 		CheckCtx* ctx,
-		const CommonTypes& commonTypes,
+		const CommonTypes* commonTypes,
 		const StructsAndAliasesMap structsAndAliasesMap,
 		const Arr<StructDecl> structs,
 		const Arr<const StructDeclAst> asts,
@@ -373,8 +373,8 @@ namespace {
 			strukt->setBody(body);
 		});
 
-		for (const StructDecl& strukt : structs) {
-			strukt.body().match(
+		for (const StructDecl* strukt : ptrsRange(structs)) {
+			strukt->body().match(
 				[](const StructBody::Bogus) {},
 				[](const StructBody::Builtin) {},
 				[](const StructBody::Record) {},
@@ -384,7 +384,7 @@ namespace {
 							todo<void>("unions can't contain unions");
 				},
 				[&](const StructBody::Iface i) {
-					for (const Message& message : i.messages) {
+					for (const Message message : i.messages) {
 						const Sig sig = message.sig;
 						checkSendable(ctx, sig.range, sig.returnType);
 						for (const Param param : sig.params)
@@ -427,8 +427,8 @@ namespace {
 		CheckCtx* ctx,
 		const Arr<const SpecUseAst> asts,
 		const StructsAndAliasesMap structsAndAliasesMap,
-		const SpecsMap& specsMap,
-		const TypeParamsScope& typeParamsScope
+		const SpecsMap specsMap,
+		const TypeParamsScope typeParamsScope
 	) {
 		return mapOp<const SpecInst*>{}(ctx->arena, asts, [&](const SpecUseAst ast) {
 			Opt<const SpecDecl*> opSpec = tryFindSpec(ctx, ast.spec, ast.range, specsMap);
@@ -454,8 +454,8 @@ namespace {
 
 	const FunsAndMap checkFuns(
 		CheckCtx* ctx,
-		const CommonTypes& commonTypes,
-		const SpecsMap& specsMap,
+		const CommonTypes* commonTypes,
+		const SpecsMap specsMap,
 		const StructsAndAliasesMap structsAndAliasesMap,
 		const Arr<const FunDeclAst> asts
 	) {
@@ -477,8 +477,8 @@ namespace {
 		const FunsMap funsMap = buildMultiDict<const Sym, const FunDecl*, compareSym>{}(
 			ctx->arena,
 			funs,
-			[](const FunDecl& it) {
-				return KeyValuePair<const Sym, const FunDecl*>{it.name(), &it};
+			[](const FunDecl* it) {
+				return KeyValuePair<const Sym, const FunDecl*>{it->name(), it};
 			});
 
 		zipPtrs(funs, asts, [&](FunDecl* fun, const FunDeclAst* funAst) {
@@ -525,12 +525,12 @@ namespace {
 		if (hasDiags(&ctx))
 			return failure<const IncludeCheck, const Arr<const Diagnostic>>(diags(&ctx));
 		else {
-			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypes = getCommonTypes(&ctx, structsAndAliasesMap, &delayStructInsts);
-			return flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(commonTypes, [&](const CommonTypes commonTypes) {
-				checkStructBodies(&ctx, commonTypes, structsAndAliasesMap, structs, ast.structs, &delayStructInsts);
+			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypesResult = getCommonTypes(&ctx, structsAndAliasesMap, &delayStructInsts);
+			return flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(commonTypesResult, [&](const CommonTypes commonTypes) {
+				checkStructBodies(&ctx, &commonTypes, structsAndAliasesMap, structs, ast.structs, &delayStructInsts);
 				for (StructInst* i : freeze(&delayStructInsts))
 					i->setBody(instantiateStructBody(arena, i->decl, i->typeArgs));
-				const FunsAndMap funsAndMap = checkFuns(&ctx, commonTypes, specsMap, structsAndAliasesMap, ast.funs);
+				const FunsAndMap funsAndMap = checkFuns(&ctx, &commonTypes, specsMap, structsAndAliasesMap, ast.funs);
 
 				// Create a module unconditionally so every function will always have containingModule set, even in failure case
 				const Module* mod = nu<const Module>{}(

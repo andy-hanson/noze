@@ -1,4 +1,9 @@
+See [style](./style.md) for code style guidelines.
+
 # compiler design
+
+This document does not describe the runtime -- that is written in noze itself.
+There is currently no document describing the runtime, other than [future](./future.md).
 
 The compiler consists of a few well-defined stages:
 
@@ -7,32 +12,39 @@ The compiler consists of a few well-defined stages:
 * The AST, defined in `ast.h`.
   This comes from *parsing* the source code text.
   There is no separate lexing phase, and the parser often operates directly on characters in the source code.
-  There is a separate `lexer.h` file containing many useful utilities for operating on text, but there's no strict boundary between the parser and source text.
   The AST consists of only the information that is available by direct parsing -- the parser does not attempt to resolve what names refer to.
 
 * The model, defined in `model.h`.
   This comes from *type-checking* the AST.
   This stage is the prettiest in that it best represents what the programmer wrote and meant.
-  The AST lacks information about what names refer to, and the concrete model is an expansion of the model that contains many more functions than were directly written by the programmer.
+  The AST lacks information about what names refer to, and the concrete-model is an expansion of the model that contains many more functions than were directly written by the programmer.
   The process of getting the model does all type checking -- there should be no compile errors from that point.
   If a linter were added it would likely operate on the model.
+  IDE features such as go-to-definition and find-all-references should also operate on the model.
+  Ideally, the model should have enough information to produce the original AST, which should have enough information to produce the original source text. This is not currently the case as comments disappear, but the plan is to add comments to the model at some point. This would allow IDEs to display the documentation of a function at a call-site by looking it up in the model.
 
-* The concrete model, defined in `concreteModel.h`.
+* The concrete-model, defined in `concreteModel.h`.
   This comes from *concretizing* the model.
-  Unlike the model, the concrete model does not have templates. Instead it contains separate instantiations for everything.
-  The concrete model is designed to be easy to generate code from, not to represent what the programmer meant.
+  Unlike the model, the concrete-model does not have templates. Instead it contains separate instantiations for everything.
+  Also unlike the model, the goal is not to preserve all information about what the programmer meant, the goal is just to generate code.
   For example, expressions may be replaced by constants, and there is no notion of modules.
-  (If one were trying to compile noze to a higher-level language like Java bytecode, one would use the model directly, not the concrete model.)
+  (If one were trying to compile noze to a higher-level language like Java bytecode, one would use the model directly, not the concrete-model.)
 
-* Finally, C source code is produced. It's also planned to produce a libFIRM IRP and then directly generate machine code.
+  You could think of the concrete-model as a low-level language that we downlevel noze to.
 
+* Finally, C source code is produced.
+  For the most part this is a direct serialization of the concrete-model;
+  however, there is some interesting code around emitting types in the correct order because C requires types to only refer to previously-declared types.
+  (For functions this is easy because we can emit a header. But for non-reference types a header is not sufficient.)
+  It's also planned to produce a libFIRM IRP and then directly generate machine code.
 
-Each stage gets its own arena allocator, and the previous stage is discarded as soon as the current stage is available. This means that when using the model, you never have to go back to the AST to look up some information -- the model should contain everything. This means that there are often three similar type definitions, e.g. there's a `StructDeclAst`, then a `StructDecl`, then a `ConcreteStruct`.
+Each stage gets its own `Arena`, and the previous stage is discarded as soon as the current stage is available. This means that when using the model, you never have to go back to the AST to look up some information -- the model should contain everything. This means that there are often three (or four for template instantiations) similar type definitions, e.g. there's a `StructDeclAst`, then a `StructDecl` / `StructInst`, then a `ConcreteStruct`.
 
 
 ## parser
 
 The parser is pretty straightforward due to the language's syntax -- there is no lookahead anywhere.
+There is also no lexer / parser separation. There is a separate `lexer.h` file containing many useful utilities for operating on text, but there's no strict boundary between the parser and source text.
 There is no single tokenizer function, instead the parser usually knows exactly what it's looking for and tries to parse that, and anything else is an error.
 The parser state consists only of the current index in the source text, the current indentation, and whatever stack of parser functions are currently being called.
 
@@ -66,12 +78,12 @@ Even a non-template struct will get a single `StructInst`.
 
 When we create a `StructInst`, we also make a copy of the `StructDecl`'s body, with its type parameters replaced with the type arguments.
 
-Each `StructDecl` contains a list of all insts -- this means that a given `StructInst` is created only once. Then two `StructInst`s are equal iff their pointers are equal.
+Each `StructDecl` contains a list of all instantiations -- this means that a given `StructInst` is created only once. Then two `StructInst`s are equal iff their pointers are equal.
 
 `FunDecl` / `FunInst` and `SpecDecl` / `SpecInst` work the same way.
 
 
-Since noze supoprts circular dependencies *within* a module, type-checking a module must take a few steps:
+Since noze supports circular dependencies *within* a module, type-checking a module must take a few steps:
 
 * First, we *create* all `StructDecl`s and `StructAlias`es, without filling in their bodies.
 * Then, we create a dict of all structs (and aliases) in the current module.
@@ -90,7 +102,7 @@ Since noze is an expression-based language, a function body is a single expressi
 So we can simply the-check each expression recursively.
 
 
-#### expected type
+#### expected type (`inferringType.h`)
 
 When checking an expression, we have an `Expected` representing the expected type (if any).
 `Expected` is basically a wrapper around a `Opt<Type>`, and also stores any type arguments that we may be inferring if in a call.
@@ -164,12 +176,13 @@ These rules mean that specs and function flags have no effect on overload resolu
 
 ## concretize
 
-The concretize step takes a model containing templates and produces a concrete program with specialized instances of each function.
+The concretize step takes a model containing templates and produces a concrete-model with specialized instances of each function.
 In addition to filling in type parameters, it does other kinds of specialization:
 
 * When an expression evaluates to a constant, it replaces the expression with the constant.
 * When an expression is a lambda, it does not create a dynamically-invoked function; it creates the closure. If this is invoked directly it avoids the virtual call and heap allocation.
 * It also sometimes specializes a function based on an argument that is a constant. Currently this is pretty conservative, only specializing when every argument is constant.
+* It also makes low-level decisions such as calculating the size of types and choosing whether they are by-value or by-reference. These decisions aren't appropriate for the `model` since they reflect implementation decisions (which may change) rather than the programmer's decisions.
 
 This means that each expression has an associated optional `KnownLambdaBody`. When we call the lambda and it has a `KnownLambdaBody`, we'll specialize the body to a `ConcreteFun` of its own to call directly.
 (A constant lambda works similarly.)

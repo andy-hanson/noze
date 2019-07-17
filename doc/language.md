@@ -2,21 +2,22 @@
 
 A few interesting aspects of noze:
 
+* It is strongly typed and expression-based. It has no subtyping or casts and only a few kinds of implicit conversions, making it safe.
 * There normally is no global state. A normal function can access only its arguments.
   The exception is `summon` functions, which can only be called by other `summon` functions.
   Similarly, a normal function can not perform I/O, except through an argument of interface types.
   A normal function with no interface parameters performs no I/O, and a normal function with no mutable parameters is a pure function.
-
+* It's designed for parallelism. Interfaces always return `fut` (futures) allowing them to run in parallel, and the type system tracks what data can safely be send to an interface.
 
 ## syntax
 
 A noze file consists of many top-level declarations. There are no nested declarations. (Local variables may appear in nested expressions but those are not considered declarations for this purpose.)
 Each declaration is declared like `name type`, with an indented block following.
-The language is fairly strict with whitespace -- an indentation must be exactly one tab, and leading / trailing spaces on a line are illegal.
+The language is fairly strict with whitespace -- an indentation must be exactly one tab, and leading / trailing spaces on a line are illegal. "Extra" whitespaces in random places are also illegal as are missing whitespaces where they are normally expected, such as after a comma.
 It is also a syntax error to have multiple spaces in a row or to fail to put spaces around an operator (which is parsed much like a regular name).
 
 
-Noze is an expression-based langage -- it has only expressions and no concept of a statement.
+Noze is an expression-based language -- it has only expressions and no concept of a statement.
 A function body is an expression and no `return` is necessary.
 Functions that return "nothing" return `void`, which is an empty type.
 
@@ -37,7 +38,7 @@ Despite having an alpha / operator distinction, there *must* be spaces around op
 #### call syntax
 
 The most common expression is a call expression, so there are a number of ways to write it for convenience.
-Common operators such as `+` are just call exprsesions.
+Common operators such as `+` are just call expressions.
 Special functions like `and` and `if` are also just call expressions,
 though the compiler treats them specially as their arguments are lazily evaluated.
 
@@ -186,7 +187,7 @@ stdout-printer printer() summon
 And called like:
 
 ```nz
-callit fut void(p printer)
+call-it fut void(p printer)
 	p !print "hello"
 ```
 
@@ -215,6 +216,28 @@ For interfaces with a single method, you might just use a `send-fun` type and im
 Interfaces are also the normal way to perform I/O (without `summon`). Since I/O operations may take a long time, it's useful that interfaces always return `fut`.
 The exceptional functions that run synchronously usually have names that end in `sync` (and are usually `summon`).
 However, it's not considered unsafe behavior for a function to take a long time, since that's possible without performing any I/O at all -- to handle that interrupts should be added to the runtime.
+
+
+### arr
+
+`arr` is technically a record type consisting of a pointer and size. But the compiler treats it specially by having a `new-arr` expression:
+
+```nz
+one-two-three arr nat()
+	new-arr 1, 2, 3
+```
+
+As with `new`, when there is no expected type you can provide a type argument.
+
+```nz
+one-two-three arr nat()
+	a = new-arr<nat> 1, 2, 3
+	a
+```
+
+The compiler can treat arr literals as constants (so long as every element is a constant), which avoids the allocation.
+
+
 
 
 
@@ -257,7 +280,7 @@ Other languages solve this problem with implicit conversion between number types
 
 #### lambdas
 
-Noze has two different kinds of dynamically-invocable function types:
+Noze has two different kinds of dynamically-invokable function types:
 
 `fun`: This is a `mut` type for a function that will be synchronously invoked.
   It's `mut` because the function might close over `mut` objects.
@@ -283,6 +306,15 @@ This could also be written as `10 n-times {it.to-str print-sync}`.
 If a lambda would be equivalent to an existing function, you can write `&f` where `f` is the function name.
 
 There is no way to explicitly provide a parameter type in a lambda; an expected type is mandatory. (You can always use `as<fun1<void, nat>>:` to provide an expected type.)
+
+### Arrows
+
+A common operation on `fut`s is `then`:
+
+```nz
+plus-one fut nat(f fut nat)
+```
+
 
 
 
@@ -315,13 +347,21 @@ say-hi void() summon
 ```
 
 Only `summon` functions can call `summon` functions. (Meaning, `main` will have to be summon for your program to do anything.)
-However, a `summon` function can return an interface, and normal functinos can perform I/O through that interface.
+However, a `summon` function can return an interface, and normal functions can perform I/O through that interface.
 
 #### unsafe / trusted
 
 `unsafe` functions are used to implement the runtime. These can do things like pointer arithmetic or allocating uninitialized memory.
 Only `unsafe` or `trusted` functions can call unsafe functions.
 Any function can call a `trusted` function.
+
+A safe function should never be able to access memory that was not validly passed in, mutate immutable values, perform I/O without `summon`, fail with a hard assertion failure (catchable exceptions are OK) or other bad stuff.
+
+The runtime has some additional safety properties, such that all `fut`s must be resolved eventually, and so should hide its implementation details or make them `unsafe`. For example, `new-unresolved-fut` is `unsafe` since the user might forget to resolve it, but `then` is safe since the new `fut` will always be resolved if the previous one was.
+
+This is so regardless of any input passed in. So for example, `at`, which accesses an element of an array, must check that the index is valid and throw an exception.
+All operations on `ptr` are unsafe. Theoretically we could make just dereferencing unsafe, or just pointer arithmetic unsafe, but it's simpler to just make it all unsafe.
+
 
 #### noctx
 
@@ -353,11 +393,11 @@ You can't specify purity for an interfaces because those are all `sendable`.
 The constituents of a type must be at least as pure as that type. This applies transitively.
 
 ```nz
-im-mutable record mut
+i-am-mutable record mut
 	x mut nat
 
 what-am-i record
-	m im-mutable
+	m i-am-mutable
 ```
 
 The above example is a compile error: `what-am-i` should be marked `mut` even though it has no `mut` fields itself, because `mut` data is eventually reachable through it.
@@ -402,8 +442,12 @@ get-nats pair nat()
 Type arguments to a type are normally just provided with a space in between.
 But to provide nested type arguments to a type argument angle brackets must be used, as in `pair pair<nat>`.
 
+Unlike other languages, a template is type-checked *abstractly*, once, rather than once per instantiation.
 Type arguments are *opaque*, meaning nothing about the type is known.
-However, you can use specs to ensure that some functions will exist.
+This means you can't do things that only work on particular types, like access properties or `match` on them.
+A template will be checked to work for *any* type `?t`, even ones you don't happen to be using.
+This means you can't have `x + 1` where x is `?t`, even if you happen to only instantiate it with numeric types.
+However, you can use **specs** to ensure that some needed functions will exist.
 
 
 ## specs
@@ -428,7 +472,11 @@ six nat()
 ```
 
 The implementations for the spec functions are provided by the *caller* and don't need to exist in the spec user's scope.
-Specs don't constain a *type*, they constrain the functions that the caller must have in scope.
+This provision is done implicitly by looking up functions with the same name and checking if their signature matches the spec signature.
+(Parameter names don't have to match.)
+Spec signatures shouldn't be marked with attributes like `summon`; they can always be implemented by a `summon` function if the provider of the spec implementation (`six` in this example) is `summon`, even if the user of the spec implementation (`my-sum` in this example) is not.
+Specs don't constrain a *type*, they constrain the functions that the caller must have in scope.
+Specs can take multiple or no type parameters.
 Different callers might have different implementations of the spec for the same type, depending on what functions they have in scope.
 
 
@@ -440,16 +488,37 @@ That file must name all other modules it wants to import, except for `include.nz
 
 When module A imports module B, all declarations in B become visible in A. This is not transitive, so B can import things without affecting its callers.
 Module import cycles are not allowed.
-If two functinos depend on each other but for some reason you want them in different modules, you could use a spec to allow each to declare their dependency on the other without a direct import. You could also define them to take a lambda (or interface) instead of a direct dependency.
+If two functions depend on each other but for some reason you want them in different modules, you could use a spec to allow each to declare their dependency on the other without a direct import. You could also define them to take a lambda (or interface) instead of a direct dependency.
 
 Import syntax looks like so:
 
-`import a .b ..c.d`
+```nz
+import a .b ..c.d
+```
+
+There can only be at most one import statement and it must be the first non-comment line in a file.
 
 This will import files from:
 
 * `a`: This is a global import. Currently global imports can only import things from the `noze/include` directory, but it's planned to support other global import paths too.
 * `.b`: This is a local import. The compiler will expect a file `./b.nz` to exist or it will be a compile error.
-* `..c.d`: This is also a local import from `../c/d.nz`. The number of leading `.` is the number of parent directories to climb, minus one.
+* `..c.d`: This is also a local import from `../c/d.nz`. The number of leading `.` is the number of parent directories to climb, minus one. Subsequent `.`s act as directory separators.
   `...c.d` would import from `../../c/d.nz`.
+
+
+### private
+
+Halfway through a module you can add the `private` keyword:
+
+```nz
+f nat()
+	g + g
+
+private
+
+g nat()
+	1
+```
+
+Other modules will import `f` (and all things above `private`) but not `g` (and all things below `private`).
 

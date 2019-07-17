@@ -11,7 +11,7 @@ const Expr* checkFunctionBody(
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const FunsMap funsMap,
 	const FunDecl* fun,
-	const CommonTypes& commonTypes
+	const CommonTypes* commonTypes
 );
 
 const Expr checkExpr(ExprCtx* ctx, const ExprAst ast, Expected* expected);

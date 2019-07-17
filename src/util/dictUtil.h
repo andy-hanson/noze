@@ -28,7 +28,7 @@ struct buildMultiDict {
 	template <typename T, typename GetPair>
 	MultiDict<K, V, cmp> operator()(Arena* arena, const Arr<T> inputs, GetPair getPair) {
 		MutArr<KeyValuePair<K, MutArr<V>>> res {};
-		for (const T& input : inputs) {
+		for (const T* input : ptrsRange(inputs)) {
 			const KeyValuePair<K, V> pair = getPair(input);
 			Cell<const Bool> didAdd { False };
 			for (const size_t i : Range{mutArrSize(&res)}) {

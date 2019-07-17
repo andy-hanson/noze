@@ -1,6 +1,6 @@
 #include <cstdio>
 #include <cstdlib> // exit
-#include <signal.h>
+#include <signal.h> // SIGXCPU
 #include <sys/resource.h> // rlimit
 #include <unistd.h> // getcwd
 

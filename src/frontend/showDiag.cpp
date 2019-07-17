@@ -45,7 +45,12 @@ namespace {
 		writePath(writer, where.path);
 		writeReset(writer);
 		writeStatic(writer, " line ");
-		const size_t line = lineAndColumnAtPos(mustGetAt<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(fi.lineAndColumnGetters, where), range.start).line;
+		const LineAndColumnGetter lcg = mustGetAt<
+			const PathAndStorageKind,
+			const LineAndColumnGetter,
+			comparePathAndStorageKind
+		>(fi.lineAndColumnGetters, where);
+		const size_t line = lineAndColumnAtPos(lcg, range.start).line;
 		writeNat(writer, line + 1);
 	}
 

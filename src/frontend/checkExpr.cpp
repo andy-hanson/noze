@@ -64,7 +64,7 @@ namespace {
 	}
 
 	const CheckedExpr checkCond(ExprCtx* ctx, const SourceRange range, const CondAst ast, Expected* expected) {
-		const Expr* cond = ctx->alloc(checkAndExpect(ctx, ast.cond, ctx->commonTypes._bool));
+		const Expr* cond = ctx->alloc(checkAndExpect(ctx, ast.cond, ctx->commonTypes->_bool));
 		const Expr* then = ctx->alloc(checkExpr(ctx, ast.then, expected));
 		const Expr* elze = ctx->alloc(checkExpr(ctx, ast.elze, expected));
 		return CheckedExpr{Expr{range, Expr::Cond{inferred(expected), cond, then, elze}}};
@@ -80,7 +80,7 @@ namespace {
 		const ArrExpectedType aet = [&]() {
 			if (has(ast.elementType)) {
 				const Type ta = typeFromAst(ctx, force(ast.elementType));
-				const StructInst* arrType = instantiateStructNeverDelay(ctx->arena(), ctx->commonTypes.arr, arrLiteral<const Type>(ctx->arena(), ta));
+				const StructInst* arrType = instantiateStructNeverDelay(ctx->arena(), ctx->commonTypes->arr, arrLiteral<const Type>(ctx->arena(), { ta }));
 				return ArrExpectedType{False, arrType, ta};
 			} else {
 				const Opt<const Type> opT = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
@@ -88,7 +88,7 @@ namespace {
 					const Type t = force(opT);
 					if (t.isStructInst()) {
 						const StructInst* si = t.asStructInst();
-						if (ptrEquals(si->decl, ctx->commonTypes.arr))
+						if (ptrEquals(si->decl, ctx->commonTypes->arr))
 							return ArrExpectedType{True, si, only<const Type>(si->typeArgs)};
 					}
 				}
@@ -135,11 +135,11 @@ namespace {
 				return none<const RecordAndIsBuiltinByVal>();
 			},
 			[&](const StructBody::Builtin) {
-				if (ptrEquals(decl, ctx->commonTypes.byVal)) {
+				if (ptrEquals(decl, ctx->commonTypes->byVal)) {
 					// We know this will be deeply instantiated since we did that at the beginning of this function
 					const Type inner = only<const Type>(si->typeArgs);
 					if (inner.isStructInst()) {
-						const StructBody& body = inner.asStructInst()->body();
+						const StructBody body = inner.asStructInst()->body();
 						if (body.isRecord())
 							return some<const RecordAndIsBuiltinByVal>(RecordAndIsBuiltinByVal{body.asRecord(), True});
 					}
@@ -204,7 +204,7 @@ namespace {
 		const StructInst* expectedStructInst = force(expectedType).asStructInst();
 		const StructDecl* funStruct = expectedStructInst->decl;
 
-		const Opt<const CommonTypes::LambdaInfo> opInfo = ctx->commonTypes.getFunStructInfo(funStruct);
+		const Opt<const CommonTypes::LambdaInfo> opInfo = ctx->commonTypes->getFunStructInfo(funStruct);
 		if (!has(opInfo)) {
 			ctx->addDiag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
 			return none<const ExpectedLambdaType>();
@@ -356,17 +356,17 @@ namespace {
 	}
 
 	const CheckedExpr checkNoCallLiteral(ExprCtx* ctx, const SourceRange range, const Str literal, Expected* expected) {
-		return check(ctx, expected, Type{ctx->commonTypes.str}, Expr{range, Expr::StringLiteral{copyStr(ctx->arena(), literal)}});
+		return check(ctx, expected, Type{ctx->commonTypes->str}, Expr{range, Expr::StringLiteral{copyStr(ctx->arena(), literal)}});
 	}
 
 	const CheckedExpr checkLiteral(ExprCtx* ctx, const SourceRange range, const LiteralAst ast, Expected* expected) {
-		if (isExpectingString(expected, ctx->commonTypes.str) || !hasExpected(expected))
+		if (isExpectingString(expected, ctx->commonTypes->str) || !hasExpected(expected))
 			return checkNoCallLiteral(ctx, range, ast.literal, expected);
 		else {
 			const CallAst call = CallAst{
 				shortSymAlphaLiteral("literal"),
 				emptyArr<const TypeAst>(),
-				arrLiteral<const ExprAst>(ctx->arena(), ExprAst{range, ExprAstKind{ast}})};
+				arrLiteral<const ExprAst>(ctx->arena(), { ExprAst{range, ExprAstKind{ast}} })};
 			return checkCall(ctx, range, call, expected);
 		}
 	}
@@ -436,7 +436,7 @@ namespace {
 			if (et.isSendFun) {
 				if (actualPossiblyFutReturnType.isStructInst()) {
 					const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
-					return ptrEquals(ap->decl, ctx->commonTypes.fut)
+					return ptrEquals(ap->decl, ctx->commonTypes->fut)
 						? some<const Type>(only(ap->typeArgs))
 						: none<const Type>();
 				} else
@@ -564,7 +564,7 @@ namespace {
 					});
 				if (!has(opMessage)) todo<void>("checkMessageSend");
 				const Message* message = force(opMessage);
-				const Sig& messageSig = message->sig;
+				const Sig messageSig = message->sig;
 				if (size(ast.args) != arity(messageSig))
 					todo<void>("checkMessageSend");
 				const Arr<const Expr> args = mapZip<const Expr>{}(ctx->arena(), ast.args, messageSig.params, [&](const ExprAst argAst, const Param& param) {
@@ -607,7 +607,7 @@ namespace {
 	}
 
 	const CheckedExpr checkSeq(ExprCtx* ctx, const SourceRange range, const SeqAst ast, Expected* expected) {
-		const Expr* first = ctx->alloc(checkAndExpect(ctx, ast.first, ctx->commonTypes._void));
+		const Expr* first = ctx->alloc(checkAndExpect(ctx, ast.first, ctx->commonTypes->_void));
 		const Expr* then = ctx->alloc(checkExpr(ctx, ast.then, expected));
 		return CheckedExpr{Expr{range, Expr::Seq{first, then}}};
 	}
@@ -621,24 +621,24 @@ namespace {
 			const StructField* field = structAndField.field;
 			if (!field->isMutable) {
 				ctx->addDiag(range, Diag{Diag::WriteToNonMutableField{field}});
-				return bogusWithType(expected, range, Type{ctx->commonTypes._void});
+				return bogusWithType(expected, range, Type{ctx->commonTypes->_void});
 			} else {
 				const Expr value = checkAndExpect(ctx, ast.value, field->type);
 				const Expr::StructFieldSet sfs = Expr::StructFieldSet{ctx->alloc(target.expr), structInst, field, ctx->alloc(value)};
-				return check(ctx, expected, Type{ctx->commonTypes._void}, Expr{range, sfs});
+				return check(ctx, expected, Type{ctx->commonTypes->_void}, Expr{range, sfs});
 			}
 		} else {
 			ctx->addDiag(range, Diag{Diag::WriteToNonExistentField{target.type, ast.fieldName}});
-			return bogusWithType(expected, range, Type{ctx->commonTypes._void});
+			return bogusWithType(expected, range, Type{ctx->commonTypes->_void});
 		}
 	}
 
 	const CheckedExpr checkThen(ExprCtx* ctx, const SourceRange range, const ThenAst ast, Expected* expected) {
-		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx->arena(), ast.left), ast.then}}};
+		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx->arena(), { ast.left }), ast.then}}};
 		const CallAst call = CallAst{
 			shortSymAlphaLiteral("then"),
 			emptyArr<const TypeAst>(),
-			arrLiteral<const ExprAst>(ctx->arena(), *ast.futExpr, lambda)};
+			arrLiteral<const ExprAst>(ctx->arena(), { *ast.futExpr, lambda })};
 		return checkCall(ctx, range, call, expected);
 	}
 
@@ -699,7 +699,7 @@ const Expr* checkFunctionBody(
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const FunsMap funsMap,
 	const FunDecl* fun,
-	const CommonTypes& commonTypes
+	const CommonTypes* commonTypes
 ) {
 	ExprCtx exprCtx {checkCtx, structsAndAliasesMap, funsMap, commonTypes, fun, none<const NewAndMessageInfo>()};
 	return exprCtx.alloc(checkAndExpect(&exprCtx, ast, fun->returnType()));

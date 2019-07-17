@@ -64,7 +64,7 @@ namespace {
 
 	const ExpressionToken takeOperator(Lexer* lexer, const CStr begin)  {
 		const Str name = takeOperatorRest(lexer, begin);
-		return ExpressionToken{NameAndRange{range(lexer, begin), getSymFromOperator(lexer->symbols, name)}};
+		return ExpressionToken{NameAndRange{range(lexer, begin), getSymFromOperator(lexer->allSymbols, name)}};
 	}
 
 	const Str takeStringLiteral(Lexer* lexer) {
@@ -209,8 +209,8 @@ void take(Lexer* lexer, const CStr c) {
 const Sym takeName(Lexer* lexer) {
 	const StrAndIsOperator s = takeNameAsTempStr(lexer);
 	return s.isOperator
-		? getSymFromOperator(lexer->symbols, s.str)
-		: getSymFromAlphaIdentifier(lexer->symbols, s.str);
+		? getSymFromOperator(lexer->allSymbols, s.str)
+		: getSymFromAlphaIdentifier(lexer->allSymbols, s.str);
 }
 
 const Str takeNameAsStr(Lexer* lexer) {
@@ -247,7 +247,7 @@ const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 				return takeOperator(lexer, begin);
 			else if (isLowerCaseLetter(c)) {
 				const Str nameStr = takeNameRest(lexer, begin);
-				const Sym name = getSymFromAlphaIdentifier(lexer->symbols, nameStr);
+				const Sym name = getSymFromAlphaIdentifier(lexer->allSymbols, nameStr);
 				switch (name.value) {
 					case shortSymAlphaLiteralValue("match"):
 						return ExpressionToken{ExpressionToken::Kind::match};
@@ -342,7 +342,7 @@ const Bool tryTakeElseIndent(Lexer* lexer)  {
 	return res;
 }
 
-Lexer createLexer(Arena* arena, Symbols* symbols, const NulTerminatedStr source) {
+Lexer createLexer(Arena* arena, AllSymbols* allSymbols, const NulTerminatedStr source) {
 	// Note: We *are* relying on the nul terminator to stop the lexer->
 	const Str str = stripNulTerminator(source);
 	const uint len = safeSizeTToUint(size(str));
@@ -367,5 +367,5 @@ Lexer createLexer(Arena* arena, Symbols* symbols, const NulTerminatedStr source)
 			}
 		}
 
-	return Lexer{arena, symbols, /*sourceBegin*/ str.begin(), /*ptr*/ str.begin(), /*indent*/ 0};
+	return Lexer{arena, allSymbols, /*sourceBegin*/ str.begin(), /*ptr*/ str.begin(), /*indent*/ 0};
 }

@@ -77,7 +77,7 @@ namespace {
 		if (tryTake(lexer, '.')) {
 			const Sym funName = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-			const CallAst call = CallAst{funName, typeArgs, arrLiteral<const ExprAst>(lexer->arena, target)};
+			const CallAst call = CallAst{funName, typeArgs, arrLiteral<const ExprAst>(lexer->arena, { target })};
 			return noDedent(ExprAst{range(lexer, start), ExprAstKind{call}});
 		} else {
 			const Bool isMessage = tryTake(lexer, '!');
@@ -183,7 +183,7 @@ namespace {
 		if (tryTake(lexer, '.')) {
 			const Sym name = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-			const CallAst call = CallAst{name, typeArgs, arrLiteral<const ExprAst>(lexer->arena, initial)};
+			const CallAst call = CallAst{name, typeArgs, arrLiteral<const ExprAst>(lexer->arena, { initial })};
 			const ExprAst expr = ExprAst{range(lexer, start), ExprAstKind{call}};
 			return tryParseDots(lexer, expr);
 		} else
@@ -337,7 +337,7 @@ namespace {
 				take(lexer, '}');
 				const SourceRange range = getRange();
 				const Arr<const LambdaAst::Param> params = bodyUsesIt(*body)
-					? arrLiteral<const LambdaAst::Param>(lexer->arena, LambdaAst::Param{range, shortSymAlphaLiteral("it")})
+					? arrLiteral<const LambdaAst::Param>(lexer->arena, { LambdaAst::Param{range, shortSymAlphaLiteral("it")} })
 					: emptyArr<const LambdaAst::Param>();
 				const ExprAst expr = ExprAst{range, ExprAstKind{LambdaAst{params, body}}};
 				return noDedent(tryParseDots(lexer, expr));

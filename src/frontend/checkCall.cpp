@@ -206,7 +206,13 @@ namespace {
 	}
 
 	// On failure, returns none.
-	const Opt<const Arr<const Called>> checkSpecImpls(ExprCtx* ctx, const SourceRange range, const FunDecl* called, const Arr<const Type> typeArgs, const bool allowSpecs) {
+	const Opt<const Arr<const Called>> checkSpecImpls(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const FunDecl* called,
+		const Arr<const Type> typeArgs,
+		const bool allowSpecs
+	) {
 		// We store the impls in a flat array. Calculate the size ahead of time.
 		const size_t nImpls = sum(called->specs, [](const SpecInst* specInst) {
 			return size(specInst->sigs);

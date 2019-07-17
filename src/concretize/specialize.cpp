@@ -10,7 +10,7 @@ namespace {
 			const KnownLambdaBody* klb = c->kind.asLambda().knownLambdaBody;
 			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);
 			const ConcreteType closureType = force(fun->closureType());
-			const ConstantOrExpr closure = ConstantOrExpr{ctx->allConstants._null(ctx->arena, closureType)};
+			const ConstantOrExpr closure = ConstantOrExpr{constantNull(ctx->arena, &ctx->allConstants, closureType)};
 			const ConcreteExpr::LambdaToDynamic ld = ConcreteExpr::LambdaToDynamic{fun, closure};
 			return nuExpr(ctx->arena, klb->dynamicType, range, ld);
 		} else {

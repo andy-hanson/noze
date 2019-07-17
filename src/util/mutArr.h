@@ -58,7 +58,7 @@ template <typename T>
 inline void setAt(MutArr<T>* m, const size_t index, const T value) {
 	assert(!m->isFrozen);
 	assert(index < m->_size);
-	overwriteConst(m->_begin[index], value);
+	overwriteConst(&m->_begin[index], value);
 }
 
 template <typename T>
@@ -68,10 +68,10 @@ void push(Arena* arena, MutArr<T>* m, const T value) {
 		m->capacity = m->_size == 0 ? 4 : m->_size * 2;
 		m->_begin = static_cast<T*>(alloc(arena, sizeof(T) * m->capacity));
 		for (const size_t i : Range{m->_size})
-			initMemory(m->_begin[i], oldBegin[i]);
+			initMemoryFromPtr(&m->_begin[i], &oldBegin[i]);
 	}
 	assert(m->_size < m->capacity);
-	initMemory(m->_begin[m->_size], value);
+	initMemoryFromPtr(&m->_begin[m->_size], &value);
 	m->_size++;
 }
 
@@ -117,7 +117,7 @@ template <typename T>
 void deleteAt(MutArr<T>& m, const size_t index) {
 	assert(index < m._size);
 	for (const size_t i : Range{index, m._size - 1})
-		overwriteConst(m._begin[i], m._begin[i + 1]);
+		overwriteConst(&m._begin[i], m._begin[i + 1]);
 	m._size--;
 }
 

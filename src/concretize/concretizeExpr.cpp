@@ -23,8 +23,8 @@ namespace {
 		ConcretizeExprCtx(const ConcretizeExprCtx*) = delete;
 		ConcretizeExprCtx(ConcretizeExprCtx&&) = default;
 
-		AllConstants& allConstants() {
-			return concretizeCtx->allConstants;
+		AllConstants* allConstants() {
+			return &concretizeCtx->allConstants;
 		}
 
 		const ConcreteType getConcreteType(const Type t) {
@@ -177,7 +177,7 @@ namespace {
 			const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(ctx, e.args);
 			return args.match(
 				[&](const Arr<const Constant*> constantArgs) {
-					return ConstantOrExpr{ctx->allConstants().record(arena, type, constantArgs)};
+					return ConstantOrExpr{constantRecord(arena, ctx->allConstants(), type, constantArgs)};
 				},
 				[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
 					return nonConstant(nonConstantArgs);
@@ -214,7 +214,7 @@ namespace {
 				args});
 		const LambdaInfo info = LambdaInfo{ctx->concreteFunSource.containingFunInst, body};
 		addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(arena, &ctx->concretizeCtx->knownLambdaBodyToInfo, klb, info);
-		return ConstantOrExpr{ctx->allConstants().lambda(arena, klb)};
+		return ConstantOrExpr{constantLambda(arena, ctx->allConstants(), klb)};
 	}
 
 	struct ClosureSpecialize {
@@ -246,16 +246,19 @@ namespace {
 			: none<const ConcreteParam>();
 
 		size_t fieldI = 0;
-		const Arr<const ClosureSingleSpecialize> closureSpecialize = map<const ClosureSingleSpecialize>{}(arena, specializeOnArgs.specializeOnArgs, [&](const ConstantOrLambdaOrVariable clv) {
-			const Opt<const ConcreteField*> field = clv.isConstant()
-				? none<const ConcreteField*>()
-				: [&]() {
-					const ConcreteField* res = getPtr(closureFields, fieldI);
-					fieldI++;
-					return some<const ConcreteField*>(res);
-				}();
-			return ClosureSingleSpecialize{clv, field};
-		});
+		const Arr<const ClosureSingleSpecialize> closureSpecialize = map<const ClosureSingleSpecialize>{}(
+			arena,
+			specializeOnArgs.specializeOnArgs,
+			[&](const ConstantOrLambdaOrVariable clv) {
+				const Opt<const ConcreteField*> field = clv.isConstant()
+					? none<const ConcreteField*>()
+					: [&]() {
+						const ConcreteField* res = getPtr(closureFields, fieldI);
+						fieldI++;
+						return some<const ConcreteField*>(res);
+					}();
+				return ClosureSingleSpecialize{clv, field};
+			});
 		assert(fieldI == size(closureFields));
 
 		return ClosureSpecialize{closureParam, closureSpecialize, specializeOnArgs.nonOmittedArgs};
@@ -301,7 +304,7 @@ namespace {
 
 		return has(closureSpecialize.closureParam)
 			? nuExpr(arena, klb->dynamicType, range, some<const KnownLambdaBody*>(klb), ConcreteExpr::Lambda{closureSpecialize.nonConstantArgs})
-			: ConstantOrExpr{ctx->allConstants().lambda(arena, klb)};
+			: ConstantOrExpr{constantLambda(arena, ctx->allConstants(), klb)};
 	}
 
 	const Str chooseUniqueName(Arena* arena, const Str mangledName, const Arr<const ConcreteLocal*> allLocals) {
@@ -450,7 +453,7 @@ namespace {
 		const ConcreteType targetType = ctx->getConcreteType_forStructInst(e.targetType);
 		const size_t fieldIndex = e.field->index;
 		const Sym fieldName = e.field->name;
-		AllConstants& allConstants = ctx->allConstants();
+		AllConstants* allConstants = ctx->allConstants();
 
 		const ConcreteField* field = getMatchingField(targetType, fieldIndex);
 		const ConcreteType type = field->type;
@@ -472,10 +475,10 @@ namespace {
 					switch (fieldIndex) {
 						case 0:
 							assert(symEq(fieldName, shortSymAlphaLiteral("size")));
-							return ConstantOrExpr{allConstants.nat64(arena, type, a.size())};
+							return ConstantOrExpr{constantNat64(arena, allConstants, type, a.size())};
 						case 1:
 							assert(symEq(fieldName, shortSymAlphaLiteral("data")));
-							return ConstantOrExpr{allConstants.ptr(arena, type, c, 0)};
+							return ConstantOrExpr{constantPtr(arena, allConstants, type, c, 0)};
 						default:
 							assert(0);
 					}
@@ -487,7 +490,7 @@ namespace {
 							assert(symEq(fieldName, shortSymAlphaLiteral("fun-ptr")));
 							// instantiate the lambda now
 							const ConcreteFun* cf = instantiateKnownLambdaBodyForDynamic(ctx->concretizeCtx, klb);
-							return ConstantOrExpr{allConstants.funPtr(arena, type, cf)};
+							return ConstantOrExpr{constantFunPtr(arena, allConstants, type, cf)};
 						}
 						case 1:
 							assert(symEq(fieldName, shortSymAlphaLiteral("closure")));
@@ -495,7 +498,7 @@ namespace {
 								// Constant parts of closure are omitted, so this must be non-constant.
 								return expr();
 							else
-								return ConstantOrExpr(allConstants._null(arena, type));
+								return ConstantOrExpr(constantNull(arena, allConstants, type));
 						default:
 							assert(0);
 					}
@@ -553,7 +556,7 @@ namespace {
 				const ConcreteType elementType = ctx->getConcreteType(e.elementType());
 				return args.match(
 					[&](const Arr<const Constant*> constantArgs) {
-						return ConstantOrExpr{ctx->allConstants().arr(arena, arrayType, elementType, constantArgs)};
+						return ConstantOrExpr{constantArr(arena, ctx->allConstants(), arrayType, elementType, constantArgs)};
 					},
 					[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
 						const ConcreteExpr::CreateArr ca = ConcreteExpr::CreateArr{
@@ -628,12 +631,14 @@ namespace {
 			[&](const Expr::StringLiteral e) {
 				const ConcreteType charType = ctx->concretizeCtx->charType();
 				const Arr<const Constant*> chars = map<const Constant*>{}(arena, e.literal, [&](const char c) {
-					return ctx->allConstants()._char(arena, charType, c);
+					return constantChar(arena, ctx->allConstants(), charType, c);
 				});
-				return ConstantOrExpr{ctx->allConstants().arr(
+				const CommonTypes* commonTypes = ctx->concretizeCtx->commonTypes;
+				return ConstantOrExpr{constantArr(
 					arena,
-					ctx->getConcreteType_forStructInst(ctx->concretizeCtx->commonTypes.str).mustBeNonPointer(),
-					ctx->getConcreteType_forStructInst(ctx->concretizeCtx->commonTypes._char),
+					ctx->allConstants(),
+					ctx->getConcreteType_forStructInst(commonTypes->str).mustBeNonPointer(),
+					ctx->getConcreteType_forStructInst(commonTypes->_char),
 					chars)};
 			},
 			[&](const Expr::StructFieldAccess e) {

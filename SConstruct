@@ -4,7 +4,6 @@
 from os import environ
 
 env = Environment()
-env["CXX"] = "clang++-6.0"
 # This ensures we get color output
 env["ENV"]["TERM"] = environ["TERM"]
 
@@ -13,4 +12,5 @@ env.Program(
 	Glob("src/*.cpp") + Glob("src/**/*.cpp"),
 	LIBS=[File("libfirm/build/debug/libfirm.so")],
 	CPPPATH=["libfirm/include", "libfirm/build/gen/include/libfirm"],
-	CPPFLAGS=Split("-Werror -Wextra -Wall -ansi -pedantic -Wno-c99-extensions -std=c++17 -g"))
+	# Not -pedantic because I want to use c99 designated initializers
+	CPPFLAGS=Split("-Werror -Wextra -Wall -ansi -std=c++17 -g"))

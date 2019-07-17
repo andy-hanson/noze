@@ -17,5 +17,5 @@ inline const T cellGet(const Cell<T>* c) {
 
 template <typename T>
 inline void cellSet(Cell<T>* c, const T value) {
-	overwriteConst(c->_value, value);
+	overwriteConst(&c->_value, value);
 }

@@ -15,12 +15,12 @@ struct Opt {
 
 template <typename T>
 inline Opt<T> none() {
-	return Opt<T>{False, {False}};
+	return Opt<T>{False, {.ignore=False}};
 }
 
 template <typename T>
 inline Opt<T> some(T value) {
-	return Opt<T>{True, {._value = value}};
+	return Opt<T>{True, {._value=value}};
 }
 
 template <typename T>

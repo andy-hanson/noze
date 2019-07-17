@@ -18,7 +18,7 @@ namespace {
 	}
 
 	const Arr<const Diagnostic> parseDiagnostics(Arena* modelArena, const PathAndStorageKind where, const ParseDiagnostic p) {
-		return arrLiteral<const Diagnostic>(modelArena, Diagnostic{where, p.range, Diag{p.diag}});
+		return arrLiteral<const Diagnostic>(modelArena, { Diagnostic{where, p.range, Diag{p.diag}} });
 	}
 
 	using LineAndColumnGettersBuilder = DictBuilder<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;
@@ -26,7 +26,7 @@ namespace {
 	const Result<const FileAst, const Arr<const Diagnostic>> parseSingle(
 		Arena* modelArena,
 		Arena* astsArena,
-		Symbols* symbols,
+		AllSymbols* allSymbols,
 		const PathAndStorageKind where,
 		const ReadOnlyStorages storages,
 		LineAndColumnGettersBuilder* lineAndColumnGetters
@@ -35,14 +35,22 @@ namespace {
 		const Opt<const NulTerminatedStr> opFileContent = getFile(astsArena, where, storages);
 		if (has(opFileContent)) {
 			const NulTerminatedStr text = force(opFileContent);
-			addToDict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(modelArena, lineAndColumnGetters, where, lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
+			addToDict<
+				const PathAndStorageKind,
+				const LineAndColumnGetter,
+				comparePathAndStorageKind
+			>(
+				modelArena,
+				lineAndColumnGetters,
+				where,
+				lineAndColumnGetterForText(modelArena, stripNulTerminator(text)));
 			return mapFailure<const Arr<const Diagnostic>>{}(
-				parseFile(astsArena, symbols, text),
+				parseFile(astsArena, allSymbols, text),
 				[&](const ParseDiagnostic p) { return parseDiagnostics(modelArena, where, p); });
 		}
 		else
 			return failure<const FileAst, const Arr<const Diagnostic>>(
-				arrLiteral<const Diagnostic>(modelArena, Diagnostic{where, SourceRange::empty(), Diag{Diag::FileDoesNotExist{}}}));
+				arrLiteral<const Diagnostic>(modelArena, { Diagnostic{where, SourceRange::empty(), Diag{Diag::FileDoesNotExist{}}} }));
 	}
 
 	struct PathAndAst {
@@ -71,7 +79,7 @@ namespace {
 	const Result<const Arr<const PathAndAst>, const Arr<const Diagnostic>> parseEverything(
 		Arena* modelArena,
 		Arena* astsArena,
-		Symbols* symbols,
+		AllSymbols* allSymbols,
 		const Path* mainPath,
 		ReadOnlyStorages storages,
 		LineAndColumnGettersBuilder* lineAndColumnGetters
@@ -93,7 +101,7 @@ namespace {
 				break;
 
 			const PathAndStorageKind path = force(opPath);
-			const Result<const FileAst, const Arr<const Diagnostic>> parseResult = parseSingle(modelArena, astsArena, symbols, path, storages, lineAndColumnGetters);
+			const Result<const FileAst, const Arr<const Diagnostic>> parseResult = parseSingle(modelArena, astsArena, allSymbols, path, storages, lineAndColumnGetters);
 			if (!parseResult.isSuccess())
 				return failure<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(parseResult.asFailure());
 
@@ -126,7 +134,7 @@ namespace {
 				return success<const Module*, const Arr<const Diagnostic>>(force(i));
 			else {
 				const Diagnostic diag = Diagnostic{curPath, ast.range, Diag{Diag::CircularImport{}}};
-				return failure<const Module*, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(modelArena, diag));
+				return failure<const Module*, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(modelArena, { diag }));
 			}
 		});
 	}
@@ -134,7 +142,7 @@ namespace {
 
 const Result<const Program, const Diagnostics> frontendCompile(
 	Arena* modelArena,
-	Symbols* symbols,
+	AllSymbols* allSymbols,
 	const ReadOnlyStorages storages,
 	const Path* mainPath
 ) {
@@ -146,7 +154,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	const PathAndStorageKind inclPath = includePath(modelArena);
 
 	const Result<const IncludeCheck, const Arr<const Diagnostic>> include = flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(
-		parseSingle(modelArena, &astsArena, symbols, inclPath, storages, &lineAndColumnGetters),
+		parseSingle(modelArena, &astsArena, allSymbols, inclPath, storages, &lineAndColumnGetters),
 		[&](const FileAst ast) {
 			return checkIncludeNz(modelArena, ast, inclPath);
 		});
@@ -155,14 +163,17 @@ const Result<const Program, const Diagnostics> frontendCompile(
 		include,
 		[&](const IncludeCheck includeCheck) {
 			return mapSuccess<const IncludeAndPathAndAsts>{}(
-				parseEverything(modelArena, &astsArena, symbols, mainPath, storages, &lineAndColumnGetters),
+				parseEverything(modelArena, &astsArena, allSymbols, mainPath, storages, &lineAndColumnGetters),
 				[&](const Arr<const PathAndAst> everything) {
 					return IncludeAndPathAndAsts{includeCheck, everything};
 				});
 		});
 
 	// TODO: less nested callbacks, more intermediate Result values
-	const Result<const Program, const Arr<const Diagnostic>> res = flatMapSuccess<const Program, const Arr<const Diagnostic>>{}(includeAndParsed, [&](const IncludeAndPathAndAsts pair) {
+	const Result<const Program, const Arr<const Diagnostic>> res = flatMapSuccess<
+		const Program,
+		const Arr<const Diagnostic>
+	>{}(includeAndParsed, [&](const IncludeAndPathAndAsts pair) {
 		const IncludeCheck includeCheck = pair.includeCheck;
 		const Arr<const PathAndAst> fileAsts = pair.pathAndAsts;
 
@@ -192,6 +203,11 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	});
 
 	return mapFailure<const Diagnostics>{}(res, [&](const Arr<const Diagnostic> d) {
-		return Diagnostics{d, FilesInfo{storages.absolutePathsGetter(), finishDictShouldBeNoConflict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(&lineAndColumnGetters)}};
+		const LineAndColumnGetters lcgs = finishDictShouldBeNoConflict<
+			const PathAndStorageKind,
+			const LineAndColumnGetter,
+			comparePathAndStorageKind
+		>(&lineAndColumnGetters);
+		return Diagnostics{d, FilesInfo{storages.absolutePathsGetter(), lcgs}};
 	});
 }
