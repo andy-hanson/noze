@@ -165,7 +165,10 @@ const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx* ctx,
 
 const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx* ctx, const ConcreteFunKey key);
 
-const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(ConcretizeCtx* ctx, const KnownLambdaBody* klb, const Arr<const ConstantOrLambdaOrVariable> args);
+const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(
+	ConcretizeCtx* ctx,
+	const KnownLambdaBody* klb,
+	const Arr<const ConstantOrLambdaOrVariable> args);
 const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx* ctx, const KnownLambdaBody* klb);
 inline const ConcreteFun* getConcreteFunForCallAndFillBody(
 	ConcretizeCtx* ctx,
@@ -175,19 +178,37 @@ inline const ConcreteFun* getConcreteFunForCallAndFillBody(
 	return getOrAddConcreteFunAndFillBody(ctx, ConcreteFunKey{fun, specializeOnArgs});
 }
 
-const ConcreteType getConcreteType_forStructInst(ConcretizeCtx* ctx, const StructInst* i, const TypeArgsScope typeArgsScope);
+const ConcreteType getConcreteType_forStructInst(
+	ConcretizeCtx* ctx,
+	const StructInst* i,
+	const TypeArgsScope typeArgsScope);
 // TODO: 't' may contain type params, must pass in current context
 const ConcreteType getConcreteType(ConcretizeCtx* ctx, const Type t, const TypeArgsScope typeArgsScope);
-const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx* ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope);
+const Arr<const ConcreteType> typesToConcreteTypes(
+	ConcretizeCtx* ctx,
+	const Arr<const Type> types,
+	const TypeArgsScope typeArgsScope);
 
-const Opt<const ConcreteType> concreteTypeFromFields(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName);
-const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName);
+const Opt<const ConcreteType> concreteTypeFromFields(
+	Arena* arena,
+	const Arr<const ConcreteField> fields,
+	const Str mangledName);
+const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(
+	Arena* arena,
+	const Arr<const ConcreteField> fields,
+	const Str mangledName);
 
 const Bool isCallFun(ConcretizeCtx* ctx, const FunDecl* decl);
 
 // TODO:MOVE?
 template <typename T>
-const ConstantOrExpr nuExpr(Arena* arena, const ConcreteType type, const SourceRange range, const Opt<const KnownLambdaBody*> klb, T t) {
+const ConstantOrExpr nuExpr(
+	Arena* arena,
+	const ConcreteType type,
+	const SourceRange range,
+	const Opt<const KnownLambdaBody*> klb,
+	T t
+) {
 	return ConstantOrExpr{nu<const ConcreteExpr>{}(arena, type, range, klb, t)};
 }
 

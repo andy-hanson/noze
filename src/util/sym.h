@@ -121,9 +121,11 @@ namespace symImpl {
 	const Nat64 maxShortOperatorSize = shortStringAvailableBits / bitsPerOperatorChar;
 	const Nat64 shortOperatorMarker = shortAlphaOrOperatorMarker | shortOrLongOperatorMarker;
 
-	static_assert((shortAlphaIdentifierMarker & (static_cast<Nat64>(1) << (bitsPerAlphaChar * (maxShortAlphaIdentifierSize - 1)))) == 0, "!");
+	const Nat64 highestPossibleAlphaBit = singleBit(bitsPerAlphaChar * (maxShortAlphaIdentifierSize - 1));
+	static_assert((shortAlphaIdentifierMarker & highestPossibleAlphaBit) == 0, "!");
 
-	static_assert((shortOperatorMarker & (static_cast<Nat64>(1) << (bitsPerOperatorChar * (maxShortOperatorSize - 1)))) == 0, "1");
+	const Nat64 highestPossibleOperatorBit = singleBit(bitsPerOperatorChar * (maxShortOperatorSize - 1));
+	static_assert((shortOperatorMarker & highestPossibleOperatorBit) == 0, "1");
 
 	inline constexpr Nat64 packAlphaIdentifier(const Str str) {
 		assert(size(str) <= maxShortAlphaIdentifierSize);

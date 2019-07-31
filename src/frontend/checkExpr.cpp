@@ -80,7 +80,10 @@ namespace {
 		const ArrExpectedType aet = [&]() {
 			if (has(ast.elementType)) {
 				const Type ta = typeFromAst(ctx, force(ast.elementType));
-				const StructInst* arrType = instantiateStructNeverDelay(ctx->arena(), ctx->commonTypes->arr, arrLiteral<const Type>(ctx->arena(), { ta }));
+				const StructInst* arrType = instantiateStructNeverDelay(
+					ctx->arena(),
+					ctx->commonTypes->arr,
+					arrLiteral<const Type>(ctx->arena(), { ta }));
 				return ArrExpectedType{False, arrType, ta};
 			} else {
 				const Opt<const Type> opT = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
@@ -163,10 +166,14 @@ namespace {
 				ctx->addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, size(fields), size(ast.args)}});
 				return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : bogus(expected, range);
 			} else {
-				const Arr<const Expr> args = mapZip<const Expr>{}(ctx->arena(), fields, ast.args, [&](const StructField field, const ExprAst arg) {
-					const Type expectedType = instantiateType(ctx->arena(), field.type, si);
-					return checkAndExpect(ctx, arg, expectedType);
-				});
+				const Arr<const Expr> args = mapZip<const Expr>{}(
+					ctx->arena(),
+					fields,
+					ast.args,
+					[&](const StructField field, const ExprAst arg) {
+						const Type expectedType = instantiateType(ctx->arena(), field.type, si);
+						return checkAndExpect(ctx, arg, expectedType);
+					});
 				const Expr expr = Expr{range, Expr::CreateRecord{si, args}};
 
 				if (ctx->outermostFun->noCtx() && !record.isBuiltinByVal) {
@@ -219,11 +226,19 @@ namespace {
 				todo<void>("getExpectedLambdaType");
 			return force(op);
 		});
-		const Type nonInstantiatedReturnType = info.isSend ? ctx->makeFutType(nonInstantiatedNonFutReturnType) : nonInstantiatedNonFutReturnType;
-		return some<const ExpectedLambdaType>(ExpectedLambdaType{funStruct, info.nonSend, info.isSend, paramTypes, nonInstantiatedReturnType});
+		const Type nonInstantiatedReturnType = info.isSend
+			? ctx->makeFutType(nonInstantiatedNonFutReturnType)
+			: nonInstantiatedNonFutReturnType;
+		return some<const ExpectedLambdaType>(
+			ExpectedLambdaType{funStruct, info.nonSend, info.isSend, paramTypes, nonInstantiatedReturnType});
 	}
 
-	const CheckedExpr checkFunAsLambda(ExprCtx* ctx, const SourceRange range, const FunAsLambdaAst ast, Expected* expected) {
+	const CheckedExpr checkFunAsLambda(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const FunAsLambdaAst ast,
+		Expected* expected
+	) {
 		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
 		if (!has(opEt))
 			return bogus(expected, range);
@@ -259,7 +274,10 @@ namespace {
 			todo<void>("checkFunAsLambda");
 
 		const Type returnType = fun->returnType();
-		const StructInst* type = instantiateStructNeverDelay(ctx->arena(), et.funStruct, prepend<const Type>(ctx->arena(), returnType, et.paramTypes));
+		const StructInst* type = instantiateStructNeverDelay(
+			ctx->arena(),
+			et.funStruct,
+			prepend<const Type>(ctx->arena(), returnType, et.paramTypes));
 
 		if (!typeEquals(returnType, et.nonInstantiatedPossiblyFutReturnType)) todo<void>("checkFunAsLambda");
 
@@ -427,7 +445,8 @@ namespace {
 		Expected returnTypeInferrer = copyWithNewExpectedType(expected, et.nonInstantiatedPossiblyFutReturnType);
 
 		const Expr* body = withLambda(ctx, &info, [&]() {
-			// Note: checking the body of the lambda may fill in candidate type args if the expected return type contains candidate's type params
+			// Note: checking the body of the lambda may fill in candidate type args
+			// if the expected return type contains candidate's type params
 			return ctx->alloc(checkExpr(ctx, bodyAst, &returnTypeInferrer));
 		});
 
@@ -567,9 +586,13 @@ namespace {
 				const Sig messageSig = message->sig;
 				if (size(ast.args) != arity(messageSig))
 					todo<void>("checkMessageSend");
-				const Arr<const Expr> args = mapZip<const Expr>{}(ctx->arena(), ast.args, messageSig.params, [&](const ExprAst argAst, const Param& param) {
-					return checkAndExpect(ctx, argAst, instantiateType(ctx->arena(), param.type, instIface));
-				});
+				const Arr<const Expr> args = mapZip<const Expr>{}(
+					ctx->arena(),
+					ast.args,
+					messageSig.params,
+					[&](const ExprAst argAst, const Param& param) {
+						return checkAndExpect(ctx, argAst, instantiateType(ctx->arena(), param.type, instIface));
+					});
 				const Type returnType = instantiateType(ctx->arena(), messageSig.returnType, instIface);
 				return check(ctx, expected, returnType, Expr{range, Expr::MessageSend{target, instIface, message->index, args}});
 			});
@@ -634,7 +657,11 @@ namespace {
 	}
 
 	const CheckedExpr checkThen(ExprCtx* ctx, const SourceRange range, const ThenAst ast, Expected* expected) {
-		const ExprAst lambda = ExprAst{range, ExprAstKind{LambdaAst{arrLiteral<const LambdaAst::Param>(ctx->arena(), { ast.left }), ast.then}}};
+		const ExprAst lambda = ExprAst{
+			range,
+			ExprAstKind{LambdaAst{
+				arrLiteral<const LambdaAst::Param>(ctx->arena(), { ast.left }),
+				ast.then}}};
 		const CallAst call = CallAst{
 			shortSymAlphaLiteral("then"),
 			emptyArr<const TypeAst>(),

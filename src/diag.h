@@ -55,20 +55,32 @@ private:
 	};
 
 public:
-	explicit inline ParseDiag(const ExpectedCharacter d) : kind{Kind::expectedCharacter}, expectedCharacter{d} {}
-	explicit inline ParseDiag(const ExpectedDedent d) : kind{Kind::expectedDedent}, expectedDedent{d} {}
-	explicit inline ParseDiag(const ExpectedIndent d) : kind{Kind::expectedIndent}, expectedIndent{d} {}
-	explicit inline ParseDiag(const ExpectedPurityAfterSpace d) : kind{Kind::expectedPurityAfterSpace}, expectedPurityAfterSpace{d} {}
-	explicit inline ParseDiag(const LeadingSpace d) : kind{Kind::leadingSpace}, leadingSpace{d} {}
-	explicit inline ParseDiag(const LetMustHaveThen d) : kind{Kind::letMustHaveThen}, letMustHaveThen{d} {}
+	explicit inline ParseDiag(const ExpectedCharacter d)
+		: kind{Kind::expectedCharacter}, expectedCharacter{d} {}
+	explicit inline ParseDiag(const ExpectedDedent d)
+		: kind{Kind::expectedDedent}, expectedDedent{d} {}
+	explicit inline ParseDiag(const ExpectedIndent d)
+		: kind{Kind::expectedIndent}, expectedIndent{d} {}
+	explicit inline ParseDiag(const ExpectedPurityAfterSpace d)
+		: kind{Kind::expectedPurityAfterSpace}, expectedPurityAfterSpace{d} {}
+	explicit inline ParseDiag(const LeadingSpace d)
+		: kind{Kind::leadingSpace}, leadingSpace{d} {}
+	explicit inline ParseDiag(const LetMustHaveThen d)
+		: kind{Kind::letMustHaveThen}, letMustHaveThen{d} {}
 	explicit inline ParseDiag(const MatchWhenNewMayNotAppearInsideArg d)
 		: kind{Kind::matchWhenNewMayNotAppearInsideArg}, matchWhenNewMayNotAppearInsideArg{d} {}
-	explicit inline ParseDiag(const MustEndInBlankLine d) : kind{Kind::mustEndInBlankLine}, mustEndInBlankLine{d} {}
-	explicit inline ParseDiag(const TrailingSpace d) : kind{Kind::trailingSpace}, trailingSpace{d} {}
-	explicit inline ParseDiag(const TypeParamCantHaveTypeArgs d) : kind{Kind::typeParamCantHaveTypeArgs}, typeParamCantHaveTypeArgs{d} {}
-	explicit inline ParseDiag(const UnexpectedCharacter d) : kind{Kind::unexpectedCharacter}, unexpectedCharacter{d} {}
-	explicit inline ParseDiag(const UnionCantBeEmpty d) : kind{Kind::unionCantBeEmpty}, unionCantBeEmpty{d} {}
-	explicit inline ParseDiag(const WhenMustHaveElse d) : kind{Kind::whenMustHaveElse}, whenMustHaveElse{d} {}
+	explicit inline ParseDiag(const MustEndInBlankLine d)
+		: kind{Kind::mustEndInBlankLine}, mustEndInBlankLine{d} {}
+	explicit inline ParseDiag(const TrailingSpace d)
+		: kind{Kind::trailingSpace}, trailingSpace{d} {}
+	explicit inline ParseDiag(const TypeParamCantHaveTypeArgs d)
+		: kind{Kind::typeParamCantHaveTypeArgs}, typeParamCantHaveTypeArgs{d} {}
+	explicit inline ParseDiag(const UnexpectedCharacter d)
+		: kind{Kind::unexpectedCharacter}, unexpectedCharacter{d} {}
+	explicit inline ParseDiag(const UnionCantBeEmpty d)
+		: kind{Kind::unionCantBeEmpty}, unionCantBeEmpty{d} {}
+	explicit inline ParseDiag(const WhenMustHaveElse d)
+		: kind{Kind::whenMustHaveElse}, whenMustHaveElse{d} {}
 
 	template <
 		typename CbExpectedCharacter,
@@ -318,37 +330,68 @@ private:
 	};
 
 public:
-	explicit inline Diag(const CallMultipleMatches d) : kind{Kind::callMultipleMatches}, callMultipleMatches{d} {}
-	explicit inline Diag(const CallNoMatch d) : kind{Kind::callNoMatch}, callNoMatch{d} {}
-	explicit inline Diag(const CantCallNonNoCtx d) : kind{Kind::cantCallNonNoCtx}, cantCallNonNoCtx{d} {}
-	explicit inline Diag(const CantCallSummon d) : kind{Kind::cantCallSummon}, cantCallSummon{d} {}
-	explicit inline Diag(const CantCallUnsafe d) : kind{Kind::cantCallUnsafe}, cantCallUnsafe{d} {}
-	explicit inline Diag(const CantCreateNonRecordStruct d) : kind{Kind::cantCreateNonRecordStruct}, cantCreateNonRecordStruct{d} {}
-	explicit inline Diag(const CantInferTypeArguments d) : kind{Kind::cantInferTypeArguments}, cantInferTypeArguments{d} {}
-	explicit inline Diag(const CircularImport d) : kind{Kind::circularImport}, circularImport{d} {}
-	explicit inline Diag(const CommonTypesMissing d) : kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
-	explicit inline Diag(const CreateRecordByRefNoCtx d) : kind{Kind::createRecordByRefNoCtx}, createRecordByRefNoCtx{d} {}
-	explicit inline Diag(const DuplicateDeclaration d) : kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
-	explicit inline Diag(const ExpectedTypeIsNotALambda d) : kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
-	explicit inline Diag(const FileDoesNotExist d) : kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
-	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d) : kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
-	explicit inline Diag(const MatchOnNonUnion d) : kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
-	explicit inline Diag(const MutFieldInNonMutRecord d) : kind{Kind::mutFieldInNonMutRecord}, mutFieldInNonMutRecord{d} {}
-	explicit inline Diag(const NameNotFound d) : kind{Kind::nameNotFound}, nameNotFound{d} {}
-	explicit inline Diag(const ParamShadowsPrevious d) : kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
-	explicit inline Diag(const ParseDiag d) : kind{Kind::parseDiag}, parseDiag{d} {}
-	explicit inline Diag(const PurityOfFieldWorseThanRecord d) : kind{Kind::purityOfFieldWorseThanRecord}, purityOfFieldWorseThanRecord{d} {}
-	explicit inline Diag(const PurityOfMemberWorseThanUnion d) : kind{Kind::purityOfMemberWorseThanUnion}, purityOfMemberWorseThanUnion{d} {}
-	explicit inline Diag(const SendFunDoesNotReturnFut d) : kind{Kind::sendFunDoesNotReturnFut}, sendFunDoesNotReturnFut{d} {}
-	explicit inline Diag(const SpecImplHasSpecs d) : kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
-	explicit inline Diag(const SpecImplNotFound d) : kind{Kind::specImplNotFound}, specImplNotFound{d} {}
-	explicit inline Diag(const TypeConflict d) : kind{Kind::typeConflict}, typeConflict{d} {}
-	explicit inline Diag(const TypeNotSendable d) : kind{Kind::typeNotSendable}, typeNotSendable{d} {}
-	explicit inline Diag(const WriteToNonExistentField d) : kind{Kind::writeToNonExistentField}, writeToNonExistentField{d} {}
-	explicit inline Diag(const WriteToNonMutableField d) : kind{Kind::writeToNonMutableField}, writeToNonMutableField{d} {}
-	explicit inline Diag(const WrongNumberNewStructArgs d) : kind{Kind::wrongNumberNewStructArgs}, wrongNumberNewStructArgs{d} {}
-	explicit inline Diag(const WrongNumberTypeArgsForSpec d) : kind{Kind::wrongNumberTypeArgsForSpec}, wrongNumberTypeArgsForSpec{d} {}
-	explicit inline Diag(const WrongNumberTypeArgsForStruct d) : kind{Kind::wrongNumberTypeArgsForStruct}, wrongNumberTypeArgsForStruct{d} {}
+	explicit inline Diag(const CallMultipleMatches d)
+		: kind{Kind::callMultipleMatches}, callMultipleMatches{d} {}
+	explicit inline Diag(const CallNoMatch d)
+		: kind{Kind::callNoMatch}, callNoMatch{d} {}
+	explicit inline Diag(const CantCallNonNoCtx d)
+		: kind{Kind::cantCallNonNoCtx}, cantCallNonNoCtx{d} {}
+	explicit inline Diag(const CantCallSummon d)
+		: kind{Kind::cantCallSummon}, cantCallSummon{d} {}
+	explicit inline Diag(const CantCallUnsafe d)
+		: kind{Kind::cantCallUnsafe}, cantCallUnsafe{d} {}
+	explicit inline Diag(const CantCreateNonRecordStruct d)
+		: kind{Kind::cantCreateNonRecordStruct}, cantCreateNonRecordStruct{d} {}
+	explicit inline Diag(const CantInferTypeArguments d)
+		: kind{Kind::cantInferTypeArguments}, cantInferTypeArguments{d} {}
+	explicit inline Diag(const CircularImport d)
+		: kind{Kind::circularImport}, circularImport{d} {}
+	explicit inline Diag(const CommonTypesMissing d)
+		: kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
+	explicit inline Diag(const CreateRecordByRefNoCtx d)
+		: kind{Kind::createRecordByRefNoCtx}, createRecordByRefNoCtx{d} {}
+	explicit inline Diag(const DuplicateDeclaration d)
+		: kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
+	explicit inline Diag(const ExpectedTypeIsNotALambda d)
+		: kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
+	explicit inline Diag(const FileDoesNotExist d)
+		: kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
+	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d)
+		: kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
+	explicit inline Diag(const MatchOnNonUnion d)
+		: kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
+	explicit inline Diag(const MutFieldInNonMutRecord d)
+		: kind{Kind::mutFieldInNonMutRecord}, mutFieldInNonMutRecord{d} {}
+	explicit inline Diag(const NameNotFound d)
+		: kind{Kind::nameNotFound}, nameNotFound{d} {}
+	explicit inline Diag(const ParamShadowsPrevious d)
+		: kind{Kind::paramShadowsPrevious}, paramShadowsPrevious{d} {}
+	explicit inline Diag(const ParseDiag d)
+		: kind{Kind::parseDiag}, parseDiag{d} {}
+	explicit inline Diag(const PurityOfFieldWorseThanRecord d)
+		: kind{Kind::purityOfFieldWorseThanRecord}, purityOfFieldWorseThanRecord{d} {}
+	explicit inline Diag(const PurityOfMemberWorseThanUnion d)
+		: kind{Kind::purityOfMemberWorseThanUnion}, purityOfMemberWorseThanUnion{d} {}
+	explicit inline Diag(const SendFunDoesNotReturnFut d)
+		: kind{Kind::sendFunDoesNotReturnFut}, sendFunDoesNotReturnFut{d} {}
+	explicit inline Diag(const SpecImplHasSpecs d)
+		: kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
+	explicit inline Diag(const SpecImplNotFound d)
+		: kind{Kind::specImplNotFound}, specImplNotFound{d} {}
+	explicit inline Diag(const TypeConflict d)
+		: kind{Kind::typeConflict}, typeConflict{d} {}
+	explicit inline Diag(const TypeNotSendable d)
+		: kind{Kind::typeNotSendable}, typeNotSendable{d} {}
+	explicit inline Diag(const WriteToNonExistentField d)
+		: kind{Kind::writeToNonExistentField}, writeToNonExistentField{d} {}
+	explicit inline Diag(const WriteToNonMutableField d)
+		: kind{Kind::writeToNonMutableField}, writeToNonMutableField{d} {}
+	explicit inline Diag(const WrongNumberNewStructArgs d)
+		: kind{Kind::wrongNumberNewStructArgs}, wrongNumberNewStructArgs{d} {}
+	explicit inline Diag(const WrongNumberTypeArgsForSpec d)
+		: kind{Kind::wrongNumberTypeArgsForSpec}, wrongNumberTypeArgsForSpec{d} {}
+	explicit inline Diag(const WrongNumberTypeArgsForStruct d)
+		: kind{Kind::wrongNumberTypeArgsForStruct}, wrongNumberTypeArgsForStruct{d} {}
 
 	inline const Bool isFileDoesNotExist() const {
 		return enumEq(kind, Kind::fileDoesNotExist);

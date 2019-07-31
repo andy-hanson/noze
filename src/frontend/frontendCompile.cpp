@@ -101,7 +101,8 @@ namespace {
 				break;
 
 			const PathAndStorageKind path = force(opPath);
-			const Result<const FileAst, const Arr<const Diagnostic>> parseResult = parseSingle(modelArena, astsArena, allSymbols, path, storages, lineAndColumnGetters);
+			const Result<const FileAst, const Arr<const Diagnostic>> parseResult =
+				parseSingle(modelArena, astsArena, allSymbols, path, storages, lineAndColumnGetters);
 			if (!parseResult.isSuccess())
 				return failure<const Arr<const PathAndAst>, const Arr<const Diagnostic>>(parseResult.asFailure());
 
@@ -112,7 +113,8 @@ namespace {
 				if (!has(opDependencyPath))
 					todo<void>("diagnostic: import resolution failed");
 				const PathAndStorageKind dependencyPath = force(opDependencyPath);
-				if (tryAddToMutSet<const PathAndStorageKind, comparePathAndStorageKind>(&tempArena, &seenSet, dependencyPath))
+				if (tryAddToMutSet<const PathAndStorageKind, comparePathAndStorageKind>(
+					&tempArena, &seenSet, dependencyPath))
 					push<const PathAndStorageKind>(&tempArena, &toParse, dependencyPath);
 			}
 		}
@@ -129,12 +131,17 @@ namespace {
 		return mapOrFail<const Module*, const Arr<const Diagnostic>>{}(modelArena, imports, [&](const ImportAst ast) {
 			// resolveImport should succeed because we already did this in parseEverything. (TODO: then keep it around with the ast?)
 			const PathAndStorageKind importPath = force(resolveImport(modelArena, curPath, ast));
-			const Opt<const Module*> i = getAt_mut<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(compiled, importPath);
+			const Opt<const Module*> i = getAt_mut<
+				const PathAndStorageKind,
+				const Module*,
+				comparePathAndStorageKind
+			>(compiled, importPath);
 			if (has(i))
 				return success<const Module*, const Arr<const Diagnostic>>(force(i));
 			else {
 				const Diagnostic diag = Diagnostic{curPath, ast.range, Diag{Diag::CircularImport{}}};
-				return failure<const Module*, const Arr<const Diagnostic>>(arrLiteral<const Diagnostic>(modelArena, { diag }));
+				return failure<const Module*, const Arr<const Diagnostic>>(
+					arrLiteral<const Diagnostic>(modelArena, { diag }));
 			}
 		});
 	}
@@ -153,21 +160,25 @@ const Result<const Program, const Diagnostics> frontendCompile(
 
 	const PathAndStorageKind inclPath = includePath(modelArena);
 
-	const Result<const IncludeCheck, const Arr<const Diagnostic>> include = flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(
+	const Result<const IncludeCheck, const Arr<const Diagnostic>> include = flatMapSuccess<
+		const IncludeCheck,
+		const Arr<const Diagnostic>
+	>{}(
 		parseSingle(modelArena, &astsArena, allSymbols, inclPath, storages, &lineAndColumnGetters),
 		[&](const FileAst ast) {
 			return checkIncludeNz(modelArena, ast, inclPath);
 		});
 
-	const Result<const IncludeAndPathAndAsts, const Arr<const Diagnostic>> includeAndParsed = flatMapSuccess<const IncludeAndPathAndAsts, const Arr<const Diagnostic>>{}(
-		include,
-		[&](const IncludeCheck includeCheck) {
-			return mapSuccess<const IncludeAndPathAndAsts>{}(
-				parseEverything(modelArena, &astsArena, allSymbols, mainPath, storages, &lineAndColumnGetters),
-				[&](const Arr<const PathAndAst> everything) {
-					return IncludeAndPathAndAsts{includeCheck, everything};
-				});
-		});
+	const Result<const IncludeAndPathAndAsts, const Arr<const Diagnostic>> includeAndParsed =
+		flatMapSuccess<const IncludeAndPathAndAsts, const Arr<const Diagnostic>>{}(
+			include,
+			[&](const IncludeCheck includeCheck) {
+				return mapSuccess<const IncludeAndPathAndAsts>{}(
+					parseEverything(modelArena, &astsArena, allSymbols, mainPath, storages, &lineAndColumnGetters),
+					[&](const Arr<const PathAndAst> everything) {
+						return IncludeAndPathAndAsts{includeCheck, everything};
+					});
+			});
 
 	// TODO: less nested callbacks, more intermediate Result values
 	const Result<const Program, const Arr<const Diagnostic>> res = flatMapSuccess<
@@ -180,24 +191,35 @@ const Result<const Program, const Diagnostics> frontendCompile(
 		// Go in reverse order (starting at leaf dependencies, finishing with mainPath)
 		// If we ever see some dependency that's not compiled yet, it indicates a circular dependency.
 		MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind> compiled {};
-		const Result<const Arr<const Module*>, const Arr<const Diagnostic>> modules = mapOrFailReverse<const Module*, const Arr<const Diagnostic>>{}(
-			modelArena,
-			fileAsts,
-			[&](const PathAndAst ast) {
-				const Result<const Arr<const Module*>, const Arr<const Diagnostic>> resultImports = getImports(modelArena, ast.ast.imports, ast.pathAndStorageKind, &compiled);
-				return flatMapSuccess<const Module*, const Arr<const Diagnostic>>{}(
-					resultImports,
-					[&](const Arr<const Module*> imports) {
-						const Result<const Module*, const Arr<const Diagnostic>> res = check(modelArena, imports, ast.ast, ast.pathAndStorageKind, includeCheck);
-						if (res.isSuccess())
-							addToDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>(&tempArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
-						return res;
-					});
-			});
+		const Result<const Arr<const Module*>, const Arr<const Diagnostic>> modules =
+			mapOrFailReverse<const Module*, const Arr<const Diagnostic>>{}(
+				modelArena,
+				fileAsts,
+				[&](const PathAndAst ast) {
+					const Result<const Arr<const Module*>, const Arr<const Diagnostic>> resultImports =
+						getImports(modelArena, ast.ast.imports, ast.pathAndStorageKind, &compiled);
+					return flatMapSuccess<const Module*, const Arr<const Diagnostic>>{}(
+						resultImports,
+						[&](const Arr<const Module*> imports) {
+							const Result<const Module*, const Arr<const Diagnostic>> res =
+								check(modelArena, imports, ast.ast, ast.pathAndStorageKind, includeCheck);
+							if (res.isSuccess())
+								addToDict<
+									const PathAndStorageKind,
+									const Module*,
+									comparePathAndStorageKind
+								>(&tempArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
+							return res;
+						});
+				});
 
 		return mapSuccess<const Program>{}(modules, [&](const Arr<const Module*> modules) {
 			const Arr<const Module*> allModules = prepend<const Module*>(modelArena, includeCheck.module, modules);
-			const LineAndColumnGetters lc = finishDictShouldBeNoConflict<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(&lineAndColumnGetters);
+			const LineAndColumnGetters lc = finishDictShouldBeNoConflict<
+				const PathAndStorageKind,
+				const LineAndColumnGetter,
+				comparePathAndStorageKind
+			>(&lineAndColumnGetters);
 			return Program{includeCheck.module, last(modules), allModules, includeCheck.commonTypes, lc};
 		});
 	});

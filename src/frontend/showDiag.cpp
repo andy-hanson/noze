@@ -34,7 +34,12 @@ namespace {
 		writeHyperlink(writer, pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where)), pathToStr(&temp, where.path));
 		writeChar(writer, ' ');
 		writeRed(writer);
-		writeRange(writer, mustGetAt<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>(fi.lineAndColumnGetters, where), range);
+		const LineAndColumnGetter lcg = mustGetAt<
+			const PathAndStorageKind,
+			const LineAndColumnGetter,
+			comparePathAndStorageKind
+		>(fi.lineAndColumnGetters, where);
+		writeRange(writer, lcg, range);
 		writeReset(writer);
 	}
 
@@ -433,9 +438,12 @@ void printDiagnostics(const Diagnostics diagnostics) {
 	Arena tempArena {};
 	Writer writer { &tempArena };
 	//TODO: sort diagnostics by file / range
-	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(&tempArena, diagnostics.diagnostics, [&](const Diagnostic a, const Diagnostic b) {
-		return comparePathAndStorageKind(a.where, b.where);
-	});
+	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(
+		&tempArena,
+		diagnostics.diagnostics,
+		[&](const Diagnostic a, const Diagnostic b) {
+			return comparePathAndStorageKind(a.where, b.where);
+		});
 
 	for (const Arr<const Diagnostic> group : groups) {
 		if (first(group).diag.isFileDoesNotExist()) {

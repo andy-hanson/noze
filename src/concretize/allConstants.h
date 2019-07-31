@@ -36,7 +36,12 @@ const Constant* constantArr(
 	const ConcreteStruct* arrayType,
 	const ConcreteType elementType,
 	const Arr<const Constant*> elements);
-const Constant* constantPtr(Arena* arena, AllConstants* allConstants, const ConcreteType pointerType, const Constant* array, const size_t index);
+const Constant* constantPtr(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType pointerType,
+	const Constant* array,
+	const size_t index);
 const Constant* constantNull(Arena* arena, AllConstants* allConstants, const ConcreteType pointerType);
 const Constant* constantBool(Arena* arena, AllConstants* allConstants, const ConcreteType boolType, const Bool value);
 const Constant* constantVoid(Arena* arena, AllConstants* allConstants, const ConcreteType voidType);
@@ -46,4 +51,9 @@ const Constant* constantNat64(Arena* arena, AllConstants* allConstants, const Co
 const Constant* constantFunPtr(Arena* arena, AllConstants* allConstants, const ConcreteType funPtrType, const ConcreteFun* fun);
 const Constant* constantLambda(Arena* arena, AllConstants* allConstants, const KnownLambdaBody* klb);
 const Constant* constantRecord(Arena* arena, AllConstants* allConstants, const ConcreteType recordType, const Arr<const Constant*> args);
-const Constant* constantUnion(Arena* arena, AllConstants* allConstants, const ConcreteType unionType, const size_t memberIndex, const Constant* member);
+const Constant* constantUnion(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType unionType,
+	const size_t memberIndex,
+	const Constant* member);

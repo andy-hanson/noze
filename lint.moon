@@ -17,7 +17,7 @@ n_tabs = (line) ->
 line_len = (line) ->
 	n_tabs(line) * (TAB_SIZE - 1) + line\len()
 
-MAX_LINE_LENGTH = 180
+MAX_LINE_LENGTH = 140
 
 lint_line_length = (path) ->
 	file = io.open path

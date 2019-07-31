@@ -36,30 +36,41 @@ namespace {
 			return ConstantOrExpr{e};
 	}
 
-	const SpecializeOnArgs yesSpecialize(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> args, const Bool specializeOnAllConstants) {
+	const SpecializeOnArgs yesSpecialize(
+		ConcretizeCtx* ctx,
+		const SourceRange range,
+		const Arr<const ConstantOrExpr> args,
+		const Bool specializeOnAllConstants
+	) {
 		// TODO: helper to map to two different arrs
 		ArrBuilder<const ConstantOrExpr> nonOmittedArgs {};
-		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs = map<const ConstantOrLambdaOrVariable>{}(ctx->arena, args, [&](const ConstantOrExpr ce) {
-			return ce.match(
-				[&](const Constant* c) {
-					if (specializeOnAllConstants || c->kind.isLambda())
-						// Still specialize on lambda constants
-						return ConstantOrLambdaOrVariable{c};
-					else {
-						add<const ConstantOrExpr>(ctx->arena, &nonOmittedArgs, ConstantOrExpr{c});
-						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
-					}
-				},
-				[&](const ConcreteExpr* e) {
-					if (has(e->knownLambdaBody())) {
-						add<const ConstantOrExpr>(ctx->arena, &nonOmittedArgs, ConstantOrExpr{e});
-						return ConstantOrLambdaOrVariable{force(e->knownLambdaBody())};
-					} else {
-						add<const ConstantOrExpr>(ctx->arena, &nonOmittedArgs, makeLambdasDynamic_forExpr(ctx, range, e));
-						return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
-					}
-				});
-		});
+		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs = map<const ConstantOrLambdaOrVariable>{}(
+			ctx->arena,
+			args,
+			[&](const ConstantOrExpr ce) {
+				return ce.match(
+					[&](const Constant* c) {
+						if (specializeOnAllConstants || c->kind.isLambda())
+							// Still specialize on lambda constants
+							return ConstantOrLambdaOrVariable{c};
+						else {
+							add<const ConstantOrExpr>(ctx->arena, &nonOmittedArgs, ConstantOrExpr{c});
+							return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
+						}
+					},
+					[&](const ConcreteExpr* e) {
+						if (has(e->knownLambdaBody())) {
+							add<const ConstantOrExpr>(ctx->arena, &nonOmittedArgs, ConstantOrExpr{e});
+							return ConstantOrLambdaOrVariable{force(e->knownLambdaBody())};
+						} else {
+							add<const ConstantOrExpr>(
+								ctx->arena,
+								&nonOmittedArgs,
+								makeLambdasDynamic_forExpr(ctx, range, e));
+							return ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}};
+						}
+					});
+			});
 		return SpecializeOnArgs{specializeOnArgs, finishArr(&nonOmittedArgs)};
 	}
 
@@ -70,11 +81,20 @@ namespace {
 	}
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> args) {
+const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const Arr<const ConstantOrExpr> args
+) {
 	return yesSpecialize(ctx, range, args, /*specializeOnAllConstants*/ False);
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> args, const Bool isSummon) {
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const Arr<const ConstantOrExpr> args,
+	const Bool isSummon
+) {
 	Cell<const Bool> allConstant { True };
 	Cell<const Bool> someFun { False };
 	for (const ConstantOrExpr c : args) {
@@ -94,7 +114,12 @@ const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(ConcretizeCtx* ctx, cons
 		: dontSpecialize(ctx, range, args);
 }
 
-const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx* ctx, const SourceRange range, const FunDecl* f, const Arr<const ConstantOrExpr> args) {
+const SpecializeOnArgs getSpecializeOnArgsForFun(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const FunDecl* f,
+	const Arr<const ConstantOrExpr> args
+) {
 	// Don't specialize just because a single arg is a constant.
 	// If *every* arg is a constant, we always specialize on all args.
 	// Else, specialize if some arg has a known lambda body. (TODO: and that lambda is *only* called.)
@@ -176,7 +201,11 @@ const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
 	return finishArr(&res);
 }
 
-const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx* ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope) {
+const Arr<const ConcreteParam> concretizeParamsNoSpecialize(
+	ConcretizeCtx* ctx,
+	const Arr<const Param> params,
+	const TypeArgsScope typeArgsScope
+) {
 	return concretizeParamsAndSpecialize(ctx, params, allVariable(ctx->arena, size(params)), typeArgsScope);
 }
 
@@ -190,7 +219,11 @@ const ConstantOrExpr makeLambdasDynamic(ConcretizeCtx* ctx, const SourceRange ra
 		});
 }
 
-const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> exprs) {
+const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const Arr<const ConstantOrExpr> exprs
+) {
 	return map<const ConstantOrExpr>{}(ctx->arena, exprs, [&](const ConstantOrExpr expr) {
 		return makeLambdasDynamic(ctx, range, expr);
 	});

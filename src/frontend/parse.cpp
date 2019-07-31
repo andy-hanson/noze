@@ -164,18 +164,25 @@ namespace {
 				case shortSymAlphaLiteralValue("by-val"):
 					if (!cellGet(&isFirstLine))
 						todo<void>("by-val on later line");
-					cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
+					cellSet<const Opt<const ExplicitByValOrRef>>(
+						&explicitByValOrRef,
+						some<const ExplicitByValOrRef>(ExplicitByValOrRef::byVal));
 					break;
 				case shortSymAlphaLiteralValue("by-ref"):
 					if (!cellGet(&isFirstLine))
 						todo<void>("by-ref on later line");
-					cellSet<const Opt<const ExplicitByValOrRef>>(&explicitByValOrRef, some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
+					cellSet<const Opt<const ExplicitByValOrRef>>(
+						&explicitByValOrRef,
+						some<const ExplicitByValOrRef>(ExplicitByValOrRef::byRef));
 					break;
 				default: {
 					take(lexer, ' ');
 					const Bool isMutable = tryTake(lexer, "mut ");
 					const TypeAst type = parseType(lexer);
-					add<const StructDeclAst::Body::Record::Field>(lexer->arena, &res, StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
+					add<const StructDeclAst::Body::Record::Field>(
+						lexer->arena,
+						&res,
+						StructDeclAst::Body::Record::Field{range(lexer, start), isMutable, name, type});
 				}
 			}
 			cellSet<const Bool>(&isFirstLine, False);
@@ -326,7 +333,10 @@ namespace {
 					todo<void>("alias shouldn't have purity");
 				const TypeAst::InstStruct target = parseStructType(lexer);
 				takeDedent(lexer);
-				add<const StructAliasAst>(lexer->arena, structAliases, StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
+				add<const StructAliasAst>(
+					lexer->arena,
+					structAliases,
+					StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
 			} else if (kw == NonFunKeyword::spec) {
 				if (!tookIndent)
 					todo<void>("always indent spec");
@@ -360,7 +370,10 @@ namespace {
 							return unreachable<const Body>();
 					}
 				}();
-				add<const StructDeclAst>(lexer->arena, structs, StructDeclAst{range(lexer, start), isPublic, name, typeParams, purity, body});
+				add<const StructDeclAst>(
+					lexer->arena,
+					structs,
+					StructDeclAst{range(lexer, start), isPublic, name, typeParams, purity, body});
 			}
 		} else
 			add<const FunDeclAst>(lexer->arena, funs, parseFun(lexer, isPublic, start, name, typeParams));

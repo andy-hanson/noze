@@ -21,9 +21,20 @@ struct SpecializeOnArgs {
 		assert(nNotSpecialized == size(nonOmittedArgs));
 	}
 };
-const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> args);
-const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> args, const Bool isSummon);
-const SpecializeOnArgs getSpecializeOnArgsForFun(ConcretizeCtx* ctx, const SourceRange range, const FunDecl* f, const Arr<const ConstantOrExpr> args);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaClosure(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const Arr<const ConstantOrExpr> args);
+const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const Arr<const ConstantOrExpr> args,
+	const Bool isSummon);
+const SpecializeOnArgs getSpecializeOnArgsForFun(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const FunDecl* f,
+	const Arr<const ConstantOrExpr> args);
 
 const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 	ConcretizeCtx* ctx,
@@ -37,7 +48,10 @@ const Arr<const ConcreteParam> concretizeParamsAndSpecialize(
 	const Arr<const Param> params,
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs,
 	const TypeArgsScope typeArgsScope);
-const Arr<const ConcreteParam> concretizeParamsNoSpecialize(ConcretizeCtx* ctx, const Arr<const Param> params, const TypeArgsScope typeArgsScope);
+const Arr<const ConcreteParam> concretizeParamsNoSpecialize(
+	ConcretizeCtx* ctx,
+	const Arr<const Param> params,
+	const TypeArgsScope typeArgsScope);
 
 // This is for instantiating a KnownLambdaBody.
 const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
@@ -46,7 +60,10 @@ const Arr<const ConcreteParam> specializeParamsForLambdaInstance(
 	const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs);
 
 const ConstantOrExpr makeLambdasDynamic(ConcretizeCtx* ctx, const SourceRange range, const ConstantOrExpr expr);
-const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> expr);
+const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(
+	ConcretizeCtx* ctx,
+	const SourceRange range,
+	const Arr<const ConstantOrExpr> expr);
 
 inline const Bool shouldAllocateClosureForDynamicLambda(const ConcreteType closureType) {
 	// TODO:PERF we could avoid the pointer for closures that don't exceed pointer size.

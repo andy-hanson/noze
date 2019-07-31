@@ -90,7 +90,11 @@ namespace {
 		return max<const size_t>(s, 1);
 	}
 
-	const Bool getDefaultIsPointerForFields(const Opt<const ForcedByValOrRef> forcedByValOrRef, const size_t sizeBytes, const Bool isSelfMutable) {
+	const Bool getDefaultIsPointerForFields(
+		const Opt<const ForcedByValOrRef> forcedByValOrRef,
+		const size_t sizeBytes,
+		const Bool isSelfMutable
+	) {
 		if (has(forcedByValOrRef))
 			switch (force(forcedByValOrRef)) {
 				case ForcedByValOrRef::byVal:
@@ -105,7 +109,10 @@ namespace {
 			return _or(isSelfMutable, gt(sizeBytes, sizeof(void*) * 2));
 	}
 
-	const ConcreteStructInfo getConcreteStructInfoForFields(const Opt<const ForcedByValOrRef> forcedByValOrRef, const Arr<const ConcreteField> fields) {
+	const ConcreteStructInfo getConcreteStructInfoForFields(
+		const Opt<const ForcedByValOrRef> forcedByValOrRef,
+		const Arr<const ConcreteField> fields
+	) {
 		const size_t sizeBytes = sizeFromConcreteFields(fields);
 		const Bool isSelfMutable = /*isSelfMutable*/ exists(fields, [](const ConcreteField fld) {
 			return fld.isMutable;
@@ -266,7 +273,11 @@ namespace {
 
 			lateSet<const ConcreteFunBody>(&cf->_body, ConcreteFunBody{ConcreteFunBody::Bogus{}});
 
-			const ConcreteFunSource source = mustDelete<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(&ctx->concreteFunToSource, cf);
+			const ConcreteFunSource source = mustDelete<
+				const ConcreteFun*,
+				const ConcreteFunSource,
+				comparePtr<const ConcreteFun>
+			>(&ctx->concreteFunToSource, cf);
 			const ConcreteFunBody body = source.body.match(
 				[&](const FunBody::Builtin) {
 					return getBuiltinFunBody(ctx, source, cf);
@@ -460,13 +471,21 @@ const ConcreteType getConcreteType_forStructInst(ConcretizeCtx* ctx, const Struc
 		const ConcreteStructKey key = ConcreteStructKey{i->decl, typeArgs};
 		Cell<const Bool> didAdd { False };
 		// Note: we can't do anything in this callback that would call getOrAddConcreteStruct again.
-		ConcreteStruct* res = getOrAdd<const ConcreteStructKey, ConcreteStruct*, compareConcreteStructKey>{}(ctx->arena, &ctx->allConcreteStructs, key, [&]() {
-			cellSet<const Bool>(&didAdd, True);
-			return nu<ConcreteStruct>{}(
-				ctx->arena,
-				getConcreteStructMangledName(ctx->arena, i->decl->name, key.typeArgs),
-				getSpecialStructKind(i, ctx->commonTypes));
-		});
+		ConcreteStruct* res = getOrAdd<
+			const ConcreteStructKey,
+			ConcreteStruct*,
+			compareConcreteStructKey
+		>{}(
+			ctx->arena,
+			&ctx->allConcreteStructs,
+			key,
+			[&]() {
+				cellSet<const Bool>(&didAdd, True);
+				return nu<ConcreteStruct>{}(
+					ctx->arena,
+					getConcreteStructMangledName(ctx->arena, i->decl->name, key.typeArgs),
+					getSpecialStructKind(i, ctx->commonTypes));
+			});
 		if (cellGet(&didAdd))
 			initializeConcreteStruct(ctx, typeArgs, i, res, typeArgsScope);
 		return ConcreteType::fromStruct(res);
@@ -496,7 +515,12 @@ const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx* ctx, const Arr
 }
 
 namespace {
-	const Opt<const ConcreteType> concreteTypeFromFieldsCommon(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName, const Bool neverPointer) {
+	const Opt<const ConcreteType> concreteTypeFromFieldsCommon(
+		Arena* arena,
+		const Arr<const ConcreteField> fields,
+		const Str mangledName,
+		const Bool neverPointer
+	) {
 		if (isEmpty(fields))
 			return none<const ConcreteType>();
 		else {
@@ -515,7 +539,11 @@ const Opt<const ConcreteType> concreteTypeFromFields(Arena* arena, const Arr<con
 	return concreteTypeFromFieldsCommon(arena, fields, mangledName, False);
 }
 
-const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName) {
+const Opt<const ConcreteType> concreteTypeFromFields_neverPointer(
+	Arena* arena,
+	const Arr<const ConcreteField> fields,
+	const Str mangledName
+) {
 	return concreteTypeFromFieldsCommon(arena, fields, mangledName, True);
 }
 

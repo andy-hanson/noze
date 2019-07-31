@@ -36,7 +36,10 @@ namespace {
 	}
 
 	const Bool isNameContinue(const char c) {
-		return _or3(isLowerCaseLetter(c), c == '-', isDigit(c));
+		return _or3(
+			isLowerCaseLetter(c),
+			c == '-',
+			isDigit(c));
 	}
 
 	uint takeTabs(Lexer* lexer) {

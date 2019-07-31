@@ -299,14 +299,25 @@ namespace {
 		return nu<const ConcreteExpr>{}(arena, type, SourceRange::empty(), none<const KnownLambdaBody*>(), value);
 	}
 
-	const ConcreteExpr* makeLess(Arena* arena, const ConcreteType boolType, const ConcreteExpr* l, const ConcreteExpr* r) {
+	const ConcreteExpr* makeLess(
+		Arena* arena,
+		const ConcreteType boolType,
+		const ConcreteExpr* l,
+		const ConcreteExpr* r
+	) {
 		return genExpr(arena, boolType, ConcreteExpr::SpecialBinary{
 			ConcreteExpr::SpecialBinary::Kind::less,
 			ConstantOrExpr{l},
 			ConstantOrExpr{r}});
 	}
 
-	const ConcreteExpr* makeCond(Arena* arena, const ConcreteType type, const ConcreteExpr* cond, const ConcreteExpr* then, const ConcreteExpr* elze) {
+	const ConcreteExpr* makeCond(
+		Arena* arena,
+		const ConcreteType type,
+		const ConcreteExpr* cond,
+		const ConcreteExpr* then,
+		const ConcreteExpr* elze
+	) {
 		return genExpr(arena, type, ConcreteExpr::Cond{cond, ConstantOrExpr{then}, ConstantOrExpr{elze}});
 	}
 
@@ -433,13 +444,28 @@ namespace {
 					// switch (a.x <=> b.x) { case less: || a.y <=> b.y
 					// `||` will short-circuit on any non-zero value.
 					// Using special operators `compare` and `orcmp`
-					const ConcreteExpr* ax = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{aIsPointer, ConstantOrExpr(a), field});
-					const ConcreteExpr* bx = genExpr(arena, field->type, ConcreteExpr::StructFieldAccess{bIsPointer, ConstantOrExpr(b), field});
-					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(arena, { ConstantOrExpr{ax}, ConstantOrExpr{bx} });
-					const ConcreteExpr* compareThisField = genExpr(arena, types.comparison, ConcreteExpr::Call{getCompareFor(field->type), args});
+					const ConcreteExpr* ax = genExpr(
+						arena,
+						field->type,
+						ConcreteExpr::StructFieldAccess{aIsPointer, ConstantOrExpr(a), field});
+					const ConcreteExpr* bx = genExpr(
+						arena,
+						field->type,
+						ConcreteExpr::StructFieldAccess{bIsPointer, ConstantOrExpr(b), field});
+					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(
+						arena,
+						{ ConstantOrExpr{ax}, ConstantOrExpr{bx} });
+					const ConcreteExpr* compareThisField = genExpr(
+						arena,
+						types.comparison,
+						ConcreteExpr::Call{getCompareFor(field->type), args});
 					const ConcreteExpr* newAccum = has(cellGet(&accum))
 						? [&]() {
-							const LocalAndExpr le = combineCompares(arena, force(cellGet(&accum)), compareThisField, types.comparison);
+							const LocalAndExpr le = combineCompares(
+								arena,
+								force(cellGet(&accum)),
+								compareThisField,
+								types.comparison);
 							add(arena, &locals, le.local);
 							return le.expr;
 						}()

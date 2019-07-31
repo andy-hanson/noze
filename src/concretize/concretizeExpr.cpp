@@ -61,9 +61,12 @@ namespace {
 	const ConcreteFunInst getConcreteFunInstFromCalled(ConcretizeExprCtx* ctx, const Called called) {
 		return called.match(
 			[&](const FunInst* funInst) {
-				const Arr<const ConcreteFunInst> specImpls = map<const ConcreteFunInst>{}(getArena(ctx), funInst->specImpls, [&](const Called calledSpecImpl) {
-					return getConcreteFunInstFromCalled(ctx, calledSpecImpl);
-				});
+				const Arr<const ConcreteFunInst> specImpls = map<const ConcreteFunInst>{}(
+					getArena(ctx),
+					funInst->specImpls,
+					[&](const Called calledSpecImpl) {
+						return getConcreteFunInstFromCalled(ctx, calledSpecImpl);
+					});
 				return ConcreteFunInst{
 					funInst->decl,
 					ctx->typesToConcreteTypes(funInst->typeArgs),
@@ -160,7 +163,11 @@ namespace {
 		Arena* arena = getArena(ctx);
 		const ConcreteType type = ctx->getConcreteType_forStructInst(e.structInst);
 		auto nonConstant = [&](const Arr<const ConstantOrExpr> nonConstantArgs) -> const ConstantOrExpr {
-			const ConstantOrExpr value = nuExpr(arena, type.byVal(), range, ConcreteExpr::CreateRecord{makeLambdasDynamic_arr(ctx->concretizeCtx, range, nonConstantArgs)});
+			const ConstantOrExpr value = nuExpr(
+				arena,
+				type.byVal(),
+				range,
+				ConcreteExpr::CreateRecord{makeLambdasDynamic_arr(ctx->concretizeCtx, range, nonConstantArgs)});
 			return type.isPointer
 				? nuExpr(
 					arena,
@@ -325,7 +332,11 @@ namespace {
 	}
 
 	const ConcreteLocal* getMatchedLocal(ConcretizeExprCtx* ctx, const ConcreteStruct* matchedUnion) {
-		return makeLocalWorker(ctx, shortSymAlphaLiteral("matched"), ConcreteType::value(matchedUnion), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+		return makeLocalWorker(
+			ctx,
+			shortSymAlphaLiteral("matched"),
+			ConcreteType::value(matchedUnion),
+			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 	}
 
 	const ConstantOrExpr concretizeWithLocal(ConcretizeExprCtx* ctx, const Local* modelLocal, const ConcreteLocal* concreteLocal, const Expr expr) {
@@ -346,7 +357,12 @@ namespace {
 				return then;
 			},
 			[&](const ConcreteExpr* valueExpr) {
-				return nuExpr(getArena(ctx), then.typeWithoutKnownLambdaBody(), range, getKnownLambdaBodyFromConstantOrExpr(then), ConcreteExpr::Let { local, valueExpr, then });
+				return nuExpr(
+					getArena(ctx),
+					then.typeWithoutKnownLambdaBody(),
+					range,
+					getKnownLambdaBodyFromConstantOrExpr(then),
+					ConcreteExpr::Let{local, valueExpr, then});
 			});
 	}
 
@@ -369,9 +385,15 @@ namespace {
 			[&](const ConcreteExpr* matchedExpr) {
 				const Arr<const ConcreteExpr::Match::Case> cases = map<const ConcreteExpr::Match::Case>{}(arena, e.cases, [&](const Expr::Match::Case kase) {
 					if (has(kase.local)) {
-						const ConcreteLocal* local = concretizeLocal(ctx, force(kase.local), ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+						const ConcreteLocal* local = concretizeLocal(
+							ctx,
+							force(kase.local),
+							ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 						// Since there are many cases, no one KnownLambdaBody can win
-						const ConstantOrExpr then = makeLambdasDynamic(ctx->concretizeCtx, range, concretizeWithLocal(ctx, force(kase.local), local, *kase.then));
+						const ConstantOrExpr then = makeLambdasDynamic(
+							ctx->concretizeCtx,
+							range,
+							concretizeWithLocal(ctx, force(kase.local), local, *kase.then));
 						return ConcreteExpr::Match::Case{some<const ConcreteLocal*>(local), then};
 					} else
 						return ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), concretizeExpr(ctx, *kase.then)};
@@ -625,7 +647,12 @@ namespace {
 						return then;
 					},
 					[&](const ConcreteExpr* e) {
-						return nuExpr(arena, then.typeWithoutKnownLambdaBody(), range, getKnownLambdaBodyFromConstantOrExpr(then), ConcreteExpr::Seq{e, then});
+						return nuExpr(
+							arena,
+							then.typeWithoutKnownLambdaBody(),
+							range,
+							getKnownLambdaBodyFromConstantOrExpr(then),
+							ConcreteExpr::Seq{e, then});
 					});
 			},
 			[&](const Expr::StringLiteral e) {

@@ -115,9 +115,12 @@ namespace {
 	}
 
 	const Arr<const TypeParam> checkTypeParams(CheckCtx* ctx, const Arr<const TypeParamAst> asts) {
-		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(ctx->arena, asts, [&](const TypeParamAst& ast, const size_t i) {
-			return TypeParam{ast.range, ast.name, i};
-		});
+		const Arr<const TypeParam> typeParams = mapWithIndex<const TypeParam>{}(
+			ctx->arena,
+			asts,
+			[&](const TypeParamAst& ast, const size_t i) {
+				return TypeParam{ast.range, ast.name, i};
+			});
 		for (const size_t i : Range{size(typeParams)})
 			for (const size_t prev_i : Range{i})
 				if (symEq(at(typeParams, prev_i).name, at(typeParams, i).name))
@@ -311,7 +314,12 @@ namespace {
 			ctx->arena,
 			r.fields,
 			[&](const StructDeclAst::Body::Record::Field field, const size_t index) {
-				const Type fieldType = typeFromAst(ctx, field.type, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, some<MutArr<StructInst*>*>(delayStructInsts));
+				const Type fieldType = typeFromAst(
+					ctx,
+					field.type,
+					structsAndAliasesMap,
+					TypeParamsScope{strukt->typeParams},
+					some<MutArr<StructInst*>*>(delayStructInsts));
 				if (isPurityWorse(fieldType.purity(), strukt->purity) && !strukt->forceSendable)
 					addDiag(ctx, field.range, Diag{Diag::PurityOfFieldWorseThanRecord{strukt, fieldType}});
 				if (field.isMutable && strukt->purity != Purity::mut && !strukt->forceSendable)
@@ -343,17 +351,32 @@ namespace {
 					return checkRecord(ctx, structsAndAliasesMap, strukt, r, delayStructInsts);
 				},
 				[&](const StructDeclAst::Body::Union un) {
-					const Opt<const Arr<const StructInst*>> members = mapOrNone<const StructInst*>{}(ctx->arena, un.members, [&](const TypeAst::InstStruct it) {
-						const Opt<const StructInst*> res = instStructFromAst(ctx, it, structsAndAliasesMap, TypeParamsScope{strukt->typeParams}, delay);
-						if (has(res) && isPurityWorse(force(res)->purity, strukt->purity))
-							addDiag(ctx, it.range, Diag{Diag::PurityOfMemberWorseThanUnion{strukt, force(res)}});
-						return res;
-					});
-					if (has(members)) {
-						everyPairWithIndex(force(members), [&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
-							if (ptrEquals(a->decl, b->decl))
-								addDiag(ctx, at(un.members, bIndex).range, Diag{Diag::DuplicateDeclaration{Diag::DuplicateDeclaration::Kind::unionMember, a->decl->name}});
+					const Opt<const Arr<const StructInst*>> members = mapOrNone<const StructInst*>{}(
+						ctx->arena,
+						un.members,
+						[&](const TypeAst::InstStruct it) {
+							const Opt<const StructInst*> res = instStructFromAst(
+								ctx,
+								it,
+								structsAndAliasesMap,
+								TypeParamsScope{strukt->typeParams},
+								delay);
+							if (has(res) && isPurityWorse(force(res)->purity, strukt->purity))
+								addDiag(ctx, it.range, Diag{Diag::PurityOfMemberWorseThanUnion{strukt, force(res)}});
+							return res;
 						});
+					if (has(members)) {
+						everyPairWithIndex(
+							force(members),
+							[&](const StructInst* a, const StructInst* b, const size_t, const size_t bIndex) {
+								if (ptrEquals(a->decl, b->decl))
+									addDiag(
+										ctx,
+										at(un.members, bIndex).range,
+										Diag{Diag::DuplicateDeclaration{
+											Diag::DuplicateDeclaration::Kind::unionMember,
+											a->decl->name}});
+							});
 						return StructBody{StructBody::Union{force(members)}};
 					} else
 						return StructBody{StructBody::Bogus{}};

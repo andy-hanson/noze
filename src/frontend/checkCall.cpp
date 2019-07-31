@@ -50,16 +50,25 @@ namespace {
 		}
 	};
 
-	MutArr<Candidate> getInitialCandidates(ExprCtx* ctx, const Sym funName, const Arr<const Type> explicitTypeArgs, const size_t actualArity) {
+	MutArr<Candidate> getInitialCandidates(
+		ExprCtx* ctx,
+		const Sym funName,
+		const Arr<const Type> explicitTypeArgs,
+		const size_t actualArity
+	) {
 		MutArr<Candidate> res {};
 		eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 			const size_t nTypeParams = size(called.typeParams());
 			if (arity(called) == actualArity &&
 				(isEmpty(explicitTypeArgs) || nTypeParams == size(explicitTypeArgs))) {
-				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(ctx->arena(), nTypeParams, [&](const size_t i) {
-					// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
-					return SingleInferringType{isEmpty(explicitTypeArgs) ? none<const Type>() : some<const Type>(at(explicitTypeArgs, i))};
-				});
+				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(
+					ctx->arena(),
+					nTypeParams, [&](const size_t i) {
+						// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
+						return SingleInferringType{isEmpty(explicitTypeArgs)
+							? none<const Type>()
+							: some<const Type>(at(explicitTypeArgs, i))};
+					});
 				push(ctx->arena(), &res, Candidate{called, inferringTypeArgs});
 			}
 		});
@@ -74,13 +83,18 @@ namespace {
 		return finishArr(&res);
 	}
 
-	const Type getCandidateExpectedParameterTypeRecur(Arena* arena, const Candidate* candidate, const Type candidateParamType) {
+	const Type getCandidateExpectedParameterTypeRecur(
+		Arena* arena,
+		const Candidate* candidate,
+		const Type candidateParamType
+	) {
 		return candidateParamType.match(
 			[](const Type::Bogus) {
 				return Type{Type::Bogus{}};
 			},
 			[&](const TypeParam* p) {
-				const Opt<SingleInferringType*> sit = tryGetTypeArg(InferringTypeArgs{candidate->called.typeParams(), candidate->typeArgs}, p);
+				const Opt<SingleInferringType*> sit = tryGetTypeArg(
+					InferringTypeArgs{candidate->called.typeParams(), candidate->typeArgs}, p);
 				const Opt<const Type> inferred = has(sit) ? force(sit)->tryGetInferred() : none<const Type>();
 				return has(inferred) ? force(inferred) : Type{p};
 			},
@@ -102,7 +116,11 @@ namespace {
 		const Bool isExpectedFromCandidate;
 	};
 
-	CommonOverloadExpected getCommonOverloadParamExpected(Arena* arena, const Arr<Candidate> candidates, const size_t argIdx) {
+	CommonOverloadExpected getCommonOverloadParamExpected(
+		Arena* arena,
+		const Arr<Candidate> candidates,
+		const size_t argIdx
+	) {
 		switch (size(candidates)) {
 			case 0:
 				return CommonOverloadExpected{Expected::infer(), False};
@@ -133,11 +151,19 @@ namespace {
 	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx* ctx, const Sym funName, const Expr arg) {
 		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx->arena(), ctx->commonTypes), funName);
 		return has(field)
-			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{ctx->alloc(arg), force(field).structInst, force(field).field})
+			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{
+				ctx->alloc(arg),
+				force(field).structInst,
+				force(field).field})
 			: none<const Expr::StructFieldAccess>();
 	}
 
-	void checkCallFlags(CheckCtx* ctx, const SourceRange range, const FunFlags calledFlags, const FunFlags callerFlags) {
+	void checkCallFlags(
+		CheckCtx* ctx,
+		const SourceRange range,
+		const FunFlags calledFlags,
+		const FunFlags callerFlags
+	) {
 		if (!calledFlags.noCtx && callerFlags.noCtx)
 			addDiag(ctx, range, Diag{Diag::CantCallNonNoCtx{}});
 		if (calledFlags.summon && !callerFlags.summon)
@@ -183,7 +209,11 @@ namespace {
 		});
 	}
 
-	const Opt<const Called> getCalledFromCandidate(ExprCtx* ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs);
+	const Opt<const Called> getCalledFromCandidate(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const Candidate candidate,
+		const bool allowSpecs);
 
 	const Opt<const Called> findSpecSigImplementation(ExprCtx* ctx, const SourceRange range, const Sig specSig) {
 		MutArr<Candidate> candidates = getInitialCandidates(ctx, specSig.name, emptyArr<const Type>(), arity(specSig));
@@ -226,7 +256,10 @@ namespace {
 			for (const SpecInst* specInst : called->specs) {
 				// Note: specInst was instantiated potentialyl based on f's params.
 				// Meed to instantiate it again.
-				const SpecInst* specInstInstantiated = instantiateSpecInst(ctx->arena(), specInst, TypeParamsAndArgs{called->typeParams, typeArgs});
+				const SpecInst* specInstInstantiated = instantiateSpecInst(
+					ctx->arena(),
+					specInst,
+					TypeParamsAndArgs{called->typeParams, typeArgs});
 				for (const Sig sig : specInstInstantiated->sigs) {
 					const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
 					if (!has(impl))
@@ -240,7 +273,11 @@ namespace {
 		}
 	}
 
-	const Opt<const Arr<const Type>> finishCandidateTypeArgs(ExprCtx* ctx, const SourceRange range, const Candidate candidate) {
+	const Opt<const Arr<const Type>> finishCandidateTypeArgs(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const Candidate candidate
+	) {
 		const Opt<const Arr<const Type>> res = mapPtrsOrNone<const Type>{}(
 			ctx->arena(),
 			candidate.typeArgs,
@@ -252,7 +289,12 @@ namespace {
 		return res;
 	}
 
-	const Opt<const Called> getCalledFromCandidate(ExprCtx* ctx, const SourceRange range, const Candidate candidate, const bool allowSpecs) {
+	const Opt<const Called> getCalledFromCandidate(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const Candidate candidate,
+		const bool allowSpecs
+	) {
 		checkCalledDeclFlags(ctx, candidate.called, range);
 		const Opt<const Arr<const Type>> candidateTypeArgs = finishCandidateTypeArgs(ctx, range, candidate);
 		if (has(candidateTypeArgs)) {
@@ -346,7 +388,13 @@ const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst
 	if (!has(args) || size(candidatesArr) != 1) {
 		if (isEmpty(candidatesArr)) {
 			const Arr<const CalledDecl> allCandidates = getAllCandidatesAsCalledDecls(ctx, funName);
-			ctx->addDiag(range, Diag{Diag::CallNoMatch{funName, expectedReturnType, arity, finishArr(&actualArgTypes), allCandidates}});
+			ctx->addDiag(
+				range,
+				Diag{Diag::CallNoMatch{
+					funName,
+					expectedReturnType,
+					arity,
+					finishArr(&actualArgTypes), allCandidates}});
 		} else {
 			const Arr<const CalledDecl> matches = map<const CalledDecl>{}(
 				ctx->arena(),

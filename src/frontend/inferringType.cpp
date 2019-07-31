@@ -254,7 +254,10 @@ const CheckedExpr check(ExprCtx* ctx, Expected* expected, const Type exprType, c
 				});
 			if (has(opMemberIndex)) {
 				const size_t memberIndex = force(opMemberIndex);
-				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(ctx->arena(), at(members, memberIndex), expectedStruct);
+				const StructInst* instantiatedExpectedUnionMember = instantiateStructInst(
+					ctx->arena(),
+					at(members, memberIndex),
+					expectedStruct);
 
 				const SetTypeResult setTypeResult = setTypeNoDiagnosticWorker_forStructInst(
 					ctx->arena(),
@@ -324,7 +327,13 @@ const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Expect
 	return tryGetDeeplyInstantiatedTypeWorker(arena, t, expected->inferringTypeArgs);
 }
 
-const Bool matchTypesNoDiagnostic(Arena* arena, const Type expectedType, const Type setType, const InferringTypeArgs inferringTypeArgs, const Bool allowConvertToUnion) {
+const Bool matchTypesNoDiagnostic(
+	Arena* arena,
+	const Type expectedType,
+	const Type setType,
+	const InferringTypeArgs inferringTypeArgs,
+	const Bool allowConvertToUnion
+) {
 	return setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType, setType, inferringTypeArgs, allowConvertToUnion).match(
 		[](const SetTypeResult::Set) {
 			return True;

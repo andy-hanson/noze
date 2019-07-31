@@ -21,7 +21,9 @@ namespace {
 	}
 
 	const FunDecl* getMainFun(const Program program) {
-		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.mainModule->funsMap, shortSymAlphaLiteral("main"));
+		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(
+			program.mainModule->funsMap,
+			shortSymAlphaLiteral("main"));
 		if (size(mainFuns) != 1)
 			todo<void>("wrong number main funs");
 		const FunDecl* mainFun = only(mainFuns);
@@ -30,7 +32,11 @@ namespace {
 	}
 
 	const FunDecl* getAllocFun(const Program program) {
-		const Arr<const FunDecl*> allocFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
+		const Arr<const FunDecl*> allocFuns = multiDictGetAt<
+			const Sym,
+			const FunDecl*,
+			compareSym
+		>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
 		if (size(allocFuns) != 1)
 			todo<void>("wrong number allocate-bytes funs");
 		const FunDecl* allocFun = only(allocFuns);

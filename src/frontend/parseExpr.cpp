@@ -92,7 +92,12 @@ namespace {
 		}
 	}
 
-	const ExprAndMaybeDedent parseCallsAndStructFieldSets(Lexer* lexer, const Pos start, const ExprAndMaybeDedent ed, const Bool allowBlock) {
+	const ExprAndMaybeDedent parseCallsAndStructFieldSets(
+		Lexer* lexer,
+		const Pos start,
+		const ExprAndMaybeDedent ed,
+		const Bool allowBlock
+	) {
 		if (has(ed.dedents))
 			return ed;
 		else if (tryTake(lexer, " := ")) {
@@ -209,7 +214,10 @@ namespace {
 						return some<const Sym>(localName);
 					}();
 				const ExprAndDedent ed = parseStatementsAndDedent(lexer);
-				add<const MatchAst::CaseAst>(lexer->arena, &cases, MatchAst::CaseAst{range(lexer, startCase), structName, localName, alloc(lexer, ed.expr)});
+				add<const MatchAst::CaseAst>(
+					lexer->arena,
+					&cases,
+					MatchAst::CaseAst{range(lexer, startCase), structName, localName, alloc(lexer, ed.expr)});
 				if (ed.dedents != 0)
 					return ed.dedents - 1;
 			}
@@ -285,7 +293,10 @@ namespace {
 				}();
 				takeIndent(lexer);
 				const ExprAndDedent bodyAndDedent = parseStatementsAndDedent(lexer);
-				add<const NewActorAst::MessageImpl>(lexer->arena, &messages, NewActorAst::MessageImpl{messageName, paramNames, alloc(lexer, bodyAndDedent.expr)});
+				add<const NewActorAst::MessageImpl>(
+					lexer->arena,
+					&messages,
+					NewActorAst::MessageImpl{messageName, paramNames, alloc(lexer, bodyAndDedent.expr)});
 				if (bodyAndDedent.dedents != 0)
 					return bodyAndDedent.dedents - 1;
 			}

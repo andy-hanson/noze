@@ -48,7 +48,12 @@ const FunInst* instantiateFun(Arena* arena, const FunDecl* decl, const Arr<const
 		if (eachCorresponds(fi->typeArgs, typeArgs, typeEquals) && eachCorresponds(fi->specImpls, specImpls, calledEquals))
 			return fi;
 
-	const FunInst* res = nu<const FunInst>{}(arena, decl, typeArgs, specImpls, instantiateSig(arena, decl->sig, TypeParamsAndArgs{decl->typeParams, typeArgs}));
+	const FunInst* res = nu<const FunInst>{}(
+		arena,
+		decl,
+		typeArgs,
+		specImpls,
+		instantiateSig(arena, decl->sig, TypeParamsAndArgs{decl->typeParams, typeArgs}));
 	push<const FunInst*>(arena, &decl->insts, res);
 	return res;
 }
