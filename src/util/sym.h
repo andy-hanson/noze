@@ -2,6 +2,7 @@
 
 #include "./bitUtils.h"
 #include "./mutDict.h"
+#include "./mutSet.h"
 #include "./str.h"
 #include "./writer.h"
 
@@ -242,4 +243,14 @@ inline void eachCharInSym(const Sym a, Cb cb) {
 	else
 		for (const char c : symImpl::asLong(a))
 			cb(c);
+}
+
+using MutSymSet = MutSet<const Sym, compareSym>;
+
+inline bool mutSymSetHas(const MutSymSet* set, const Sym sym) {
+	return mutSetHas<const Sym, compareSym>(set, sym);
+}
+
+inline void addToMutSymSetOkIfPresent(Arena* arena, MutSymSet* set, const Sym sym) {
+	addToMutSetOkIfPresent<const Sym, compareSym>(arena, set, sym);
 }

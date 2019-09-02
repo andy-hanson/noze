@@ -8,10 +8,10 @@ namespace {
 	const Opt<const T*> findInEither(const Arr<T> a, const Arr<T> b, Cb cb) {
 		for (const size_t i : Range{a.size})
 			if (cb(at(a, i)))
-				return some<const T*>(getPtr(a, i));
+				return some<const T*>(ptrAt(a, i));
 		for (const size_t i : Range{b.size})
 			if (cb(at(b, i)))
-				return some<const T*>(getPtr(b, i));
+				return some<const T*>(ptrAt(b, i));
 		return none<const T*>();
 	}
 
@@ -105,7 +105,8 @@ const Type typeFromAst(
 			}
 		},
 		[&](const TypeAst::InstStruct iAst) {
-			const Opt<const StructInst*> i = instStructFromAst(ctx, iAst, structsAndAliasesMap, typeParamsScope, delayStructInsts);
+			const Opt<const StructInst*> i =
+				instStructFromAst(ctx, iAst, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 			return has(i) ? Type{force(i)} : Type{Type::Bogus{}};
 		});
 }
@@ -138,7 +139,8 @@ const Bool typeIsPossiblySendable(const Type type) {
 			return True;
 		},
 		[](const TypeParam*) {
-			// type param *might* have a sendable type arg. Issue errors when instantiating a template iface, not declaring it.
+			// type param *might* have a sendable type arg.
+			// Issue errors when instantiating a template iface, not declaring it.
 			return True;
 		},
 		[](const StructInst* i) {

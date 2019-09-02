@@ -383,8 +383,8 @@ namespace {
 		const ConcreteExpr* greaterExpr = getExpr(2, types.greater);
 
 		assert(fun->arityExcludingCtxAndClosure() == 2);
-		const ConcreteParam* aParam = getPtr(fun->paramsExcludingCtxAndClosure(), 0);
-		const ConcreteParam* bParam = getPtr(fun->paramsExcludingCtxAndClosure(), 1);
+		const ConcreteParam* aParam = ptrAt(fun->paramsExcludingCtxAndClosure(), 0);
+		const ConcreteParam* bParam = ptrAt(fun->paramsExcludingCtxAndClosure(), 1);
 		const Bool aIsPointer = aParam->type.isPointer;
 		const Bool bIsPointer = bParam->type.isPointer;
 		const ConcreteExpr* a = genExpr(arena, types.t, ConcreteExpr::ParamRef{aParam});
@@ -414,7 +414,8 @@ namespace {
 					case BuiltinStructKind::_char:
 					case BuiltinStructKind::float64:
 					case BuiltinStructKind::int64:
-					case BuiltinStructKind::nat64: {
+					case BuiltinStructKind::nat64:
+					case BuiltinStructKind::ptr: {
 						// Output: a < b ? less : b < a ? greater : equal
 						const ConcreteExpr* aLessB = makeLess(arena, boolType, a, b);
 						const ConcreteExpr* bLessA = makeLess(arena, boolType, b, a);
@@ -424,8 +425,7 @@ namespace {
 					}
 
 					case BuiltinStructKind::funPtrN:
-					case BuiltinStructKind::ptr:
-						// should be a compile error
+						// should be a compile error? (Or just allow this?)
 						return unreachable<const ConcreteFunExprBody>();
 
 					case BuiltinStructKind::_void:
@@ -447,11 +447,11 @@ namespace {
 					const ConcreteExpr* ax = genExpr(
 						arena,
 						field->type,
-						ConcreteExpr::StructFieldAccess{aIsPointer, ConstantOrExpr(a), field});
+						ConcreteExpr::RecordFieldAccess{aIsPointer, ConstantOrExpr(a), field});
 					const ConcreteExpr* bx = genExpr(
 						arena,
 						field->type,
-						ConcreteExpr::StructFieldAccess{bIsPointer, ConstantOrExpr(b), field});
+						ConcreteExpr::RecordFieldAccess{bIsPointer, ConstantOrExpr(b), field});
 					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(
 						arena,
 						{ ConstantOrExpr{ax}, ConstantOrExpr{bx} });
@@ -490,7 +490,7 @@ const ConcreteFunBody getBuiltinFunBody(ConcretizeCtx* ctx, const ConcreteFunSou
 	if (has(allConstant)) {
 		const Opt<const Constant*> c = tryEvalBuiltinAsConst(
 			ctx->arena,
-			&ctx->allConstants,
+			ctx->allConstants,
 			info,
 			typeArgs,
 			force(allConstant),

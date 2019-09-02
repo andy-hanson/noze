@@ -154,7 +154,7 @@ namespace {
 			else if (strEqLiteral(arg0, "test"))
 				return size(args) == 1 ? Command{Command::Test{}} : Command{Command::Help{}};
 			else
-				return todo<const Command>("bad command name");
+				return Command{Command::Help{}};
 		}
 	}
 
@@ -215,7 +215,12 @@ namespace {
 				return helpRun();
 			},
 			[&](const Command::Run r) {
-				return buildAndRun(nozeDir, r.programDirAndMain.programDir, r.programDirAndMain.mainPath, r.programArgs, args.environ);
+				return buildAndRun(
+					nozeDir,
+					r.programDirAndMain.programDir,
+					r.programDirAndMain.mainPath,
+					r.programArgs,
+					args.environ);
 			},
 			[&](const Command::Test) {
 				return buildAndRun(

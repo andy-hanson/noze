@@ -56,7 +56,8 @@ namespace {
 
 	const ExpressionToken takeNumber(Lexer* lexer, const CStr begin)  {
 		while (isDigit(*lexer->ptr) || *lexer->ptr == '.') lexer->ptr++;
-		return ExpressionToken{copyStr(lexer->arena, arrOfRange(begin, lexer->ptr))};
+		const Str text = copyStr(lexer->arena, arrOfRange(begin, lexer->ptr));
+		return ExpressionToken{LiteralAst{LiteralAst::Kind::numeric, text}};
 	}
 
 	const Str takeOperatorRest(Lexer* lexer, const CStr begin)  {
@@ -164,6 +165,7 @@ namespace {
 
 	struct StrAndIsOperator {
 		const Str str;
+		const SourceRange range;
 		const Bool isOperator;
 	};
 
@@ -171,10 +173,12 @@ namespace {
 		const CStr begin = lexer->ptr;
 		if (isOperatorChar(*lexer->ptr)) {
 			lexer->ptr++;
-			return StrAndIsOperator{takeOperatorRest(lexer, begin), True};
+			const Str op = takeOperatorRest(lexer, begin);
+			return StrAndIsOperator{op, range(lexer, begin), True};
 		} else if (isLowerCaseLetter(*lexer->ptr)) {
 			lexer->ptr++;
-			return StrAndIsOperator{takeNameRest(lexer, begin), False};
+			const Str name = takeNameRest(lexer, begin);
+			return StrAndIsOperator{name, range(lexer, begin), False};
 		} else
 			return throwUnexpected<const StrAndIsOperator>(lexer);
 	}
@@ -209,11 +213,53 @@ void take(Lexer* lexer, const CStr c) {
 		throwUnexpected<void>(lexer);
 }
 
-const Sym takeName(Lexer* lexer) {
+namespace {
+	const Bool isReservedName(const Sym name) {
+		switch (name.value) {
+			case shortSymAlphaLiteralValue("alias"):
+			case shortSymAlphaLiteralValue("builtin"):
+			case shortSymAlphaLiteralValue("else"):
+			case shortSymAlphaLiteralValue("extern"):
+			case shortSymAlphaLiteralValue("iface"):
+			case shortSymAlphaLiteralValue("import"):
+			case shortSymAlphaLiteralValue("match"):
+			case shortSymAlphaLiteralValue("mut"):
+			case shortSymAlphaLiteralValue("new"):
+			case shortSymAlphaLiteralValue("new-actor"):
+			case shortSymAlphaLiteralValue("new-arr"):
+			case shortSymAlphaLiteralValue("noctx"):
+			case shortSymAlphaLiteralValue("record"):
+			case shortSymAlphaLiteralValue("sendable"):
+			case shortSymAlphaLiteralValue("spec"):
+			case shortSymAlphaLiteralValue("summon"):
+			case shortSymAlphaLiteralValue("trusted"):
+			case shortSymAlphaLiteralValue("union"):
+			case shortSymAlphaLiteralValue("unsafe"):
+			case shortSymAlphaLiteralValue("when"):
+				return True;
+			default:
+				return False;
+		}
+	}
+}
+
+const SymAndIsReserved takeNameAllowReserved(Lexer* lexer) {
 	const StrAndIsOperator s = takeNameAsTempStr(lexer);
-	return s.isOperator
-		? getSymFromOperator(lexer->allSymbols, s.str)
-		: getSymFromAlphaIdentifier(lexer->allSymbols, s.str);
+	if (s.isOperator) {
+		const Sym op = getSymFromOperator(lexer->allSymbols, s.str);
+		return SymAndIsReserved{op, s.range, symEq(op, shortSymOperatorLiteral("="))};
+	}
+	else {
+		const Sym name = getSymFromAlphaIdentifier(lexer->allSymbols, s.str);
+		return SymAndIsReserved{name, s.range, isReservedName(name)};
+	}
+}
+
+const Sym takeName(Lexer* lexer) {
+	const SymAndIsReserved s = takeNameAllowReserved(lexer);
+	return s.isReserved
+		? throwOnReservedName<const Sym>(s.range, s.sym)
+		: s.sym;
 }
 
 const Str takeNameAsStr(Lexer* lexer) {
@@ -239,7 +285,7 @@ const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 		case '\\':
 			return ExpressionToken{ExpressionToken::Kind::lambda};
 		case '"':
-			return ExpressionToken{takeStringLiteral(lexer)};
+			return ExpressionToken{LiteralAst{LiteralAst::Kind::string, takeStringLiteral(lexer)}};
 		case '+':
 		case '-':
 			return isDigit(*lexer->ptr)
@@ -251,20 +297,24 @@ const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 			else if (isLowerCaseLetter(c)) {
 				const Str nameStr = takeNameRest(lexer, begin);
 				const Sym name = getSymFromAlphaIdentifier(lexer->allSymbols, nameStr);
-				switch (name.value) {
-					case shortSymAlphaLiteralValue("match"):
-						return ExpressionToken{ExpressionToken::Kind::match};
-					case shortSymAlphaLiteralValue("new"):
-						return ExpressionToken{ExpressionToken::Kind::_new};
-					case shortSymAlphaLiteralValue("new-actor"):
-						return ExpressionToken{ExpressionToken::Kind::newActor};
-					case shortSymAlphaLiteralValue("new-arr"):
-						return ExpressionToken{ExpressionToken::Kind::newArr};
-					case shortSymAlphaLiteralValue("when"):
-						return ExpressionToken{ExpressionToken::Kind::when};
-					default:
-						return ExpressionToken{NameAndRange{range(lexer, begin), name}};
-				}
+				const SourceRange nameRange = range(lexer, begin);
+				if (isReservedName(name))
+					switch (name.value) {
+						case shortSymAlphaLiteralValue("match"):
+							return ExpressionToken{ExpressionToken::Kind::match};
+						case shortSymAlphaLiteralValue("new"):
+							return ExpressionToken{ExpressionToken::Kind::_new};
+						case shortSymAlphaLiteralValue("new-actor"):
+							return ExpressionToken{ExpressionToken::Kind::newActor};
+						case shortSymAlphaLiteralValue("new-arr"):
+							return ExpressionToken{ExpressionToken::Kind::newArr};
+						case shortSymAlphaLiteralValue("when"):
+							return ExpressionToken{ExpressionToken::Kind::when};
+						default:
+							return throwOnReservedName<const ExpressionToken>(nameRange, name);
+					}
+				else
+					return ExpressionToken{NameAndRange{nameRange, name}};
 			} else if (isDigit(c))
 				return takeNumber(lexer, begin);
 			else
@@ -322,10 +372,10 @@ NewlineOrIndent tryTakeIndentAfterNewline(Lexer* lexer) {
 }
 
 size_t takeNewlineOrDedentAmount(Lexer* lexer) {
+	// Must be at the end of a line
+	take(lexer, '\n');
 	const int i = skipLinesAndGetIndentDelta(lexer);
-	if (i > 0)
-		todo<void>("takeNewlineOrDedentAmoutn -- actually it indented");
-	return -i;
+	return i > 0 ? throwAtChar<size_t>(lexer, ParseDiag{ParseDiag::UnexpectedIndent{}}) : -i;
 }
 
 NewlineOrDedent takeNewlineOrSingleDedent(Lexer* lexer) {

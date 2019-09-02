@@ -57,7 +57,7 @@ namespace {
 	};
 
 	// When matching a type, we may fill in type parameters, so we may want to set a new more specific expected type.
-	const SetTypeResult setTypeNoDiagnosticWorkerWorkerWorker(
+	const SetTypeResult checkAssignability(
 		Arena* arena,
 		const Type a,
 		const Type b,
@@ -65,7 +65,7 @@ namespace {
 		const Bool allowConvertAToBUnion
 	);
 
-	const SetTypeResult setForStructInstsWithSameDecl(
+	const SetTypeResult checkAssignabilityForStructInstsWithSameDecl(
 		Arena* arena,
 		const StructDecl* decl,
 		const Arr<const Type> as,
@@ -81,7 +81,7 @@ namespace {
 			as,
 			bs,
 			[&](const Type a, const Type b) {
-				const SetTypeResult res = setTypeNoDiagnosticWorkerWorkerWorker(arena, a, b, aInferringTypeArgs, False);
+				const SetTypeResult res = checkAssignability(arena, a, b, aInferringTypeArgs, False);
 				return res.match(
 					[&](const SetTypeResult::Set s) {
 						cellSet<const Bool>(&someIsSet, True);
@@ -111,7 +111,7 @@ namespace {
 		// Handling a union expected type is done in Expected::check
 		// TODO: but it's done here to for case of call return type ...
 		if (ptrEquals(a->decl, b->decl))
-			return setForStructInstsWithSameDecl(arena, a->decl, a->typeArgs, b->typeArgs, aInferringTypeArgs);
+			return checkAssignabilityForStructInstsWithSameDecl(arena, a->decl, a->typeArgs, b->typeArgs, aInferringTypeArgs);
 		else {
 			const StructBody bBody = b->decl->body();
 			if (allowConvertAToBUnion && bBody.isUnion()) {
@@ -119,7 +119,7 @@ namespace {
 					return ptrEquals(i->decl, a->decl);
 				});
 				if (has(bMember))
-					return setForStructInstsWithSameDecl(
+					return checkAssignabilityForStructInstsWithSameDecl(
 						arena,
 						a->decl,
 						a->typeArgs,
@@ -132,17 +132,13 @@ namespace {
 		}
 	}
 
-	inline const Opt<SingleInferringType*> tryGetTypeArg(const InferringTypeArgs inferringTypeArgs, const TypeParam* typeParam) {
-		return ::tryGetTypeArg<SingleInferringType>(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
-	}
-
 	const Opt<const Type> tryGetDeeplyInstantiatedTypeWorker(Arena* arena, const Type t, const InferringTypeArgs inferringTypeArgs) {
 		return t.match(
 			[](const Type::Bogus) {
 				return some<const Type>(Type{Type::Bogus{}});
 			},
 			[&](const TypeParam* p) {
-				const Opt<SingleInferringType*> ta = tryGetTypeArg(inferringTypeArgs, p);
+				const Opt<SingleInferringType*> ta = tryGetTypeArgFromInferringTypeArgs(inferringTypeArgs, p);
 				// If it's not one of the inferring types, it's instantiated enough to return.
 				return has(ta) ? force(ta)->tryGetInferred() : some<const Type>(t);
 			},
@@ -156,19 +152,19 @@ namespace {
 			});
 	}
 
-	const SetTypeResult setTypeNoDiagnosticWorkerWorker(
+	const SetTypeResult checkAssignabilityOpt(
 		Arena* arena,
 		const Opt<const Type> a,
 		const Type b,
 		const InferringTypeArgs aInferringTypeArgs
 	) {
 		return has(a)
-			? setTypeNoDiagnosticWorkerWorkerWorker(arena, force(a), b, aInferringTypeArgs, False)
+			? checkAssignability(arena, force(a), b, aInferringTypeArgs, False)
 			: SetTypeResult{SetTypeResult::Set{b}};
 	}
 
 	const SetTypeResult setTypeNoDiagnosticWorker_forSingleInferringType(Arena* arena, SingleInferringType& sit, const Type setType) {
-		const SetTypeResult res = setTypeNoDiagnosticWorkerWorker(arena, cellGet(&sit.type), setType, InferringTypeArgs::none());
+		const SetTypeResult res = checkAssignabilityOpt(arena, cellGet(&sit.type), setType, InferringTypeArgs::none());
 		res.match(
 			[&](const SetTypeResult::Set s) {
 				cellSet<const Opt<const Type>>(&sit.type, some<const Type>(s.type));
@@ -182,7 +178,7 @@ namespace {
 	// We are trying to assign 'a = b'.
 	// 'a' may contain type parameters from inferringTypeArgs. We'll infer those here.
 	// If 'allowConvertAToBUnion' is set, if 'b' is a union type and 'a' is a member, we'll set it to the union.
-	const SetTypeResult setTypeNoDiagnosticWorkerWorkerWorker(
+	const SetTypeResult checkAssignability(
 		Arena* arena,
 		const Type a,
 		const Type b,
@@ -195,11 +191,12 @@ namespace {
 				return SetTypeResult{SetTypeResult::Keep{}};
 			},
 			[&](const TypeParam* pa) {
-				const Opt<SingleInferringType*> aInferring = tryGetTypeArg(aInferringTypeArgs, pa);
+				const Opt<SingleInferringType*> aInferring = tryGetTypeArgFromInferringTypeArgs(aInferringTypeArgs, pa);
 				return has(aInferring)
 					? setTypeNoDiagnosticWorker_forSingleInferringType(arena, *force(aInferring), b)
 					: b.match(
 						[](const Type::Bogus) {
+							// Bogus is assignable to anything
 							return SetTypeResult{SetTypeResult::Keep{}};
 						},
 						[&](const TypeParam* pb) {
@@ -213,28 +210,25 @@ namespace {
 						});
 			},
 			[&](const StructInst* ai) {
-				return b.isStructInst()
-					? setTypeNoDiagnosticWorker_forStructInst(arena, ai, b.asStructInst(), aInferringTypeArgs, allowConvertAToBUnion)
-					: SetTypeResult{SetTypeResult::Fail{}};
+				return b.match(
+					[](const Type::Bogus) {
+						// Bogus is assignable to anything
+						return SetTypeResult{SetTypeResult::Keep{}};
+					},
+					[](const TypeParam*) {
+						return SetTypeResult{SetTypeResult::Fail{}};
+					},
+					[&](const StructInst* bi) {
+						return setTypeNoDiagnosticWorker_forStructInst(
+							arena,
+							ai,
+							bi,
+							aInferringTypeArgs,
+							allowConvertAToBUnion);
+					});
 			});
 	}
-
 }
-
-const Bool SingleInferringType::setTypeNoDiagnostic(Arena* arena, const Type setType) {
-	return setTypeNoDiagnosticWorkerWorker(arena, cellGet(&type), setType, InferringTypeArgs::none()).match(
-		[&](const SetTypeResult::Set s) {
-			cellSet<const Opt<const Type>>(&type, some<const Type>(s.type));
-			return True;
-		},
-		[](const SetTypeResult::Keep) {
-			return True;
-		},
-		[](const SetTypeResult::Fail) {
-			return False;
-		});
-}
-
 
 const CheckedExpr check(ExprCtx* ctx, Expected* expected, const Type exprType, const Expr expr) {
 	// Allow implicitly converting to union
@@ -296,7 +290,7 @@ const CheckedExpr check(ExprCtx* ctx, Expected* expected, const Type exprType, c
 }
 
 const Bool setTypeNoDiagnostic(Arena* arena, Expected* expected, const Type setType) {
-	const SetTypeResult typeToSet = setTypeNoDiagnosticWorkerWorker(
+	const SetTypeResult typeToSet = checkAssignabilityOpt(
 		arena,
 		cellGet(&expected->type),
 		setType,
@@ -317,7 +311,7 @@ const Bool setTypeNoDiagnostic(Arena* arena, Expected* expected, const Type setT
 const Opt<const Type> shallowInstantiateType(const Expected* expected) {
 	const Opt<const Type> t = cellGet(&expected->type);
 	if (has(t) && force(t).isTypeParam()) {
-		const Opt<SingleInferringType*> typeArg = tryGetTypeArg(expected->inferringTypeArgs, force(t).asTypeParam());
+		const Opt<SingleInferringType*> typeArg = tryGetTypeArgFromInferringTypeArgs(expected->inferringTypeArgs, force(t).asTypeParam());
 		return has(typeArg) ? force(typeArg)->tryGetInferred() : none<const Type>();
 	} else
 		return t;
@@ -334,7 +328,7 @@ const Bool matchTypesNoDiagnostic(
 	const InferringTypeArgs inferringTypeArgs,
 	const Bool allowConvertToUnion
 ) {
-	return setTypeNoDiagnosticWorkerWorkerWorker(arena, expectedType, setType, inferringTypeArgs, allowConvertToUnion).match(
+	return checkAssignability(arena, expectedType, setType, inferringTypeArgs, allowConvertToUnion).match(
 		[](const SetTypeResult::Set) {
 			return True;
 		},
@@ -346,7 +340,7 @@ const Bool matchTypesNoDiagnostic(
 		});
 }
 
-const Opt<const StructAndField> tryGetStructField(const Type targetType, const Sym fieldName) {
+const Opt<const StructAndField> tryGetRecordField(const Type targetType, const Sym fieldName) {
 	return targetType.match(
 		[](const Type::Bogus) {
 			//TODO: want to avoid cascading errors here.
@@ -364,7 +358,7 @@ const Opt<const StructAndField> tryGetStructField(const Type targetType, const S
 					return none<const StructAndField>();
 				},
 				[&](const StructBody::Record r) {
-					const Opt<const StructField*> field = findPtr(r.fields, [&](const StructField* f) {
+					const Opt<const RecordField*> field = findPtr(r.fields, [&](const RecordField* f) {
 						return symEq(f->name, fieldName);
 					});
 					return has(field)

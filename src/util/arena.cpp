@@ -16,7 +16,7 @@ void* alloc(Arena* arena, const size_t n_bytes) {
 			*b = 0xff;
 	}
 
-	assert(n_bytes < 99999); // sanity check
+	assert(n_bytes < 999999); // sanity check
 
 	// Since we filled with 0xff, should still be that way!
 	byte* res = arena->cur;

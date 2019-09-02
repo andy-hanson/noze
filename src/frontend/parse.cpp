@@ -227,29 +227,33 @@ namespace {
 
 		while (tryTake(lexer, ' ')) {
 			const Pos start = curPos(lexer);
-			const Sym name = takeName(lexer);
-			switch (name.value) {
-				case shortSymAlphaLiteralValue("noctx"):
-					setIt(&noCtx);
-					break;
-				case shortSymAlphaLiteralValue("summon"):
-					setIt(&summon);
-					break;
-				case shortSymAlphaLiteralValue("unsafe"):
-					setIt(&unsafe);
-					break;
-				case shortSymAlphaLiteralValue("trusted"):
-					setIt(&trusted);
-					break;
-				case shortSymAlphaLiteralValue("builtin"):
-					cellSet<const Bool>(&builtin, True);
-					goto end_loop;
-				case shortSymAlphaLiteralValue("extern"):
-					cellSet<const Bool>(&_extern, True);
-					goto end_loop;
-				default:
-					const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-					add<const SpecUseAst>(lexer->arena, &specUses, SpecUseAst{range(lexer, start), name, typeArgs});
+			const SymAndIsReserved name = takeNameAllowReserved(lexer);
+			if (name.isReserved)
+				switch (name.sym.value) {
+					case shortSymAlphaLiteralValue("noctx"):
+						setIt(&noCtx);
+						break;
+					case shortSymAlphaLiteralValue("summon"):
+						setIt(&summon);
+						break;
+					case shortSymAlphaLiteralValue("unsafe"):
+						setIt(&unsafe);
+						break;
+					case shortSymAlphaLiteralValue("trusted"):
+						setIt(&trusted);
+						break;
+					case shortSymAlphaLiteralValue("builtin"):
+						cellSet<const Bool>(&builtin, True);
+						goto end_loop;
+					case shortSymAlphaLiteralValue("extern"):
+						cellSet<const Bool>(&_extern, True);
+						goto end_loop;
+					default:
+						return throwOnReservedName<const SpecUsesAndSigFlagsAndKwBody>(name.range, name.sym);
+				}
+			else {
+				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
+				add<const SpecUseAst>(lexer->arena, &specUses, SpecUseAst{range(lexer, start), name.sym, typeArgs});
 			}
 		}
 		end_loop:

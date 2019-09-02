@@ -153,6 +153,8 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	const ReadOnlyStorages storages,
 	const Path* mainPath
 ) {
+	ProgramState programState {};
+
 	// NOTE: use modelArena for paths since those are stored along with the module
 	Arena astsArena {};
 	Arena tempArena {};
@@ -166,7 +168,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	>{}(
 		parseSingle(modelArena, &astsArena, allSymbols, inclPath, storages, &lineAndColumnGetters),
 		[&](const FileAst ast) {
-			return checkIncludeNz(modelArena, ast, inclPath);
+			return checkIncludeNz(modelArena, &programState, ast, inclPath);
 		});
 
 	const Result<const IncludeAndPathAndAsts, const Arr<const Diagnostic>> includeAndParsed =
@@ -202,7 +204,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 						resultImports,
 						[&](const Arr<const Module*> imports) {
 							const Result<const Module*, const Arr<const Diagnostic>> res =
-								check(modelArena, imports, ast.ast, ast.pathAndStorageKind, includeCheck);
+								check(modelArena, &programState, imports, ast.ast, ast.pathAndStorageKind, includeCheck);
 							if (res.isSuccess())
 								addToDict<
 									const PathAndStorageKind,

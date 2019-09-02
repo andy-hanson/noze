@@ -7,10 +7,9 @@ void eachFunInScope(ExprCtx* ctx, const Sym funName, Cb cb) {
 	size_t totalIndex = 0;
 	for (const SpecInst* specInst : ctx->outermostFun->specs) {
 		const Arr<const Sig> sigs = specInst->sigs;
-		//TODO:EACHWITHINDEX
-		for (const size_t i : Range{size(sigs)})
+		for (const size_t i : indices(sigs))
 			if (symEq(at(sigs, i).name, funName))
-				cb(CalledDecl{SpecSig{specInst, getPtr(sigs, i), totalIndex + i}});
+				cb(CalledDecl{SpecSig{specInst, ptrAt(sigs, i), totalIndex + i}});
 		totalIndex += size(sigs);
 	}
 

@@ -561,6 +561,7 @@ namespace {
 		// (matched1.kind == 0 ? 42 : (s = matched1.as_some, s.value))
 		// TODO: for safety, hard-fail if the union kind is wrong
 		const ConcreteLocal* matchedLocal = e.matchedLocal;
+		writeChar(writer, '(');
 		writeLocalAssignment(writer->writer, matchedLocal);
 		writeConcreteExpr(writer, *e.matchedValue);
 		writeChar(writer, ',');
@@ -578,7 +579,8 @@ namespace {
 				if (has(kase.local)) {
 					writeStatic(writer, "(");
 					writeLocalAssignment(writer->writer, force(kase.local));
-					writeStatic(writer, "matched.as_");
+					writeLocalRef(writer->writer, matchedLocal);
+					writeStatic(writer, ".as_");
 					writeStr(writer, memberName);
 					writeStatic(writer, ",");
 					newline(writer);
@@ -589,8 +591,9 @@ namespace {
 					writeStatic(writer, ")");
 				writeStatic(writer, ": ");
 			});
-			writeFailForType(writer->writer, ce.typeWithoutKnownLambdaBody());
+		writeFailForType(writer->writer, ce.typeWithoutKnownLambdaBody());
 		decrIndent(writer);
+		writeChar(writer, ')');
 	}
 
 	void writeFieldAccess(
@@ -725,9 +728,9 @@ namespace {
 
 			case BuiltinFunKind::ptrTo:
 			case BuiltinFunKind::refOfVal:
-				writeStatic(writer, "&(");
+				writeStatic(writer, "(&(");
 				writeArg(0);
-				writeStatic(writer, ")");
+				writeStatic(writer, "))");
 				break;
 
 			case BuiltinFunKind::setPtr:
@@ -921,6 +924,17 @@ namespace {
 			[&](const ConcreteExpr::ParamRef e) {
 				writeStr(writer, e.param->mangledName);
 			},
+			[&](const ConcreteExpr::RecordFieldAccess e) {
+				writeFieldAccess(writer, e.targetIsPointer, e.target, e.field);
+			},
+			[&](const ConcreteExpr::RecordFieldSet e) {
+				// (s.x = v), 0
+				writeStatic(writer, "(");
+				writeFieldAccess(writer, e.targetIsPointer, ConstantOrExpr{e.target}, e.field);
+				writeStatic(writer, " = ");
+				writeConstantOrExpr(writer, e.value);
+				writeStatic(writer, "), 0");
+			},
 			[&](const ConcreteExpr::Seq e) {
 				// (a,
 				// b)
@@ -947,17 +961,6 @@ namespace {
 				}
 				writeConstantOrExpr(writer, e.right);
 				writeStatic(writer, ")");
-			},
-			[&](const ConcreteExpr::StructFieldAccess e) {
-				writeFieldAccess(writer, e.targetIsPointer, e.target, e.field);
-			},
-			[&](const ConcreteExpr::StructFieldSet e) {
-				// (s.x = v), 0
-				writeStatic(writer, "(");
-				writeFieldAccess(writer, e.targetIsPointer, ConstantOrExpr{e.target}, e.field);
-				writeStatic(writer, " = ");
-				writeConstantOrExpr(writer, e.value);
-				writeStatic(writer, "), 0");
 			});
 	}
 
@@ -1012,7 +1015,9 @@ namespace {
 
 	void writeFunWithConstantBody(Writer* writer, const ConcreteFun* fun, const Constant* body) {
 		writeFunWithBodyWorker(writer, fun, [&]() {
+			writeStatic(writer, "return ");
 			writeConstantReference(writer, body);
+			writeStatic(writer, ";");
 		});
 	}
 
@@ -1135,6 +1140,7 @@ const Str writeToC(Arena* arena, const ConcreteProgram program) {
 
 	//writeStatic(writer, "#include <stdatomic.h>\n"); // compare_exchange_strong
 	writeStatic(&writer, "#include <assert.h>\n");
+	writeStatic(&writer, "#include <stdatomic.h>\n");
 	writeStatic(&writer, "#include <stdint.h>\n");
 
 	writeStructs(&writer, program.allStructs);

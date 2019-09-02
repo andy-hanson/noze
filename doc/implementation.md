@@ -121,15 +121,16 @@ Since noze supports circular dependencies *within* a module, type-checking a mod
   because the corresponding `StructDecl` does not have a body yet either.
   (The `StructInst` creation was not delayed, only its body.)
 * For each struct alias, we can now fill in what it aliases -- this does not depend on the body.
-* We can check all spec decls without any fancy delaying,
-  since specs depend on structs but not on other specs, and structs can't depend on specs.
-  (But `delayStructInsts` is still used in this phase.)
 * Now we can fill in the struct bodies.
   Filling in struct A's body may depend on struct B,
   but doesn't depend on struct B's body, so this can be done in any order.
 * Now we can fill in all `StructInst` bodies that were delayed by `delayStructInsts`.
+* We can check all spec decls without any fancy delaying,
+  since specs depend on structs but not on other specs.
+  (And structs never depend on specs).
 
-We the do a similar thing for functions: First we create all the functions without their bodies filled in, then fill in their bodies.
+We the do a similar thing for functions:
+First we create all the functions without their bodies filled in, then fill in their bodies.
 
 
 ### type-checking function bodies (`checkExpr.cpp`)

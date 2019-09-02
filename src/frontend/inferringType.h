@@ -29,7 +29,8 @@ struct ExprCtx {
 	// (Note the Let stores the local and this points to that.)
 	MutArr<const Local*> messageOrFunctionLocals = MutArr<const Local*>{};
 	// Note: if inside newAndMessageInfo, these are only the lambdas *inside* of it.
-	// TODO: these are pointers because MutArr currently only works on copyable values, and LambdaInfo should not be copied.
+	// TODO: these are pointers because MutArr currently only works on copyable values,
+	// and LambdaInfo should not be copied.
 	MutArr<LambdaInfo*> lambdas = MutArr<LambdaInfo*>{};
 
 
@@ -47,6 +48,10 @@ struct ExprCtx {
 
 	inline const Expr* alloc(const Expr e) {
 		return nu<const Expr>{}(arena(), e);
+	}
+
+	inline const ProgramState* programState() const {
+		return checkCtx->programState;
 	}
 };
 
@@ -67,9 +72,6 @@ struct SingleInferringType {
 	inline const Opt<const Type> tryGetInferred() const {
 		return cellGet(&type);
 	}
-
-	// Note: this may infer type parameters.
-	const Bool setTypeNoDiagnostic(Arena* arena, const Type setType);
 };
 
 struct InferringTypeArgs {
@@ -97,7 +99,11 @@ const Bool matchTypesNoDiagnostic(
 	const Type b,
 	const InferringTypeArgs aInferringTypeArgs,
 	const Bool allowConvertAToBUnion);
-inline const Bool matchTypesNoDiagnostic(Arena* arena, const Type a, const Type b, const InferringTypeArgs aInferringTypeArgs) {
+inline const Bool matchTypesNoDiagnostic(
+	Arena* arena,
+	const Type a,
+	const Type b,
+	const InferringTypeArgs aInferringTypeArgs) {
 	return matchTypesNoDiagnostic(arena, a, b, aInferringTypeArgs, /*allowConvertAToBUnion*/ False);
 }
 
@@ -171,6 +177,13 @@ const Bool setTypeNoDiagnostic(Arena* arena, Expected* expected, const Type setT
 
 struct StructAndField {
 	const StructInst* structInst;
-	const StructField* field;
+	const RecordField* field;
 };
-const Opt<const StructAndField> tryGetStructField(const Type targetType, const Sym fieldName);
+const Opt<const StructAndField> tryGetRecordField(const Type targetType, const Sym fieldName);
+
+inline const Opt<SingleInferringType*> tryGetTypeArgFromInferringTypeArgs(
+	const InferringTypeArgs inferringTypeArgs,
+	const TypeParam* typeParam
+) {
+	return tryGetTypeArg<SingleInferringType>(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
+}

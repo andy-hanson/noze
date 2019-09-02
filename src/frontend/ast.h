@@ -96,12 +96,18 @@ struct LambdaAst {
 };
 
 struct LetAst {
-	const Sym name;
+	const NameAndRange name;
 	const ExprAst* initializer;
 	const ExprAst* then;
 };
 
 struct LiteralAst {
+	enum class Kind {
+		numeric,
+		string
+	};
+
+	const Kind kind;
 	const Str literal;
 };
 
@@ -109,7 +115,7 @@ struct MatchAst {
 	struct CaseAst {
 		const SourceRange range;
 		const Sym structName;
-		const Opt<const Sym> localName;
+		const Opt<const NameAndRange> local;
 		const ExprAst* then;
 	};
 
@@ -145,7 +151,7 @@ struct SeqAst {
 	const ExprAst* then;
 };
 
-struct StructFieldSetAst {
+struct RecordFieldSetAst {
 	const ExprAst* target;
 	const Sym fieldName;
 	const ExprAst* value;
@@ -173,8 +179,8 @@ private:
 		messageSend,
 		newActor,
 		seq,
-		// no StructFieldAccess, that's just 'call'
-		structFieldSet,
+		// no RecordFieldAccess, that's just 'call'
+		recordFieldSet,
 		then,
 	};
 	const Kind kind;
@@ -192,7 +198,7 @@ private:
 		const MessageSendAst messageSend;
 		const NewActorAst newActor;
 		const SeqAst seq;
-		const StructFieldSetAst structFieldSet;
+		const RecordFieldSetAst recordFieldSet;
 		const ThenAst then;
 	};
 
@@ -210,7 +216,7 @@ public:
 	explicit inline ExprAstKind(const MessageSendAst a) : kind{Kind::messageSend}, messageSend{a} {}
 	explicit inline ExprAstKind(const NewActorAst a) : kind{Kind::newActor}, newActor{a} {}
 	explicit inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
-	explicit inline ExprAstKind(const StructFieldSetAst a) : kind{Kind::structFieldSet}, structFieldSet{a} {}
+	explicit inline ExprAstKind(const RecordFieldSetAst a) : kind{Kind::recordFieldSet}, recordFieldSet{a} {}
 	explicit inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
 
 	inline const Bool isIdentifier() const {
@@ -245,7 +251,7 @@ public:
 		typename CbMessageSend,
 		typename CbNewActor,
 		typename CbSeq,
-		typename CbStructFieldSet,
+		typename CbRecordFieldSet,
 		typename CbThen
 	>
 	inline auto match(
@@ -262,7 +268,7 @@ public:
 		CbMessageSend cbMessageSend,
 		CbNewActor cbNewActor,
 		CbSeq cbSeq,
-		CbStructFieldSet cbStructFieldSet,
+		CbRecordFieldSet cbRecordFieldSet,
 		CbThen cbThen
 	) const {
 		switch (kind) {
@@ -292,8 +298,8 @@ public:
 				return cbNewActor(newActor);
 			case Kind::seq:
 				return cbSeq(seq);
-			case Kind::structFieldSet:
-				return cbStructFieldSet(structFieldSet);
+			case Kind::recordFieldSet:
+				return cbRecordFieldSet(recordFieldSet);
 			case Kind::then:
 				return cbThen(then);
 			default:

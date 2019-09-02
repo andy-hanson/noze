@@ -22,8 +22,7 @@ namespace {
 	}
 
 	void writeSpecializeOnArgsForMangle(Writer* writer, const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs) {
-		//TODO:EACHWITHINDEX
-		for (const size_t i : Range{size(specializeOnArgs)})
+		for (const size_t i : indices(specializeOnArgs))
 			at(specializeOnArgs, i).match(
 				[](const ConstantOrLambdaOrVariable::Variable) {},
 				[&](const Constant* c) {
@@ -133,7 +132,8 @@ namespace {
 		const TypeArgsScope typeArgsScope
 	) {
 		// Initially make this a by-ref type, so we don't recurse infinitely when computing size
-		// TODO: is this a bug? We compute the size based on assuming it's a pointer, then make it not be a pointer and that would change the size?
+		// TODO: is this a bug? We compute the size based on assuming it's a pointer,
+		// then make it not be a pointer and that would change the size?
 		lateSet<const ConcreteStructInfo>(&res->_info, ConcreteStructInfo{
 			ConcreteStructBody{ConcreteStructBody::Bogus{}},
 			/*sizeBytes*/ 9999,
@@ -156,7 +156,7 @@ namespace {
 				};
 			},
 			[&](const StructBody::Record r) {
-				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(ctx->arena, r.fields, [&](const StructField f) {
+				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(ctx->arena, r.fields, [&](const RecordField f) {
 					return ConcreteField{f.isMutable, mangleName(ctx->arena, f.name), getConcreteType(ctx, f.type, typeArgsScope)};
 				});
 				return getConcreteStructInfoForFields(r.forcedByValOrRef, fields);
@@ -257,12 +257,12 @@ namespace {
 			key.specializeOnArgs,
 			decl->body(),
 			none<const KnownLambdaBody*>()};
-		addToDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(ctx->arena, &ctx->concreteFunToSource, res, source);
+		addToDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(
+			ctx->arena, &ctx->concreteFunToSource, res, source);
 		return res;
 	}
 
-	//TODO: only used for side effect?
-	const ConcreteFunBody fillInConcreteFunBody(ConcretizeCtx* ctx, ConcreteFun* cf) {
+	void fillInConcreteFunBody(ConcretizeCtx* ctx, ConcreteFun* cf) {
 		// TODO: just assert it's not already set?
 		if (!lateIsSet(&cf->_body)) {
 			if (PRINT_INSTANTIATION) {
@@ -286,7 +286,7 @@ namespace {
 					return ConcreteFunBody{ConcreteFunBody::Extern{}};
 				},
 				[&](const Expr* e) {
-					return doConcretizeExpr(ctx, source, cf, *e);
+					return concretizeExpr(ctx, source, cf, *e);
 				});
 			lateSetOverwrite<const ConcreteFunBody>(&cf->_body, body);
 
@@ -297,10 +297,7 @@ namespace {
 				assert(INSTANTIATING_INDENT != 0);
 				INSTANTIATING_INDENT--;
 			}
-
-			return body;
-		} else
-			return cf->body();
+		}
 	}
 
 	const Str getLambdaInstanceMangledName(
@@ -337,7 +334,9 @@ namespace {
 			? some<const ConcreteParam>([&]() {
 				if (klb->hasClosure()) {
 					const ConcreteParam closureParam = force(klb->closureParam);
-					return shouldAllocateClosureForDynamicLambda(closureParam.type) ? closureParam.withType(closureParam.type.byRef()) : closureParam;
+					return shouldAllocateClosureForDynamicLambda(closureParam.type)
+						? closureParam.withType(closureParam.type.byRef())
+						: closureParam;
 				} else
 					return ConcreteParam{strLiteral("__unused"), ctx->anyPtrType()};
 			}())
@@ -356,7 +355,8 @@ namespace {
 			specializeOnArgs,
 			FunBody{info.body},
 			some<const KnownLambdaBody*>(klb)};
-		addToDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(ctx->arena, &ctx->concreteFunToSource, res, source);
+		addToDict<const ConcreteFun*, const ConcreteFunSource, comparePtr<const ConcreteFun>>(
+			ctx->arena, &ctx->concreteFunToSource, res, source);
 
 		fillInConcreteFunBody(ctx, res);
 
@@ -440,7 +440,11 @@ const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx* ctx, const Conc
 	return cf;
 }
 
-const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(ConcretizeCtx* ctx, const KnownLambdaBody* klb, const Arr<const ConstantOrLambdaOrVariable> args) {
+const ConcreteFun* instantiateKnownLambdaBodyForDirectCall(
+	ConcretizeCtx* ctx,
+	const KnownLambdaBody* klb,
+	const Arr<const ConstantOrLambdaOrVariable> args
+) {
 	return getOrAdd<
 		const Arr<const ConstantOrLambdaOrVariable>,
 		const ConcreteFun*,
@@ -463,7 +467,11 @@ const ConcreteFun* instantiateKnownLambdaBodyForDynamic(ConcretizeCtx* ctx, cons
 	});
 }
 
-const ConcreteType getConcreteType_forStructInst(ConcretizeCtx* ctx, const StructInst* i, const TypeArgsScope typeArgsScope) {
+const ConcreteType getConcreteType_forStructInst(
+	ConcretizeCtx* ctx,
+	const StructInst* i,
+	const TypeArgsScope typeArgsScope
+) {
 	const Arr<const ConcreteType> typeArgs = typesToConcreteTypes(ctx, i->typeArgs, typeArgsScope);
 	if (ptrEquals(i->decl, ctx->commonTypes->byVal))
 		return getConcreteType(ctx, only(i->typeArgs), typeArgsScope).byVal();
@@ -500,7 +508,7 @@ const ConcreteType getConcreteType(ConcretizeCtx* ctx, const Type t, const TypeA
 		},
 		[&](const TypeParam* p) {
 			// Handle calledConcreteFun first
-			assert(ptrEquals(p, getPtr(typeArgsScope.typeParams, p->index)));
+			assert(ptrEquals(p, ptrAt(typeArgsScope.typeParams, p->index)));
 			return at(typeArgsScope.typeArgs, p->index);
 		},
 		[&](const StructInst* i) {

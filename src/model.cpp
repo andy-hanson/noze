@@ -66,8 +66,8 @@ const Bool Expr::typeIsBogus(Arena* arena) const {
 		[](const Expr::ClosureFieldRef e) {
 			return e.field->type.isBogus();
 		},
-		[](const Expr::Cond) {
-			return todo<const Bool>("typeIsBogus cond");
+		[](const Expr::Cond e) {
+			return e.type.isBogus();
 		},
 		[](const Expr::CreateArr) {
 			return False;
@@ -93,8 +93,8 @@ const Bool Expr::typeIsBogus(Arena* arena) const {
 		[](const Expr::LocalRef e) {
 			return e.local->type.isBogus();
 		},
-		[](const Expr::Match) {
-			return todo<const Bool>("typeIsBogus match");
+		[](const Expr::Match e) {
+			return e.type.isBogus();
 		},
 		[](const Expr::MessageSend e) {
 			return e.getType().isBogus();
@@ -105,17 +105,17 @@ const Bool Expr::typeIsBogus(Arena* arena) const {
 		[](const Expr::ParamRef e) {
 			return e.param->type.isBogus();
 		},
+		[](const Expr::RecordFieldAccess e) {
+			return e.accessedFieldType().isBogus();
+		},
+		[](const Expr::RecordFieldSet) {
+			return False; // always void
+		},
 		[&](const Expr::Seq e) {
 			return e.then->typeIsBogus(arena);
 		},
 		[](const Expr::StringLiteral) {
 			return False;
-		},
-		[](const Expr::StructFieldAccess e) {
-			return e.accessedFieldType().isBogus();
-		},
-		[](const Expr::StructFieldSet) {
-			return False; // always void
 		});
 }
 
@@ -169,17 +169,17 @@ const Type Expr::getType(Arena* arena, const CommonTypes* commonTypes) const {
 		[](const Expr::ParamRef e) {
 			return e.param->type;
 		},
+		[](const Expr::RecordFieldAccess e) {
+			return e.accessedFieldType();
+		},
+		[&](const Expr::RecordFieldSet) {
+			return Type{commonTypes->_void};
+		},
 		[&](const Expr::Seq e) {
 			return e.then->getType(arena, commonTypes);
 		},
 		[&](const Expr::StringLiteral) {
 			return Type(commonTypes->str);
-		},
-		[](const Expr::StructFieldAccess e) {
-			return e.accessedFieldType();
-		},
-		[&](const Expr::StructFieldSet) {
-			return Type{commonTypes->_void};
 		});
 }
 
@@ -315,17 +315,17 @@ const Sexpr exprToSexpr(Arena* arena, const Expr expr) {
 		[&](const Expr::ParamRef) {
 			return todo<const Sexpr>("paramref");
 		},
+		[&](const Expr::RecordFieldAccess) {
+			return todo<const Sexpr>("structfieldaccess");
+		},
+		[](const Expr::RecordFieldSet) {
+			return todo<const Sexpr>("structfieldset");
+		},
 		[&](const Expr::Seq) {
 			return todo<const Sexpr>("seq");
 		},
 		[&](const Expr::StringLiteral) {
 			return todo<const Sexpr>("stringliteral");
-		},
-		[&](const Expr::StructFieldAccess) {
-			return todo<const Sexpr>("structfieldaccess");
-		},
-		[](const Expr::StructFieldSet) {
-			return todo<const Sexpr>("structfieldset");
 		});
 }
 

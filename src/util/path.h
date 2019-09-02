@@ -155,7 +155,9 @@ const AbsolutePath parseAbsolutePath(Arena* arena, const Str str);
 
 inline Comparison comparePath(const Path* a, const Path* b) {
 	const Comparison res = compareStr(a->baseName, b->baseName);
-	const Comparison result = res != Comparison::equal ? res : compareOpt<const Path*, comparePath>(a->parent, b->parent);
+	const Comparison result = res != Comparison::equal
+		? res
+		: compareOpt<const Path*, comparePath>(a->parent, b->parent);
 	return result;
 }
 

@@ -13,24 +13,38 @@ my-sum ?t(a arr ?t) my-spec<?t>
 main int() trusted noctx summon
 	| TODO: more threads
 	n-threads = one as<nat>
-	gctx-by-val = new-global-ctx
+	gctx-by-val = n-threads new-global-ctx
 	gctx = gctx-by-val ref-of-val
 
-	vat-by-val = new-vat: gctx, zero
+	vat-by-val = new-vat: gctx, zero, n-threads
 	vat = vat-by-val ref-of-val
 
 	vats = new<arr<vat>> one, vat.ptr-to
 
 	gctx.vats := vats
 
-	| actor-id = new<some<actor-id>> vat new-actor
-	actor-id = new<some<actor-id>> zero
-	ctx-by-val = new-ctx: gctx, vat, actor-id
+	| Before we start the engine, add a task.
+	| Create a ctx manually so we can call functions that need it when creating the task
+	ctx-by-val = new-ctx: gctx, vat, new<some<nat>> zero
 	ctx = ctx-by-val ref-of-val
-	ctx call-with-ctx &other-main
+	ctx call-with-ctx<void, global-ctx, vat> &add-first-task, gctx, vat
 
-	| TODO: catch exceptions and return 1 on error
+	| TODO: more than one thread
+	thread-function: zero, gctx
+
+	| TODO: if main fut failed, return error code here
 	zero
+
+| TODO: if mut-bag-node is in unmanaged memory, don't need ctx for this
+add-first-task void(gctx global-ctx, vat vat)
+	actor-id = new<some<actor-id>> vat new-actor-id
+	| TODO: store the main fut somewhere so we can test for errors
+	t = new<task> actor-id, &user-main-drop
+	vat add-task t
+
+
+
+
 
 test void() trusted summon
 	m = empty-mut-dict<nat, nat>
@@ -52,26 +66,43 @@ test void() trusted summon
 	print-sync: d3 at 2 to-str
 	print-sync: d4 at 2 to-str
 
+
 is-multiple? bool(a nat, b nat)
 	a mod b == 0
 
 f nat(s stream nat)
 	s sum
 
+user-main-drop void() summon
+	user-main drop
+
 | Main function normally seen by users
-other-main void() trusted summon
+user-main fut void() trusted summon
 	| rgs = (zero to 1000).to-stream<range-nat, nat>
 	| filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5}
 	| x = filtered sum
 	| assert: x == 233168
 	| print-sync: x.to-str
 
-	n = (new-arr<nat> 1, 2, 3) my-sum
-	print-sync: n.to-str
+	resolved: print-sync: "hello world"
 
-	count-down
 
-	pass
+	| n = (new-arr<nat> 1, 2, 3) my-sum
+	| print-sync: n.to-str
+
+	| count-down
+
+	| pass
+
+
+| printer iface
+|	print void(s str)
+
+| make-printer printer() summon
+|	new-actor()
+|		print(s)
+|			resolved: print-sync: s
+
 
 n-times void(n nat, f fun1 void nat)
 	f call n

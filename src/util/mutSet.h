@@ -1,5 +1,7 @@
 #pragma once
 
+#include "./mutArr.h"
+
 template <typename T, Cmp<T> cmp>
 struct MutSet {
 	MutArr<T> arr {};
@@ -26,4 +28,9 @@ template <typename T, Cmp<T> cmp>
 void addToMutSet(Arena* arena, MutSet<T, cmp>* s, const T value) {
 	const Bool added = tryAddToMutSet<T, cmp>(arena, s, value);
 	assert(added);
+}
+
+template <typename T, Cmp<T> cmp>
+void addToMutSetOkIfPresent(Arena* arena, MutSet<T, cmp>* s, const T value) {
+	tryAddToMutSet<T, cmp>(arena, s, value);
 }

@@ -392,7 +392,8 @@ say-hi void() summon
 	print-sync "hello world"
 ```
 
-Only `summon` functions can call `summon` functions. (Meaning, `main` will have to be summon for your program to do anything.)
+Only `summon` functions can call `summon` functions.
+(Meaning, `main` will have to be summon for your program to do anything.)
 However, a `summon` function can return an interface, and normal functions can perform I/O through that interface.
 
 
@@ -442,7 +443,8 @@ The vast majority of functions require a `ctx`, even `+` since that may throw an
 
 `extern` functions are implicitly `unsafe` and `summon`.
 These are like `extern` functions in C -- they should be implemented in a library that is linked in.
-(Currently there is no way to specify libraries to link, so the only `extern` functions are from the C standard library.)
+(Currently there is no way to specify libraries to link,
+so the only `extern` functions are from the C standard library.)
 
 
 ## purity
@@ -455,7 +457,9 @@ Every type (except type parameters) has a purity. The three values of purity are
 
 `data` is more pure than `sendable`, which is more pure than `mut`.
 
-The purity specifier goes after specifying the kind of type, e.g. `r record mut` or `u union sendable`. `data` is the default.
+The purity specifier goes after specifying the kind of type,
+e.g. `r record mut` or `u union sendable`.
+`data` is the default.
 You can't specify purity for an interfaces because those are all `sendable`.
 
 The constituents of a type must be at least as pure as that type. This applies transitively.

@@ -6,7 +6,7 @@ const Type instantiateType(Arena* arena, const Type type, const TypeParamsAndArg
 			return Type{Type::Bogus{}};
 		},
 		[&](const TypeParam* p) {
-			const Opt<const Type> op = tryGetTypeArg(typeParamsAndArgs, p);
+			const Opt<const Type> op = tryGetTypeArgFromTypeParamsAndArgs(typeParamsAndArgs, p);
 			return has(op) ? force(op) : type;
 		},
 		[&](const StructInst* i) {
@@ -43,9 +43,15 @@ namespace {
 	}
 }
 
-const FunInst* instantiateFun(Arena* arena, const FunDecl* decl, const Arr<const Type> typeArgs, const Arr<const Called> specImpls) {
+const FunInst* instantiateFun(
+	Arena* arena,
+	const FunDecl* decl,
+	const Arr<const Type> typeArgs,
+	const Arr<const Called> specImpls
+) {
 	for (const FunInst* fi : tempAsArr(&decl->insts))
-		if (eachCorresponds(fi->typeArgs, typeArgs, typeEquals) && eachCorresponds(fi->specImpls, specImpls, calledEquals))
+		if (eachCorresponds(fi->typeArgs, typeArgs, typeEquals)
+			&& eachCorresponds(fi->specImpls, specImpls, calledEquals))
 			return fi;
 
 	const FunInst* res = nu<const FunInst>{}(
@@ -68,7 +74,7 @@ const StructBody instantiateStructBody(Arena* arena, const StructDecl* decl, con
 			return StructBody{StructBody::Builtin{}};
 		},
 		[&](const StructBody::Record r) {
-			const Arr<const StructField> fields = map<const StructField>{}(arena, r.fields, [&](const StructField f) {
+			const Arr<const RecordField> fields = map<const RecordField>{}(arena, r.fields, [&](const RecordField f) {
 				return f.withType(instantiateType(arena, f.type, typeParamsAndArgs));
 			});
 			return StructBody{StructBody::Record{r.forcedByValOrRef, fields}};
@@ -84,7 +90,10 @@ const StructBody instantiateStructBody(Arena* arena, const StructDecl* decl, con
 				const Arr<const Param> params = map<const Param>{}(arena, m.sig.params, [&](const Param p) {
 					return Param{p.range, p.name, instantiateType(arena, p.type, typeParamsAndArgs), p.index};
 				});
-				const Sig sig = Sig{m.sig.range, m.sig.name, instantiateType(arena, m.sig.returnType, typeParamsAndArgs), params};
+				const Sig sig = Sig{
+					m.sig.range,
+					m.sig.name,
+					instantiateType(arena, m.sig.returnType, typeParamsAndArgs), params};
 				return Message{sig, m.index};
 			});
 			return StructBody{StructBody::Iface{messages}};
@@ -114,12 +123,17 @@ const StructInst* instantiateStruct(
 	if (decl->bodyIsSet())
 		res->setBody(instantiateStructBody(arena, decl, typeArgs));
 	else
-		// We should only need to do this in the initial phase of settings struct bodies, which is when delayedStructInst is set.
+		// We should only need to do this in the initial phase of settings struct bodies,
+		// which is when delayedStructInst is set.
 		push(arena, force(delayStructInsts), res);
 	return res;
 }
 
-const StructInst* instantiateStructInst(Arena* arena, const StructInst* structInst, const TypeParamsAndArgs typeParamsAndArgs) {
+const StructInst* instantiateStructInst(
+	Arena* arena,
+	const StructInst* structInst,
+	const TypeParamsAndArgs typeParamsAndArgs
+) {
 	// TODO:PERF don't create the array if we don't need it (`instantiate` could take the callback)
 	const Arr<const Type> itsTypeArgs = map<const Type>{}(arena, structInst->typeArgs, [&](const Type t) {
 		return instantiateType(arena, t, typeParamsAndArgs);

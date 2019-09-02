@@ -33,6 +33,7 @@ inline constexpr const Bool neq(const T a, const T b) {
 
 #define _not(a) Bool{!a}
 #define _and(a, b) Bool{a && b}
+#define _and3(a, b, c) Bool{a && b && c}
 #define _or(a, b) Bool{a || b}
 #define _or3(a, b, c) Bool{a || b || c}
 

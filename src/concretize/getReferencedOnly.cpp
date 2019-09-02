@@ -139,6 +139,13 @@ namespace {
 				addNewIfaceImpl(ctx, e);
 			},
 			[](const ConcreteExpr::ParamRef) {},
+			[&](const ConcreteExpr::RecordFieldAccess e) {
+				setReferencedInConstantOrExpr(ctx, e.target);
+			},
+			[&](const ConcreteExpr::RecordFieldSet e) {
+				setReferencedInExpr(ctx, *e.target);
+				setReferencedInConstantOrExpr(ctx, e.value);
+			},
 			[&](const ConcreteExpr::Seq e) {
 				setReferencedInExpr(ctx, *e.first);
 				setReferencedInConstantOrExpr(ctx, e.then);
@@ -146,13 +153,6 @@ namespace {
 			[&](const ConcreteExpr::SpecialBinary e) {
 				setReferencedInConstantOrExpr(ctx, e.left);
 				setReferencedInConstantOrExpr(ctx, e.right);
-			},
-			[&](const ConcreteExpr::StructFieldAccess e) {
-				setReferencedInConstantOrExpr(ctx, e.target);
-			},
-			[&](const ConcreteExpr::StructFieldSet e) {
-				setReferencedInExpr(ctx, *e.target);
-				setReferencedInConstantOrExpr(ctx, e.value);
 			});
 	}
 

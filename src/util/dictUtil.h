@@ -5,7 +5,7 @@ struct buildDict {
 	template <typename T, typename GetPair, typename OnConflict>
 	Dict<K, V, cmp> operator()(Arena* arena, const Arr<T> inputs, GetPair getPair, OnConflict onConflict) {
 		MutArr<KeyValuePair<K, V>> res;
-		for (const T& input : inputs) {
+		for (const T* input : ptrsRange(inputs)) {
 			KeyValuePair<K, V> pair = getPair(input);
 			Cell<const Bool> wasConflict { False };
 			for (const size_t i : Range{mutArrSize(&res)}) {

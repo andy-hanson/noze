@@ -54,7 +54,7 @@
         <key>name</key>
         <string>keyword</string>
         <key>match</key>
-        <string>(alias|builtin|by-ref|by-val|else|extern|force-sendable|import|iface|it|match|mut|new|new-actor|new-arr|noctx|record|sendable|spec|summon|trusted|union|unsafe|when)(?=$|&lt;|\,|\s|\})</string>
+        <string>(alias|builtin|by-ref|by-val|else|extern|force-sendable|iface|import|it|match|mut|new|new-actor|new-arr|noctx|record|sendable|spec|summon|trusted|union|unsafe|when)(?=$|&lt;|\,|\s|\})</string>
       </dict>
       <dict>
         <key>name</key>
@@ -79,6 +79,16 @@
         <string>support.function</string>
         <key>match</key>
         <string>(^|\&amp;)[a-z][a-z0-9\-\?]+</string>
+      </dict>
+      <dict>
+        <!--
+        normal name
+        not highlighted, but we want to take text here so e.g. 'foo-else' does not have 'else' highlighted
+        -->
+        <key>name</key>
+        <string>identifier</string>
+        <key>match</key>
+        <string>[a-z0-9\-\?]+</string>
       </dict>
       <dict>
         <key>name</key>

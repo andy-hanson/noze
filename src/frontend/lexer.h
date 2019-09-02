@@ -66,6 +66,18 @@ inline const SourceRange range(Lexer* lexer, const Pos begin) {
 	return SourceRange{begin, curPos(lexer)};
 }
 
+template <typename T>
+T throwOnReservedName(const SourceRange range, const Sym name) {
+	return throwDiag<T>(range, ParseDiag{ParseDiag::ReservedName{name}});
+}
+
+struct SymAndIsReserved {
+	const Sym sym;
+	const SourceRange range;
+	const Bool isReserved;
+};
+
+const SymAndIsReserved takeNameAllowReserved(Lexer* lexer);
 const Sym takeName(Lexer* lexer);
 const Str takeNameAsStr(Lexer* lexer);
 const NameAndRange takeNameAndRange(Lexer* lexer);
@@ -86,18 +98,18 @@ struct ExpressionToken {
 	};
 	const Kind kind;
 	union {
-		const Str literal;
+		const LiteralAst literal;
 		const NameAndRange nameAndRange;
 	};
-	inline ExpressionToken(Kind _kind) : kind{_kind} {
+	explicit inline ExpressionToken(Kind _kind) : kind{_kind} {
 		assert(kind != Kind::literal && kind != Kind::nameAndRange);
 	}
-	inline ExpressionToken(const Str _literal)
+	explicit inline ExpressionToken(const LiteralAst _literal)
 		: kind{Kind::literal}, literal{_literal} {}
-	inline ExpressionToken(const NameAndRange _nameAndRange)
+	explicit inline ExpressionToken(const NameAndRange _nameAndRange)
 		: kind{Kind::nameAndRange}, nameAndRange{_nameAndRange} {}
 
-	inline Str asLiteral() const {
+	inline LiteralAst asLiteral() const {
 		assert(kind == Kind::literal);
 		return literal;
 	}

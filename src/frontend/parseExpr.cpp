@@ -58,15 +58,16 @@ namespace {
 
 	const ExprAndDedent parseLetOrThen(Lexer* lexer, const Pos start, const NameAndRange name, const Bool isArrow) {
 		const ExprAndDedent initAndDedent = parseExprNoLet(lexer);
-		if (initAndDedent.dedents != 0)
+		if (initAndDedent.dedents != 0) {
+			printf("????? %zd\n", initAndDedent.dedents);
 			return throwDiag<const ExprAndDedent>(range(lexer, start), ParseDiag{ParseDiag::LetMustHaveThen{}});
-		else {
+		} else {
 			const ExprAst* init = alloc(lexer, initAndDedent.expr);
 			const ExprAndDedent thenAndDedent = parseStatementsAndDedent(lexer);
 			const ExprAst* then = alloc(lexer, thenAndDedent.expr);
 			const ExprAstKind exprKind = isArrow
 				? ExprAstKind{ThenAst{LambdaAst::Param{name.range, name.name}, init, then}}
-				: ExprAstKind{LetAst{name.name, init, then}};
+				: ExprAstKind{LetAst{name, init, then}};
 			// Since we don't always expect a dedent here, the dedent isn't *extra*, so increment to get the correct number of dedents.
 			return ExprAndDedent{ExprAst{range(lexer, start), exprKind}, thenAndDedent.dedents + 1};
 		}
@@ -92,7 +93,7 @@ namespace {
 		}
 	}
 
-	const ExprAndMaybeDedent parseCallsAndStructFieldSets(
+	const ExprAndMaybeDedent parseCallsAndRecordFieldSets(
 		Lexer* lexer,
 		const Pos start,
 		const ExprAndMaybeDedent ed,
@@ -106,15 +107,15 @@ namespace {
 				todo<void>("non-struct-field-access to left of ':='");
 			const CallAst call = expr.kind.asCall();
 			if (!isEmpty(call.typeArgs))
-				todo<void>("StructFieldSet should not have type args");
+				todo<void>("RecordFieldSet should not have type args");
 			if (size(call.args) != 1)
-				todo<void>("StructFieldSet should have exactly 1 arg");
+				todo<void>("RecordFieldSet should have exactly 1 arg");
 			const ExprAst* target = alloc(lexer, only(call.args));
 			const ExprAndMaybeDedent value = parseExprArg(lexer, ArgCtx{allowBlock, /*allowCall*/ True});
-			const StructFieldSetAst sfs = StructFieldSetAst{target, call.funName, alloc(lexer, value.expr)};
+			const RecordFieldSetAst sfs = RecordFieldSetAst{target, call.funName, alloc(lexer, value.expr)};
 			return ExprAndMaybeDedent{ExprAst{range(lexer, start), ExprAstKind{sfs}}, value.dedents};
 		} else if (tryTake(lexer, ' '))
-			return parseCallsAndStructFieldSets(lexer, start, parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock);
+			return parseCallsAndRecordFieldSets(lexer, start, parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock);
 		else
 			return ed;
 	}
@@ -169,7 +170,7 @@ namespace {
 			[](const SeqAst) {
 				return unreachable<const Bool>();
 			},
-			[&](const StructFieldSetAst e) {
+			[&](const RecordFieldSetAst e) {
 				return _or(recur(*e.target), recur(*e.value));
 			},
 			[](const ThenAst) {
@@ -205,13 +206,13 @@ namespace {
 			for (;;) {
 				const Pos startCase = curPos(lexer);
 				const Sym structName = takeName(lexer);
-				const Opt<const Sym> localName = tryTakeIndent(lexer)
-					? none<const Sym>()
+				const Opt<const NameAndRange> localName = tryTakeIndent(lexer)
+					? none<const NameAndRange>()
 					: [&]() {
 						take(lexer, ' ');
-						const Sym localName = takeName(lexer);
+						const NameAndRange local = takeNameAndRange(lexer);
 						takeIndent(lexer);
-						return some<const Sym>(localName);
+						return some<const NameAndRange>(local);
 					}();
 				const ExprAndDedent ed = parseStatementsAndDedent(lexer);
 				add<const MatchAst::CaseAst>(
@@ -354,8 +355,8 @@ namespace {
 				return noDedent(tryParseDots(lexer, expr));
 			}
 			case Kind::literal: {
-				const Str literal = et.asLiteral();
-				const ExprAst expr = ExprAst{getRange(), ExprAstKind{LiteralAst{literal}}};
+				const LiteralAst literal = et.asLiteral();
+				const ExprAst expr = ExprAst{getRange(), ExprAstKind{literal}};
 				return noDedent(tryParseDots(lexer, expr));
 			}
 			case Kind::lparen: {
@@ -402,15 +403,18 @@ namespace {
 		}
 	}
 
+	// Note: if dedents is none, may not be at a newline.
 	const ExprAndMaybeDedent parseExprWorker(Lexer* lexer, const Pos start, const ExpressionToken et, const ArgCtx ctx) {
 		const ExprAndMaybeDedent ed = parseExprBeforeCall(lexer, start, et, ctx);
-		return ctx.allowCall ? parseCallsAndStructFieldSets(lexer, start, ed, ctx.allowBlock) : ed;
+		return ctx.allowCall ? parseCallsAndRecordFieldSets(lexer, start, ed, ctx.allowBlock) : ed;
 	}
 
+	// This eats an expression, but does not eat any newlines.
 	const ExprAst parseExprNoBlock(Lexer* lexer) {
 		const Pos start = curPos(lexer);
 		const ExpressionToken et = takeExpressionToken(lexer);
 		const ExprAndMaybeDedent ed = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ False, /*allowCall*/ True});
+		// We set allowBlock to false, so not allowed to take newlines, so can't have dedents.
 		assert(!has(ed.dedents));
 		return ed.expr;
 	}
@@ -423,7 +427,9 @@ namespace {
 
 	const ExprAndDedent parseExprNoLet(Lexer* lexer, const Pos start, const ExpressionToken et) {
 		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ True, /*allowCall*/ True});
-		const size_t dedents = has(e.dedents) ? force(e.dedents) : takeNewlineOrDedentAmount(lexer);
+		const size_t dedents = has(e.dedents)
+			? force(e.dedents)
+			: takeNewlineOrDedentAmount(lexer);
 		return ExprAndDedent{e.expr, dedents};
 	}
 

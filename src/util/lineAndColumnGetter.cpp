@@ -38,8 +38,7 @@ namespace {
 const LineAndColumnGetter lineAndColumnGetterForText(Arena* arena, const Str text) {
 	ArrBuilder<const Pos> res {};
 	add<const Pos>(arena, &res, 0);
-	// TODO:EACHWITHINDEX
-	for (const size_t i : Range{size(text)})
+	for (const size_t i : indices(text))
 		if (at(text, i) == '\n')
 			add<const Pos>(arena, &res, safeSizeTToUint(i + 1));
 	return LineAndColumnGetter{copyStr(arena, text), finishArr(&res)};

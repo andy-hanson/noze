@@ -2,8 +2,9 @@
 
 #include "../diag.h"
 #include "../model.h"
-
 #include "../util/arrUtil.h" // copyStr
+
+#include "./programState.h"
 
 struct IncludeAndImportsIter {
 	const Opt<const Module*> include;
@@ -39,6 +40,7 @@ struct IncludeAndImportsRange {
 
 struct CheckCtx {
 	Arena* arena;
+	ProgramState* programState;
 	const PathAndStorageKind path;
 	const Opt<const Module*> include;
 	const Arr<const Module*> imports;

@@ -76,6 +76,12 @@ namespace {
 		}
 	}
 
+	void writeName(Writer* writer, const Sym name) {
+		writeChar(writer, '\'');
+		writeSym(writer, name);
+		writeChar(writer, '\'');
+	}
+
 	void writeParseDiag(Writer* writer, const ParseDiag d) {
 		d.match(
 			[&](const ParseDiag::ExpectedCharacter) {
@@ -94,13 +100,18 @@ namespace {
 				todo<void>("leadingspace");
 			},
 			[&](const ParseDiag::LetMustHaveThen) {
-				writeStatic(writer, "after 'x = y', must have another line after it");
+				writeStatic(writer,
+					"the final line of a block can not be 'x = y'\n(hint: remove 'x =', or add another line)");
 			},
 			[&](const ParseDiag::MatchWhenNewMayNotAppearInsideArg) {
 				todo<void>("mwn");
 			},
 			[&](const ParseDiag::MustEndInBlankLine) {
 				writeStatic(writer, "file must end in a blank line");
+			},
+			[&](const ParseDiag::ReservedName d) {
+				writeName(writer, d.name);
+				writeStatic(writer, " is a reserved word and can't be used as a name.");
 			},
 			[&](const ParseDiag::TrailingSpace) {
 				todo<void>("trailingspace");
@@ -112,6 +123,9 @@ namespace {
 				writeStatic(writer, "unexpected character '");
 				showChar(writer, d.ch);
 				writeStatic(writer, "'");
+			},
+			[&](const ParseDiag::UnexpectedIndent) {
+				writeStatic(writer, "unexpected indent");
 			},
 			[&](const ParseDiag::UnionCantBeEmpty) {
 				writeStatic(writer, "union type can't be empty");
@@ -137,12 +151,6 @@ namespace {
 			default:
 				assert(0);
 		}
-		writeChar(writer, '\'');
-	}
-
-	void writeName(Writer* writer, const Sym name) {
-		writeChar(writer, '\'');
-		writeSym(writer, name);
 		writeChar(writer, '\'');
 	}
 
@@ -201,6 +209,11 @@ namespace {
 				writeStatic(writer, "or field ");
 			writeStatic(writer, "named ");
 			writeName(writer, d.funName);
+
+			if (size(d.actualArgTypes) == 1) {
+				writeStatic(writer, "\nargument type: ");
+				writeType(writer, only(d.actualArgTypes));
+			}
 		} else if (!someCandidateHasCorrectArity) {
 			writeStatic(writer, "there are functions named ");
 			writeName(writer, d.funName);
@@ -252,14 +265,24 @@ namespace {
 			[&](const Diag::CallNoMatch d) {
 				writeCallNoMatch(writer, fi, d);
 			},
-			[&](const Diag::CantCallNonNoCtx) {
-				writeStatic(writer, "a 'noctx' fun can't call a non-'noctx' fun.");
-			},
-			[&](const Diag::CantCallSummon) {
-				writeStatic(writer, "non-'summon' fun can't call 'summon' fun");
-			},
-			[&](const Diag::CantCallUnsafe) {
-				writeStatic(writer, "non-'trusted' and non-'unsafe' function can't call 'unsafe' function");
+			[&](const Diag::CantCall c) {
+				const char* descr = [&]() {
+					switch (c.reason) {
+						case Diag::CantCall::Reason::nonNoCtx:
+							return "a 'noctx' fun can't call a non-'noctx' fun";
+						case Diag::CantCall::Reason::summon:
+							return "a non-'summon' fun can't call a 'summon' fun";
+						case Diag::CantCall::Reason::unsafe:
+							return "a non-'trusted' and non-'unsafe' fun can't call an 'unsafe' fun";
+						default:
+							assert(0);
+					}
+				}();
+				writeStatic(writer, descr);
+				writeStatic(writer, "\ncalling: ");
+				writeName(writer, c.callee->name());
+				writeStatic(writer, "\ncaller: ");
+				writeName(writer, c.caller->name());
 			},
 			[&](const Diag::CantCreateNonRecordStruct d) {
 				writeStatic(writer, "non-record struct ");
@@ -309,9 +332,22 @@ namespace {
 				} else
 					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");
 			},
-			[&](const Diag::FileDoesNotExist) {
+			[](const Diag::FileDoesNotExist) {
 				// We handle this specially
 				unreachable<void>();
+			},
+			[&](const Diag::FunAsLambdaCantOverload) {
+				writeStatic(writer, "fun has multiple overloads, can't convert to lambda");
+			},
+			[&](const Diag::FunAsLambdaWrongReturnType d) {
+				writeStatic(writer, "fun as lambda has wrong return type\nactual: ");
+				writeType(writer, d.actual);
+				writeStatic(writer, "\nexpected: ");
+				writeType(writer, d.expected);
+			},
+			[&](const Diag::LocalShadowsPrevious d) {
+				writeName(writer, d.name);
+				writeStatic(writer, " is already in scope");
 			},
 			[&](const Diag::MatchCaseStructNamesDoNotMatch d) {
 				writeStatic(writer, "expected the case names to be: ");

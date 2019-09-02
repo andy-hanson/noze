@@ -23,6 +23,11 @@ const Opt<V> getAt(const Dict<K, V, cmp> d, const K key) {
 }
 
 template <typename K, typename V, Cmp<K> cmp>
+const Bool hasKey(const Dict<K, V, cmp> d, const K key) {
+	return has(getAt(d, key));
+}
+
+template <typename K, typename V, Cmp<K> cmp>
 inline const V mustGetAt(const Dict<K, V, cmp> d, const K key) {
 	return force(getAt<K, V, cmp>(d, key));
 }

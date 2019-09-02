@@ -4,10 +4,6 @@
 #include "./checkExpr.h"
 
 namespace {
-	const Opt<SingleInferringType*> tryGetTypeArg(InferringTypeArgs inferringTypeArgs, const TypeParam* typeParam) {
-		return tryGetTypeArg(inferringTypeArgs.params, inferringTypeArgs.args, typeParam);
-	}
-
 	const Arr<const Type> typeArgsFromAsts(ExprCtx* ctx, const Arr<const TypeAst> typeAsts) {
 		return map<const Type>{}(ctx->arena(), typeAsts, [&](const TypeAst it) {
 			return typeFromAst(ctx, it);
@@ -35,7 +31,7 @@ namespace {
 			[](const MessageSendAst) { return False; },
 			[](const NewActorAst) { return False; },
 			[](const SeqAst e) { return exprMightHaveProperties(*e.then); },
-			[](const StructFieldSetAst) { return False; },
+			[](const RecordFieldSetAst) { return False; },
 			// Always returns fut
 			[](const ThenAst) { return False; });
 	}
@@ -64,7 +60,8 @@ namespace {
 				const Arr<SingleInferringType> inferringTypeArgs = fillArr<SingleInferringType>{}(
 					ctx->arena(),
 					nTypeParams, [&](const size_t i) {
-						// InferringType for a type arg doesn't need a candidate; that's for a (value) arg's expected type
+						// InferringType for a type arg doesn't need a candidate;
+						// that's for a (value) arg's expected type
 						return SingleInferringType{isEmpty(explicitTypeArgs)
 							? none<const Type>()
 							: some<const Type>(at(explicitTypeArgs, i))};
@@ -93,7 +90,7 @@ namespace {
 				return Type{Type::Bogus{}};
 			},
 			[&](const TypeParam* p) {
-				const Opt<SingleInferringType*> sit = tryGetTypeArg(
+				const Opt<SingleInferringType*> sit = tryGetTypeArgFromInferringTypeArgs(
 					InferringTypeArgs{candidate->called.typeParams(), candidate->typeArgs}, p);
 				const Opt<const Type> inferred = has(sit) ? force(sit)->tryGetInferred() : none<const Type>();
 				return has(inferred) ? force(inferred) : Type{p};
@@ -148,28 +145,36 @@ namespace {
 		}
 	}
 
-	const Opt<const Expr::StructFieldAccess> tryGetStructFieldAccess(ExprCtx* ctx, const Sym funName, const Expr arg) {
-		const Opt<const StructAndField> field = tryGetStructField(arg.getType(ctx->arena(), ctx->commonTypes), funName);
+	const Opt<const Expr::RecordFieldAccess> tryGetRecordFieldAccess(ExprCtx* ctx, const Sym funName, const Expr arg) {
+		const Opt<const StructAndField> field = tryGetRecordField(arg.getType(ctx->arena(), ctx->commonTypes), funName);
 		return has(field)
-			? some<const Expr::StructFieldAccess>(Expr::StructFieldAccess{
+			? some<const Expr::RecordFieldAccess>(Expr::RecordFieldAccess{
 				ctx->alloc(arg),
 				force(field).structInst,
 				force(field).field})
-			: none<const Expr::StructFieldAccess>();
+			: none<const Expr::RecordFieldAccess>();
+	}
+
+	const Opt<const Diag::CantCall::Reason> getCantCallReason(const FunFlags calledFlags, const FunFlags callerFlags) {
+		if (!calledFlags.noCtx && callerFlags.noCtx)
+			return some<const Diag::CantCall::Reason>(Diag::CantCall::Reason::nonNoCtx);
+		else if (calledFlags.summon && !callerFlags.summon)
+			return some<const Diag::CantCall::Reason>(Diag::CantCall::Reason::summon);
+		else if (calledFlags.unsafe && !callerFlags.trusted && !callerFlags.unsafe)
+			return some<const Diag::CantCall::Reason>(Diag::CantCall::Reason::unsafe);
+		else
+			return none<const Diag::CantCall::Reason>();
 	}
 
 	void checkCallFlags(
 		CheckCtx* ctx,
 		const SourceRange range,
-		const FunFlags calledFlags,
-		const FunFlags callerFlags
+		const FunDecl* called,
+		const FunDecl* caller
 	) {
-		if (!calledFlags.noCtx && callerFlags.noCtx)
-			addDiag(ctx, range, Diag{Diag::CantCallNonNoCtx{}});
-		if (calledFlags.summon && !callerFlags.summon)
-			addDiag(ctx, range, Diag{Diag::CantCallSummon{}});
-		if (calledFlags.unsafe && !callerFlags.trusted && !callerFlags.unsafe)
-			addDiag(ctx, range, Diag{Diag::CantCallUnsafe{}});
+		const Opt<const Diag::CantCall::Reason> reason = getCantCallReason(called->flags, caller->flags);
+		if (has(reason))
+			addDiag(ctx, range, Diag{Diag::CantCall{force(reason), called, caller}});
 	}
 
 	template <typename TypeArgsEqual>
@@ -182,7 +187,7 @@ namespace {
 	void checkCalledDeclFlags(ExprCtx* ctx, const CalledDecl res, const SourceRange range) {
 		res.match(
 			[&](const FunDecl* f) {
-				checkCallFlags(ctx->checkCtx, range, f->flags, ctx->outermostFun->flags);
+				checkCallFlags(ctx->checkCtx, range, f, ctx->outermostFun);
 			},
 			[](const SpecSig) {
 				// For a spec, we check the flags when providing the spec impl
@@ -324,7 +329,8 @@ namespace {
 		const Opt<const Called> opCalled = getCalledFromCandidate(ctx, range, candidate, /*allowSpecs*/ true);
 		if (has(opCalled)) {
 			const Called called = force(opCalled);
-			//TODO: PERF second return type check may be unnecessary if we already filtered by return type at the beginning
+			//TODO: PERF second return type check may be unnecessary
+			// if we already filtered by return type at the beginning
 			return check(ctx, expected, called.returnType(), Expr{range, Expr::Call{called, args}});
 		}
 		else
@@ -336,14 +342,18 @@ const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst
 	const Sym funName = ast.funName;
 	const size_t arity = size(ast.args);
 
-	const Bool mightBePropertyAccess = _and(arity == 1, exprMightHaveProperties(only(ast.args)));
-
 	const Arr<const Type> explicitTypeArgs = typeArgsFromAsts(ctx, ast.typeArgs);
 	MutArr<Candidate> candidates = getInitialCandidates(ctx, funName, explicitTypeArgs, arity);
 	// TODO: may not need to be deeply instantiated to do useful filtering here
 	const Opt<const Type> expectedReturnType = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
 	if (has(expectedReturnType))
 		filterByReturnType(ctx->arena(), &candidates, force(expectedReturnType));
+
+	// Try to determine if the expression can have properties, without type-checking it.
+	const Bool mightBePropertyAccess = _and3(
+		arity == 1,
+		exprMightHaveProperties(only(ast.args)),
+		mutSymSetHas(&ctx->programState()->recordFieldNames, funName));
 
 	ArrBuilder<const Type> actualArgTypes;
 
@@ -377,7 +387,7 @@ const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst
 
 	if (mightBePropertyAccess && arity == 1 && has(args)) {
 		// Might be a struct field access
-		const Opt<const Expr::StructFieldAccess> sfa = tryGetStructFieldAccess(ctx, funName, only(force(args)));
+		const Opt<const Expr::RecordFieldAccess> sfa = tryGetRecordFieldAccess(ctx, funName, only(force(args)));
 		if (has(sfa)) {
 			if (!isEmpty(candidatesArr))
 				todo<void>("ambiguous call vs property access");

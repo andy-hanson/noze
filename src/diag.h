@@ -13,11 +13,15 @@ struct ParseDiag {
 	struct LetMustHaveThen {};
 	struct MatchWhenNewMayNotAppearInsideArg {};
 	struct MustEndInBlankLine {};
+	struct ReservedName {
+		const Sym name;
+	};
 	struct TrailingSpace {};
 	struct TypeParamCantHaveTypeArgs {};
 	struct UnexpectedCharacter {
 		const char ch;
 	};
+	struct UnexpectedIndent {};
 	struct UnionCantBeEmpty {};
 	struct WhenMustHaveElse {};
 
@@ -31,9 +35,11 @@ private:
 		letMustHaveThen,
 		matchWhenNewMayNotAppearInsideArg,
 		mustEndInBlankLine,
+		reservedName,
 		trailingSpace,
 		typeParamCantHaveTypeArgs,
 		unexpectedCharacter,
+		unexpectedIndent,
 		unionCantBeEmpty,
 		whenMustHaveElse,
 	};
@@ -47,9 +53,11 @@ private:
 		const LetMustHaveThen letMustHaveThen;
 		const MatchWhenNewMayNotAppearInsideArg matchWhenNewMayNotAppearInsideArg;
 		const MustEndInBlankLine mustEndInBlankLine;
+		const ReservedName reservedName;
 		const TrailingSpace trailingSpace;
 		const TypeParamCantHaveTypeArgs typeParamCantHaveTypeArgs;
 		const UnexpectedCharacter unexpectedCharacter;
+		const UnexpectedIndent unexpectedIndent;
 		const UnionCantBeEmpty unionCantBeEmpty;
 		const WhenMustHaveElse whenMustHaveElse;
 	};
@@ -71,12 +79,16 @@ public:
 		: kind{Kind::matchWhenNewMayNotAppearInsideArg}, matchWhenNewMayNotAppearInsideArg{d} {}
 	explicit inline ParseDiag(const MustEndInBlankLine d)
 		: kind{Kind::mustEndInBlankLine}, mustEndInBlankLine{d} {}
+	explicit inline ParseDiag(const ReservedName d)
+		: kind{Kind::reservedName}, reservedName{d} {}
 	explicit inline ParseDiag(const TrailingSpace d)
 		: kind{Kind::trailingSpace}, trailingSpace{d} {}
 	explicit inline ParseDiag(const TypeParamCantHaveTypeArgs d)
 		: kind{Kind::typeParamCantHaveTypeArgs}, typeParamCantHaveTypeArgs{d} {}
 	explicit inline ParseDiag(const UnexpectedCharacter d)
 		: kind{Kind::unexpectedCharacter}, unexpectedCharacter{d} {}
+	explicit inline ParseDiag(const UnexpectedIndent d)
+		: kind{Kind::unexpectedIndent}, unexpectedIndent{d} {}
 	explicit inline ParseDiag(const UnionCantBeEmpty d)
 		: kind{Kind::unionCantBeEmpty}, unionCantBeEmpty{d} {}
 	explicit inline ParseDiag(const WhenMustHaveElse d)
@@ -91,9 +103,11 @@ public:
 		typename CbMatchWhenNewMayNotAppearInsideArg,
 		typename CbMustEndInBlankLine,
 		typename CbLetMustHaveThen,
+		typename CbReservedName,
 		typename CbTrailingSpace,
 		typename CbTypeParamCantHaveTypeArgs,
 		typename CbUnexpectedCharacter,
+		typename CbUnexpectedIndent,
 		typename CbUnionCantBeEmpty,
 		typename CbWhenMustHaveElse
 	> inline auto match(
@@ -105,9 +119,11 @@ public:
 		CbLetMustHaveThen cbLetMustHaveThen,
 		CbMatchWhenNewMayNotAppearInsideArg cbMatchWhenNewMayNotAppearInsideArg,
 		CbMustEndInBlankLine cbMustEndInBlankLine,
+		CbReservedName cbReservedName,
 		CbTrailingSpace cbTrailingSpace,
 		CbTypeParamCantHaveTypeArgs cbTypeParamCantHaveTypeArgs,
 		CbUnexpectedCharacter cbUnexpectedCharacter,
+		CbUnexpectedIndent cbUnexpectedIndent,
 		CbUnionCantBeEmpty cbUnionCantBeEmpty,
 		CbWhenMustHaveElse cbWhenMustHaveElse
 	) const {
@@ -128,12 +144,16 @@ public:
 				return cbMatchWhenNewMayNotAppearInsideArg(matchWhenNewMayNotAppearInsideArg);
 			case Kind::mustEndInBlankLine:
 				return cbMustEndInBlankLine(mustEndInBlankLine);
+			case Kind::reservedName:
+				return cbReservedName(reservedName);
 			case Kind::trailingSpace:
 				return cbTrailingSpace(trailingSpace);
 			case Kind::typeParamCantHaveTypeArgs:
 				return cbTypeParamCantHaveTypeArgs(typeParamCantHaveTypeArgs);
 			case Kind::unexpectedCharacter:
 				return cbUnexpectedCharacter(unexpectedCharacter);
+			case Kind::unexpectedIndent:
+				return cbUnexpectedIndent(unexpectedIndent);
 			case Kind::unionCantBeEmpty:
 				return cbUnionCantBeEmpty(unionCantBeEmpty);
 			case Kind::whenMustHaveElse:
@@ -162,9 +182,18 @@ struct Diag {
 		const Arr<const CalledDecl> allCandidates;
 	};
 
-	struct CantCallNonNoCtx {};
-	struct CantCallSummon {};
-	struct CantCallUnsafe {};
+	struct CantCall {
+		enum class Reason {
+			nonNoCtx,
+			summon,
+			unsafe
+		};
+
+		const Reason reason;
+		const FunDecl* callee;
+		const FunDecl* caller;
+	};
+
 	struct CantCreateNonRecordStruct {
 		const StructDecl* strukt;
 	};
@@ -188,6 +217,14 @@ struct Diag {
 		const Opt<const Type> expectedType;
 	};
 	struct FileDoesNotExist {};
+	struct FunAsLambdaCantOverload {};
+	struct FunAsLambdaWrongReturnType {
+		const Type actual;
+		const Type expected;
+	};
+	struct LocalShadowsPrevious {
+		const Sym name;
+	};
 	struct MatchCaseStructNamesDoNotMatch {
 		const Arr<const StructInst*> unionMembers;
 	};
@@ -242,7 +279,7 @@ struct Diag {
 		const Sym fieldName;
 	};
 	struct WriteToNonMutableField {
-		const StructField* field;
+		const RecordField* field;
 	};
 	struct WrongNumberNewStructArgs {
 		const StructDecl* decl;
@@ -264,9 +301,7 @@ private:
 	enum class Kind {
 		callMultipleMatches,
 		callNoMatch,
-		cantCallNonNoCtx,
-		cantCallSummon,
-		cantCallUnsafe,
+		cantCall,
 		cantCreateNonRecordStruct,
 		cantInferTypeArguments,
 		circularImport,
@@ -275,6 +310,9 @@ private:
 		duplicateDeclaration,
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
+		funAsLambdaCantOverload,
+		funAsLambdaWrongReturnType,
+		localShadowsPrevious,
 		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
 		mutFieldInNonMutRecord,
@@ -298,9 +336,7 @@ private:
 	union {
 		const CallMultipleMatches callMultipleMatches;
 		const CallNoMatch callNoMatch;
-		const CantCallNonNoCtx cantCallNonNoCtx;
-		const CantCallSummon cantCallSummon;
-		const CantCallUnsafe cantCallUnsafe;
+		const CantCall cantCall;
 		const CantCreateNonRecordStruct cantCreateNonRecordStruct;
 		const CantInferTypeArguments cantInferTypeArguments;
 		const CircularImport circularImport;
@@ -309,6 +345,9 @@ private:
 		const DuplicateDeclaration duplicateDeclaration;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
+		const FunAsLambdaCantOverload funAsLambdaCantOverload;
+		const FunAsLambdaWrongReturnType funAsLambdaWrongReturnType;
+		const LocalShadowsPrevious localShadowsPrevious;
 		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
 		const MutFieldInNonMutRecord mutFieldInNonMutRecord;
@@ -334,12 +373,8 @@ public:
 		: kind{Kind::callMultipleMatches}, callMultipleMatches{d} {}
 	explicit inline Diag(const CallNoMatch d)
 		: kind{Kind::callNoMatch}, callNoMatch{d} {}
-	explicit inline Diag(const CantCallNonNoCtx d)
-		: kind{Kind::cantCallNonNoCtx}, cantCallNonNoCtx{d} {}
-	explicit inline Diag(const CantCallSummon d)
-		: kind{Kind::cantCallSummon}, cantCallSummon{d} {}
-	explicit inline Diag(const CantCallUnsafe d)
-		: kind{Kind::cantCallUnsafe}, cantCallUnsafe{d} {}
+	explicit inline Diag(const CantCall d)
+		: kind{Kind::cantCall}, cantCall{d} {}
 	explicit inline Diag(const CantCreateNonRecordStruct d)
 		: kind{Kind::cantCreateNonRecordStruct}, cantCreateNonRecordStruct{d} {}
 	explicit inline Diag(const CantInferTypeArguments d)
@@ -356,6 +391,12 @@ public:
 		: kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
 	explicit inline Diag(const FileDoesNotExist d)
 		: kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
+	explicit inline Diag(const FunAsLambdaCantOverload d)
+		: kind{Kind::funAsLambdaCantOverload}, funAsLambdaCantOverload{d} {}
+	explicit inline Diag(const FunAsLambdaWrongReturnType d)
+		: kind{Kind::funAsLambdaWrongReturnType}, funAsLambdaWrongReturnType{d} {}
+	explicit inline Diag(const LocalShadowsPrevious d)
+		: kind{Kind::localShadowsPrevious}, localShadowsPrevious{d} {}
 	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d)
 		: kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
 	explicit inline Diag(const MatchOnNonUnion d)
@@ -400,9 +441,7 @@ public:
 	template <
 		typename CbCallMultipleMatches,
 		typename CbCallNoMatch,
-		typename CbCantCallNonNoCtx,
-		typename CbCantCallSummon,
-		typename CbCantCallUnsafe,
+		typename CbCantCall,
 		typename CbCantCreateNonRecordStruct,
 		typename CbCantInferTypeArguments,
 		typename CbCircularImport,
@@ -411,6 +450,9 @@ public:
 		typename CbDuplicateDeclaration,
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
+		typename CbFunAsLambdaCantOverload,
+		typename CbFunAsLambdaWrongReturnType,
+		typename CbLocalShadowsPrevious,
 		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
 		typename CbMutFieldInNonMutRecord,
@@ -432,9 +474,7 @@ public:
 	> inline auto match(
 		CbCallMultipleMatches cbCallMultipleMatches,
 		CbCallNoMatch cbCallNoMatch,
-		CbCantCallNonNoCtx cbCantCallNonNoCtx,
-		CbCantCallSummon cbCantCallSummon,
-		CbCantCallUnsafe cbCantCallUnsafe,
+		CbCantCall cbCantCall,
 		CbCantCreateNonRecordStruct cbCantCreateNonRecordStruct,
 		CbCantInferTypeArguments cbCantInferTypeArguments,
 		CbCircularImport cbCircularImport,
@@ -443,6 +483,9 @@ public:
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
+		CbFunAsLambdaCantOverload cbFunAsLambdaCantOverload,
+		CbFunAsLambdaWrongReturnType cbFunAsLambdaWrongReturnType,
+		CbLocalShadowsPrevious cbLocalShadowsPrevious,
 		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
 		CbMutFieldInNonMutRecord cbMutFieldInNonMutRecord,
@@ -467,12 +510,8 @@ public:
 				return cbCallMultipleMatches(callMultipleMatches);
 			case Kind::callNoMatch:
 				return cbCallNoMatch(callNoMatch);
-			case Kind::cantCallNonNoCtx:
-				return cbCantCallNonNoCtx(cantCallNonNoCtx);
-			case Kind::cantCallSummon:
-				return cbCantCallSummon(cantCallSummon);
-			case Kind::cantCallUnsafe:
-				return cbCantCallUnsafe(cantCallUnsafe);
+			case Kind::cantCall:
+				return cbCantCall(cantCall);
 			case Kind::cantCreateNonRecordStruct:
 				return cbCantCreateNonRecordStruct(cantCreateNonRecordStruct);
 			case Kind::cantInferTypeArguments:
@@ -489,6 +528,12 @@ public:
 				return cbExpectedTypeIsNotALambda(expectedTypeIsNotALambda);
 			case Kind::fileDoesNotExist:
 				return cbFileDoesNotExist(fileDoesNotExist);
+			case Kind::funAsLambdaCantOverload:
+				return cbFunAsLambdaCantOverload(funAsLambdaCantOverload);
+			case Kind::funAsLambdaWrongReturnType:
+				return cbFunAsLambdaWrongReturnType(funAsLambdaWrongReturnType);
+			case Kind::localShadowsPrevious:
+				return cbLocalShadowsPrevious(localShadowsPrevious);
 			case Kind::matchCaseStructNamesDoNotMatch:
 				return cbMatchCaseStructNamesDoNotMatch(matchCaseStructNamesDoNotMatch);
 			case Kind::matchOnNonUnion:

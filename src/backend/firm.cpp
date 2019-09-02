@@ -78,8 +78,8 @@ namespace {
 	}
 
 	mtp_additional_properties getAdditionalProperties(const ConcreteFun* cf) {
-		// TODO: we can improve performance by providing mroe information.
-		// https://libfirm.github.io/api_latest/a00163.html#gga7f9b9d4beb2438880b94362a62459692a970970c5cd0c5127042f1b35c9d61c48
+		// TODO: we can improve performance by providing more information.
+		// libfirm.github.io/api_latest/a00163.html#gga7f9b9d4beb2438880b94362a62459692a970970c5cd0c5127042f1b35c9d61c48
 
 		// Especially mtp_property_private, which should be there for all non-extern functions
 		unused(cf);

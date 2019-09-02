@@ -21,7 +21,7 @@ inline T only(const Arr<T> a) {
 template <typename T>
 inline const T* onlyPtr(const Arr<T> a) {
 	assert(size(a) == 1);
-	return getPtr(a, 0);
+	return ptrAt(a, 0);
 }
 
 template <typename T, typename Cb>
@@ -34,12 +34,11 @@ inline size_t sum(const Arr<T> a, Cb cb) {
 	return res;
 }
 
-
 template <typename T>
 struct PtrsIter {
 	T* ptr;
 
-	T* operator*() {
+	T* operator*() const {
 		return ptr;
 	}
 
@@ -97,10 +96,14 @@ const Opt<T> find(Arr<T> a, Cb cb) {
 	return none<T>();
 }
 
+template <typename T>
+inline Range indices(const Arr<T> a) {
+	return Range{size(a)};
+}
+
 template <typename T, typename Cb>
 const Opt<const size_t> findIndex(Arr<T> a, Cb cb) {
-	//TODO:EACHWITHRANGE
-	for (const size_t i : Range{size(a)})
+	for (const size_t i : indices(a))
 		if (cb(at(a, i)))
 			return some<const size_t>(i);
 	return none<const size_t>();
@@ -232,7 +235,7 @@ struct mapPtrs {
 	Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size(in)));
 		for (const size_t i : Range{size(in)})
-			initMemory(&out[i], cb(getPtr(in, i)));
+			initMemory(&out[i], cb(ptrAt(in, i)));
 		return Arr<Out>{out, size(in)};
 	}
 };
@@ -270,7 +273,7 @@ struct mapPtrsOrNone {
 	const Opt<const Arr<Out>> operator()(Arena* arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size(in)));
 		for (const size_t i : Range{size(in)}) {
-			const Opt<Out> o = cb(getPtr(in, i));
+			const Opt<Out> o = cb(ptrAt(in, i));
 			if (has(o))
 				initMemory(&out[i], force(o));
 			else
@@ -326,9 +329,9 @@ const Bool zipSome(const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
 	const size_t sz = size(in0);
 	assert(size(in1) == sz);
 	for (const size_t i : Range{sz})
-		if (!cb(at(in0, i), at(in1, i)))
-			return False;
-	return True;
+		if (cb(at(in0, i), at(in1, i)))
+			return True;
+	return False;
 }
 
 template <typename Out>
@@ -408,7 +411,7 @@ struct mapZipPtrs {
 		assert(size(in1) == sz);
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * sz));
 		for (const size_t i : Range{sz})
-			initMemory(&out[i], cb(getPtr(in0, i), getPtr(in1, i)));
+			initMemory(&out[i], cb(ptrAt(in0, i), ptrAt(in1, i)));
 		return Arr<Out>{out, sz};
 	}
 };
@@ -424,7 +427,7 @@ template <typename T, typename U, typename Cb>
 void zipPtrs(Arr<T> a, Arr<U> b, Cb cb) {
 	assert(sizeEq(a, b));
 	for (const size_t i : Range{size(a)})
-		cb(getPtr(a, i), getPtr(b, i));
+		cb(ptrAt(a, i), ptrAt(b, i));
 }
 
 template <typename T, typename U, typename Cb>

@@ -52,7 +52,7 @@ inline constexpr T at(const Arr<T> a, const size_t index) {
 }
 
 template <typename T>
-inline T* getPtr(const Arr<T> a, const size_t index) {
+inline T* ptrAt(const Arr<T> a, const size_t index) {
 	assert(index < size(a));
 	return a._begin + index;
 }

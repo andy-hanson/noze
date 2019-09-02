@@ -5,12 +5,16 @@
 #include "./mangleName.h"
 
 namespace {
-	const ConstantOrExpr makeLambdasDynamic_forConstant(ConcretizeCtx* ctx, const SourceRange range, const Constant* c) {
+	const ConstantOrExpr makeLambdasDynamic_forConstant(
+		ConcretizeCtx* ctx,
+		const SourceRange range,
+		const Constant* c
+	) {
 		if (c->kind.isLambda()) {
 			const KnownLambdaBody* klb = c->kind.asLambda().knownLambdaBody;
 			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);
 			const ConcreteType closureType = force(fun->closureType());
-			const ConstantOrExpr closure = ConstantOrExpr{constantNull(ctx->arena, &ctx->allConstants, closureType)};
+			const ConstantOrExpr closure = ConstantOrExpr{constantNull(ctx->arena, ctx->allConstants, closureType)};
 			const ConcreteExpr::LambdaToDynamic ld = ConcreteExpr::LambdaToDynamic{fun, closure};
 			return nuExpr(ctx->arena, klb->dynamicType, range, ld);
 		} else {
@@ -18,7 +22,11 @@ namespace {
 		}
 	}
 
-	const ConstantOrExpr makeLambdasDynamic_forExpr(ConcretizeCtx* ctx, const SourceRange range, const ConcreteExpr* e) {
+	const ConstantOrExpr makeLambdasDynamic_forExpr(
+		ConcretizeCtx* ctx,
+		const SourceRange range,
+		const ConcreteExpr* e
+	) {
 		if (has(e->knownLambdaBody())) {
 			const KnownLambdaBody* klb = force(e->knownLambdaBody());
 			const ConcreteFun* fun = instantiateKnownLambdaBodyForDynamic(ctx, klb);

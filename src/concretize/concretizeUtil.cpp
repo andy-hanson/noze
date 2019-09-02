@@ -34,7 +34,10 @@ const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena* arena, const Arr<
 		: none<const Arr<const Constant*>>();
 }
 
-const Opt<const Arr<const Constant*>> tryGetAllConstant(Arena* arena, const Arr<const ConstantOrLambdaOrVariable> args) {
+const Opt<const Arr<const Constant*>> tryGetAllConstant(
+	Arena* arena,
+	const Arr<const ConstantOrLambdaOrVariable> args
+) {
 	return allConstant(args)
 		? some<const Arr<const Constant*>>(asAllConstant(arena, args))
 		: none<const Arr<const Constant*>>();

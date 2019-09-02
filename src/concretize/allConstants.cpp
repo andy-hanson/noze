@@ -3,6 +3,55 @@
 #include "../util/arrUtil.h"
 
 namespace {
+	Comparison compareArrConstants(const Arr<const Constant*> a, const Arr<const Constant*> b) {
+		return compareArr<const Constant*, comparePtr<const Constant>>(a, b);
+	}
+
+	struct ConstantsForRecord {
+		size_t nextId;
+		MutDict<const Arr<const Constant*>, const Constant*, compareArrConstants> values;
+		ConstantsForRecord(const ConstantsForRecord&) = delete;
+	};
+
+	struct ConstantsForUnion {
+		size_t nextId;
+		// Maps a struct to that struct as a member of the union
+		MutDict<const Constant*, const Constant*, comparePtr<const Constant>> values;
+		ConstantsForUnion(const ConstantsForUnion&) = delete;
+	};
+}
+
+struct AllConstants {
+	// element type * args -> id
+	// When we're done, we'll invert this dict so they can be emitted.
+	size_t nextArrId = 0;
+	MutDict<const ConstantArrKey, const Constant*, compareConstantArrKey> arrays {};
+	// Dict from array to an array of each pointer inside it
+	MutDict<const Constant*, Arr<const Constant*>, comparePtr<const Constant>> arrayToPtrs {};
+	size_t nextPtrId = 0;
+	Late<const Constant*> _false {};
+	Late<const Constant*> _true {};
+	Late<const Constant*> __void {};
+	MutDict<const char, const Constant*, comparePrimitive<const char>> chars {};
+	MutDict<const Int64, const Constant*, comparePrimitive<const Int64>> int64s {};
+	MutDict<const Nat64, const Constant*, comparePrimitive<const Nat64>> nat64s {};
+	MutDict<const ConcreteFun*, const Constant*, comparePtr<const ConcreteFun>> funPtrs {};
+	size_t nextLambdaId = 0;
+	// No dict for lambdas?
+	MutDict<const ConcreteType, ConstantsForRecord*, compareConcreteType> records {};
+	MutDict<const ConcreteStruct*, ConstantsForUnion*, comparePtr<const ConcreteStruct>> unions {};
+	MutDict<const ConcreteStruct*, const Constant*, comparePtr<const ConcreteStruct>> nulls {};
+	ArrBuilder<const Constant*> all {};
+
+	AllConstants(const AllConstants&) = delete;
+	inline AllConstants() {}
+};
+
+AllConstants* newAllConstants(Arena* arena) {
+	return nu<AllConstants>{}(arena);
+}
+
+namespace {
 	const Constant* newConstant(
 		Arena* arena,
 		AllConstants* allConstants,
@@ -15,23 +64,11 @@ namespace {
 		return res;
 	}
 
-	Comparison compareArrConstants(const Arr<const Constant*> a, const Arr<const Constant*> b) {
-		return compareArr<const Constant*, comparePtr<const Constant>>(a, b);
+	void assertIsPointer(const ConcreteType pointerType) {
+		assert(strEqLiteral(slice(pointerType.strukt->mangledName, 0, 3), "ptr"));
+		assert(!pointerType.isPointer);
 	}
 }
-
-struct ConstantsForRecord {
-	size_t nextId;
-	MutDict<const Arr<const Constant*>, const Constant*, compareArrConstants> values;
-	ConstantsForRecord(const ConstantsForRecord&) = delete;
-};
-
-struct ConstantsForUnion {
-	size_t nextId;
-	// Maps a struct to that struct as a member of the union
-	MutDict<const Constant*, const Constant*, comparePtr<const Constant>> values;
-	ConstantsForUnion(const ConstantsForUnion&) = delete;
-};
 
 const Constant* constantArr(
 	Arena* arena,
@@ -55,52 +92,6 @@ const Constant* constantArr(
 		});
 }
 
-namespace {
-	void assertIsPointer(const ConcreteType pointerType) {
-		assert(strEqLiteral(slice(pointerType.strukt->mangledName, 0, 3), "ptr"));
-		assert(!pointerType.isPointer);
-	}
-}
-
-const Constant* constantPtr(
-	Arena* arena,
-	AllConstants* allConstants,
-	const ConcreteType pointerType,
-	const Constant* array,
-	const size_t index
-) {
-	assertIsPointer(pointerType);
-	const ConstantKind::Array a = array->kind.asArray();
-	// Pointer may point to the end of the array
-	const size_t nPtrs = a.size() + 1;
-	assert(index < nPtrs);
-	const Arr<const Constant*> ptrs = getOrAdd<
-		const Constant*,
-		Arr<const Constant*>,
-		comparePtr<const Constant>
-	>{}(arena, &allConstants->arrayToPtrs, array, [&]() {
-		return fillArr<const Constant*>{}(arena, nPtrs, [&](const size_t idx) {
-			return newConstant(arena, allConstants, pointerType, ConstantKind{ConstantKind::Ptr{array, idx}}, allConstants->nextPtrId++);
-		});
-	});
-	return at(ptrs, index);
-}
-
-const Constant* constantNull(
-	Arena* arena,
-	AllConstants* allConstants,
-	const ConcreteType pointerType
-) {
-	assertIsPointer(pointerType);
-	return getOrAdd<const ConcreteStruct*, const Constant*, comparePtr<const ConcreteStruct>>{}(
-		arena,
-		&allConstants->nulls,
-		pointerType.strukt,
-		[&]() {
-			return newConstant(arena, allConstants, pointerType, ConstantKind{ConstantKind::Null{}}, 0);
-		});
-}
-
 const Constant* constantBool(Arena* arena, AllConstants* allConstants, const ConcreteType boolType, const Bool value)  {
 	if (value)
 		return lazilySet(&allConstants->_true, [&]() {
@@ -112,12 +103,6 @@ const Constant* constantBool(Arena* arena, AllConstants* allConstants, const Con
 		});
 }
 
-const Constant* constantVoid(Arena* arena, AllConstants* allConstants, const ConcreteType voidType) {
-	return lazilySet(&allConstants->__void, [&]() {
-		return newConstant(arena, allConstants, voidType, ConstantKind{ConstantKind::Void{}}, 0);
-	});
-}
-
 const Constant* constantChar(Arena* arena, AllConstants* allConstants, const ConcreteType charType, const char value) {
 	return getOrAdd<const char, const Constant*, comparePrimitive<const char>>{}(
 		arena,
@@ -126,6 +111,28 @@ const Constant* constantChar(Arena* arena, AllConstants* allConstants, const Con
 		[&]() {
 			return newConstant(arena, allConstants, charType, ConstantKind{value}, value);
 		});
+}
+
+const Constant* constantFunPtr(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType funPtrType,
+	const ConcreteFun* fun
+) {
+	const Constant* res = getOrAdd<const ConcreteFun*, const Constant*, comparePtr<const ConcreteFun>>{}(
+		arena,
+		&allConstants->funPtrs,
+		fun,
+		[&]() {
+			return newConstant(
+				arena,
+				allConstants,
+				funPtrType,
+				ConstantKind{ConstantKind::FunPtr{fun}},
+				allConstants->nextLambdaId++);
+		});
+	assert(res->type().eq(funPtrType));
+	return res;
 }
 
 const Constant* constantInt64(
@@ -164,19 +171,19 @@ const Constant* constantNat64(
 		});
 }
 
-const Constant* constantFunPtr(
+const Constant* constantNull(
 	Arena* arena,
 	AllConstants* allConstants,
-	const ConcreteType funPtrType,
-	const ConcreteFun* fun
+	const ConcreteType pointerType
 ) {
-	//TODO: cache this!
-	return newConstant(
+	assertIsPointer(pointerType);
+	return getOrAdd<const ConcreteStruct*, const Constant*, comparePtr<const ConcreteStruct>>{}(
 		arena,
-		allConstants,
-		funPtrType,
-		ConstantKind{ConstantKind::FunPtr{fun}},
-		allConstants->nextLambdaId++);
+		&allConstants->nulls,
+		pointerType.strukt,
+		[&]() {
+			return newConstant(arena, allConstants, pointerType, ConstantKind{ConstantKind::Null{}}, 0);
+		});
 }
 
 const Constant* constantLambda(Arena* arena, AllConstants* allConstants, const KnownLambdaBody* klb) {
@@ -188,7 +195,41 @@ const Constant* constantLambda(Arena* arena, AllConstants* allConstants, const K
 		allConstants->nextLambdaId++);
 }
 
-const Constant* constantRecord(Arena* arena, AllConstants* allConstants, const ConcreteType recordType, const Arr<const Constant*> args) {
+const Constant* constantPtr(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType pointerType,
+	const Constant* array,
+	const size_t index
+) {
+	assertIsPointer(pointerType);
+	const ConstantKind::Array a = array->kind.asArray();
+	// Pointer may point to the end of the array
+	const size_t nPtrs = a.size() + 1;
+	assert(index < nPtrs);
+	const Arr<const Constant*> ptrs = getOrAdd<
+		const Constant*,
+		Arr<const Constant*>,
+		comparePtr<const Constant>
+	>{}(arena, &allConstants->arrayToPtrs, array, [&]() {
+		return fillArr<const Constant*>{}(arena, nPtrs, [&](const size_t idx) {
+			return newConstant(
+				arena,
+				allConstants,
+				pointerType,
+				ConstantKind{ConstantKind::Ptr{array, idx}},
+				allConstants->nextPtrId++);
+		});
+	});
+	return at(ptrs, index);
+}
+
+const Constant* constantRecord(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType recordType,
+	const Arr<const Constant*> args
+) {
 	assert(recordType.strukt->isRecord());
 	ConstantsForRecord* cr = getOrAdd<const ConcreteType, ConstantsForRecord*, compareConcreteType>{}(
 		arena,
@@ -197,14 +238,18 @@ const Constant* constantRecord(Arena* arena, AllConstants* allConstants, const C
 		[&]() {
 			return nu<ConstantsForRecord>{}(arena);
 		});
-	return getOrAdd<const Arr<const Constant*>, const Constant*, compareArrConstants> {}(arena, &cr->values, args, [&]() {
-		return newConstant(
-			arena,
-			allConstants,
-			recordType,
-			ConstantKind{ConstantKind::Record{recordType, args}},
-			cr->nextId++);
-	});
+	return getOrAdd<const Arr<const Constant*>, const Constant*, compareArrConstants>{}(
+		arena,
+		&cr->values,
+		args,
+		[&]() {
+			return newConstant(
+				arena,
+				allConstants,
+				recordType,
+				ConstantKind{ConstantKind::Record{recordType, args}},
+				cr->nextId++);
+		});
 }
 
 const Constant* constantUnion(
@@ -236,4 +281,10 @@ const Constant* constantUnion(
 		});
 	assert(res->kind.asUnion().memberIndex == memberIndex);
 	return res;
+}
+
+const Constant* constantVoid(Arena* arena, AllConstants* allConstants, const ConcreteType voidType) {
+	return lazilySet(&allConstants->__void, [&]() {
+		return newConstant(arena, allConstants, voidType, ConstantKind{ConstantKind::Void{}}, 0);
+	});
 }

@@ -46,16 +46,17 @@ Noze is written using a limited subset of C++. It's more like C with templates.
   (This assumes the fields are `const`; if not, the assertion should be done again whenever mutating the fields.)
 
 * Constructors may *only* do a few things:
-  - Set each field to a value of one of the parameters
-  - Default-initialize a field
-  - Assert that this instance is valid
+  - Take a parameter `_foo` and initialize a field with `foo{_foo}`
+    (If the field starts with an underscore, the parameter shouldn't.)
+  - Default-initialize a field.
+  - Make assertions.
 
-  It would probably be a good idea to eliminate constructors and instead use a function called `new_MyType`.
   Even types like `MutArr`  (and `MutDict` and `MutSet` which wrap it) and `Arena` follow this rule --
   their constructors default-initialize all fields to 0 / nullptr
   and allocation isn't done until the first push / add / alloc.
 
-* Only use headers that are C compatible and cross-platform. This means no `std::`.
+* Only use headers that are C compatible and cross-platform.
+  This means no `std::`.
   Use the data structures defined in `util` which are analogous to those from noze.
 
 * Don't use references (`Foo&`).
@@ -74,11 +75,11 @@ Noze is written using a limited subset of C++. It's more like C with templates.
 
 * Don't use overloading, give all functions unique names.
 
-* `nullptr` -- Use `Opt` instead.
-
 * A pointer should be considered to point to exactly one value.
   Don't use `nullptr`, use `Opt` instead.
   Use `Arr` for pointers to potentially more than one value.
+  The exception is that some data structures like `MutArr`
+  use `nullptr` internally if they have not allocated anything yet.
 
 The following C++ features *are* allowed:
 
@@ -92,7 +93,7 @@ The following C++ features *are* allowed:
   use a separate (un-nested) function instead and explicitly pass in exactly what's needed.
 
   Lambdas should be *temporary*, never stored anywhere.
-  Never store data hidden behind a function, store data as normal data and pass it to a function when necessary.
+  Never store data hidden behind a function, store data as a struct and pass it to a function when necessary.
   (If there are multiple functions that might be associated with the data, use a union.)
 
   Lambdas should always be of a type parameter type (rather than `std::function`) whose name starts with `Cb`.

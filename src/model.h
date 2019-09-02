@@ -174,15 +174,15 @@ struct Message {
 	const size_t index;
 };
 
-struct StructField {
+struct RecordField {
 	const SourceRange range;
 	const Bool isMutable;
 	const Sym name;
 	const Type type;
 	const size_t index;
 
-	inline const StructField withType(const Type newType) const {
-		return StructField{range, isMutable, name, newType, index};
+	inline const RecordField withType(const Type newType) const {
+		return RecordField{range, isMutable, name, newType, index};
 	}
 };
 
@@ -196,7 +196,7 @@ struct StructBody {
 	struct Builtin {};
 	struct Record {
 		const Opt<const ForcedByValOrRef> forcedByValOrRef;
-		const Arr<const StructField> fields;
+		const Arr<const RecordField> fields;
 	};
 	struct Union {
 		const Arr<const StructInst*> members;
@@ -336,7 +336,6 @@ public:
 		lateSet<const StructBody>(&_body, value);
 	}
 
-	// TODO: why do I need to specify a constructor here?
 	inline StructDecl(
 		const SourceRange _range,
 		const Bool _isPublic,
@@ -361,7 +360,11 @@ private:
 	// Like decl->body, but has type args filled in.
 	Late<StructBody> _body;
 public:
-	inline StructInst(const StructDecl* d, const Arr<const Type> t, const Purity p) : decl{d}, typeArgs{t}, purity{p}, _body{} {
+	inline StructInst(
+		const StructDecl* d,
+		const Arr<const Type> t,
+		const Purity p
+	) : decl{d}, typeArgs{t}, purity{p}, _body{} {
 		assert(sizeEq(d->typeParams, t));
 	}
 	inline StructBody body() const {
@@ -539,8 +542,12 @@ struct FunInst {
 	const Arr<const Called> specImpls;
 	const Sig sig;
 
-	inline FunInst(const FunDecl* _decl, const Arr<const Type> _typeArgs, const Arr<const Called> _specImpls, const Sig _sig)
-		: decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls}, sig{_sig} {
+	inline FunInst(
+		const FunDecl* _decl,
+		const Arr<const Type> _typeArgs,
+		const Arr<const Called> _specImpls,
+		const Sig _sig
+	) : decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls}, sig{_sig} {
 		assert(sizeEq(typeArgs, decl->typeParams));
 		assert(size(specImpls) == decl->nSpecImpls());
 	}
@@ -837,6 +844,7 @@ struct Program {
 };
 
 struct Local {
+	const SourceRange range;
 	const Sym name;
 	const Type type;
 };
@@ -861,6 +869,13 @@ struct Expr {
 		inline size_t index() const {
 			return field->index;
 		}
+	};
+
+	struct Cond {
+		const Type type;
+		const Expr* cond;
+		const Expr* then;
+		const Expr* elze;
 	};
 
 	struct CreateArr {
@@ -980,19 +995,10 @@ struct Expr {
 		const Param* param;
 	};
 
-	struct Seq {
-		const Expr* first;
-		const Expr* then;
-	};
-
-	struct StringLiteral {
-		const Str literal;
-	};
-
-	struct StructFieldAccess {
+	struct RecordFieldAccess {
 		const Expr* target;
 		const StructInst* targetType;
-		const StructField* field; // This is the field from the StructInst, not the StructDecl
+		const RecordField* field; // This is the field from the StructInst, not the StructDecl
 
 		//TODO:KILL (just write field->type everywhere)
 		inline const Type accessedFieldType() const {
@@ -1004,23 +1010,29 @@ struct Expr {
 		}
 	};
 
-	struct StructFieldSet {
+	struct RecordFieldSet {
 		const Expr* target;
 		const StructInst* targetType;
-		const StructField* field;
+		const RecordField* field;
 		const Expr* value;
 
-		inline StructFieldSet(const Expr* _target, const StructInst* _targetType, const StructField* _field, const Expr* _value)
-			: target{_target}, targetType{_targetType}, field{_field}, value{_value} {
+		inline RecordFieldSet(
+			const Expr* _target,
+			const StructInst* _targetType,
+			const RecordField* _field,
+			const Expr* _value
+		) : target{_target}, targetType{_targetType}, field{_field}, value{_value} {
 			assert(field->isMutable);
 		}
 	};
 
-	struct Cond {
-		const Type type;
-		const Expr* cond;
+	struct Seq {
+		const Expr* first;
 		const Expr* then;
-		const Expr* elze;
+	};
+
+	struct StringLiteral {
+		const Str literal;
 	};
 
 private:
@@ -1041,10 +1053,10 @@ private:
 		messageSend,
 		newIfaceImpl,
 		paramRef,
+		recordFieldAccess,
+		recordFieldSet,
 		seq,
 		stringLiteral,
-		structFieldAccess,
-		structFieldSet,
 	};
 	const SourceRange _range;
 	const Kind kind;
@@ -1065,10 +1077,10 @@ private:
 		const MessageSend messageSend;
 		const NewIfaceImpl newIfaceImpl;
 		const ParamRef paramRef;
+		const RecordFieldAccess recordFieldAccess;
+		const RecordFieldSet recordFieldSet;
 		const Seq seq;
 		const StringLiteral stringLiteral;
-		const StructFieldAccess structFieldAccess;
-		const StructFieldSet structFieldSet;
 	};
 	inline Expr(const SourceRange range, const Kind _kind) : _range{range}, kind{_kind} {
 		assert(_kind == Kind::bogus);
@@ -1107,14 +1119,14 @@ public:
 		: _range{range}, kind{Kind::newIfaceImpl}, newIfaceImpl{_newIfaceImpl} {}
 	inline Expr(const SourceRange range, const ParamRef _paramRef)
 		: _range{range}, kind{Kind::paramRef}, paramRef{_paramRef} {}
+	inline Expr(const SourceRange range, const RecordFieldAccess _recordFieldAccess)
+		: _range{range}, kind{Kind::recordFieldAccess}, recordFieldAccess{_recordFieldAccess} {}
+	inline Expr(const SourceRange range, const RecordFieldSet _recordFieldSet)
+		: _range{range}, kind{Kind::recordFieldSet}, recordFieldSet{_recordFieldSet} {}
 	inline Expr(const SourceRange range, const Seq _seq)
 		: _range{range}, kind{Kind::seq}, seq{_seq} {}
 	inline Expr(const SourceRange range, const StringLiteral _stringLiteral)
 		: _range{range}, kind{Kind::stringLiteral}, stringLiteral{_stringLiteral} {}
-	inline Expr(const SourceRange range, const StructFieldAccess _structFieldAccess)
-		: _range{range}, kind{Kind::structFieldAccess}, structFieldAccess{_structFieldAccess} {}
-	inline Expr(const SourceRange range, const StructFieldSet _structFieldSet)
-		: _range{range}, kind{Kind::structFieldSet}, structFieldSet{_structFieldSet} {}
 
 	inline SourceRange range() const {
 		return _range;
@@ -1137,10 +1149,10 @@ public:
 		typename CbMessageSend,
 		typename CbNewIfaceImpl,
 		typename CbParamRef,
+		typename CbRecordFieldAccess,
+		typename CbRecordFieldSet,
 		typename CbSeq,
-		typename CbStringLiteral,
-		typename CbStructFieldAccess,
-		typename CbStructFieldSet
+		typename CbStringLiteral
 	>
 	inline auto match(
 		CbBogus cbBogus,
@@ -1159,10 +1171,10 @@ public:
 		CbMessageSend cbMessageSend,
 		CbNewIfaceImpl cbNewIfaceImpl,
 		CbParamRef cbParamRef,
+		CbRecordFieldAccess cbRecordFieldAccess,
+		CbRecordFieldSet cbRecordFieldSet,
 		CbSeq cbSeq,
-		CbStringLiteral cbStringLiteral,
-		CbStructFieldAccess cbStructFieldAccess,
-		CbStructFieldSet cbStructFieldSet
+		CbStringLiteral cbStringLiteral
 	) const {
 		switch (kind) {
 			case Kind::bogus:
@@ -1197,14 +1209,14 @@ public:
 				return cbNewIfaceImpl(newIfaceImpl);
 			case Kind::paramRef:
 				return cbParamRef(paramRef);
+			case Kind::recordFieldAccess:
+				return cbRecordFieldAccess(recordFieldAccess);
+			case Kind::recordFieldSet:
+				return cbRecordFieldSet(recordFieldSet);
 			case Kind::seq:
 				return cbSeq(seq);
 			case Kind::stringLiteral:
 				return cbStringLiteral(stringLiteral);
-			case Kind::structFieldAccess:
-				return cbStructFieldAccess(structFieldAccess);
-			case Kind::structFieldSet:
-				return cbStructFieldSet(structFieldSet);
 			default:
 				assert(0);
 		}

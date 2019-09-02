@@ -1117,6 +1117,30 @@ struct ConcreteExpr {
 		const ConcreteParam* param;
 	};
 
+	struct RecordFieldAccess {
+		const Bool targetIsPointer;
+		const ConstantOrExpr target; // TODO: should never be a constant
+		const ConcreteField* field;
+	};
+
+	struct RecordFieldSet {
+		// TODO: maybe just store a ConcreteType on every ConcreteExpr
+		const Bool targetIsPointer;
+		const ConcreteExpr* target;
+		const ConcreteField* field;
+		const ConstantOrExpr value;
+
+		inline RecordFieldSet(
+			const Bool _targetIsPointer,
+			const ConcreteExpr* _target,
+			const ConcreteField* _field,
+			const ConstantOrExpr _value
+		)
+			: targetIsPointer{_targetIsPointer}, target{_target}, field{_field}, value{_value} {
+			assert(field->isMutable);
+		}
+	};
+
 	struct Seq {
 		// In the rare event this is a constant, it would have been optimized away.
 		const ConcreteExpr* first;
@@ -1132,30 +1156,6 @@ struct ConcreteExpr {
 		const Kind kind;
 		const ConstantOrExpr left;
 		const ConstantOrExpr right;
-	};
-
-	struct StructFieldAccess {
-		const Bool targetIsPointer;
-		const ConstantOrExpr target; // TODO: should never be a constant
-		const ConcreteField* field;
-	};
-
-	struct StructFieldSet {
-		// TODO: maybe just store a ConcreteType on every ConcreteExpr
-		const Bool targetIsPointer;
-		const ConcreteExpr* target;
-		const ConcreteField* field;
-		const ConstantOrExpr value;
-
-		inline StructFieldSet(
-			const Bool _targetIsPointer,
-			const ConcreteExpr* _target,
-			const ConcreteField* _field,
-			const ConstantOrExpr _value
-		)
-			: targetIsPointer{_targetIsPointer}, target{_target}, field{_field}, value{_value} {
-			assert(field->isMutable);
-		}
 	};
 
 private:
@@ -1175,10 +1175,10 @@ private:
 		messageSend,
 		newIfaceImpl,
 		paramRef,
+		recordFieldAccess,
+		recordFieldSet,
 		seq,
 		specialBinary,
-		structFieldAccess,
-		structFieldSet,
 	};
 	// This is the type it's *supposed* to have. KnownLambdaBody may better reflect the actual type.
 	const ConcreteType _type;
@@ -1203,10 +1203,10 @@ private:
 		const MessageSend messageSend;
 		const NewIfaceImpl newIfaceImpl;
 		const ParamRef paramRef;
+		const RecordFieldAccess recordFieldAccess;
+		const RecordFieldSet recordFieldSet;
 		const Seq seq;
 		const SpecialBinary specialBinary;
-		const StructFieldAccess structFieldAccess;
-		const StructFieldSet structFieldSet;
 	};
 
 public:
@@ -1313,6 +1313,18 @@ public:
 		const ConcreteType type,
 		const SourceRange range,
 		const Opt<const KnownLambdaBody*> klb,
+		const RecordFieldAccess a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::recordFieldAccess}, recordFieldAccess{a} {}
+	inline ConcreteExpr(
+		const ConcreteType type,
+		const SourceRange range,
+		const Opt<const KnownLambdaBody*> klb,
+		const RecordFieldSet a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::recordFieldSet}, recordFieldSet{a} {}
+	inline ConcreteExpr(
+		const ConcreteType type,
+		const SourceRange range,
+		const Opt<const KnownLambdaBody*> klb,
 		const Seq a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::seq}, seq{a} {}
 	inline ConcreteExpr(
@@ -1321,18 +1333,6 @@ public:
 		const Opt<const KnownLambdaBody*> klb,
 		const SpecialBinary a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::specialBinary}, specialBinary{a} {}
-	inline ConcreteExpr(
-		const ConcreteType type,
-		const SourceRange range,
-		const Opt<const KnownLambdaBody*> klb,
-		const StructFieldAccess a)
-		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldAccess}, structFieldAccess{a} {}
-	inline ConcreteExpr(
-		const ConcreteType type,
-		const SourceRange range,
-		const Opt<const KnownLambdaBody*> klb,
-		const StructFieldSet a)
-		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::structFieldSet}, structFieldSet{a} {}
 
 	inline const Bool isCond() const {
 		return enumEq(kind, Kind::cond);
@@ -1373,10 +1373,10 @@ public:
 		typename CbMessageSend,
 		typename CbNewIfaceImpl,
 		typename CbParamRef,
+		typename CbRecordFieldAccess,
+		typename CbRecordFieldSet,
 		typename CbSeq,
-		typename CbSpecialBinary,
-		typename CbStructFieldAccess,
-		typename CbStructFieldSet
+		typename CbSpecialBinary
 	>
 	inline auto match(
 		CbBogus cbBogus,
@@ -1394,10 +1394,10 @@ public:
 		CbMessageSend cbMessageSend,
 		CbNewIfaceImpl cbNewIfaceImpl,
 		CbParamRef cbParamRef,
+		CbRecordFieldAccess cbRecordFieldAccess,
+		CbRecordFieldSet cbRecordFieldSet,
 		CbSeq cbSeq,
-		CbSpecialBinary cbSpecialBinary,
-		CbStructFieldAccess cbStructFieldAccess,
-		CbStructFieldSet cbStructFieldSet
+		CbSpecialBinary cbSpecialBinary
 	) const {
 		switch (kind) {
 			case Kind::bogus:
@@ -1430,14 +1430,14 @@ public:
 				return cbNewIfaceImpl(newIfaceImpl);
 			case Kind::paramRef:
 				return cbParamRef(paramRef);
+			case Kind::recordFieldAccess:
+				return cbRecordFieldAccess(recordFieldAccess);
+			case Kind::recordFieldSet:
+				return cbRecordFieldSet(recordFieldSet);
 			case Kind::seq:
 				return cbSeq(seq);
 			case Kind::specialBinary:
 				return cbSpecialBinary(specialBinary);
-			case Kind::structFieldAccess:
-				return cbStructFieldAccess(structFieldAccess);
-			case Kind::structFieldSet:
-				return cbStructFieldSet(structFieldSet);
 			default:
 				assert(0);
 		}

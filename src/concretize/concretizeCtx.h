@@ -133,7 +133,7 @@ struct ConcretizeCtx {
 	const FunDecl* allocFun;
 	const Arr<const FunDecl*> callFuns;
 	const CommonTypes* commonTypes;
-	AllConstants allConstants;
+	AllConstants* allConstants;
 	MutDict<const ConcreteStructKey, ConcreteStruct*, compareConcreteStructKey> allConcreteStructs {};
 	MutDict<const ConcreteFunKey, ConcreteFun*, compareConcreteFunKey> allConcreteFuns {};
 
@@ -152,7 +152,7 @@ struct ConcretizeCtx {
 	Late<const ConcreteType> _ctxPtrType;
 
 	ConcretizeCtx(Arena* _arena, const FunDecl* _allocFun, const Arr<const FunDecl*> _callFuns, const CommonTypes* _commonTypes)
-		: arena{_arena}, allocFun{_allocFun}, callFuns{_callFuns}, commonTypes{_commonTypes}, allConstants{} {}
+		: arena{_arena}, allocFun{_allocFun}, callFuns{_callFuns}, commonTypes{_commonTypes}, allConstants{newAllConstants(arena)} {}
 
 	const ConcreteType boolType();
 	const ConcreteType charType();

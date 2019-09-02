@@ -21,11 +21,14 @@ template <typename T>
 inline Opt<T*> tryGetTypeArg(const Arr<const TypeParam> typeParams, const Arr<T> typeArgs, const TypeParam* typeParam) {
 	const Bool hasTypeParam = ptrEquals(typeParams.begin() + typeParam->index, typeParam);
 	return hasTypeParam
-		? some<T*>(getPtr(typeArgs, typeParam->index))
+		? some<T*>(ptrAt(typeArgs, typeParam->index))
 		: none<T*>();
 }
 
-inline const Opt<const Type> tryGetTypeArg(const TypeParamsAndArgs typeParamsAndArgs, const TypeParam* typeParam) {
+inline const Opt<const Type> tryGetTypeArgFromTypeParamsAndArgs(
+	const TypeParamsAndArgs typeParamsAndArgs,
+	const TypeParam* typeParam
+) {
 	const Opt<const Type*> t = tryGetTypeArg(typeParamsAndArgs.typeParams, typeParamsAndArgs.typeArgs, typeParam);
 	return has(t) ? some<const Type>(*force(t)) : none<const Type>();
 }
@@ -38,7 +41,11 @@ inline const Type instantiateType(Arena* arena, const Type type, const StructIns
 	return instantiateType(arena, type, TypeParamsAndArgs{structInst->decl->typeParams, structInst->typeArgs});
 }
 
-const FunInst* instantiateFun(Arena* arena, const FunDecl* decl, const Arr<const Type> typeArgs, const Arr<const Called> specImpls);
+const FunInst* instantiateFun(
+	Arena* arena,
+	const FunDecl* decl,
+	const Arr<const Type> typeArgs,
+	const Arr<const Called> specImpls);
 
 inline const FunInst* instantiateNonTemplateFun(Arena* arena, const FunDecl* decl) {
 	assert(!decl->isTemplate());
@@ -53,12 +60,26 @@ const StructInst* instantiateStruct(
 	const Arr<const Type> typeArgs,
 	DelayStructInsts delayStructInsts);
 
-const StructInst* instantiateStructInst(Arena* arena, const StructInst* structInst, const TypeParamsAndArgs typeParamsAndArgs);
-inline const StructInst* instantiateStructInst(Arena* arena, const StructInst* structInst, const StructInst* contextStructInst) {
-	return instantiateStructInst(arena, structInst, TypeParamsAndArgs{contextStructInst->decl->typeParams, contextStructInst->typeArgs});
+const StructInst* instantiateStructInst(
+	Arena* arena,
+	const StructInst* structInst,
+	const TypeParamsAndArgs typeParamsAndArgs);
+inline const StructInst* instantiateStructInst(
+	Arena* arena,
+	const StructInst* structInst,
+	const StructInst* contextStructInst
+) {
+	return instantiateStructInst(
+		arena,
+		structInst,
+		TypeParamsAndArgs{contextStructInst->decl->typeParams, contextStructInst->typeArgs});
 }
 
-inline const StructInst* instantiateStructNeverDelay(Arena* arena, const StructDecl* decl, const Arr<const Type> typeArgs) {
+inline const StructInst* instantiateStructNeverDelay(
+	Arena* arena,
+	const StructDecl* decl,
+	const Arr<const Type> typeArgs
+) {
 	return instantiateStruct(arena, decl, typeArgs, none<MutArr<StructInst*>*>());
 }
 
