@@ -124,11 +124,17 @@ namespace {
 		}
 	}
 
-	const Opt<const NonFunKeywordAndIndent> tryTake(Lexer* lexer, const CStr kwSpace, const CStr kwNl, const NonFunKeyword keyword) {
+	const Opt<const NonFunKeywordAndIndent> tryTake(
+		Lexer* lexer,
+		const CStr kwSpace,
+		const CStr kwNl,
+		const NonFunKeyword keyword
+	) {
 		if (tryTake(lexer, kwSpace))
 			return some<const NonFunKeywordAndIndent>(NonFunKeywordAndIndent{keyword, SpaceOrNewlineOrIndent::space});
 		else if (tryTake(lexer, kwNl)) {
-			const SpaceOrNewlineOrIndent sni = spaceOrNewlineOrIndentFromNewlineOrIndent(tryTakeIndentAfterNewline(lexer));
+			const SpaceOrNewlineOrIndent sni =
+				spaceOrNewlineOrIndentFromNewlineOrIndent(tryTakeIndentAfterNewline(lexer));
 			return some<const NonFunKeywordAndIndent>(NonFunKeywordAndIndent{keyword, sni});
 		} else
 			return none<const NonFunKeywordAndIndent>();
@@ -196,7 +202,10 @@ namespace {
 			const Pos start = curPos(lexer);
 			const Sym name = takeName(lexer);
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-			add<const TypeAst::InstStruct>(lexer->arena, &res, TypeAst::InstStruct{range(lexer, start), name, typeArgs});
+			add<const TypeAst::InstStruct>(
+				lexer->arena,
+				&res,
+				TypeAst::InstStruct{range(lexer, start), name, typeArgs});
 		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
 		return finishArr(&res);
 	}
@@ -292,7 +301,16 @@ namespace {
 		const SigAst sig = parseSigAfterNameAndSpace(lexer, start, name);
 		const SpecUsesAndSigFlagsAndKwBody extra = parseSpecUsesAndSigFlagsAndKwBody(lexer);
 		const FunBodyAst body = has(extra.body) ? force(extra.body) : FunBodyAst(parseFunExprBody(lexer));
-		return FunDeclAst{isPublic, typeParams, sig, extra.specUses, extra.noCtx, extra.summon, extra.unsafe, extra.trusted, body};
+		return FunDeclAst{
+			isPublic,
+			typeParams,
+			sig,
+			extra.specUses,
+			extra.noCtx,
+			extra.summon,
+			extra.unsafe,
+			extra.trusted,
+			body};
 	}
 
 	void parseSpecOrStructOrFun(
@@ -347,7 +365,10 @@ namespace {
 				if (has(purity))
 					todo<void>("spec shouldn't have purity");
 				const Arr<const SigAst> sigs = parseIndentedSigs(lexer);
-				add<const SpecDeclAst>(lexer->arena, specs, SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
+				add<const SpecDeclAst>(
+					lexer->arena,
+					specs,
+					SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
 			} else {
 				using Body = StructDeclAst::Body;
 				const Body body = [&]() {
@@ -361,7 +382,9 @@ namespace {
 						case NonFunKeyword::record:
 							return Body{tookIndent
 								? parseFields(lexer)
-								: Body::Record{none<const ExplicitByValOrRef>(), emptyArr<const Body::Record::Field>()}};
+								: Body::Record{
+									none<const ExplicitByValOrRef>(),
+									emptyArr<const Body::Record::Field>()}};
 						case NonFunKeyword::_union:
 							return tookIndent
 								? Body{Body::Union{parseUnionMembers(lexer)}}

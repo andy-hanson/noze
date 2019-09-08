@@ -299,16 +299,22 @@ struct StructAlias {
 	const Sym name;
 	const Arr<const TypeParam> typeParams;
 private:
-	Late<const StructInst*> _target;
+	// This will be none if the alias target is not found
+	Late<const Opt<const StructInst*>> _target;
 public:
-	StructAlias(const SourceRange _range, const Bool _isPublic, const Sym _name, const Arr<const TypeParam> _typeParams)
+	StructAlias(
+		const SourceRange _range,
+		const Bool _isPublic,
+		const Sym _name,
+		const Arr<const TypeParam> _typeParams
+	)
 		: range{_range}, isPublic{_isPublic}, name{_name}, typeParams{_typeParams} {}
 
-	inline const StructInst* target() const {
+	inline const Opt<const StructInst*> target() const {
 		return lateGet(&_target);
 	}
-	inline void setTarget(const StructInst* value) {
-		lateSet(&_target, value);
+	inline void setTarget(const Opt<const StructInst*> value) {
+		lateSet<const Opt<const StructInst*>>(&_target, value);
 	}
 };
 

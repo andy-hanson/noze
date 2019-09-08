@@ -2,8 +2,6 @@
 
 #include <type_traits> // std::is_fundamental
 
-#include "./types.h"
-
 struct Bool {
 	bool b;
 
@@ -19,18 +17,6 @@ struct Bool {
 static const Bool True { true };
 static const Bool False { false };
 
-template <typename T>
-inline constexpr const Bool eq(const T a, const T b) {
-	static_assert(std::is_fundamental<T>::value, "must be primitive");
-	return Bool{a == b};
-}
-
-template <typename T>
-inline constexpr const Bool neq(const T a, const T b) {
-	static_assert(std::is_fundamental<T>::value, "must be primitive");
-	return Bool{a != b};
-}
-
 #define _not(a) Bool{!a}
 #define _and(a, b) Bool{a && b}
 #define _and3(a, b, c) Bool{a && b && c}
@@ -43,12 +29,24 @@ inline const Bool enumEq(const T a, const T b) {
 	return Bool{a == b};
 }
 
+inline bool boolToNat(const Bool b) {
+	return b ? 1 : 0;
+}
+
+template <typename T>
+inline constexpr const Bool eq(const T a, const T b) {
+	static_assert(std::is_fundamental<T>::value, "must be primitive");
+	return Bool{a == b};
+}
+
+template <typename T>
+inline constexpr const Bool neq(const T a, const T b) {
+	static_assert(std::is_fundamental<T>::value, "must be primitive");
+	return Bool{a != b};
+}
+
 template <typename T>
 inline const Bool gt(const T a, const T b) {
 	static_assert(std::is_fundamental<T>::value, "must be primitive");
 	return Bool{a > b};
-}
-
-inline size_t boolToNat(const Bool b) {
-	return b ? 1 : 0;
 }

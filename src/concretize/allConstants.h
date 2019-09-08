@@ -19,6 +19,16 @@ const Constant* constantFunPtr(
 	AllConstants* allConstants,
 	const ConcreteType funPtrType,
 	const ConcreteFun* fun);
+const Constant* constantInt16(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType int16Type,
+	const Int16 value);
+const Constant* constantInt32(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType int32Type,
+	const Int32 value);
 const Constant* constantInt64(
 	Arena* arena,
 	AllConstants* allConstants,
@@ -30,13 +40,23 @@ const Constant* constantNat64(
 	AllConstants* allConstants,
 	const ConcreteType nat64Type,
 	const Nat64 value);
+const Constant* constantNat32(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType nat32Type,
+	const Nat32 value);
+const Constant* constantNat16(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType nat16Type,
+	const Nat16 value);
 const Constant* constantNull(Arena* arena, AllConstants* allConstants, const ConcreteType pointerType);
 const Constant* constantPtr(
 	Arena* arena,
 	AllConstants* allConstants,
 	const ConcreteType pointerType,
 	const Constant* array,
-	const size_t index);
+	const Nat64 index);
 const Constant* constantRecord(
 	Arena* arena,
 	AllConstants* allConstants,

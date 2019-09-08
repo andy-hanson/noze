@@ -82,7 +82,11 @@ namespace {
 		return SpecializeOnArgs{specializeOnArgs, finishArr(&nonOmittedArgs)};
 	}
 
-	const SpecializeOnArgs dontSpecialize(ConcretizeCtx* ctx, const SourceRange range, const Arr<const ConstantOrExpr> args) {
+	const SpecializeOnArgs dontSpecialize(
+		ConcretizeCtx* ctx,
+		const SourceRange range,
+		const Arr<const ConstantOrExpr> args
+	) {
 		return SpecializeOnArgs{
 			allVariable(ctx->arena, size(args)),
 			makeLambdasDynamic_arr(ctx, range, args)};

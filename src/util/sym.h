@@ -14,7 +14,7 @@ struct Sym {
 	// Long operator: a CStr tagged with longOperatorMarker
 	//
 	// It's perfectly safe to *compare* syms with `a.value == b.value` without first testing if they're short or long.
-	Nat64 value;
+	u64 value;
 };
 
 struct AllSymbols {
@@ -27,7 +27,7 @@ namespace symImpl {
 	// Never returns 0
 	// (the first '0' tells us that the string is over. Note there may be no '0' if we use all space.)
 	// TODO: huffman compression could make this even better
-	inline constexpr Nat64 packAlphaChar(const char c) {
+	inline constexpr u64 packAlphaChar(const char c) {
 		if ('a' <= c && c <= 'z')
 			return 1 + c - 'a';
 		else if ('0' <= c && c <= '9')
@@ -36,13 +36,11 @@ namespace symImpl {
 			return 1 + 26 + 10;
 		else if (c == '?')
 			return 1 + 26 + 10 + 1;
-		else {
-			printf("TRYING TO PACK %d %c\n", c, c);
-			return unreachable<const Nat64>();
-		}
+		else
+			return unreachable<const u64>();
 	}
 
-	inline constexpr char unpackAlphaChar(const Nat64 n) {
+	inline constexpr char unpackAlphaChar(const u64 n) {
 		assert(n != 0);
 		if (n < 1 + 26)
 			return 'a' + (n - 1);
@@ -52,13 +50,11 @@ namespace symImpl {
 			return '-';
 		else if (n == 1 + 26 + 10 + 1)
 			return '?';
-		else {
-			printf("%lu\n", n);
+		else
 			return unreachable<const char>();
-		}
 	}
 
-	inline constexpr Nat64 packOperatorChar(const char c) {
+	inline constexpr u64 packOperatorChar(const char c) {
 		switch (c) {
 			case '+':
 				return 1;
@@ -75,11 +71,11 @@ namespace symImpl {
 			case '=':
 				return 7;
 			default:
-				return unreachable<const Nat64>();
+				return unreachable<const u64>();
 		}
 	}
 
-	inline constexpr char unpackOperatorChar(const Nat64 n) {
+	inline constexpr char unpackOperatorChar(const u64 n) {
 		switch (n) {
 			case 1:
 				return '+';
@@ -105,52 +101,52 @@ namespace symImpl {
 	// Note this puts the encoded characters "backwards" as char 0 is rightmost.
 
 	// Short strings leave the top 3 bits untouched.
-	const Nat64 shortStringAvailableBits = 64 - 3;
-	const Nat64 bitsPerAlphaChar = 6;
-	const Nat64 maxShortAlphaIdentifierSize = shortStringAvailableBits / bitsPerAlphaChar;
+	const u64 shortStringAvailableBits = 64 - 3;
+	const u64 bitsPerAlphaChar = 6;
+	const u64 maxShortAlphaIdentifierSize = shortStringAvailableBits / bitsPerAlphaChar;
 	// Bit to be set when the sym is short
-	const Nat64 shortAlphaOrOperatorMarker = 0x8000000000000000;
+	const u64 shortAlphaOrOperatorMarker = 0x8000000000000000;
 	// Bit to be set when the sym is alpha
 	// (NOTE: this is redundant as alpha == not operator
-	const Nat64 shortOrLongAlphaMarker     = 0x4000000000000000;
+	const u64 shortOrLongAlphaMarker     = 0x4000000000000000;
 	// Bit to be set when the sym is an operator
-	const Nat64 shortOrLongOperatorMarker  = 0x2000000000000000;
+	const u64 shortOrLongOperatorMarker  = 0x2000000000000000;
 	// 8 = b1000
-	const Nat64 shortAlphaIdentifierMarker = shortAlphaOrOperatorMarker | shortOrLongAlphaMarker;
+	const u64 shortAlphaIdentifierMarker = shortAlphaOrOperatorMarker | shortOrLongAlphaMarker;
 
-	const Nat64 bitsPerOperatorChar = 3;
-	const Nat64 maxShortOperatorSize = shortStringAvailableBits / bitsPerOperatorChar;
-	const Nat64 shortOperatorMarker = shortAlphaOrOperatorMarker | shortOrLongOperatorMarker;
+	const u64 bitsPerOperatorChar = 3;
+	const u64 maxShortOperatorSize = shortStringAvailableBits / bitsPerOperatorChar;
+	const u64 shortOperatorMarker = shortAlphaOrOperatorMarker | shortOrLongOperatorMarker;
 
-	const Nat64 highestPossibleAlphaBit = singleBit(bitsPerAlphaChar * (maxShortAlphaIdentifierSize - 1));
+	const u64 highestPossibleAlphaBit = singleBit(bitsPerAlphaChar * (maxShortAlphaIdentifierSize - 1));
 	static_assert((shortAlphaIdentifierMarker & highestPossibleAlphaBit) == 0, "!");
 
-	const Nat64 highestPossibleOperatorBit = singleBit(bitsPerOperatorChar * (maxShortOperatorSize - 1));
+	const u64 highestPossibleOperatorBit = singleBit(bitsPerOperatorChar * (maxShortOperatorSize - 1));
 	static_assert((shortOperatorMarker & highestPossibleOperatorBit) == 0, "1");
 
-	inline constexpr Nat64 packAlphaIdentifier(const Str str) {
+	inline constexpr u64 packAlphaIdentifier(const Str str) {
 		assert(size(str) <= maxShortAlphaIdentifierSize);
-		Nat64 res = 0;
-		for (const Nat64 i : Range{size(str)}) // TODO: zipwithindex
+		u64 res = 0;
+		for (const u64 i : Range{size(str)}) // TODO: zipwithindex
 			res |= packAlphaChar(at(str, i)) << (bitsPerAlphaChar * i);
 		assert((res & shortAlphaIdentifierMarker) == 0);
 		return res | shortAlphaIdentifierMarker;
 	}
 
-	inline constexpr Nat64 packOperator(const Str str) {
+	inline constexpr u64 packOperator(const Str str) {
 		assert(size(str) <= maxShortOperatorSize);
-		Nat64 res = 0;
-		for (const Nat64 i : Range{size(str)}) // TODO: zipwithindex
+		u64 res = 0;
+		for (const u64 i : Range{size(str)}) // TODO: zipwithindex
 			res |= packOperatorChar(at(str, i)) << (bitsPerOperatorChar * i);
 		assert((res & shortOperatorMarker) == 0);
 		return res | shortOperatorMarker;
 	}
 
 	template <typename Cb>
-	inline void unpackShortAlphaIdentifier(const Nat64 packedStr, Cb cb) {
+	inline void unpackShortAlphaIdentifier(const u64 packedStr, Cb cb) {
 		assert((packedStr & shortAlphaIdentifierMarker) == shortAlphaIdentifierMarker);
-		for (const Nat64 i : Range{maxShortAlphaIdentifierSize}) {
-			const Nat64 packedChar = getBitsShifted(packedStr, bitsPerAlphaChar * i, bitsPerAlphaChar);
+		for (const u64 i : Range{maxShortAlphaIdentifierSize}) {
+			const u64 packedChar = getBitsShifted(packedStr, bitsPerAlphaChar * i, bitsPerAlphaChar);
 			if (packedChar == 0)
 				break;
 			cb(unpackAlphaChar(packedChar));
@@ -158,10 +154,10 @@ namespace symImpl {
 	}
 
 	template <typename Cb>
-	inline void unpackShortOperator(const Nat64 packedStr, Cb cb) {
+	inline void unpackShortOperator(const u64 packedStr, Cb cb) {
 		assert((packedStr & shortOperatorMarker) == shortOperatorMarker);
-		for (const Nat64 i : Range{maxShortOperatorSize}) {
-			const Nat64 packedChar = getBitsShifted(packedStr, bitsPerOperatorChar * i, bitsPerOperatorChar);
+		for (const u64 i : Range{maxShortOperatorSize}) {
+			const u64 packedChar = getBitsShifted(packedStr, bitsPerOperatorChar * i, bitsPerOperatorChar);
 			if (packedChar == 0)
 				break;
 			cb(unpackOperatorChar(packedChar));
@@ -174,7 +170,7 @@ namespace symImpl {
 
 	inline const Str asLong(const Sym a) {
 		assert(isLongSym(a));
-		const Nat64 value = a.value & ~(shortOrLongAlphaMarker | shortOrLongOperatorMarker);
+		const u64 value = a.value & ~(shortOrLongAlphaMarker | shortOrLongOperatorMarker);
 		return strLiteral(reinterpret_cast<const char*>(value));
 	}
 }
@@ -206,7 +202,7 @@ inline constexpr const Sym shortSymAlphaLiteral(const char* name) {
 	return Sym{symImpl::packAlphaIdentifier(strLiteral(name))};
 }
 
-inline constexpr Nat64 shortSymAlphaLiteralValue(const char* name) {
+inline constexpr u64 shortSymAlphaLiteralValue(const char* name) {
 	return shortSymAlphaLiteral(name).value;
 }
 
@@ -215,7 +211,7 @@ inline constexpr const Sym shortSymOperatorLiteral(const char* name) {
 	return Sym{symImpl::packOperator(strLiteral(name))};
 }
 
-inline constexpr Nat64 shortSymOperatorLiteralValue(const char* name) {
+inline constexpr u64 shortSymOperatorLiteralValue(const char* name) {
 	return shortSymOperatorLiteral(name).value;
 }
 

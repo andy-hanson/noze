@@ -11,12 +11,28 @@ namespace {
 		return isNamed(t, shortSymAlphaLiteral("float"));
 	}
 
+	const Bool isInt16(const Type t) {
+		return isNamed(t, shortSymAlphaLiteral("int16"));
+	}
+
+	const Bool isInt32(const Type t) {
+		return isNamed(t, shortSymAlphaLiteral("int32"));
+	}
+
 	const Bool isInt64(const Type t) {
 		return isNamed(t, shortSymAlphaLiteral("int"));
 	}
 
 	const Bool isNat64(const Type t) {
 		return isNamed(t, shortSymAlphaLiteral("nat"));
+	}
+
+	const Bool isNat32(const Type t) {
+		return isNamed(t, shortSymAlphaLiteral("nat32"));
+	}
+
+	const Bool isNat16(const Type t) {
+		return isNamed(t, shortSymAlphaLiteral("nat16"));
 	}
 
 	const Bool isPtr(const Type t) {
@@ -93,6 +109,8 @@ namespace {
 				return constant(BuiltinFunKind::_false);
 			case shortSymAlphaLiteralValue("get-ctx"):
 				return _operator(BuiltinFunKind::getCtx);
+			case shortSymAlphaLiteralValue("get-errno"):
+				return special(BuiltinFunKind::getErrno);
 			case shortSymAlphaLiteralValue("hard-fail"):
 				return special(BuiltinFunKind::hardFail);
 			case shortSymAlphaLiteralValue("if"):
@@ -103,7 +121,11 @@ namespace {
 				return constant(BuiltinFunKind::null);
 			case shortSymAlphaLiteralValue("one"):
 				return isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("one float")
+					: isInt16(rt) ? constant(BuiltinFunKind::oneInt16)
+					: isInt32(rt) ? constant(BuiltinFunKind::oneInt32)
 					: isInt64(rt) ? constant(BuiltinFunKind::oneInt64)
+					: isNat16(rt) ? constant(BuiltinFunKind::oneNat16)
+					: isNat32(rt) ? constant(BuiltinFunKind::oneNat32)
 					: isNat64(rt) ? constant(BuiltinFunKind::oneNat64)
 					: no;
 			case shortSymAlphaLiteralValue("or"):
@@ -120,6 +142,14 @@ namespace {
 				return isPtr(p0) ? _operator(BuiltinFunKind::setPtr) : no;
 			case shortSymAlphaLiteralValue("size-of"):
 				return constant(BuiltinFunKind::sizeOf);
+			case shortSymAlphaLiteralValue("to-int"):
+				return isInt16(p0) ? _operator(BuiltinFunKind::toIntFromInt16)
+					: isInt32(p0) ? _operator(BuiltinFunKind::toIntFromInt32)
+					: no;
+			case shortSymAlphaLiteralValue("to-nat"):
+				return isNat16(p0) ? _operator(BuiltinFunKind::toNatFromNat16)
+					: isNat32(p0) ? _operator(BuiltinFunKind::toNatFromNat32)
+					: no;
 			case shortSymAlphaLiteralValue("true"):
 				return constant(BuiltinFunKind::_true);
 			case shortSymAlphaLiteralValue("unsafe-div"):
@@ -130,20 +160,32 @@ namespace {
 			case shortSymAlphaLiteralValue("unsafe-mod"):
 				return _operator(BuiltinFunKind::unsafeModNat64);
 			case shortSymAlphaLiteralValue("wrap-add"):
-				return isInt64(rt) ? _operator(BuiltinFunKind::wrappingAddInt64)
-					: isNat64(rt) ? _operator(BuiltinFunKind::wrappingAddNat64)
+				return isInt16(rt) ? _operator(BuiltinFunKind::wrapAddInt16)
+					: isInt32(rt) ? _operator(BuiltinFunKind::wrapAddInt32)
+					: isInt64(rt) ? _operator(BuiltinFunKind::wrapAddInt64)
+					: isNat16(rt) ? _operator(BuiltinFunKind::wrapAddNat16)
+					: isNat32(rt) ? _operator(BuiltinFunKind::wrapAddNat32)
+					: isNat64(rt) ? _operator(BuiltinFunKind::wrapAddNat64)
 					: no;
 			case shortSymAlphaLiteralValue("wrap-sub"):
-				return isInt64(rt) ? _operator(BuiltinFunKind::wrappingSubInt64)
-					: isNat64(rt) ? _operator(BuiltinFunKind::wrappingSubNat64)
+				return isInt16(rt) ? _operator(BuiltinFunKind::wrapSubInt16)
+					: isInt32(rt) ? _operator(BuiltinFunKind::wrapSubInt32)
+					: isInt64(rt) ? _operator(BuiltinFunKind::wrapSubInt64)
+					: isNat16(rt) ? _operator(BuiltinFunKind::wrapSubNat16)
+					: isNat32(rt) ? _operator(BuiltinFunKind::wrapSubNat32)
+					: isNat64(rt) ? _operator(BuiltinFunKind::wrapSubNat64)
 					: no;
 			case shortSymAlphaLiteralValue("wrap-mul"):
-				return isInt64(rt) ? _operator(BuiltinFunKind::wrappingMulInt64)
-					: isNat64(rt) ? _operator(BuiltinFunKind::wrappingMulNat64)
+				return isInt64(rt) ? _operator(BuiltinFunKind::wrapMulInt64)
+					: isNat64(rt) ? _operator(BuiltinFunKind::wrapMulNat64)
 					: no;
 			case shortSymAlphaLiteralValue("zero"):
 				return isFloat64(rt) ? todo<const Opt<const BuiltinFunInfo>>("zero float")
+					: isInt16(rt) ? constant(BuiltinFunKind::zeroInt16)
+					: isInt32(rt) ? constant(BuiltinFunKind::zeroInt32)
 					: isInt64(rt) ? constant(BuiltinFunKind::zeroInt64)
+					: isNat16(rt) ? constant(BuiltinFunKind::zeroNat16)
+					: isNat32(rt) ? constant(BuiltinFunKind::zeroNat32)
 					: isNat64(rt) ? constant(BuiltinFunKind::zeroNat64)
 					: no;
 			default:
@@ -153,9 +195,9 @@ namespace {
 					return special(BuiltinFunKind::compareExchangeStrong);
 				else if (symEqLongAlphaLiteral(name, "is-reference-type"))
 					return constant(BuiltinFunKind::isReferenceType);
-				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat64"))
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat"))
 					return _operator(BuiltinFunKind::unsafeInt64ToNat64);
-				else if (symEqLongAlphaLiteral(name, "unsafe-to-int64"))
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-int"))
 					return _operator(BuiltinFunKind::unsafeNat64ToInt64);
 				else
 					return no;
@@ -189,8 +231,16 @@ const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {
 		case shortSymAlphaLiteralValue("fun-ptr3"):
 		case shortSymAlphaLiteralValue("fun-ptr4"):
 			return BuiltinStructInfo{BuiltinStructKind::funPtrN, sizeof(void(*))};
+		case shortSymAlphaLiteralValue("int16"):
+			return BuiltinStructInfo{BuiltinStructKind::int16, sizeof(Int16)};
+		case shortSymAlphaLiteralValue("int32"):
+			return BuiltinStructInfo{BuiltinStructKind::int32, sizeof(Int32)};
 		case shortSymAlphaLiteralValue("int"):
 			return BuiltinStructInfo{BuiltinStructKind::int64, sizeof(Int64)};
+		case shortSymAlphaLiteralValue("nat16"):
+			return BuiltinStructInfo{BuiltinStructKind::nat16, sizeof(Nat16)};
+		case shortSymAlphaLiteralValue("nat32"):
+			return BuiltinStructInfo{BuiltinStructKind::nat32, sizeof(Nat32)};
 		case shortSymAlphaLiteralValue("nat"):
 			return BuiltinStructInfo{BuiltinStructKind::nat64, sizeof(Nat64)};
 		case shortSymAlphaLiteralValue("ptr"):

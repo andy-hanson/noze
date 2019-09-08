@@ -24,6 +24,11 @@ void eachFunInScope(ExprCtx* ctx, const Sym funName, Cb cb) {
 
 const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst ast, Expected* expected);
 
-inline const CheckedExpr checkIdentifierCall(ExprCtx* ctx, const SourceRange range, const Sym name, Expected* expected) {
+inline const CheckedExpr checkIdentifierCall(
+	ExprCtx* ctx,
+	const SourceRange range,
+	const Sym name,
+	Expected* expected
+) {
 	return checkCall(ctx, range, CallAst{name, emptyArr<const TypeAst>(), emptyArr<const ExprAst>()}, expected);
 }

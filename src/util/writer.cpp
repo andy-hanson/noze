@@ -5,16 +5,16 @@ void writeStr(Writer* writer, const Str s) {
 		add<const char>(writer->arena, &writer->res, c);
 }
 
-void writeNat(Writer* writer, const size_t s) {
-	if (s >= 10)
-		writeNat(writer, s / 10);
-	writeChar(writer, '0' + s % 10);
+void writeNat(Writer* writer, const Nat64 n) {
+	if (n.value >= 10)
+		writeNat(writer, n.value / 10);
+	writeChar(writer, '0' + n.value % 10);
 }
 
 void writeInt(Writer* writer, const Int64 i) {
-	if (i < 0)
+	if (i.value < 0)
 		writeChar(writer, '-');
-	writeNat(writer, i < 0 ? -i : i);
+	writeNat(writer, Nat64{static_cast<uint64_t>(i.value < 0 ? -i.value : i.value)});
 }
 
 void writeEscapedChar(Writer* writer, const char c) {

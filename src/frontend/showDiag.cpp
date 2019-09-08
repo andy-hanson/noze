@@ -31,7 +31,10 @@ namespace {
 	void writeWhere(Writer* writer, const FilesInfo fi, const PathAndStorageKind where, const SourceRange range) {
 		writeBold(writer);
 		Arena temp {};
-		writeHyperlink(writer, pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where)), pathToStr(&temp, where.path));
+		writeHyperlink(
+			writer,
+			pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where)),
+			pathToStr(&temp, where.path));
 		writeChar(writer, ' ');
 		writeRed(writer);
 		const LineAndColumnGetter lcg = mustGetAt<
@@ -359,8 +362,18 @@ namespace {
 				writeType(writer, d.type);
 				writeStatic(writer, " is not a union type");
 			},
-			[&](const Diag::MutFieldInNonMutRecord) {
-				writeStatic(writer, "field is mut, but containing record was not marked mut");
+			[&](const Diag::MutFieldNotAllowed d) {
+				const char* message = [&]() {
+					switch (d.reason) {
+						case Diag::MutFieldNotAllowed::Reason::recordIsNotMut:
+							return "field is mut, but containing record was not marked mut";
+						case Diag::MutFieldNotAllowed::Reason::recordIsForcedByVal:
+							return "field is mut, but containing record was forced by-val";
+						default:
+							assert(0);
+					}
+				}();
+				writeStatic(writer, message);
 			},
 			[&](const Diag::NameNotFound d) {
 				const CStr kind = [&]() {

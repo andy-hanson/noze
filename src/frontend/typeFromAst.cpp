@@ -72,17 +72,16 @@ const Opt<const StructInst*> instStructFromAst(
 			return typeArgsFromAsts(ctx, ast.typeArgs, structsAndAliasesMap, typeParamsScope, delayStructInsts);
 	}();
 
-	const StructInst* inst = sOrA.match(
+	return sOrA.match(
 		[&](const StructAlias* a) {
 			if (nExpectedTypeArgs != 0)
-				return todo<const StructInst*>("alias with type params");
+				return todo<const Opt<const StructInst*>>("alias with type params");
 			else
 				return a->target();
 		},
 		[&](const StructDecl* decl) {
-			return instantiateStruct(ctx->arena, decl, typeArgs, delayStructInsts);
+			return some<const StructInst*>(instantiateStruct(ctx->arena, decl, typeArgs, delayStructInsts));
 		});
-	return some<const StructInst*>(inst);
 }
 
 const Type typeFromAst(

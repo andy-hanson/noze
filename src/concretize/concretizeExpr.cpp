@@ -612,10 +612,10 @@ namespace {
 					switch (fieldIndex) {
 						case 0:
 							assert(symEq(fieldName, shortSymAlphaLiteral("size")));
-							return ConstantOrExpr{constantNat64(arena, allConstants, type, a.size())};
+							return ConstantOrExpr{constantNat64(arena, allConstants, type, Nat64{a.size()})};
 						case 1:
 							assert(symEq(fieldName, shortSymAlphaLiteral("data")));
-							return ConstantOrExpr{constantPtr(arena, allConstants, type, c, 0)};
+							return ConstantOrExpr{constantPtr(arena, allConstants, type, c, Nat64{0})};
 						default:
 							assert(0);
 					}

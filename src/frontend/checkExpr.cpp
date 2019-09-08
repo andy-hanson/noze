@@ -76,7 +76,11 @@ namespace {
 		const Type elementType;
 	};
 
-	const CheckedExpr checkCreateArr(ExprCtx* ctx, const SourceRange range, const CreateArrAst ast, Expected* expected) {
+	const CheckedExpr checkCreateArr(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const CreateArrAst ast, Expected* expected
+	) {
 		const ArrExpectedType aet = [&]() {
 			if (has(ast.elementType)) {
 				const Type ta = typeFromAst(ctx, force(ast.elementType));
@@ -114,7 +118,12 @@ namespace {
 		const Bool isBuiltinByVal;
 	};
 
-	const CheckedExpr checkCreateRecord(ExprCtx* ctx, const SourceRange range, const CreateRecordAst ast, Expected* expected) {
+	const CheckedExpr checkCreateRecord(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const CreateRecordAst ast,
+		Expected* expected
+	) {
 		Cell<const Bool> cellTypeIsFromExpected { False };
 		const Type t = [&]() {
 			if (has(ast.type))
@@ -202,7 +211,11 @@ namespace {
 		const Type nonInstantiatedPossiblyFutReturnType;
 	};
 
-	const Opt<const ExpectedLambdaType> getExpectedLambdaType(ExprCtx* ctx, const SourceRange range, Expected* expected) {
+	const Opt<const ExpectedLambdaType> getExpectedLambdaType(
+		ExprCtx* ctx,
+		const SourceRange range,
+		Expected* expected
+	) {
 		const Opt<const Type> expectedType = shallowInstantiateType(expected);
 		if (!has(expectedType) && !force(expectedType).isStructInst()) {
 			ctx->addDiag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});

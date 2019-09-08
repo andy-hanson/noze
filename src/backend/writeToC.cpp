@@ -95,11 +95,23 @@ namespace {
 					case BuiltinStructKind::float64:
 						writeStatic(writer, "double");
 						break;
+					case BuiltinStructKind::int16:
+						writeStatic(writer, "int16_t");
+						break;
+					case BuiltinStructKind::int32:
+						writeStatic(writer, "int32_t");
+						break;
 					case BuiltinStructKind::int64:
 						writeStatic(writer, "int64_t");
 						break;
 					case BuiltinStructKind::nat64:
 						writeStatic(writer, "uint64_t");
+						break;
+					case BuiltinStructKind::nat32:
+						writeStatic(writer, "uint32_t");
+						break;
+					case BuiltinStructKind::nat16:
+						writeStatic(writer, "uint16_t");
 						break;
 					case BuiltinStructKind::ptr:
 						writeType(writer, at(typeArgs, 0));
@@ -360,6 +372,12 @@ namespace {
 				writeStr(writer, f.fun->mangledName());
 				writeChar(writer, ')');
 			},
+			[&](const Int16 i) {
+				writeInt(writer, i);
+			},
+			[&](const Int32 i) {
+				writeInt(writer, i);
+			},
 			[&](const Int64 i) {
 				writeInt(writer, i);
 				writeStatic(writer, "ll");
@@ -369,6 +387,14 @@ namespace {
 				// Don't need a decl for this (other than the concretefun), just create it here
 				todo<void>("write reference for const lambda");
 				// fun0___void{someFun, closurePtr};
+			},
+			[&](const Nat16 n) {
+				writeNat(writer, n);
+				writeStatic(writer, "u");
+			},
+			[&](const Nat32 n) {
+				writeNat(writer, n);
+				writeStatic(writer, "u");
 			},
 			[&](const Nat64 n) {
 				writeNat(writer, n);
@@ -430,7 +456,7 @@ namespace {
 
 				const size_t size = a.size();
 				const Bool isStr = first(a.elements())->kind.isChar();
-				const size_t id = c->id;
+				const Nat64 id = c->id;
 				if (size != 0) {
 					writeStatic(writer, "static ");
 					writeType(writer, a.elementType());
@@ -462,9 +488,13 @@ namespace {
 			[](const Bool) {},
 			[](const char) {},
 			[](const ConstantKind::FunPtr) {},
+			[](const Int16) {},
+			[](const Int32) {},
 			[](const Int64) {},
 			// Do nothing for lambda now -- fun is by-value. Closure is emitted as a separate constant.
 			[](const ConstantKind::Lambda) {},
+			[](const Nat16) {},
+			[](const Nat32) {},
 			[](const Nat64) {},
 			[](const ConstantKind::Null) {},
 			[&](const ConstantKind::Ptr p) {
@@ -686,25 +716,41 @@ namespace {
 				binaryOperator("||");
 				break;
 
-			case BuiltinFunKind::wrappingAddInt64:
-			case BuiltinFunKind::wrappingSubInt64:
-			case BuiltinFunKind::wrappingMulInt64:
-				todo<void>("this isn't wrapping in c++!");
+			// TODO: int operators don't wrap in c++!
+			case BuiltinFunKind::wrapAddInt64:
+				binaryOperator("+");
+				break;
+			case BuiltinFunKind::wrapSubInt64:
+				binaryOperator("-");
+				break;
+			case BuiltinFunKind::wrapMulInt64:
+				binaryOperator("*");
+				break;
 
 			case BuiltinFunKind::addPtr:
 			case BuiltinFunKind::addFloat64:
-			case BuiltinFunKind::wrappingAddNat64:
+			case BuiltinFunKind::wrapAddNat64:
+			case BuiltinFunKind::wrapAddNat32:
+			case BuiltinFunKind::wrapAddNat16:
 				binaryOperator("+");
 				break;
 
 			case BuiltinFunKind::subFloat64:
-			case BuiltinFunKind::wrappingSubNat64:
+			case BuiltinFunKind::wrapSubNat64:
 				binaryOperator("-");
 				break;
 
 			case BuiltinFunKind::mulFloat64:
-			case BuiltinFunKind::wrappingMulNat64:
+			case BuiltinFunKind::wrapMulNat64:
 				binaryOperator("*");
+				break;
+
+			case BuiltinFunKind::toIntFromInt16:
+			case BuiltinFunKind::toIntFromInt32:
+			case BuiltinFunKind::toNatFromNat16:
+			case BuiltinFunKind::toNatFromNat32:
+				writeCastToType(writer->writer, e.returnType());
+				writeArg(0);
 				break;
 
 			case BuiltinFunKind::unsafeDivFloat64:
@@ -715,6 +761,15 @@ namespace {
 
 			case BuiltinFunKind::unsafeModNat64:
 				binaryOperator("%");
+				break;
+
+			case BuiltinFunKind::unsafeNat64ToInt64:
+				todo<void>("unsafeNat64ToInt64");
+				break;
+
+			case BuiltinFunKind::unsafeInt64ToNat64:
+				writeCastToType(writer->writer, e.returnType());
+				writeArg(0);
 				break;
 
 			case BuiltinFunKind::deref:
@@ -743,7 +798,7 @@ namespace {
 				break;
 
 			default:
-				printf("Unhandled BuiltinFunKind: %d\n", static_cast<int>(bf.kind));
+				printf("writeToC: unhandled BuiltinFunKind: %d\n", static_cast<int>(bf.kind));
 				assert(0);
 		}
 	}
@@ -781,6 +836,12 @@ namespace {
 			writeArgsNoCtx(writer, args);
 	}
 
+	const Bool isParameterlessExternFun(const ConcreteFun* fun) {
+		return _and(
+			fun->body().isExtern(),
+			fun->arityExcludingCtxAndClosure() == 0);
+	}
+
 	void writeCall(WriterWithIndent* writer, const ConcreteExpr ce, const ConcreteExpr::Call e) {
 		auto call = [&]() -> void {
 			writeStr(writer, e.called->mangledName());
@@ -804,7 +865,11 @@ namespace {
 				default:
 					assert(0);
 			}
-		} else
+		} else if (isParameterlessExternFun(e.called))
+			// Extern 0-argument function is a global
+			// (TODO: maybe not always?)
+			writeStr(writer, e.called->mangledName());
+		else
 			call();
 	}
 
@@ -985,7 +1050,8 @@ namespace {
 		writeType(writer, fun->returnType());
 		writeChar(writer, ' ');
 		writeStr(writer, fun->mangledName());
-		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
+		if (!isParameterlessExternFun(fun))
+			writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
 	}
 
 	void writeConcreteFunDeclaration(Writer* writer, const ConcreteFun* fun) {
@@ -1044,6 +1110,10 @@ namespace {
 				writeStr(writer, at(params, 2).mangledName);
 				writeStatic(writer, ");");
 				break;
+			}
+
+			case BuiltinFunKind::getErrno: {
+				writeStatic(writer, "return errno;");
 			}
 
 			case BuiltinFunKind::hardFail:
@@ -1140,6 +1210,7 @@ const Str writeToC(Arena* arena, const ConcreteProgram program) {
 
 	//writeStatic(writer, "#include <stdatomic.h>\n"); // compare_exchange_strong
 	writeStatic(&writer, "#include <assert.h>\n");
+	writeStatic(&writer, "#include <errno.h>\n");
 	writeStatic(&writer, "#include <stdatomic.h>\n");
 	writeStatic(&writer, "#include <stdint.h>\n");
 

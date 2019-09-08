@@ -26,8 +26,25 @@ inline void writeStatic(Writer* writer, const char* c) {
 	writeStr(writer, strLiteral(c));
 }
 
-void writeNat(Writer* writer, const Nat64 s);
-void writeInt(Writer* writer, const Int64 s);
+void writeNat(Writer* writer, const Nat64 n);
+inline void writeNat(Writer* writer, const Nat16 n) {
+	writeNat(writer, nat64FromNat16(n));
+}
+inline void writeNat(Writer* writer, const Nat32 n) {
+	writeNat(writer, nat64FromNat32(n));
+}
+inline void writeNat(Writer* writer, const size_t n) {
+	writeNat(writer, Nat64{n});
+}
+
+void writeInt(Writer* writer, const Int64 i);
+inline void writeInt(Writer* writer, const Int16 i) {
+	writeInt(writer, int64FromInt16(i));
+}
+inline void writeInt(Writer* writer, const Int32 i) {
+	writeInt(writer, int64FromInt32(i));
+}
+
 inline void writeBool(Writer* writer, const Bool b) {
 	writeStatic(writer, b ? "true" : "false");
 }

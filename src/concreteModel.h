@@ -11,7 +11,11 @@ enum class BuiltinStructKind {
 	_char,
 	float64,
 	funPtrN, // fun-ptr0, fun-ptr1, etc...
+	int16,
+	int32,
 	int64,
+	nat16,
+	nat32,
 	nat64,
 	ptr,
 	_void,
@@ -34,13 +38,18 @@ enum class BuiltinFunKind {
 	deref,
 	_false,
 	getCtx,
+	getErrno,
 	hardFail,
 	_if,
 	isReferenceType,
 	mulFloat64,
 	_not,
 	null,
+	oneInt16,
+	oneInt32,
 	oneInt64,
+	oneNat16,
+	oneNat32,
 	oneNat64,
 	_or,
 	pass,
@@ -50,6 +59,10 @@ enum class BuiltinFunKind {
 	setPtr,
 	sizeOf,
 	subFloat64,
+	toIntFromInt16,
+	toIntFromInt32,
+	toNatFromNat16,
+	toNatFromNat32,
 	_true,
 	unsafeDivFloat64,
 	unsafeDivInt64,
@@ -57,13 +70,25 @@ enum class BuiltinFunKind {
 	unsafeModNat64,
 	unsafeNat64ToInt64,
 	unsafeInt64ToNat64,
-	wrappingAddInt64,
-	wrappingAddNat64,
-	wrappingMulInt64,
-	wrappingMulNat64,
-	wrappingSubInt64,
-	wrappingSubNat64,
+	wrapAddInt16,
+	wrapAddInt32,
+	wrapAddInt64,
+	wrapAddNat16,
+	wrapAddNat32,
+	wrapAddNat64,
+	wrapMulInt64,
+	wrapMulNat64,
+	wrapSubInt16,
+	wrapSubInt32,
+	wrapSubInt64,
+	wrapSubNat16,
+	wrapSubNat32,
+	wrapSubNat64,
+	zeroInt16,
+	zeroInt32,
 	zeroInt64,
+	zeroNat16,
+	zeroNat32,
 	zeroNat64,
 };
 
@@ -328,7 +353,8 @@ struct ConcreteSig {
 	const Str mangledName;
 	const ConcreteType returnType;
 	// NOTE: when a parameter has been specialized to a constant, it should be omitted here.
-	// When a parameter has been specialized with a KnownLambdaBody, this should store the closure (or be omitted if none).
+	// When a parameter has been specialized with a KnownLambdaBody,
+	// this should store the closure (or be omitted if none).
 	// (Above does not apply to iface messages which are never specialized)
 	const Arr<const ConcreteParam> params;
 
@@ -346,7 +372,9 @@ struct ConstantArrKey {
 
 inline Comparison compareConstantArrKey(const ConstantArrKey a, const ConstantArrKey b) {
 	const Comparison res = compareConcreteType(a.elementType, b.elementType);
-	return res != Comparison::equal ? res : compareArr<const Constant*, comparePtr<const Constant>>(a.elements, b.elements);
+	return res != Comparison::equal
+		? res
+		: compareArr<const Constant*, comparePtr<const Constant>>(a.elements, b.elements);
 }
 
 struct ConcreteFun;
@@ -384,7 +412,7 @@ struct ConstantKind {
 
 	struct Ptr {
 		const Constant* array;
-		const size_t index;
+		const Nat64 index;
 
 		const Constant* deref() const;
 	};
@@ -408,8 +436,12 @@ private:
 		_bool,
 		_char,
 		funPtr,
+		int16,
+		int32,
 		int64,
 		lambda,
+		nat16,
+		nat32,
 		nat64,
 		_null,
 		ptr,
@@ -423,8 +455,12 @@ private:
 		const Bool _bool;
 		const char _char;
 		const FunPtr funPtr;
+		const Int16 int16;
+		const Int32 int32;
 		const Int64 int64;
 		const Lambda lambda;
+		const Nat16 nat16;
+		const Nat32 nat32;
 		const Nat64 nat64;
 		const Null _null;
 		const Ptr ptr;
@@ -438,8 +474,12 @@ public:
 	explicit inline ConstantKind(const Bool a) : kind{Kind::_bool}, _bool{a} {}
 	explicit inline ConstantKind(const char a) : kind{Kind::_char}, _char{a} {}
 	explicit inline ConstantKind(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
+	explicit inline ConstantKind(const Int16 a) : kind{Kind::int16}, int16{a} {}
+	explicit inline ConstantKind(const Int32 a) : kind{Kind::int32}, int32{a} {}
 	explicit inline ConstantKind(const Int64 a) : kind{Kind::int64}, int64{a} {}
 	explicit inline ConstantKind(const Lambda a) : kind{Kind::lambda}, lambda{a} {}
+	explicit inline ConstantKind(const Nat16 a) : kind{Kind::nat16}, nat16{a} {}
+	explicit inline ConstantKind(const Nat32 a) : kind{Kind::nat32}, nat32{a} {}
 	explicit inline ConstantKind(const Nat64 a) : kind{Kind::nat64}, nat64{a} {}
 	explicit inline ConstantKind(const Null a) : kind{Kind::_null}, _null{a} {}
 	explicit inline ConstantKind(const Ptr a) : kind{Kind::ptr}, ptr{a} {}
@@ -459,11 +499,23 @@ public:
 	inline const Bool isFunPtr() const {
 		return enumEq(kind, Kind::funPtr);
 	}
+	inline const Bool isInt16() const {
+		return enumEq(kind, Kind::int16);
+	}
+	inline const Bool isInt32() const {
+		return enumEq(kind, Kind::int32);
+	}
 	inline const Bool isInt64() const {
 		return enumEq(kind, Kind::int64);
 	}
 	inline const Bool isLambda() const {
 		return enumEq(kind, Kind::lambda);
+	}
+	inline const Bool isNat16() const {
+		return enumEq(kind, Kind::nat16);
+	}
+	inline const Bool isNat32() const {
+		return enumEq(kind, Kind::nat32);
 	}
 	inline const Bool isNat64() const {
 		return enumEq(kind, Kind::nat64);
@@ -500,6 +552,14 @@ public:
 		assert(isFunPtr());
 		return funPtr;
 	}
+	inline Int16 asInt16() const {
+		assert(isInt16());
+		return int16;
+	}
+	inline Int32 asInt32() const {
+		assert(isInt32());
+		return int32;
+	}
 	inline Int64 asInt64() const {
 		assert(isInt64());
 		return int64;
@@ -507,6 +567,14 @@ public:
 	inline Lambda asLambda() const {
 		assert(isLambda());
 		return lambda;
+	}
+	inline Nat16 asNat16() const {
+		assert(isNat16());
+		return nat16;
+	}
+	inline Nat32 asNat32() const {
+		assert(isNat32());
+		return nat32;
 	}
 	inline Nat64 asNat64() const {
 		assert(isNat64());
@@ -538,8 +606,12 @@ public:
 		typename CbBool,
 		typename CbChar,
 		typename CbFunPtr,
+		typename CbInt16,
+		typename CbInt32,
 		typename CbInt64,
 		typename CbLambda,
+		typename CbNat16,
+		typename CbNat32,
 		typename CbNat64,
 		typename CbNull,
 		typename CbPtr,
@@ -552,8 +624,12 @@ public:
 		CbBool cbBool,
 		CbChar cbChar,
 		CbFunPtr cbFunPtr,
+		CbInt16 cbInt16,
+		CbInt32 cbInt32,
 		CbInt64 cbInt64,
 		CbLambda cbLambda,
+		CbNat16 cbNat16,
+		CbNat32 cbNat32,
 		CbNat64 cbNat64,
 		CbNull cbNull,
 		CbPtr cbPtr,
@@ -570,10 +646,18 @@ public:
 				return cbChar(_char);
 			case Kind::funPtr:
 				return cbFunPtr(funPtr);
+			case Kind::int16:
+				return cbInt16(int16);
+			case Kind::int32:
+				return cbInt32(int32);
 			case Kind::int64:
 				return cbInt64(int64);
 			case Kind::lambda:
 				return cbLambda(lambda);
+			case Kind::nat16:
+				return cbNat16(nat16);
+			case Kind::nat32:
+				return cbNat32(nat32);
 			case Kind::nat64:
 				return cbNat64(nat64);
 			case Kind::_null:
@@ -595,8 +679,8 @@ public:
 struct Constant {
 	const ConcreteType _type;
 	const ConstantKind kind;
-	const size_t id;
-	inline Constant(const ConcreteType type, const ConstantKind _kind, const size_t _id)
+	const Nat64 id;
+	inline Constant(const ConcreteType type, const ConstantKind _kind, const Nat64 _id)
 		: _type{type}, kind{_kind}, id{_id} {}
 
 	inline const ConcreteType type() const {
@@ -674,7 +758,10 @@ public:
 
 void writeConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv);
 
-inline Comparison compareConstantOrLambdaOrVariable(const ConstantOrLambdaOrVariable a, const ConstantOrLambdaOrVariable b) {
+inline Comparison compareConstantOrLambdaOrVariable(
+	const ConstantOrLambdaOrVariable a,
+	const ConstantOrLambdaOrVariable b
+) {
 	// variable < constant < knownlambdabody
 	if (a.kind != b.kind)
 		return comparePrimitive(a.kind, b.kind);
@@ -713,7 +800,8 @@ private:
 	};
 public:
 	explicit inline ConstantOrExpr(const Constant* _constant) : kind{Kind::constant}, constant{_constant} {}
-	explicit inline ConstantOrExpr(const ConcreteExpr* _concreteExpr) : kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
+	explicit inline ConstantOrExpr(const ConcreteExpr* _concreteExpr)
+		: kind{Kind::concreteExpr}, concreteExpr{_concreteExpr} {}
 
 	inline const Bool isConstant() const {
 		return enumEq(kind, Kind::constant);
@@ -876,8 +964,12 @@ struct ConcreteFun {
 	size_t nextNewIfaceImplIndex = 0;
 	size_t nextLambdaIndex = 0;
 
-	inline ConcreteFun(const Bool _needsCtx, const Opt<const ConcreteParam> _closureParam, const ConcreteSig _sig, const Bool _isCallFun)
-		: needsCtx{_needsCtx}, closureParam{_closureParam}, sig{_sig}, isCallFun{_isCallFun} {}
+	inline ConcreteFun(
+		const Bool _needsCtx,
+		const Opt<const ConcreteParam> _closureParam,
+		const ConcreteSig _sig,
+		const Bool _isCallFun
+	) : needsCtx{_needsCtx}, closureParam{_closureParam}, sig{_sig}, isCallFun{_isCallFun} {}
 
 	inline const ConcreteFunBody body() const {
 		return lateGet(&_body);
@@ -999,6 +1091,10 @@ struct ConcreteExpr {
 		const Arr<const ConstantOrExpr> args;
 
 		Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a);
+
+		inline const ConcreteType returnType() const {
+			return called->returnType();
+		}
 	};
 
 	struct Cond {
@@ -1064,8 +1160,11 @@ struct ConcreteExpr {
 		const ConcreteExpr* matchedValue;
 		const Arr<const Case> cases;
 
-		inline Match(const ConcreteLocal* _matchedLocal, const ConcreteExpr* _matchedValue, const Arr<const Case> _cases)
-			: matchedLocal{_matchedLocal}, matchedValue{_matchedValue}, cases{_cases} {
+		inline Match(
+			const ConcreteLocal* _matchedLocal,
+			const ConcreteExpr* _matchedValue,
+			const Arr<const Case> _cases
+		) : matchedLocal{_matchedLocal}, matchedValue{_matchedValue}, cases{_cases} {
 			assert(sizeEq(matchedUnionMembers(), cases));
 		}
 
@@ -1098,7 +1197,12 @@ struct ConcreteExpr {
 			const Opt<const ConcreteType> _fieldsStruct,
 			const Arr<const ConstantOrExpr> _fieldInitializers,
 			const Arr<const MessageImpl> _messageImpls
-		) : iface{_iface}, fieldsStruct{_fieldsStruct}, fieldInitializers{_fieldInitializers}, messageImpls{_messageImpls} {
+		) :
+			iface{_iface},
+			fieldsStruct{_fieldsStruct},
+			fieldInitializers{_fieldInitializers},
+			messageImpls{_messageImpls}
+		{
 			if (has(fieldsStruct)) {
 				const ConcreteStruct* strukt = force(fieldsStruct).strukt;
 				assert(sizeEq(strukt->body().asRecord().fields, fieldInitializers));
@@ -1256,9 +1360,15 @@ public:
 	inline ConcreteExpr(
 		const ConcreteType type,
 		const SourceRange range,
-		 const Opt<const KnownLambdaBody*> klb,
-		 const ImplicitConvertToUnion a)
-		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::implicitConvertToUnion}, implicitConvertToUnion{a} {
+		const Opt<const KnownLambdaBody*> klb,
+		const ImplicitConvertToUnion a
+	) :
+		_type{type},
+		_range{range},
+		_knownLambdaBody{klb},
+		kind{Kind::implicitConvertToUnion},
+		implicitConvertToUnion{a}
+	{
 		assert(a.memberIndex < size(type.strukt->body().asUnion().members));
 	}
 	inline ConcreteExpr(

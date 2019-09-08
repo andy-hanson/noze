@@ -61,7 +61,7 @@ ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const Co
 }
 
 const Constant* ConstantKind::Ptr::deref() const {
-	return at(array->kind.asArray().elements(), index);
+	return at(array->kind.asArray().elements(), index.value);
 }
 
 void writeConstant(Writer* writer, const Constant* c) {
@@ -84,11 +84,23 @@ void writeConstant(Writer* writer, const Constant* c) {
 		[&](const ConstantKind::FunPtr) {
 			todo<void>("output constant funptr");
 		},
+		[&](const Int16 i) {
+			writeInt(writer, i);
+		},
+		[&](const Int32 i) {
+			writeInt(writer, i);
+		},
 		[&](const Int64 i) {
 			writeInt(writer, i);
 		},
 		[&](const ConstantKind::Lambda) {
 			writeStatic(writer, "some_constant_lambda");
+		},
+		[&](const Nat16 n) {
+			writeNat(writer, n);
+		},
+		[&](const Nat32 n) {
+			writeNat(writer, n);
 		},
 		[&](const Nat64 n) {
 			writeNat(writer, n);

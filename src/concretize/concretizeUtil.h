@@ -24,7 +24,9 @@ inline const Opt<const KnownLambdaBody*> getKnownLambdaBodyFromConstantOrExpr(co
 		});
 }
 
-inline const Opt<const KnownLambdaBody*> getKnownLambdaBodyFromConstantOrLambdaOrVariable(const ConstantOrLambdaOrVariable e) {
+inline const Opt<const KnownLambdaBody*> getKnownLambdaBodyFromConstantOrLambdaOrVariable(
+	const ConstantOrLambdaOrVariable e
+) {
 	return e.match(
 		[](const ConstantOrLambdaOrVariable::Variable) {
 			return none<const KnownLambdaBody*>();

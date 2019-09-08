@@ -119,6 +119,9 @@ c-str alias
 literal char(s str) noctx
 	s noctx-at zero
 
+literal c-str(s str) noctx
+	s data
+
 region bool
 
 bool builtin
@@ -221,6 +224,11 @@ region Arithmetic
 nat builtin
 int builtin
 float builtin
+| Not currently used for anything other than posix headers, so limited arithmetic is avialable
+int16 builtin
+int32 builtin
+nat16 builtin
+nat32 builtin
 
 | UB for negative numbers
 unsafe-to-nat nat(i int) noctx builtin
@@ -228,7 +236,14 @@ unsafe-to-nat nat(i int) noctx builtin
 | UB for positive numbers >= 2 ** 63
 unsafe-to-int int(n nat) noctx builtin
 
+to-nat nat(n nat16) noctx builtin
+to-nat nat(n nat32) noctx builtin
+
+to-int int(i int16) noctx builtin
+to-int int(i int32) noctx builtin
+
 wrap-add nat(a nat, b nat) noctx builtin
+wrap-add nat32(a nat32, b nat32) noctx builtin
 wrap-sub nat(a nat, b nat) noctx builtin
 wrap-mul nat(a nat, b nat) noctx builtin
 unsafe-div nat(a nat, b nat) noctx unsafe builtin
@@ -257,6 +272,8 @@ hundred nat() noctx
 	ten wrap-mul ten
 thousand nat() noctx
 	hundred wrap-mul ten
+million nat() noctx
+	thousand wrap-mul thousand
 
 | TODO: generic
 zero? bool(n nat) noctx
@@ -294,6 +311,25 @@ hundred int() noctx
 	ten wrap-mul ten
 thousand int() noctx
 	hundred wrap-mul ten
+million int() noctx
+	thousand wrap-mul thousand
+neg-million int() noctx
+	million wrap-mul neg-one
+
+wrap-add int32(a int32, b int32) noctx builtin
+wrap-sub int32(a int32, b int32) noctx builtin
+zero int32() noctx builtin
+one int32() noctx builtin
+neg-one int32() noctx
+	zero wrap-sub one
+two int32() noctx
+	one wrap-add one
+
+zero nat32() noctx builtin
+one nat32() noctx builtin
+two nat32() noctx
+	one wrap-add one
+zero nat16() noctx builtin
 
 wrap-incr nat(n nat) noctx
 	n wrap-add one
@@ -365,35 +401,35 @@ mod nat(a nat, b nat) trusted
 
 + int(a int, b int)
 	| TODO: better safety check
-	assert: a > -999
-	assert: a < 999
-	assert: b > -999
-	assert: b < 999
+	assert: a > neg-million
+	assert: a < million
+	assert: b > neg-million
+	assert: b < million
 	a wrap-add b
 
 - int(a int, b int)
 	| TODO: better safety check
-	assert: a > -999
-	assert: a < 999
-	assert: b > -999
-	assert: b < 999
+	assert: a > neg-million
+	assert: a < million
+	assert: b > neg-million
+	assert: b < million
 	a wrap-sub b
 * int(a int, b int)
-	assert: a > -999
-	assert: a < 999
-	assert: b > -999
-	assert: b < 999
+	assert: a > neg-million
+	assert: a < million
+	assert: b > neg-million
+	assert: b < million
 	a wrap-mul b
 / int(a int, b int) trusted
 	forbid: b zero?
 	| If a is the smallest int and b is -1, result is UB
 	| TODO: better safety check
-	assert: a > -999
+	assert: a > neg-million
 	a unsafe-div b
 
 to-int int(n nat)
 	| assert: n < (32 pow2)
-	assert: n < 9999
+	assert: n < million
 	n unsafe-to-int
 
 to-nat nat(i int)
@@ -652,8 +688,7 @@ arr<?t> record
 	data ptr ?t
 
 empty-arr arr ?t() noctx trusted
-	| TODO: should be able to infer type argument to null!
-	new zero, null<?t>
+	new zero, null
 
 empty? bool(a arr ?t) noctx
 	a.size zero?
@@ -690,7 +725,7 @@ at ?t(a arr ?t, index nat) trusted
 	assert: index < a.size
 	a noctx-at index
 
-cat arr ?t(a arr ?t, b arr ?t) trusted
++ arr ?t(a arr ?t, b arr ?t) trusted
 	m = uninitialized-mut-arr<?t>: a.size + b.size
 	zero to a.size each \i
 		m set-at: i, a at i
@@ -870,12 +905,25 @@ to-str str(n nat)
 		else
 			hi = to-str: n / ten
 			lo = to-str: n mod ten
-			hi cat lo
+			hi + lo
+
+to-str str(n nat32)
+	n.to-nat to-str
+
+to-str str(n nat16)
+	n.to-nat to-str
 
 to-str str(i int)
 	a = i.abs to-str
 	| TODO: string interpolation
-	i.negative? if ("-" cat a), a
+	i.negative? if ("-" + a), a
+
+to-str str(i int32)
+	i.to-int to-str
+
+to-str str(i int16)
+	i.to-int to-str
+
 
 region dict
 
@@ -1026,6 +1074,14 @@ each void(s stream ?t, f fun1 void ?t)
 
 each void(r range-nat, f fun1 void nat)
 	r.iter each-recur f
+
+each void(a arr ?t, f fun1 void ?t)
+	when
+		a empty?
+			pass
+		else
+			f call a.first
+			a.tail each f
 
 each-recur void(i iterator ?t, f fun1 void ?t)
 	match i next
@@ -1543,4 +1599,3 @@ assert-vats-are-shut-down void(i nat, vats arr vat) noctx unsafe
 			vat.tasks-lock.ref-of-val release-lock
 
 			assert-vats-are-shut-down: i.noctx-incr, vats
-

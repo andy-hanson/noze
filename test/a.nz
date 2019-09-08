@@ -1,3 +1,82 @@
+
+u-long alias
+	nat
+s-long alias
+	int
+dev-t alias
+	u-long
+ino-t alias
+	u-long
+mode-t alias
+	u-long
+nlink-t alias
+	u-long
+uid-t alias
+	u-long
+gid-t alias
+	u-long
+off-t alias
+	s-long
+blksize-t alias
+	s-long
+blkcnt-t alias
+	s-long
+time-t alias
+	s-long
+stat-t record mut
+	st-dev mut dev-t
+	st-ino mut ino-t
+	st-mode mut mode-t
+	st-nlink mut nlink-t
+	st-uid mut uid-t
+	st-gid mut gid-t
+	st-rdev mut dev-t
+	pad mut u-long
+	st-size mut off-t
+	st-blksize mut blksize-t
+	st-blocks mut blkcnt-t
+	st-atime mut time-t
+	st-atime-nsec mut u-long
+	st-mtime mut time-t
+	st-mtime-nsec mut u-long
+	st-ctime mut time-t
+	st-ctime-msec mut u-long
+	unused mut u-long
+
+err-t alias
+	int32
+
+enoent err-t()
+	two
+
+get-errno err-t() summon builtin
+
+stat int32(path c-str, buf stat-t) extern
+
+get-stat opt stat-t(path c-str) summon trusted
+	s = new<stat-t> zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero
+	err = path stat s
+	when
+		err == zero
+			new<some<stat-t>> s
+		else
+			assert: err == neg-one
+			errno = get-errno
+			when
+				errno == enoent
+					new<none>
+				else
+					print-sync: "stat failed: "
+					print-sync: errno.to-str
+					todo
+
+| TODO: move to io.nz
+file-exists? bool(path c-str) summon
+	path.get-stat has?
+
+file-exists? bool(path str) summon
+	path.data file-exists?
+
 my-spec<?t> spec
 	zero ?t()
 	+ ?t(a ?t, b ?t)
@@ -84,8 +163,14 @@ user-main fut void() trusted summon
 	| assert: x == 233168
 	| print-sync: x.to-str
 
-	resolved: print-sync: "hello world"
+	print-sync: "hello world"
 
+	files = new-arr<str> "test/a.nz", "test/b.nz"
+	files each \file
+		a = file.file-exists?
+		print-sync: file + " exists? " + a.to-str
+
+	resolved: pass
 
 	| n = (new-arr<nat> 1, 2, 3) my-sum
 	| print-sync: n.to-str

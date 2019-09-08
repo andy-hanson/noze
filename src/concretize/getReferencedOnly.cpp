@@ -199,9 +199,13 @@ namespace {
 			[&](const ConstantKind::FunPtr f) {
 				addFun(ctx, f.fun);
 			},
+			[](const Int16) {},
+			[](const Int32) {},
 			[](const Int64) {},
 			// When we *call* this or convert to fn, then we'll mark its fun as referenced
 			[](const ConstantKind::Lambda) {},
+			[](const Nat16) {},
+			[](const Nat32) {},
 			[](const Nat64) {},
 			[](const ConstantKind::Null) {},
 			[&](const ConstantKind::Ptr p) {

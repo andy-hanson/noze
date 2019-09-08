@@ -45,8 +45,11 @@ struct ConcreteFunInst {
 	const Arr<const ConcreteType> typeArgs;
 	const Arr<const ConcreteFunInst> specImpls;
 
-	inline ConcreteFunInst(const FunDecl* _decl, const Arr<const ConcreteType> _typeArgs, const Arr<const ConcreteFunInst> _specImpls)
-		: decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls} {
+	inline ConcreteFunInst(
+		const FunDecl* _decl,
+		const Arr<const ConcreteType> _typeArgs,
+		const Arr<const ConcreteFunInst> _specImpls
+	) : decl{_decl}, typeArgs{_typeArgs}, specImpls{_specImpls} {
 		assert(sizeEq(typeArgs, decl->typeParams));
 		assert(size(specImpls) == decl->nSpecImpls());
 	}
@@ -151,8 +154,18 @@ struct ConcretizeCtx {
 	Late<const ConcreteType> _anyPtrType;
 	Late<const ConcreteType> _ctxPtrType;
 
-	ConcretizeCtx(Arena* _arena, const FunDecl* _allocFun, const Arr<const FunDecl*> _callFuns, const CommonTypes* _commonTypes)
-		: arena{_arena}, allocFun{_allocFun}, callFuns{_callFuns}, commonTypes{_commonTypes}, allConstants{newAllConstants(arena)} {}
+	ConcretizeCtx(
+		Arena* _arena,
+		const FunDecl* _allocFun,
+		const Arr<const FunDecl*> _callFuns,
+		const CommonTypes* _commonTypes
+	) :
+		arena{_arena},
+		allocFun{_allocFun},
+		callFuns{_callFuns},
+		commonTypes{_commonTypes},
+		allConstants{newAllConstants(arena)}
+	{}
 
 	const ConcreteType boolType();
 	const ConcreteType charType();

@@ -288,7 +288,7 @@ struct mapOrFail {
 	template <typename In, typename Cb>
 	const Result<const _void, OutFailure> worker(OutSuccess* out, const Arr<In> in, Cb cb) {
 		if (isEmpty(in))
-			return success<const _void, OutFailure>(0);
+			return success<const _void, OutFailure>(_void{0});
 		else {
 			const Result<OutSuccess, OutFailure> result = cb(first(in));
 			return flatMapSuccess<const _void, OutFailure>{}(result, [&](const OutSuccess s) {

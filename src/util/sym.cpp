@@ -12,8 +12,8 @@ namespace {
 			[&]() {
 				return strToCStr(&allSymbols->arena, str);
 			});
-		const Nat64 marker = isOperator ? symImpl::shortOrLongOperatorMarker : symImpl::shortOrLongAlphaMarker;
-		const Nat64 res = reinterpret_cast<const Nat64>(cstr) | marker;
+		const u64 marker = isOperator ? symImpl::shortOrLongOperatorMarker : symImpl::shortOrLongAlphaMarker;
+		const u64 res = reinterpret_cast<const u64>(cstr) | marker;
 		assert((res & (symImpl::shortAlphaOrOperatorMarker)) == 0);
 		return Sym{res};
 	}

@@ -33,8 +33,12 @@ struct AllConstants {
 	Late<const Constant*> _true {};
 	Late<const Constant*> __void {};
 	MutDict<const char, const Constant*, comparePrimitive<const char>> chars {};
-	MutDict<const Int64, const Constant*, comparePrimitive<const Int64>> int64s {};
-	MutDict<const Nat64, const Constant*, comparePrimitive<const Nat64>> nat64s {};
+	MutDict<const Int16, const Constant*, compareInt16> int16s {};
+	MutDict<const Int32, const Constant*, compareInt32> int32s {};
+	MutDict<const Int64, const Constant*, compareInt64> int64s {};
+	MutDict<const Nat16, const Constant*, compareNat16> nat16s {};
+	MutDict<const Nat32, const Constant*, compareNat32> nat32s {};
+	MutDict<const Nat64, const Constant*, compareNat64> nat64s {};
 	MutDict<const ConcreteFun*, const Constant*, comparePtr<const ConcreteFun>> funPtrs {};
 	size_t nextLambdaId = 0;
 	// No dict for lambdas?
@@ -57,7 +61,7 @@ namespace {
 		AllConstants* allConstants,
 		const ConcreteType type,
 		const ConstantKind kind,
-		const size_t id
+		const Nat64 id
 	) {
 		const Constant* res = nu<const Constant>{}(arena, type, kind, id);
 		add(arena, &allConstants->all, res);
@@ -88,18 +92,18 @@ const Constant* constantArr(
 				allConstants,
 				ConcreteType::fromStruct(arrayType),
 				ConstantKind{ConstantKind::Array{key}},
-				allConstants->nextArrId++);
+				Nat64{allConstants->nextArrId++});
 		});
 }
 
 const Constant* constantBool(Arena* arena, AllConstants* allConstants, const ConcreteType boolType, const Bool value)  {
 	if (value)
 		return lazilySet(&allConstants->_true, [&]() {
-			return newConstant(arena, allConstants, boolType, ConstantKind{True}, 0);
+			return newConstant(arena, allConstants, boolType, ConstantKind{True}, Nat64{0});
 		});
 	else
 		return lazilySet(&allConstants->_false, [&]() {
-			return newConstant(arena, allConstants, boolType, ConstantKind{False}, 1);
+			return newConstant(arena, allConstants, boolType, ConstantKind{False}, Nat64{1});
 		});
 }
 
@@ -109,7 +113,7 @@ const Constant* constantChar(Arena* arena, AllConstants* allConstants, const Con
 		&allConstants->chars,
 		value,
 		[&]() {
-			return newConstant(arena, allConstants, charType, ConstantKind{value}, value);
+			return newConstant(arena, allConstants, charType, ConstantKind{value}, Nat64{static_cast<size_t>(value)});
 		});
 }
 
@@ -129,10 +133,42 @@ const Constant* constantFunPtr(
 				allConstants,
 				funPtrType,
 				ConstantKind{ConstantKind::FunPtr{fun}},
-				allConstants->nextLambdaId++);
+				Nat64{allConstants->nextLambdaId++});
 		});
 	assert(res->type().eq(funPtrType));
 	return res;
+}
+
+const Constant* constantInt16(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType int16Type,
+	const Int16 value
+) {
+	return getOrAdd<const Int16, const Constant*, compareInt16>{}(
+		arena,
+		&allConstants->int16s,
+		value,
+		[&]() {
+			return newConstant(
+				arena, allConstants, int16Type, ConstantKind{value}, Nat64{static_cast<size_t>(value.value)});
+		});
+}
+
+const Constant* constantInt32(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType int32Type,
+	const Int32 value
+) {
+	return getOrAdd<const Int32, const Constant*, compareInt32>{}(
+		arena,
+		&allConstants->int32s,
+		value,
+		[&]() {
+			return newConstant(
+				arena, allConstants, int32Type, ConstantKind{value}, Nat64{static_cast<size_t>(value.value)});
+		});
 }
 
 const Constant* constantInt64(
@@ -141,13 +177,14 @@ const Constant* constantInt64(
 	const ConcreteType int64Type,
 	const Int64 value
 ) {
-	return getOrAdd<const Int64, const Constant*, comparePrimitive<const Int64>>{}(
+	return getOrAdd<const Int64, const Constant*, compareInt64>{}(
 		arena,
 		&allConstants->int64s,
 		value,
 		[&]() {
 			// Id matters for mangling. Go ahead and wrap to nat64.
-			return newConstant(arena, allConstants, int64Type, ConstantKind{value}, static_cast<Nat64>(value));
+			return newConstant(
+				arena, allConstants, int64Type, ConstantKind{value}, Nat64{static_cast<size_t>(value.value)});
 		});
 }
 
@@ -157,7 +194,7 @@ const Constant* constantNat64(
 	const ConcreteType nat64Type,
 	const Nat64 value
 ) {
-	return getOrAdd<const Nat64, const Constant*, comparePrimitive<const Nat64>>{}(
+	return getOrAdd<const Nat64, const Constant*, compareNat64>{}(
 		arena,
 		&allConstants->nat64s,
 		value,
@@ -168,6 +205,46 @@ const Constant* constantNat64(
 				nat64Type,
 				ConstantKind{value},
 				value);
+		});
+}
+
+const Constant* constantNat32(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType nat32Type,
+	const Nat32 value
+) {
+	return getOrAdd<const Nat32, const Constant*, compareNat32>{}(
+		arena,
+		&allConstants->nat32s,
+		value,
+		[&]() {
+			return newConstant(
+				arena,
+				allConstants,
+				nat32Type,
+				ConstantKind{value},
+				nat64FromNat32(value));
+		});
+}
+
+const Constant* constantNat16(
+	Arena* arena,
+	AllConstants* allConstants,
+	const ConcreteType nat16Type,
+	const Nat16 value
+) {
+	return getOrAdd<const Nat16, const Constant*, compareNat16>{}(
+		arena,
+		&allConstants->nat16s,
+		value,
+		[&]() {
+			return newConstant(
+				arena,
+				allConstants,
+				nat16Type,
+				ConstantKind{value},
+				nat64FromNat16(value));
 		});
 }
 
@@ -182,7 +259,7 @@ const Constant* constantNull(
 		&allConstants->nulls,
 		pointerType.strukt,
 		[&]() {
-			return newConstant(arena, allConstants, pointerType, ConstantKind{ConstantKind::Null{}}, 0);
+			return newConstant(arena, allConstants, pointerType, ConstantKind{ConstantKind::Null{}}, Nat64{0});
 		});
 }
 
@@ -192,7 +269,7 @@ const Constant* constantLambda(Arena* arena, AllConstants* allConstants, const K
 		allConstants,
 		klb->dynamicType,
 		ConstantKind{ConstantKind::Lambda{klb}},
-		allConstants->nextLambdaId++);
+		Nat64{allConstants->nextLambdaId++});
 }
 
 const Constant* constantPtr(
@@ -200,13 +277,13 @@ const Constant* constantPtr(
 	AllConstants* allConstants,
 	const ConcreteType pointerType,
 	const Constant* array,
-	const size_t index
+	const Nat64 index
 ) {
 	assertIsPointer(pointerType);
 	const ConstantKind::Array a = array->kind.asArray();
 	// Pointer may point to the end of the array
 	const size_t nPtrs = a.size() + 1;
-	assert(index < nPtrs);
+	assert(index.value < nPtrs);
 	const Arr<const Constant*> ptrs = getOrAdd<
 		const Constant*,
 		Arr<const Constant*>,
@@ -217,11 +294,11 @@ const Constant* constantPtr(
 				arena,
 				allConstants,
 				pointerType,
-				ConstantKind{ConstantKind::Ptr{array, idx}},
-				allConstants->nextPtrId++);
+				ConstantKind{ConstantKind::Ptr{array, Nat64{idx}}},
+				Nat64{allConstants->nextPtrId++});
 		});
 	});
-	return at(ptrs, index);
+	return at(ptrs, index.value);
 }
 
 const Constant* constantRecord(
@@ -248,7 +325,7 @@ const Constant* constantRecord(
 				allConstants,
 				recordType,
 				ConstantKind{ConstantKind::Record{recordType, args}},
-				cr->nextId++);
+				Nat64{cr->nextId++});
 		});
 }
 
@@ -277,7 +354,7 @@ const Constant* constantUnion(
 				allConstants,
 				unionType,
 				ConstantKind{ConstantKind::Union{unionType.strukt, memberIndex, member}},
-				cu->nextId++);
+				Nat64{cu->nextId++});
 		});
 	assert(res->kind.asUnion().memberIndex == memberIndex);
 	return res;
@@ -285,6 +362,6 @@ const Constant* constantUnion(
 
 const Constant* constantVoid(Arena* arena, AllConstants* allConstants, const ConcreteType voidType) {
 	return lazilySet(&allConstants->__void, [&]() {
-		return newConstant(arena, allConstants, voidType, ConstantKind{ConstantKind::Void{}}, 0);
+		return newConstant(arena, allConstants, voidType, ConstantKind{ConstantKind::Void{}}, Nat64{0});
 	});
 }

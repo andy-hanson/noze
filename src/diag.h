@@ -231,7 +231,14 @@ struct Diag {
 	struct MatchOnNonUnion {
 		const Type type;
 	};
-	struct MutFieldInNonMutRecord {};
+	struct MutFieldNotAllowed {
+		enum Reason {
+			recordIsNotMut,
+			recordIsForcedByVal
+		};
+
+		const Reason reason;
+	};
 	struct NameNotFound {
 		enum class Kind {
 			strukt,
@@ -315,7 +322,7 @@ private:
 		localShadowsPrevious,
 		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
-		mutFieldInNonMutRecord,
+		mutFieldNotAllowed,
 		nameNotFound,
 		paramShadowsPrevious,
 		parseDiag,
@@ -350,7 +357,7 @@ private:
 		const LocalShadowsPrevious localShadowsPrevious;
 		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
-		const MutFieldInNonMutRecord mutFieldInNonMutRecord;
+		const MutFieldNotAllowed mutFieldNotAllowed;
 		const NameNotFound nameNotFound;
 		const ParamShadowsPrevious paramShadowsPrevious;
 		const ParseDiag parseDiag;
@@ -401,8 +408,8 @@ public:
 		: kind{Kind::matchCaseStructNamesDoNotMatch}, matchCaseStructNamesDoNotMatch{d} {}
 	explicit inline Diag(const MatchOnNonUnion d)
 		: kind{Kind::matchOnNonUnion}, matchOnNonUnion{d} {}
-	explicit inline Diag(const MutFieldInNonMutRecord d)
-		: kind{Kind::mutFieldInNonMutRecord}, mutFieldInNonMutRecord{d} {}
+	explicit inline Diag(const MutFieldNotAllowed d)
+		: kind{Kind::mutFieldNotAllowed}, mutFieldNotAllowed{d} {}
 	explicit inline Diag(const NameNotFound d)
 		: kind{Kind::nameNotFound}, nameNotFound{d} {}
 	explicit inline Diag(const ParamShadowsPrevious d)
@@ -455,7 +462,7 @@ public:
 		typename CbLocalShadowsPrevious,
 		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
-		typename CbMutFieldInNonMutRecord,
+		typename CbMutFieldNotAllowed,
 		typename CbNameNotFound,
 		typename CbParamShadowsPrevious,
 		typename CbParseDiag,
@@ -488,7 +495,7 @@ public:
 		CbLocalShadowsPrevious cbLocalShadowsPrevious,
 		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
-		CbMutFieldInNonMutRecord cbMutFieldInNonMutRecord,
+		CbMutFieldNotAllowed cbMutFieldNotAllowed,
 		CbNameNotFound cbNameNotFound,
 		CbParamShadowsPrevious cbParamShadowsPrevious,
 		CbParseDiag cbParseDiag,
@@ -538,8 +545,8 @@ public:
 				return cbMatchCaseStructNamesDoNotMatch(matchCaseStructNamesDoNotMatch);
 			case Kind::matchOnNonUnion:
 				return cbMatchOnNonUnion(matchOnNonUnion);
-			case Kind::mutFieldInNonMutRecord:
-				return cbMutFieldInNonMutRecord(mutFieldInNonMutRecord);
+			case Kind::mutFieldNotAllowed:
+				return cbMutFieldNotAllowed(mutFieldNotAllowed);
 			case Kind::nameNotFound:
 				return cbNameNotFound(nameNotFound);
 			case Kind::paramShadowsPrevious:

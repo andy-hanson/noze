@@ -20,15 +20,27 @@ namespace {
 				// Should be a compile error
 				return unreachable<const Comparison>();
 			},
+			[&](const Int16 ia) {
+				return compareInt16(ia, b->kind.asInt16());
+			},
+			[&](const Int32 ia) {
+				return compareInt32(ia, b->kind.asInt32());
+			},
 			[&](const Int64 ia) {
-				return comparePrimitive(ia, b->kind.asInt64());
+				return compareInt64(ia, b->kind.asInt64());
 			},
 			[&](const ConstantKind::Lambda) {
 				// Should be a compile error
 				return unreachable<const Comparison>();
 			},
+			[&](const Nat16 na) {
+				return compareNat16(na, b->kind.asNat16());
+			},
+			[&](const Nat32 na) {
+				return compareNat32(na, b->kind.asNat32());
+			},
 			[&](const Nat64 na) {
-				return comparePrimitive(na, b->kind.asNat64());
+				return compareNat64(na, b->kind.asNat64());
 			},
 			[&](const ConstantKind::Null) {
 				assert(b->kind.isNull());
@@ -88,8 +100,20 @@ namespace {
 		auto boolArg = [&](const size_t index) -> Bool {
 			return constantArg(index)->kind.asBool();
 		};
+		auto int16Arg = [&](const size_t index) -> Int16 {
+			return constantArg(index)->kind.asInt16();
+		};
+		auto int32Arg = [&](const size_t index) -> Int32 {
+			return constantArg(index)->kind.asInt32();
+		};
 		auto int64Arg = [&](const size_t index) -> Int64 {
 			return constantArg(index)->kind.asInt64();
+		};
+		auto nat16Arg = [&](const size_t index) -> Nat16 {
+			return constantArg(index)->kind.asNat16();
+		};
+		auto nat32Arg = [&](const size_t index) -> Nat32 {
+			return constantArg(index)->kind.asNat32();
 		};
 		auto nat64Arg = [&](const size_t index) -> Nat64 {
 			return constantArg(index)->kind.asNat64();
@@ -105,8 +129,20 @@ namespace {
 		auto constBool = [&](const Bool value) -> const Opt<const Constant*> {
 			return yes(constantBool(arena, allConstants, returnType, value));
 		};
+		auto constInt16 = [&](const Int16 value) -> const Opt<const Constant*> {
+			return yes(constantInt16(arena, allConstants, returnType, value));
+		};
+		auto constInt32 = [&](const Int32 value) -> const Opt<const Constant*> {
+			return yes(constantInt32(arena, allConstants, returnType, value));
+		};
 		auto constInt64 = [&](const Int64 value) -> const Opt<const Constant*> {
 			return yes(constantInt64(arena, allConstants, returnType, value));
+		};
+		auto constNat16 = [&](const Nat16 value) -> const Opt<const Constant*> {
+			return yes(constantNat16(arena, allConstants, returnType, value));
+		};
+		auto constNat32 = [&](const Nat32 value) -> const Opt<const Constant*> {
+			return yes(constantNat32(arena, allConstants, returnType, value));
 		};
 		auto constNat64 = [&](const Nat64 value) -> const Opt<const Constant*> {
 			return yes(constantNat64(arena, allConstants, returnType, value));
@@ -114,7 +150,7 @@ namespace {
 		auto constNull = [&](const ConcreteType pointerType) -> const Opt<const Constant*> {
 			return yes(constantNull(arena, allConstants, pointerType));
 		};
-		auto constPtr = [&](const Constant* array, const size_t index) {
+		auto constPtr = [&](const Constant* array, const Nat64 index) {
 			return yes(constantPtr(arena, allConstants, returnType, array, index));
 		};
 		auto constVoid = [&]() {
@@ -172,8 +208,7 @@ namespace {
 				return constBool(False);
 
 			case BuiltinFunKind::getCtx:
-				return no;
-
+			case BuiltinFunKind::getErrno:
 			case BuiltinFunKind::hardFail:
 				return no;
 
@@ -192,11 +227,23 @@ namespace {
 			case BuiltinFunKind::null:
 				return constNull(returnType);
 
+			case BuiltinFunKind::oneInt16:
+				return constInt16(Int16{1});
+
+			case BuiltinFunKind::oneInt32:
+				return constInt32(Int32{1});
+
 			case BuiltinFunKind::oneInt64:
-				return constInt64(1);
+				return constInt64(Int64{1});
 
 			case BuiltinFunKind::oneNat64:
-				return constNat64(1);
+				return constNat64(Nat64{1});
+
+			case BuiltinFunKind::oneNat32:
+				return constNat32(Nat32{1});
+
+			case BuiltinFunKind::oneNat16:
+				return constNat16(Nat16{1});
 
 			case BuiltinFunKind::_or:
 				return constBool(_or(boolArg(0), boolArg(1)));
@@ -217,7 +264,7 @@ namespace {
 				const ConcreteType t = typeArg(0);
 				if (t.isPointer != t.strukt->defaultIsPointer())
 					todo<void>("is this doing `sizeof<byval<?t>>` ?");
-				return constNat64(t.strukt->sizeBytes());
+				return constNat64(Nat64{t.strukt->sizeBytes()});
 			}
 
 			case BuiltinFunKind::subFloat64:
@@ -236,7 +283,7 @@ namespace {
 				const Nat64 n0 = nat64Arg(0);
 				const Nat64 n1 = nat64Arg(1);
 
-				if (n1 == 0)
+				if (n1.value == 0)
 					return todo<const Opt<const Constant*>>("unsafe-div failed -- divisor is 0");
 				else
 					return constNat64(n0 / n1);
@@ -245,51 +292,78 @@ namespace {
 			case BuiltinFunKind::unsafeModNat64: {
 				const Nat64 n0 = nat64Arg(0);
 				const Nat64 n1 = nat64Arg(1);
-				if (n1 == 0)
+				if (n1.value == 0)
 					todo<void>("unsafe-mod failed");
 				return constNat64(n0 % n1);
 			}
 
-			case BuiltinFunKind::wrappingAddInt64: {
-				const Int64 i0 = int64Arg(0);
-				const Int64 i1 = int64Arg(1);
-				if (i0 < -9999 || i0 > 9999 || i1 < -9999 || i1 > 9999)
-					todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
-				return constInt64(i0 + i1);
-			}
-			case BuiltinFunKind::wrappingAddNat64:
+			case BuiltinFunKind::unsafeNat64ToInt64:
+				return constInt64(int64FromNat64(nat64Arg(0)));
+
+			case BuiltinFunKind::unsafeInt64ToNat64:
+				return todo<const Opt<const Constant*>>("unsafeInt64ToNat64");
+
+			case BuiltinFunKind::wrapAddInt16:
+				return constInt16(wrapAdd(int16Arg(0), int16Arg(1)));
+
+			case BuiltinFunKind::wrapAddInt32:
+				return constInt32(wrapAdd(int32Arg(0), int32Arg(1)));
+
+			case BuiltinFunKind::wrapAddInt64:
+				return constInt64(wrapAdd(int64Arg(0), int64Arg(1)));
+
+			case BuiltinFunKind::wrapAddNat16:
+				return constNat16(nat16Arg(0) + nat16Arg(1));
+
+			case BuiltinFunKind::wrapAddNat32:
+				return constNat32(nat32Arg(0) + nat32Arg(1));
+
+			case BuiltinFunKind::wrapAddNat64:
 				return constNat64(nat64Arg(0) + nat64Arg(1));
 
-			case BuiltinFunKind::wrappingSubInt64: {
-				const Int64 i0 = int64Arg(0);
-				const Int64 i1 = int64Arg(1);
-				if (i0 < -9999 || i0 > 9999 || i1 < -9999 || i1 > 9999)
-					todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
-				return constInt64(i0 + i1);
-			}
+			case BuiltinFunKind::wrapSubInt16:
+				return constInt16(wrapSub(int16Arg(0), int16Arg(1)));
 
-			case BuiltinFunKind::wrappingSubNat64:
+			case BuiltinFunKind::wrapSubInt32:
+				return constInt32(wrapSub(int32Arg(0), int32Arg(1)));
+
+			case BuiltinFunKind::wrapSubInt64:
+				return constInt64(wrapSub(int64Arg(0), int64Arg(1)));
+
+			case BuiltinFunKind::wrapSubNat64:
 				return constNat64(nat64Arg(0) - nat64Arg(1));
 
-			case BuiltinFunKind::wrappingMulInt64: {
+			case BuiltinFunKind::wrapMulInt64: {
 				const Int64 i0 = int64Arg(0);
 				const Int64 i1 = int64Arg(1);
-				if (i0 < -9999 || i0 > 9999 || i1 < -9999 || i1 > 9999)
+				if (i0.value < -9999999 || i0.value > 9999999 || i1.value < -9999999 || i1.value > 9999999)
 					todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
 				return constInt64(i0 * i1);
 			}
 
-			case BuiltinFunKind::wrappingMulNat64:
+			case BuiltinFunKind::wrapMulNat64:
 				return constNat64(nat64Arg(0) * nat64Arg(1));
 
+			case BuiltinFunKind::zeroInt16:
+				return constInt16(Int16{0});
+
+			case BuiltinFunKind::zeroInt32:
+				return constInt32(Int32{0});
+
 			case BuiltinFunKind::zeroInt64:
-				return constInt64(0);
+				return constInt64(Int64{0});
+
+			case BuiltinFunKind::zeroNat16:
+				return constNat16(Nat16{0});
+
+			case BuiltinFunKind::zeroNat32:
+				return constNat32(Nat32{0});
 
 			case BuiltinFunKind::zeroNat64:
-				return constNat64(0);
+				return constNat64(Nat64{0});
 
 			default:
-				printf("unhandled BuiltinFunKind: %d\n", static_cast<int>(info.kind));
+				printf("concretizeBuiltin: unhandled BuiltinFunKind: %d\n", static_cast<int>(info.kind));
 				assert(0);
 		}
 	}
@@ -413,7 +487,11 @@ namespace {
 					case BuiltinStructKind::byte:
 					case BuiltinStructKind::_char:
 					case BuiltinStructKind::float64:
+					case BuiltinStructKind::int16:
+					case BuiltinStructKind::int32:
 					case BuiltinStructKind::int64:
+					case BuiltinStructKind::nat16:
+					case BuiltinStructKind::nat32:
 					case BuiltinStructKind::nat64:
 					case BuiltinStructKind::ptr: {
 						// Output: a < b ? less : b < a ? greater : equal
