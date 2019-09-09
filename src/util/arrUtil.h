@@ -13,9 +13,15 @@ const Arr<T> arrOfRange(T* const begin, T* const end) {
 }
 
 template <typename T>
+inline const T first(const Arr<T> a) {
+	assert(!isEmpty(a));
+	return at(a, 0);
+}
+
+template <typename T>
 inline T only(const Arr<T> a) {
 	assert(size(a) == 1);
-	return at(a, 0);
+	return first(a);
 }
 
 template <typename T>
@@ -120,12 +126,6 @@ const Opt<T*> findPtr(Arr<T> a, Cb cb) {
 template <typename T>
 inline const Arr<const T> asConstArr(const Arr<T> a) {
 	return Arr<const T>{a._begin, size(a)};
-}
-
-template <typename T>
-inline const T first(const Arr<T> a) {
-	assert(!isEmpty(a));
-	return at(a, 0);
 }
 
 template <typename T>
@@ -308,6 +308,7 @@ struct mapOrFail {
 	}
 };
 
+// NOTE: Performs the mapping in reverse -- does not return reversed output!
 template <typename OutSuccess, typename OutFailure>
 struct mapOrFailReverse {
 	template <typename In, typename Cb>

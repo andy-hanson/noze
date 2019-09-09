@@ -1,5 +1,7 @@
 #include "./mangleName.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
 	const Bool conflictsWithCName(const Sym name) {
 		switch (name.value) {
@@ -12,12 +14,22 @@ namespace {
 				return symEqLongAlphaLiteral(name, "atomic-bool");
 		}
 	}
+
+	const Bool isMangledChar(const char c) {
+		return _or4(
+			_and('a' <= c, c <= 'z'),
+			_and('A' <= c, c <= 'Z'),
+			_and('0' <= c, c <= '9'),
+			c == '_');
+	}
 }
 
 const Str mangleName(Arena* arena, const Sym name) {
 	Writer writer { arena };
 	writeMangledName(&writer, name);
-	return finishWriter(&writer);
+	const Str res = finishWriter(&writer);
+	assert(isMangledName(res));
+	return res;
 }
 
 void writeMangledName(Writer* writer, const Sym name) {
@@ -71,3 +83,21 @@ void writeMangledName(Writer* writer, const Sym name) {
 	}
 }
 
+const Str mangleExternFunName(Arena* arena, const Sym name) {
+	Arena temp {};
+	return map<const char>{}(
+		arena,
+		strOfSym(&temp, name),
+		[](const char c) {
+			if (isMangledChar(c))
+				return c;
+			else if (c == '-')
+				return '_';
+			else
+				return todo<const char>("extern fun with unusual char?");
+		});
+}
+
+const Bool isMangledName(const Str name) {
+	return every(name, isMangledChar);
+}

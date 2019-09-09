@@ -20,8 +20,14 @@ inline size_t arrBuilderSize(const ArrBuilder<T>* builder) {
 }
 
 template <typename T>
-inline void add(Arena* arena, ArrBuilder<T>* builder, T value) {
+inline void add(Arena* arena, ArrBuilder<T>* builder, const T value) {
 	push<T>(arena, &builder->inner, value);
+}
+
+template <typename T>
+inline void addMany(Arena* arena, ArrBuilder<T>* builder, const Arr<T> values) {
+	for (const T value : values)
+		add<T>(arena, builder, value);
 }
 
 template <typename T>

@@ -21,6 +21,12 @@ ref-of-val ?t(b by-val ?t) noctx unsafe builtin
 | WARN: If '?t' is a reference type already, this is a pointer to a pointer!
 ptr-to ptr ?t(t ?t) noctx unsafe builtin
 
+| TODO: this function only works for by-ref types -- currently that is not checked by the type checker
+as-any-ptr any-ptr(some-ref ?t) noctx unsafe builtin
+
+ptr-eq bool(a ?t, b ?t) noctx unsafe
+	a.as-any-ptr == b.as-any-ptr
+
 | Since this fun is not marked 'noctx', it simply returns the ctx that already exists.
 get-ctx ctx() unsafe builtin
 
@@ -49,8 +55,12 @@ size-or-pointer-size<?t> nat() noctx unsafe
 
 ptr-cast ptr ?out(p ptr ?in) noctx unsafe builtin
 
+to-nat nat(p ptr ?t) noctx unsafe builtin
+
 + ptr ?t(p ptr ?t, offset nat) noctx unsafe builtin
 - ptr ?t(p ptr ?t, offset nat) noctx unsafe builtin
+- nat(a ptr ?t, b ptr ?t) noctx unsafe
+	a - b.to-nat to-nat
 
 malloc any-ptr(size nat) unsafe extern
 
@@ -122,6 +132,21 @@ literal char(s str) noctx
 literal c-str(s str) noctx
 	s data
 
+to-c-str c-str(s str)
+	| Need to add the null character to the end
+	s + "\0" data
+
+to-str str(c c-str) unsafe noctx
+	end = c find-cstr-end
+	c arr-from-begin-end end
+
+find-cstr-end c-str(c c-str) unsafe noctx
+	when
+		c.deref == "\0"
+			c
+		else
+			c.incr find-cstr-end
+
 region bool
 
 bool builtin
@@ -135,6 +160,7 @@ nand bool(a bool, b bool) noctx builtin
 nor bool(a bool, b bool) noctx builtin
 | Only one of 'if-true' and 'if-false' arguments will be evaluated
 if ?t(cond bool, if-true ?t, if-false ?t) noctx builtin
+if void(cond bool, if-true void) noctx builtin
 
 region Fun
 
@@ -169,7 +195,7 @@ send-fun2<?r, ?p0, ?p1> record force-sendable
 	vat-and-actor vat-and-actor-id
 	fun fun2 ?r ?p0 ?p1
 
-| calling a fun-ptr is a primitive operatio
+| calling a fun-ptr is a primitive operation
 call ?r(f fun-ptr0 ?r) noctx builtin
 call ?r(f fun-ptr1 ?r ?p0, p0 ?p0) noctx builtin
 call ?r(f fun-ptr2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx builtin
@@ -202,12 +228,12 @@ call fut ?r(f send-fun0 ?r) trusted
 	| Return the future
 	ctx = get-ctx
 	gctx = ctx.gctx
-	vati = f.vat-and-actor.vat
-	actori = f.vat-and-actor.actor
-	vat = gctx.vats at vati
+	vat-i = f.vat-and-actor.vat
+	actor-i = f.vat-and-actor.actor
+	vat = gctx.vats at vat-i
 	res = new-unresolved-fut<?r>
 	| Add a task to resolve it
-	t = new<task> (new<some<actor-id>> actori), \
+	t = new<task> actor-i.some, \
 		res resolve: f.fun.call
 	vat add-task t
 	res
@@ -232,6 +258,8 @@ nat32 builtin
 
 | UB for negative numbers
 unsafe-to-nat nat(i int) noctx builtin
+
+unsafe-to-nat32 nat32(n nat) noctx builtin
 
 | UB for positive numbers >= 2 ** 63
 unsafe-to-int int(n nat) noctx builtin
@@ -274,6 +302,12 @@ thousand nat() noctx
 	hundred wrap-mul ten
 million nat() noctx
 	thousand wrap-mul thousand
+billion nat() noctx
+	million wrap-mul thousand
+
+bits-and nat16(a nat16, b nat16) noctx builtin
+bits-and nat32(a nat32, b nat32) noctx builtin
+bits-and nat(a nat, b nat) noctx builtin
 
 | TODO: generic
 zero? bool(n nat) noctx
@@ -315,6 +349,8 @@ million int() noctx
 	thousand wrap-mul thousand
 neg-million int() noctx
 	million wrap-mul neg-one
+billion int() noctx
+	million wrap-mul thousand
 
 wrap-add int32(a int32, b int32) noctx builtin
 wrap-sub int32(a int32, b int32) noctx builtin
@@ -335,21 +371,21 @@ wrap-incr nat(n nat) noctx
 	n wrap-add one
 
 noctx-incr nat(n nat) noctx unsafe
-	| TODO: thousand should be max-value
-	hard-assert: n < thousand
+	| TODO: billion should be max-value
+	hard-assert: n < billion
 	n wrap-incr
 
 incr nat(n nat)
-	| TODO: thousand should be max-value
-	assert: n < thousand
+	| TODO: billion should be max-value
+	assert: n < billion
 	n wrap-add one
 
 wrap-incr int(i int) noctx
 	i wrap-add one
 
 incr int(i int)
-	| TODO: thousand should be max-value
-	assert: i < thousand
+	| TODO: billion should be max-value
+	assert: i < billion
 	i wrap-add one
 
 incr ptr ?t(p ptr ?t) noctx unsafe
@@ -388,12 +424,7 @@ decr ptr ?t(p ptr ?t) noctx unsafe
 			res
 / nat(a nat, b nat) trusted
 	forbid: b zero?
-	| TODO: doing this silly thing to avoid evaluating a / b as a constant
-	when
-		b == 0
-			seven
-		else
-			a unsafe-div b
+	a unsafe-div b
 
 mod nat(a nat, b nat) trusted
 	forbid: b zero?
@@ -454,7 +485,7 @@ mod nat(a int, b nat)
 	when
 		a negative?
 			x = a.abs mod b
-			x == b if 0, b - x
+			x == b if: zero, b - x
 		else
 			a.to-nat mod b
 
@@ -497,6 +528,9 @@ literal nat(s str)
 		else
 			higher-digits = s.rtail.literal as<nat>
 			higher-digits * ten + (char-to-nat: s last)
+
+literal nat32(s str)
+	s.literal.as<nat> unsafe-to-nat32
 
 literal int(s str)
 	fst = s at zero
@@ -550,6 +584,13 @@ opt<?t> union
 	none
 	some<?t>
 
+some some ?t(t ?t) noctx
+	new t
+
+none none() noctx
+	new<none>
+
+
 empty? bool(a opt ?t) noctx
 	match a
 		none n
@@ -579,6 +620,11 @@ result<?ok, ?err> union
 	ok<?ok>
 	err<?err>
 
+ok ok ?t(t ?t) noctx
+	new t
+err err ?t(t ?t) noctx
+	new t
+
 
 as ?t(value ?t) noctx builtin
 as-non-const ?t(value ?t) noctx builtin
@@ -606,7 +652,7 @@ fut<?t> record force-sendable
 
 | Considered unsafe because normally it should not be possible to never resolve a fut
 new-unresolved-fut fut ?t() unsafe
-	new new-lock, new<fut-state-callbacks<?t>> new<none>
+	new new-lock, new<fut-state-callbacks<?t>> none
 
 resolved fut ?t(value ?t)
 	new new-lock, new<fut-state-resolved<?t>> value
@@ -636,7 +682,7 @@ then-void void(f fut ?t, cb fun1 void ?t) unsafe
 	res = match f.state
 		fut-state-callbacks cbs
 			| create a new callback
-			f.state := new<fut-state-callbacks<?t>> new<some<fut-callback-node<?t>>> new cb, cbs.head
+			f.state := new<fut-state-callbacks<?t>> some: new cb, cbs.head
 		fut-state-resolved r
 			cb call r.value
 	f.lk.ref-of-val release-lock
@@ -670,12 +716,12 @@ decr-joiner void(j joiner ?out ?in0 ?in1) unsafe
 
 join fut ?out(a fut ?in0, b fut ?in1, fun send-fun2 ?out ?in0 ?in1) trusted
 	res = new-unresolved-fut<?out>
-	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, new<none>, new<none>, new-thread-safe-counter: 2
+	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, none, none, new-thread-safe-counter: 2
 	a then-void \value
-		joiner.arg0 := new<some<?in0>> value
+		joiner.arg0 := value some
 		joiner decr-joiner
 	b then-void \value
-		joiner.arg1 := new<some<?in1>> value
+		joiner.arg1 := value some
 		joiner decr-joiner
 	res
 
@@ -687,6 +733,9 @@ arr<?t> record
 	size nat
 	data ptr ?t
 
+arr-from-begin-end arr ?t(begin ptr ?t, end ptr ?t) unsafe noctx
+	new (end - begin), begin
+
 empty-arr arr ?t() noctx trusted
 	new zero, null
 
@@ -696,6 +745,10 @@ empty? bool(a arr ?t) noctx
 slice arr ?t(a arr ?t, begin nat, size nat) trusted
 	assert: begin + size <= a.size
 	new size, a.data + begin
+
+slice-from-to arr ?t(a arr ?t, begin nat, end nat) trusted
+	assert: begin <= end
+	a slice: begin, end - begin
 
 slice arr ?t(a arr ?t, begin nat)
 	assert: begin <= a.size
@@ -733,6 +786,78 @@ at ?t(a arr ?t, index nat) trusted
 		m set-at: (i + a.size), (b at i)
 	m freeze
 
+
+mut-slice<?t> record mut
+	size nat
+	data ptr ?t
+
+slice mut-slice ?t(a mut-slice ?t, lo nat, size nat) trusted
+	assert: lo + size <= a.size
+	new size, a.data + lo
+
+slice mut-slice ?t(a mut-slice ?t, lo nat)
+	assert: lo <= a.size
+	a slice: lo, a.size - lo
+
+at ?t(a mut-slice ?t, index nat) trusted
+	assert: index < a.size
+	a.data + index deref
+
+set void(a mut-slice ?t, index nat, value ?t) trusted
+	assert: index < a.size
+	a.data + index set value
+
+| UNSAFE since it can't track whether the underlying mut-arr was frozen (or reallocated)
+to-mut-slice mut-slice ?t(a mut-arr ?t) unsafe
+	forbid: a.frozen
+	new a.size, a.data
+
+sort arr ?t(a arr ?t)
+	m = a to-mut-arr
+	m sort
+	m freeze
+
+swap void(a mut-slice ?t, lo nat, hi nat)
+	old-lo = a at lo
+	a set: lo, a at hi
+	a set hi, old-lo
+
+sort void(a mut-arr ?t) trusted
+	a.to-mut-slice sort
+
+sort void(a mut-slice ?t)
+	when
+		a.size <= one
+			pass
+		else
+			| Perf -- in case a is sorted already, prefer the middle element as a pivot
+			a swap zero, (a.size / two)
+			pivot = a at zero
+			index-of-first-value-gt-pivot = a partition-recur pivot, one, a.size.decr
+			new-pivot-index = index-of-first-value-gt-pivot.decr
+			a swap zero, new-pivot-index
+
+			sort: a slice zero, new-pivot-index
+			sort: a slice new-pivot-index.incr
+
+
+| Returns index of first value > pivot
+partition-recur nat(a mut-slice ?t, pivot ?t, l nat, r nat)
+	assert: l <= a.size
+	assert: r < a.size
+	when
+		l <= r
+			em = a at l
+			when
+				em < pivot
+					a partition-recur pivot, l.incr, r
+				else
+					a swap l, r
+					a partition-recur pivot, l, r.decr
+		else
+			l
+
+
 | NOTE: this is not a normal record, compiler treats it specially
 mut-arr<?t> record mut
 	frozen mut bool
@@ -741,6 +866,9 @@ mut-arr<?t> record mut
 	size mut nat
 	capacity mut nat
 	data mut ptr ?t
+
+temp-as-arr arr ?t(a mut-arr ?t) unsafe noctx
+	new a.size, a.data
 
 uninitialized-data ptr ?t(size nat) unsafe
 	bptr = alloc: size wrap-mul size-of<?t>
@@ -781,10 +909,13 @@ noctx-remove-unordered-at-index ?t(a mut-arr ?t, index nat) noctx unsafe
 
 
 
-contains bool(a mut-arr ?t, value ?t) noctx
+contains bool(a arr ?t, value ?t) noctx
 	a contains-recur value, zero
 
-contains-recur bool(a mut-arr ?t, value ?t, i nat) noctx trusted
+contains bool(a mut-arr ?t, value ?t) noctx trusted
+	a.temp-as-arr contains-recur value, zero
+
+contains-recur bool(a arr ?t, value ?t, i nat) noctx trusted
 	when
 		i == a.size
 			false
@@ -956,9 +1087,9 @@ freeze dict ?k ?v(m mut-dict ?k ?v)
 get-recursive<?k, ?v> opt ?v(keys arr ?k, values arr ?v, idx nat, key ?k)
 	when
 		idx == keys.size
-			new<none>
+			none
 		key ==: keys at idx
-			new<some<?v>> values at idx
+			values at idx some
 		else
 			| TODO: should not need to provide type arguments!
 			get-recursive<?k, ?v>: keys, values, idx.incr, key
@@ -1008,17 +1139,31 @@ region cell
 cell<?t> record mut
 	value mut ?t
 
+new-cell cell ?t(value ?t)
+	new value
+
 get ?t(c cell ?t)
 	c.value
 
 set void(c cell ?t, v ?t)
 	c.value := v
 
+swap ?t(c cell ?t, v ?t)
+	res = c get
+	c set v
+	res
+
 | TODO: GENERIC
 get-and-incr nat(c cell nat)
 	res = c get
 	c set: res incr
 	res
+
+cell-incr void(c cell nat)
+	c.get-and-incr drop
+
+cell-add void(c cell nat, n nat)
+	c set: c.get + n
 
 region iterator
 
@@ -1050,13 +1195,13 @@ range-nat record
 	hi nat
 
 iter iterator nat(r range-nat)
-	n = new<cell<nat>> r.lo
+	n = r.lo new-cell<nat>
 	new \
 		when
 			n.get == r.hi
-				new<none>
+				none
 			else
-				new<some<nat>> n get-and-incr
+				n.get-and-incr some
 
 to range-nat(lo nat, hi nat)
 	lo <= hi assert
@@ -1075,6 +1220,14 @@ each void(s stream ?t, f fun1 void ?t)
 each void(r range-nat, f fun1 void nat)
 	r.iter each-recur f
 
+each-recur void(i iterator ?t, f fun1 void ?t)
+	match i next
+		none
+			pass
+		some s
+			f call s.value
+			i each-recur f
+
 each void(a arr ?t, f fun1 void ?t)
 	when
 		a empty?
@@ -1083,13 +1236,23 @@ each void(a arr ?t, f fun1 void ?t)
 			f call a.first
 			a.tail each f
 
-each-recur void(i iterator ?t, f fun1 void ?t)
-	match i next
-		none
+each void(a mut-arr ?t, f fun1 void ?t) trusted
+	was-frozen = a.frozen
+	a.frozen := true
+	a.temp-as-arr each f
+	a.frozen := was-frozen
+
+each-with-index void(a arr ?t, f fun2 void ?t nat)
+	a each-with-index-recur f, zero
+
+each-with-index-recur void(a arr ?t, f fun2 void ?t nat, n nat)
+	when
+		n == a.size
 			pass
-		some s
-			f call s.value
-			i each-recur f
+		else
+			f call (a at n), n
+			a each-with-index-recur f, n.incr
+
 
 filter stream ?t(in stream ?t, pred fun1 bool ?t)
 	new \
@@ -1099,12 +1262,12 @@ filter stream ?t(in stream ?t, pred fun1 bool ?t)
 filter-helper opt ?t(i iterator ?t, pred fun1 bool ?t)
 	match i next
 		none
-			new<none>
+			none
 		some s
 			v = s.value
 			when
 				pred call v
-					new<some<?t>> v
+					v some
 				else
 					| This one didn't satisfy the predicate, but keep trying until we get one or each the end
 					i filter-helper pred
@@ -1283,7 +1446,7 @@ new-gc by-val gc() noctx
 
 try-gc-alloc opt any-ptr(gc gc, size nat) noctx trusted
 	| TODO: allocate from gc memory!
-	new<some<any-ptr>> size unmanaged-alloc-bytes
+	size.unmanaged-alloc-bytes some
 
 gc-alloc any-ptr(gc gc, size nat)
 	match gc try-gc-alloc size
@@ -1324,18 +1487,18 @@ mut-bag-node<?t> record mut
 
 | Expose construction of nodes, because it's better to do this outside of a lock
 new-mut-bag-node mut-bag-node ?t(value ?t)
-	new value, new<none>
+	new value, none
 
 mut-bag<?t> record mut
 	head mut opt mut-bag-node<?t>
 
 new-mut-bag by-val mut-bag<?t>() noctx
-	new new<none>
+	new none
 
 add void(bag mut-bag ?t, node mut-bag-node ?t) noctx
 	| TODO: insert randomly somewhere
 	node.next-node := bag.head
-	bag.head := new<some<mut-bag-node<?t>>> node
+	bag.head := node some
 
 empty? bool(m mut-bag ?t) noctx
 	m.head empty?
@@ -1473,9 +1636,9 @@ choose-task result chosen-task no-chosen-task(gctx global-ctx) noctx unsafe
 			| (Tasks may have been added concurrently;
 			| this is fine as we're about to wait on a condition and will immediately wake up if so.)
 			gctx.n-live-threads := gctx.n-live-threads.noctx-decr
-			new<err<no-chosen-task>> new<no-chosen-task> gctx.n-live-threads zero?
+			err: new<no-chosen-task> gctx.n-live-threads zero?
 		some s
-			new<ok<chosen-task>> s.value
+			s.value ok
 
 	gctx.lk.ref-of-val release-lock
 
@@ -1485,14 +1648,14 @@ choose-task result chosen-task no-chosen-task(gctx global-ctx) noctx unsafe
 choose-task-recur opt chosen-task(vats arr vat, i nat) noctx unsafe
 	when
 		i == vats.size
-			new<none>
+			none
 		else
 			vat = vats noctx-at i
 			match vat choose-task-in-vat
 				none
 					vats choose-task-recur i.noctx-incr
 				some s
-					new<some<chosen-task>> new<chosen-task> vat, s.value
+					some: new<chosen-task> vat, s.value
 
 
 
@@ -1506,19 +1669,19 @@ choose-task-in-vat opt task-or-gc(vat vat) noctx unsafe
 			when
 				vat.n-threads-running zero?
 					| do GC
-					new<some<task-or-gc>> new<none>
+					none some
 				else
 					| do nothing -- a thread is running on this vat
 					| we can't do a GC now, but don't want to start a new task either
 					| because that would block GC
-					new<none>
+					none
 		else
 			match vat find-and-remove-first-doable-task
 				none
 					| No tasks to run
-					new<none>
+					none
 				some s
-					new<some<task-or-gc>> new<some<task>> s.value
+					s.value.some some
 
 	when
 		res empty?
@@ -1541,15 +1704,15 @@ find-and-remove-first-doable-task opt task(vat vat) noctx unsafe
 	res = vat find-and-remove-first-doable-task-recur tasks.head
 	match res
 		none
-			new<none>
+			none
 		some s
 			tasks.head := s.value.nodes
-			new<some<task>> s.value.task
+			s.value.task some
 
 find-and-remove-first-doable-task-recur opt task-and-nodes(vat vat, opt-node opt mut-bag-node<task>) noctx unsafe
 	match opt-node
 		none
-			new<none>
+			none
 		some s
 			node = s.value
 			task = node.value
@@ -1572,18 +1735,15 @@ find-and-remove-first-doable-task-recur opt task-and-nodes(vat vat, opt-node opt
 			when
 				task-ok
 					| Extract this task (return just its tail)
-					new<some<task-and-nodes>> new<task-and-nodes> task, node.next-node
+					some: new<task-and-nodes> task, node.next-node
 				else
 					match vat find-and-remove-first-doable-task-recur node.next-node
 						none
-							new<none>
+							none
 						some ss
 							tn = ss.value as<task-and-nodes>
 							node.next-node := tn.nodes
-							new<some<task-and-nodes>> new<task-and-nodes> tn.task, new<some<mut-bag-node<task>>> node
-
-
-
+							some: new<task-and-nodes> tn.task, node some
 
 assert-vats-are-shut-down void(i nat, vats arr vat) noctx unsafe
 	when

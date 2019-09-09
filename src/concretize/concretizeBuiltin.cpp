@@ -300,6 +300,9 @@ namespace {
 			case BuiltinFunKind::unsafeNat64ToInt64:
 				return constInt64(int64FromNat64(nat64Arg(0)));
 
+			case BuiltinFunKind::unsafeNat64ToNat32:
+				return constNat32(nat32FromNat64(nat64Arg(0)));
+
 			case BuiltinFunKind::unsafeInt64ToNat64:
 				return todo<const Opt<const Constant*>>("unsafeInt64ToNat64");
 
@@ -395,12 +398,12 @@ namespace {
 		return genExpr(arena, type, ConcreteExpr::Cond{cond, ConstantOrExpr{then}, ConstantOrExpr{elze}});
 	}
 
-	struct LocalAndExpr {
-		const ConcreteLocal* local;
+	struct LocalsAndExpr {
+		const Arr<const ConcreteLocal*> locals;
 		const ConcreteExpr* expr;
 	};
 
-	const LocalAndExpr combineCompares(
+	const LocalsAndExpr combineCompares(
 		Arena* arena,
 		const ConcreteExpr* cmpFirst,
 		const ConcreteExpr* cmpSecond,
@@ -424,8 +427,10 @@ namespace {
 			comparisonType,
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 		const ConcreteExpr* getCmpFirst = genExpr(arena, comparisonType, ConcreteExpr::LocalRef{cmpFirstLocal});
-		const ConcreteExpr::Match::Case caseUseFirst = ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), ConstantOrExpr{getCmpFirst}};
-		const ConcreteExpr::Match::Case caseUseSecond = ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), ConstantOrExpr{cmpSecond}};
+		const ConcreteExpr::Match::Case caseUseFirst =
+			ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), ConstantOrExpr{getCmpFirst}};
+		const ConcreteExpr::Match::Case caseUseSecond =
+			ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), ConstantOrExpr{cmpSecond}};
 		const Arr<const ConcreteExpr::Match::Case> cases = arrLiteral<const ConcreteExpr::Match::Case>(
 			arena,
 			{
@@ -439,45 +444,308 @@ namespace {
 			comparisonType,
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 		const ConcreteExpr* then = genExpr(arena, comparisonType, ConcreteExpr::Match{matchedLocal, cmpFirst, cases});
-		const ConcreteExpr* res = genExpr(arena, comparisonType, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
-		return LocalAndExpr{cmpFirstLocal, res};
+		const ConcreteExpr* res =
+			genExpr(arena, comparisonType, ConcreteExpr::Let{cmpFirstLocal, cmpFirst, ConstantOrExpr{then}});
+		return LocalsAndExpr{
+			arrLiteral<const ConcreteLocal*>(arena, { cmpFirstLocal, matchedLocal }),
+			res};
 	}
 
-	const ConcreteFunExprBody generateCompare(ConcretizeCtx* ctx, const ConcreteFunInst concreteFunInst, const ConcreteFun* fun) {
-		Arena* arena = ctx->arena;
-		const ComparisonTypes types = getComparisonTypes(fun->returnType(), concreteFunInst.typeArgs);
+	const ConcreteExpr* genFieldAccess(
+		Arena* arena,
+		const ConcreteExpr* a,
+		const Bool aIsPointer,
+		const ConcreteField* field
+	) {
+		return genExpr(arena, field->type, ConcreteExpr::RecordFieldAccess{aIsPointer, ConstantOrExpr{a}, field});
+	}
 
-		auto getExpr = [&](const size_t memberIndex, const ConcreteType memberType) -> const ConcreteExpr* {
-			const ConcreteExpr* createMember = genExpr(arena, memberType, ConcreteExpr::CreateRecord{emptyArr<const ConstantOrExpr>()});
-			return genExpr(arena, types.comparison, ConcreteExpr::ImplicitConvertToUnion{memberIndex, ConstantOrExpr{createMember}});
+	const ConcreteExpr* genCreateArr(
+		Arena* arena,
+		const ConcreteType arrType,
+		const ConstantOrExpr size,
+		const ConstantOrExpr data
+	) {
+		const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(arena, { size, data });
+		return genExpr(arena, arrType, ConcreteExpr::CreateRecord{args});
+	}
+
+	const ConcreteFun* getCompareFunFor(
+		ConcretizeCtx* ctx,
+		const ConcreteFunInst compareFunInst,
+		const ConcreteType ct
+	) {
+		const ConcreteFunKey key = ConcreteFunKey{
+			compareFunInst.withTypeArgs(arrLiteral<const ConcreteType>(ctx->arena, { ct })),
+			allVariable(ctx->arena, 2)};
+		return getOrAddConcreteFunAndFillBody(ctx, key);
+	};
+
+	const ConcreteExpr* genCall(Arena* arena, const ConcreteFun* fun, const Arr<const ConstantOrExpr> args) {
+		return genExpr(arena, fun->returnType(), ConcreteExpr::Call{fun, args});
+	}
+
+	const ConcreteExpr* genCall(
+		Arena* arena,
+		const ConcreteFun* fun,
+		const ConstantOrExpr arg0,
+		const ConstantOrExpr arg1
+	) {
+		return genCall(arena, fun, arrLiteral<const ConstantOrExpr>(arena, { arg0, arg1 }));
+	}
+
+	const ConcreteExpr* genCompare(
+		ConcretizeCtx* ctx,
+		const ConcreteFunInst compareFunInst,
+		const ConcreteType argsType,
+		const ConstantOrExpr l,
+		const ConstantOrExpr r
+	) {
+		return genCall(
+			ctx->arena,
+			getCompareFunFor(ctx, compareFunInst, argsType),
+			ConstantOrExpr{l},
+			ConstantOrExpr{r});
+	}
+
+	const ConcreteExpr* compareOneField(
+		ConcretizeCtx* ctx,
+		const ConcreteFunInst compareFunInst,
+		const ConcreteField* field,
+		const ConcreteExpr* a,
+		const ConcreteExpr* b,
+		const Bool aIsPointer,
+		const Bool bIsPointer
+	) {
+		const ConcreteExpr* ax = genFieldAccess(ctx->arena, a, aIsPointer, field);
+		const ConcreteExpr* bx = genFieldAccess(ctx->arena, b, bIsPointer, field);
+		return genCompare(ctx, compareFunInst, field->type, ConstantOrExpr{ax}, ConstantOrExpr{bx});
+	}
+
+	const ConcreteFunExprBody generateCompareRecord(
+		ConcretizeCtx* ctx,
+		const ConcreteFunInst concreteFunInst,
+		const ComparisonTypes types,
+		const ConcreteStructBody::Record r,
+		const ConcreteExpr* a,
+		const ConcreteExpr* b,
+		const Bool aIsPointer,
+		const Bool bIsPointer
+	) {
+		Arena* arena = ctx->arena;
+
+		ArrBuilder<const ConcreteLocal*> locals {};
+		Cell<const Opt<const ConcreteExpr*>> accum { none<const ConcreteExpr*>() };
+		for (const ConcreteField* field : ptrsRange(r.fields)) {
+			const ConcreteExpr* compareThisField =
+				compareOneField(ctx, concreteFunInst, field, a, b, aIsPointer, bIsPointer);
+			const ConcreteExpr* newAccum = has(cellGet(&accum))
+				? [&]() {
+					const LocalsAndExpr le = combineCompares(
+						arena,
+						force(cellGet(&accum)),
+						compareThisField,
+						types.comparison);
+					addMany<const ConcreteLocal*>(arena, &locals, le.locals);
+					return le.expr;
+				}()
+				: compareThisField;
+			cellSet<const Opt<const ConcreteExpr*>>(&accum, some<const ConcreteExpr*>(newAccum));
+		}
+		return ConcreteFunExprBody{finishArr(&locals), force(cellGet(&accum))};
+	}
+
+	const ConcreteExpr* genDecrNat(ConcretizeCtx* ctx, const ConcreteType natType, const ConcreteExpr* n) {
+		return genExpr(
+			ctx->arena,
+			natType,
+			ConcreteExpr::SpecialBinary{
+				ConcreteExpr::SpecialBinary::Kind::sub,
+				ConstantOrExpr{n},
+				ConstantOrExpr{constantNat64(ctx->arena, ctx->allConstants, natType, Nat64{1})}});
+	}
+
+	const ConcreteExpr* genNatEqNat(
+		Arena* arena,
+		const ConcreteType boolType,
+		const ConstantOrExpr a,
+		const ConstantOrExpr b
+	) {
+		return genExpr(arena, boolType, ConcreteExpr::SpecialBinary{ConcreteExpr::SpecialBinary::Kind::eq, a, b});
+	}
+
+	const ConcreteExpr* genNatEqZero(
+		ConcretizeCtx* ctx,
+		const ConcreteType boolType,
+		const ConcreteType natType,
+		const ConcreteExpr* n
+	) {
+		return genNatEqNat(
+			ctx->arena,
+			boolType,
+			ConstantOrExpr{n},
+			ConstantOrExpr{constantNat64(ctx->arena, ctx->allConstants, natType, Nat64{0})});
+	}
+
+	const ConcreteExpr* genIncrPointer(
+		ConcretizeCtx* ctx,
+		const ConcreteType ptrType,
+		const ConcreteType natType,
+		const ConcreteExpr* ptr
+	) {
+		return genExpr(
+			ctx->arena,
+			ptrType,
+			ConcreteExpr::SpecialBinary{
+				ConcreteExpr::SpecialBinary::Kind::add,
+				ConstantOrExpr{ptr},
+				ConstantOrExpr{constantNat64(ctx->arena, ctx->allConstants, natType, Nat64{1})}});
+	}
+
+	const ConcreteExpr* genDeref(
+		Arena* arena,
+		const ConcreteType derefedType,
+		const ConcreteExpr* ptr
+	) {
+		return genExpr(
+			arena,
+			derefedType,
+			ConcreteExpr::SpecialUnary{ConcreteExpr::SpecialUnary::Kind::deref, ptr});
+	}
+
+	const ConcreteExpr* genLtEqOrGtHelper(
+		Arena* arena,
+		const ComparisonTypes types,
+		const size_t memberIndex,
+		const ConcreteType memberType
+	) {
+		const ConcreteExpr* createMember =
+			genExpr(arena, memberType, ConcreteExpr::CreateRecord{emptyArr<const ConstantOrExpr>()});
+		return genExpr(
+			arena,
+			types.comparison,
+			ConcreteExpr::ImplicitConvertToUnion{memberIndex, ConstantOrExpr{createMember}});
+	}
+	const ConcreteExpr* genLessLiteral(Arena* arena, const ComparisonTypes types) {
+		return genLtEqOrGtHelper(arena, types, 0, types.less);
+	}
+	const ConcreteExpr* genEqualLiteral(Arena* arena, const ComparisonTypes types) {
+		return genLtEqOrGtHelper(arena, types, 1, types.equal);
+	}
+	const ConcreteExpr* genGreaterLiteral(Arena* arena, const ComparisonTypes types) {
+		return genLtEqOrGtHelper(arena, types, 2, types.greater);
+	}
+
+	const ConcreteFunExprBody generateCompareArr(
+		ConcretizeCtx* ctx,
+		const ConcreteFunInst compareFunInst,
+		const ConcreteType comparisonType,
+		const ConcreteFun* compareFun,
+		const ComparisonTypes types,
+		const ConcreteType elementType,
+		const ConcreteExpr* a,
+		const ConcreteExpr* b
+	) {
+		// a.size == 0 ? (b.size == 0 ? eq : lt) : (b.size == 0 ? gt : (a[0] == b[0] or cmp(tail(a), tail(b))))
+		const ConcreteType arrType = first(compareFun->paramsExcludingCtxAndClosure()).type;
+
+		Arena* arena = ctx->arena;
+		assert(!arrType.isPointer);
+		const ConcreteStructBody::Record r = arrType.strukt->body().asRecord();
+		assert(size(r.fields) == 2);
+		const ConcreteField* sizeField = ptrAt(r.fields, 0);
+		const ConcreteField* dataField = ptrAt(r.fields, 1);
+		assert(strEq(sizeField->mangledName, strLiteral("size")));
+		assert(strEq(dataField->mangledName, strLiteral("data")));
+
+		const ConcreteType boolType = ctx->boolType();
+		const ConcreteType natType = sizeField->type;
+		const ConcreteType ptrType = dataField->type;
+
+		auto genGetSize = [&](const ConcreteExpr* arr) -> const ConcreteExpr* {
+			return genFieldAccess(arena, arr, False, sizeField);
+		};
+		auto genGetData = [&](const ConcreteExpr* arr) -> const ConcreteExpr* {
+			return genFieldAccess(arena, arr, False, dataField);
 		};
 
-		const ConcreteExpr* lessExpr = getExpr(0, types.less);
-		const ConcreteExpr* equalExpr = getExpr(1, types.equal);
-		const ConcreteExpr* greaterExpr = getExpr(2, types.greater);
+		auto genTail = [&](const ConcreteExpr* arr) -> const ConstantOrExpr {
+			const ConcreteExpr* curSize = genGetSize(arr);
+			const ConcreteExpr* curData = genGetData(arr);
+			const ConcreteExpr* newSize = genDecrNat(ctx, natType, curSize);
+			const ConcreteExpr* newData = genIncrPointer(ctx, ptrType, natType, curData);
+			return ConstantOrExpr{
+				genCreateArr(arena, arrType, ConstantOrExpr{newSize}, ConstantOrExpr{newData})};
+		};
 
-		assert(fun->arityExcludingCtxAndClosure() == 2);
-		const ConcreteParam* aParam = ptrAt(fun->paramsExcludingCtxAndClosure(), 0);
-		const ConcreteParam* bParam = ptrAt(fun->paramsExcludingCtxAndClosure(), 1);
+		auto genFirst = [&](const ConcreteExpr* arr) -> const ConstantOrExpr {
+			return ConstantOrExpr{genDeref(arena, elementType, genGetData(arr))};
+		};
+
+		const ConcreteExpr* compareFirst = genCompare(
+			ctx,
+			compareFunInst,
+			elementType,
+			genFirst(a),
+			genFirst(b));
+		const ConcreteExpr* recurOnTail = genCall(arena, compareFun, genTail(a), genTail(b));
+		const LocalsAndExpr firstThenRecur = combineCompares(arena, compareFirst, recurOnTail, types.comparison);
+
+		auto genSizeEqZero = [&](const ConcreteExpr* arr) -> const ConcreteExpr* {
+			return genNatEqZero(ctx, boolType, natType, genGetSize(arr));
+		};
+
+		const ConcreteExpr* bSizeIsZero = genSizeEqZero(b);
+		const ConcreteExpr* res = makeCond(
+			arena,
+			comparisonType,
+			genSizeEqZero(a),
+			makeCond(arena, comparisonType, bSizeIsZero, genEqualLiteral(arena, types), genLessLiteral(arena, types)),
+			makeCond(arena, comparisonType, bSizeIsZero, genGreaterLiteral(arena, types), firstThenRecur.expr));
+
+		return ConcreteFunExprBody{firstThenRecur.locals, res};
+	}
+
+
+	const ConcreteFunExprBody generateCompare(
+		ConcretizeCtx* ctx,
+		const ConcreteFunInst compareFunInst,
+		const ConcreteFun* compareFun
+	) {
+		Arena* arena = ctx->arena;
+		const ComparisonTypes types = getComparisonTypes(compareFun->returnType(), compareFunInst.typeArgs);
+		assert(compareFun->arityExcludingCtxAndClosure() == 2);
+		const ConcreteParam* aParam = ptrAt(compareFun->paramsExcludingCtxAndClosure(), 0);
+		const ConcreteParam* bParam = ptrAt(compareFun->paramsExcludingCtxAndClosure(), 1);
 		const Bool aIsPointer = aParam->type.isPointer;
 		const Bool bIsPointer = bParam->type.isPointer;
 		const ConcreteExpr* a = genExpr(arena, types.t, ConcreteExpr::ParamRef{aParam});
 		const ConcreteExpr* b = genExpr(arena, types.t, ConcreteExpr::ParamRef{bParam});
-
-		auto getCompareFor = [&](const ConcreteType ct) -> const ConcreteFun* {
-			const ConcreteFunKey key = ConcreteFunKey{
-				concreteFunInst.withTypeArgs(arrLiteral<const ConcreteType>(arena, { ct })),
-				allVariable(arena, fun->arityExcludingCtxAndClosure())};
-			return getOrAddConcreteFunAndFillBody(ctx, key);
-		};
 
 		const ConcreteType boolType = ctx->boolType();
 
 		if (types.t.isPointer != types.t.strukt->defaultIsPointer())
 			todo<void>("compare by value -- just take a ref and compare by ref");
 
-		if (has(types.t.strukt->special))
-			todo<void>("compare special");
+		if (has(types.t.strukt->special)) {
+			const SpecialStructInfo info = force(types.t.strukt->special);
+			switch (info.kind) {
+				case SpecialStructInfo::Kind::arr:
+					return generateCompareArr(
+						ctx,
+						compareFunInst,
+						types.comparison,
+						compareFun,
+						types,
+						info.elementType,
+						a,
+						b);
+				case SpecialStructInfo::Kind::mutArr:
+					return todo<const ConcreteFunExprBody>("mutArr is not comparable");
+				default:
+					assert(0);
+			}
+		}
 
 		return types.t.strukt->body().match(
 			[&](const ConcreteStructBody::Builtin builtin) {
@@ -497,8 +765,18 @@ namespace {
 						// Output: a < b ? less : b < a ? greater : equal
 						const ConcreteExpr* aLessB = makeLess(arena, boolType, a, b);
 						const ConcreteExpr* bLessA = makeLess(arena, boolType, b, a);
-						const ConcreteExpr* elze = makeCond(arena, types.comparison, bLessA, greaterExpr, equalExpr);
-						const ConcreteExpr* expr = makeCond(arena, types.comparison, aLessB, lessExpr, elze);
+						const ConcreteExpr* elze = makeCond(
+							arena,
+							types.comparison,
+							bLessA,
+							genGreaterLiteral(arena, types),
+							genEqualLiteral(arena, types));
+						const ConcreteExpr* expr = makeCond(
+							arena,
+							types.comparison,
+							aLessB,
+							genLessLiteral(arena, types),
+							elze);
 						return ConcreteFunExprBody{emptyArr<const ConcreteLocal*>(), expr};
 					}
 
@@ -515,42 +793,7 @@ namespace {
 				}
 			},
 			[&](const ConcreteStructBody::Record r) {
-				ArrBuilder<const ConcreteLocal*> locals {};
-				Cell<const Opt<const ConcreteExpr*>> accum { none<const ConcreteExpr*>() };
-				for (const ConcreteField* field : ptrsRange(r.fields)) {
-					// for a struct {x, y}, we emit:
-					// switch (a.x <=> b.x) { case less: || a.y <=> b.y
-					// `||` will short-circuit on any non-zero value.
-					// Using special operators `compare` and `orcmp`
-					const ConcreteExpr* ax = genExpr(
-						arena,
-						field->type,
-						ConcreteExpr::RecordFieldAccess{aIsPointer, ConstantOrExpr(a), field});
-					const ConcreteExpr* bx = genExpr(
-						arena,
-						field->type,
-						ConcreteExpr::RecordFieldAccess{bIsPointer, ConstantOrExpr(b), field});
-					const Arr<const ConstantOrExpr> args = arrLiteral<const ConstantOrExpr>(
-						arena,
-						{ ConstantOrExpr{ax}, ConstantOrExpr{bx} });
-					const ConcreteExpr* compareThisField = genExpr(
-						arena,
-						types.comparison,
-						ConcreteExpr::Call{getCompareFor(field->type), args});
-					const ConcreteExpr* newAccum = has(cellGet(&accum))
-						? [&]() {
-							const LocalAndExpr le = combineCompares(
-								arena,
-								force(cellGet(&accum)),
-								compareThisField,
-								types.comparison);
-							add(arena, &locals, le.local);
-							return le.expr;
-						}()
-						: compareThisField;
-					cellSet<const Opt<const ConcreteExpr*>>(&accum, some<const ConcreteExpr*>(newAccum));
-				}
-				return ConcreteFunExprBody{finishArr(&locals), force(cellGet(&accum))};
+				return generateCompareRecord(ctx, compareFunInst, types, r, a, b, aIsPointer, bIsPointer);
 			},
 			[&](const ConcreteStructBody::Union) {
 				return todo<const ConcreteFunExprBody>("compare union");

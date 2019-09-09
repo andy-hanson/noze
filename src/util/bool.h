@@ -22,6 +22,7 @@ static const Bool False { false };
 #define _and3(a, b, c) Bool{a && b && c}
 #define _or(a, b) Bool{a || b}
 #define _or3(a, b, c) Bool{a || b || c}
+#define _or4(a, b, c, d) Bool{a || b || c || d}
 
 template <typename T>
 inline const Bool enumEq(const T a, const T b) {

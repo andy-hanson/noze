@@ -233,13 +233,15 @@ namespace {
 		const CommonTypes::LambdaInfo info = force(opInfo);
 		const Type nonInstantiatedNonFutReturnType = first(expectedStructInst->typeArgs);
 		const Arr<const Type> nonInstantiatedParamTypes = tail(expectedStructInst->typeArgs);
-		const Arr<const Type> paramTypes = map<const Type>{}(ctx->arena(), nonInstantiatedParamTypes, [&](const Type it) {
-			const Opt<const Type> op = tryGetDeeplyInstantiatedTypeFor(ctx->arena(), expected, it);
-			if (!has(op)) {
-				todo<void>("getExpectedLambdaType");
-			}
-			return force(op);
-		});
+		const Arr<const Type> paramTypes = map<const Type>{}(
+			ctx->arena(),
+			nonInstantiatedParamTypes,
+			[&](const Type it) {
+				const Opt<const Type> op = tryGetDeeplyInstantiatedTypeFor(ctx->arena(), expected, it);
+				if (!has(op))
+					todo<void>("getExpectedLambdaType");
+				return force(op);
+			});
 		const Type nonInstantiatedReturnType = info.isSend
 			? ctx->makeFutType(nonInstantiatedNonFutReturnType)
 			: nonInstantiatedNonFutReturnType;
@@ -296,7 +298,9 @@ namespace {
 			prepend<const Type>(ctx->arena(), returnType, et.paramTypes));
 
 		if (!typeEquals(returnType, et.nonInstantiatedPossiblyFutReturnType)) {
-			ctx->addDiag(range, Diag{Diag::FunAsLambdaWrongReturnType{returnType, et.nonInstantiatedPossiblyFutReturnType}});
+			ctx->addDiag(
+				range,
+				Diag{Diag::FunAsLambdaWrongReturnType{returnType, et.nonInstantiatedPossiblyFutReturnType}});
 			return bogus(expected, range);
 		}
 
@@ -320,7 +324,8 @@ namespace {
 		if (isEmpty(passedLambdas))
 			return check(ctx, expected, type, expr);
 		else {
-			// First of passedLambdas is the outermost one where we found the param/local. This one can access it directly.
+			// First of passedLambdas is the outermost one where we found the param/local.
+			// This one can access it directly.
 			// Inner ones must reference this by a closure field.
 			LambdaInfo* l0 = first(passedLambdas);
 			// Shouldn't have already closed over it (or we should just be using that)
@@ -374,7 +379,12 @@ namespace {
 		return False;
 	}
 
-	const CheckedExpr checkIdentifier(ExprCtx* ctx, const SourceRange range, const IdentifierAst ast, Expected* expected) {
+	const CheckedExpr checkIdentifier(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const IdentifierAst ast,
+		Expected* expected
+	) {
 		const Sym name = ast.name;
 
 		if (!mutArrIsEmpty(&ctx->lambdas)) {
@@ -386,16 +396,37 @@ namespace {
 
 				for (const Local* local : tempAsArr(&lambda->locals))
 					if (symEq(local->name, name))
-						return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, passedLambdas, expected);
+						return checkRef(
+							ctx,
+							Expr{range, Expr::LocalRef{local}},
+							range,
+							name,
+							local->type,
+							passedLambdas,
+							expected);
 
 				for (const Param* param : ptrsRange(lambda->lambdaParams))
 					if (symEq(param->name, name))
-						return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, passedLambdas, expected);
+						return checkRef(
+							ctx,
+							Expr{range, Expr::ParamRef{param}},
+							range,
+							name,
+							param->type,
+							passedLambdas,
+							expected);
 
 				// Check if we've already added something with this name to closureFields to avoid adding it twice.
 				for (const ClosureField* field : tempAsArr(&lambda->closureFields))
 					if (symEq(field->name, name))
-						return checkRef(ctx, Expr{range, Expr::ClosureFieldRef{field}}, range, name, field->type, passedLambdas, expected);
+						return checkRef(
+							ctx,
+							Expr{range, Expr::ClosureFieldRef{field}},
+							range,
+							name,
+							field->type,
+							passedLambdas,
+							expected);
 			}
 		}
 
@@ -403,26 +434,40 @@ namespace {
 
 		for (const Local* local : tempAsArr(&ctx->messageOrFunctionLocals))
 			if (symEq(local->name, name))
-				return checkRef(ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, allLambdas, expected);
+				return checkRef(
+					ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, allLambdas, expected);
 
 		if (has(ctx->newAndMessageInfo)) {
 			const NewAndMessageInfo nmi = force(ctx->newAndMessageInfo);
 			for (const Param* param : ptrsRange(nmi.instantiatedParams))
 				if (symEq(param->name, name))
-					return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
+					return checkRef(
+						ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
 			for (const Expr::NewIfaceImpl::Field* field : ptrsRange(nmi.fields))
 				if (symEq(field->name, name))
-					return checkRef(ctx, Expr{range, Expr::IfaceImplFieldRef{field}}, range, name, field->type, allLambdas, expected);
+					return checkRef(
+						ctx,
+						Expr{range, Expr::IfaceImplFieldRef{field}},
+						range,
+						name,
+						field->type,
+						allLambdas,
+						expected);
 		} else
 			for (const Param* param : ptrsRange(ctx->outermostFun->params()))
 				if (symEq(param->name, name))
-					return checkRef(ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
+					return checkRef(
+						ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
 
 		return checkIdentifierCall(ctx, range, name, expected);
 	}
 
 	const CheckedExpr checkNoCallLiteral(ExprCtx* ctx, const SourceRange range, const Str literal, Expected* expected) {
-		return check(ctx, expected, Type{ctx->commonTypes->str}, Expr{range, Expr::StringLiteral{copyStr(ctx->arena(), literal)}});
+		return check(
+			ctx,
+			expected,
+			Type{ctx->commonTypes->str},
+			Expr{range, Expr::StringLiteral{copyStr(ctx->arena(), literal)}});
 	}
 
 	const CheckedExpr checkLiteral(ExprCtx* ctx, const SourceRange range, const LiteralAst ast, Expected* expected) {
@@ -606,7 +651,9 @@ namespace {
 							: checkWithOptLocal(ctx, local, *caseAst.then, expected);
 						return Expr::Match::Case{local, ctx->alloc(then)};
 					});
-				return CheckedExpr{Expr{range, Expr::Match{ctx->alloc(matchedAndType.expr), matchedUnion, cases, inferred(expected)}}};
+				return CheckedExpr{Expr{
+						range,
+						Expr::Match{ctx->alloc(matchedAndType.expr), matchedUnion, cases, inferred(expected)}}};
 			}
 		}
 	}
@@ -616,7 +663,12 @@ namespace {
 		return ifaceInst->body().asIface().messages;
 	}
 
-	const CheckedExpr checkMessageSend(ExprCtx* ctx, const SourceRange range, const MessageSendAst ast, Expected* expected) {
+	const CheckedExpr checkMessageSend(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const MessageSendAst ast,
+		Expected* expected
+	) {
 		const ExprAndType targetAndType = checkAndInfer(ctx, *ast.target);
 		const Expr* target = ctx->alloc(targetAndType.expr);
 		const Type targetType = targetAndType.type;
@@ -648,7 +700,11 @@ namespace {
 						return checkAndExpect(ctx, argAst, instantiateType(ctx->arena(), param.type, instIface));
 					});
 				const Type returnType = instantiateType(ctx->arena(), messageSig.returnType, instIface);
-				return check(ctx, expected, returnType, Expr{range, Expr::MessageSend{target, instIface, message->index, args}});
+				return check(
+					ctx,
+					expected,
+					returnType,
+					Expr{range, Expr::MessageSend{target, instIface, message->index, args}});
 			});
 	}
 
@@ -675,10 +731,13 @@ namespace {
 					if (!symEq(param.name, paramName.name))
 						todo<void>("checkNewActor -- param names don't match");
 				});
-				return withMessageImpl(ctx, NewAndMessageInfo{message->sig.params, fields, message}, [&](ExprCtx* newCtx) {
-					// message->sig.returnType is already wrapped in `fut`
-					return checkAndExpect(newCtx, impl->body, message->sig.returnType);
-				});
+				return withMessageImpl(
+					ctx,
+					NewAndMessageInfo{message->sig.params, fields, message},
+					[&](ExprCtx* newCtx) {
+						// message->sig.returnType is already wrapped in `fut`
+						return checkAndExpect(newCtx, impl->body, message->sig.returnType);
+					});
 			});
 		return check(ctx, expected, Type{instIface}, Expr{range, Expr::NewIfaceImpl{instIface, fields, messageImpls}});
 	}
@@ -689,7 +748,12 @@ namespace {
 		return CheckedExpr{Expr{range, Expr::Seq{first, then}}};
 	}
 
-	const CheckedExpr checkRecordFieldSet(ExprCtx* ctx, const SourceRange range, const RecordFieldSetAst ast, Expected* expected) {
+	const CheckedExpr checkRecordFieldSet(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const RecordFieldSetAst ast,
+		Expected* expected
+	) {
 		const ExprAndType target = checkAndInfer(ctx, *ast.target);
 		const Opt<const StructAndField> opStructAndField = tryGetRecordField(target.type, ast.fieldName);
 		if (has(opStructAndField)) {
@@ -701,8 +765,12 @@ namespace {
 				return bogusWithType(expected, range, Type{ctx->commonTypes->_void});
 			} else {
 				const Expr value = checkAndExpect(ctx, ast.value, field->type);
-				const Expr::RecordFieldSet sfs = Expr::RecordFieldSet{ctx->alloc(target.expr), structInst, field, ctx->alloc(value)};
-				return check(ctx, expected, Type{ctx->commonTypes->_void}, Expr{range, sfs});
+				const Expr::RecordFieldSet rfs = Expr::RecordFieldSet{
+					ctx->alloc(target.expr),
+					structInst,
+					field,
+					ctx->alloc(value)};
+				return check(ctx, expected, Type{ctx->commonTypes->_void}, Expr{range, rfs});
 			}
 		} else {
 			ctx->addDiag(range, Diag{Diag::WriteToNonExistentField{target.type, ast.fieldName}});

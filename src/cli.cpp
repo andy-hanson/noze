@@ -124,10 +124,10 @@ namespace {
 	}
 
 	const Command parseRunCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
-		if (size(args) == 0 || isHelp(at(args, 0)))
+		if (size(args) == 0 || isHelp(first(args)))
 			return Command{Command::HelpRun{}};
 		else {
-			const ProgramDirAndMain programDirAndMain = parseProgramDirAndMain(arena, cwd, at(args, 0));
+			const ProgramDirAndMain programDirAndMain = parseProgramDirAndMain(arena, cwd, first(args));
 			if (size(args) == 1)
 				return Command{Command::Run{programDirAndMain, emptyArr<const Str>()}};
 			else if (!strEqLiteral(at(args, 1), "--"))
@@ -142,7 +142,7 @@ namespace {
 		if (size(args) == 0)
 			return Command{Command::Help{}};
 		else {
-			const Str arg0 = at(args, 0);
+			const Str arg0 = first(args);
 			if (strEqLiteral(arg0, "help") || strEqLiteral(arg0, "--help"))
 				return Command{Command::Help{}};
 			else if (strEqLiteral(arg0, "version") || strEqLiteral(arg0, "--version"))

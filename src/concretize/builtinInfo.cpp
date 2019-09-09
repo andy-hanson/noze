@@ -82,6 +82,9 @@ namespace {
 		const Type p0 = isEmpty(sig.params)
 			? Type{Type::Bogus{}}
 			: at(sig.params, 0).type;
+		const Type p1 = size(sig.params) <= 1
+			? Type{Type::Bogus{}}
+			: at(sig.params, 1).type;
 
 		Arena tempArena {};
 
@@ -93,7 +96,9 @@ namespace {
 					: isPtr(rt) ? _operator(BuiltinFunKind::addPtr)
 					: no;
 			case shortSymOperatorLiteralValue("-"):
-				return isFloat64(rt) ? _operator(BuiltinFunKind::subFloat64) : no;
+				return isFloat64(rt) ? _operator(BuiltinFunKind::subFloat64)
+					: isPtr(rt) && isPtr(p0) && isNat64(p1) ? _operator(BuiltinFunKind::subPtrNat)
+					: no;
 			case shortSymOperatorLiteralValue("*"):
 				return isFloat64(rt) ? _operator(BuiltinFunKind::mulFloat64) : no;
 
@@ -101,6 +106,13 @@ namespace {
 				return _operator(BuiltinFunKind::_and);
 			case shortSymAlphaLiteralValue("as"):
 				return _operator(BuiltinFunKind::as);
+			case shortSymAlphaLiteralValue("as-any-ptr"):
+				return _operator(BuiltinFunKind::asAnyPtr);
+			case shortSymAlphaLiteralValue("bits-and"):
+				return isNat16(rt) ? _operator(BuiltinFunKind::bitwiseAndNat16)
+					: isNat32(rt) ? _operator(BuiltinFunKind::bitwiseAndNat32)
+					: isNat64(rt) ? _operator(BuiltinFunKind::bitwiseAndNat64)
+					: no;
 			case shortSymAlphaLiteralValue("call"):
 				return isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr) : no;
 			case shortSymAlphaLiteralValue("deref"):
@@ -149,6 +161,7 @@ namespace {
 			case shortSymAlphaLiteralValue("to-nat"):
 				return isNat16(p0) ? _operator(BuiltinFunKind::toNatFromNat16)
 					: isNat32(p0) ? _operator(BuiltinFunKind::toNatFromNat32)
+					: isPtr(p0) ? _operator(BuiltinFunKind::toNatFromPtr)
 					: no;
 			case shortSymAlphaLiteralValue("true"):
 				return constant(BuiltinFunKind::_true);
@@ -195,10 +208,12 @@ namespace {
 					return special(BuiltinFunKind::compareExchangeStrong);
 				else if (symEqLongAlphaLiteral(name, "is-reference-type"))
 					return constant(BuiltinFunKind::isReferenceType);
-				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat"))
-					return _operator(BuiltinFunKind::unsafeInt64ToNat64);
 				else if (symEqLongAlphaLiteral(name, "unsafe-to-int"))
-					return _operator(BuiltinFunKind::unsafeNat64ToInt64);
+					return isNat64(p0) ? _operator(BuiltinFunKind::unsafeNat64ToInt64) : no;
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat"))
+					return isInt64(p0) ? _operator(BuiltinFunKind::unsafeInt64ToNat64) : no;
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat32"))
+					return isNat64(p0) ? _operator(BuiltinFunKind::unsafeNat64ToNat32) : no;
 				else
 					return no;
 		}

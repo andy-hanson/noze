@@ -213,6 +213,14 @@ struct Diag {
 		const Kind kind;
 		const Sym name;
 	};
+	struct DuplicateImports {
+		enum class Kind {
+			structOrAlias,
+			spec,
+		};
+		const Kind kind;
+		const Sym name;
+	};
 	struct ExpectedTypeIsNotALambda {
 		const Opt<const Type> expectedType;
 	};
@@ -315,6 +323,7 @@ private:
 		commonTypesMissing,
 		createRecordByRefNoCtx,
 		duplicateDeclaration,
+		duplicateImports,
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
 		funAsLambdaCantOverload,
@@ -350,6 +359,7 @@ private:
 		const CommonTypesMissing commonTypesMissing;
 		const CreateRecordByRefNoCtx createRecordByRefNoCtx;
 		const DuplicateDeclaration duplicateDeclaration;
+		const DuplicateImports duplicateImports;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
 		const FunAsLambdaCantOverload funAsLambdaCantOverload;
@@ -394,6 +404,8 @@ public:
 		: kind{Kind::createRecordByRefNoCtx}, createRecordByRefNoCtx{d} {}
 	explicit inline Diag(const DuplicateDeclaration d)
 		: kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
+	explicit inline Diag(const DuplicateImports d)
+		: kind{Kind::duplicateImports}, duplicateImports{d} {}
 	explicit inline Diag(const ExpectedTypeIsNotALambda d)
 		: kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
 	explicit inline Diag(const FileDoesNotExist d)
@@ -455,6 +467,7 @@ public:
 		typename CbCommonTypesMissing,
 		typename CbCreateRecordByRefNoCtx,
 		typename CbDuplicateDeclaration,
+		typename CbDuplicateImports,
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
 		typename CbFunAsLambdaCantOverload,
@@ -488,6 +501,7 @@ public:
 		CbCommonTypesMissing cbCommonTypesMissing,
 		CbCreateRecordByRefNoCtx cbCreateRecordByRefNoCtx,
 		CbDuplicateDeclaration cbDuplicateDeclaration,
+		CbDuplicateImports cbDuplicateImports,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
 		CbFunAsLambdaCantOverload cbFunAsLambdaCantOverload,
@@ -531,6 +545,8 @@ public:
 				return cbCreateRecordByRefNoCtx(createRecordByRefNoCtx);
 			case Kind::duplicateDeclaration:
 				return cbDuplicateDeclaration(duplicateDeclaration);
+			case Kind::duplicateImports:
+				return cbDuplicateImports(duplicateImports);
 			case Kind::expectedTypeIsNotALambda:
 				return cbExpectedTypeIsNotALambda(expectedTypeIsNotALambda);
 			case Kind::fileDoesNotExist:

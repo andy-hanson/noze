@@ -5,10 +5,15 @@
 namespace {
 	//TODO:MOVE
 	void writePath(Writer* writer, const Path* p) {
-		if (has(p->parent))
+		if (has(p->parent)) {
 			writePath(writer, force(p->parent));
-		writeChar(writer, '/');
+			writeChar(writer, '/');
+		}
 		writeStr(writer, p->baseName);
+	}
+
+	void writePathAndStorageKind(Writer* writer, const PathAndStorageKind p) {
+		writePath(writer, p.path);
 	}
 
 	//TODO:MOVE
@@ -50,7 +55,7 @@ namespace {
 		// TODO
 		const PathAndStorageKind where = module->pathAndStorageKind;
 		writeBold(writer);
-		writePath(writer, where.path);
+		writePathAndStorageKind(writer, where);
 		writeReset(writer);
 		writeStatic(writer, " line ");
 		const LineAndColumnGetter lcg = mustGetAt<
@@ -230,7 +235,6 @@ namespace {
 			writeStatic(writer, ", but they do not match the ");
 			const Bool hasRet = has(d.expectedReturnType);
 			const Bool hasArgs = _not(isEmpty(d.actualArgTypes));
-			assert(hasRet || hasArgs); // we have a candidate with the correct arity so there must be some type error
 			const char* descr = hasRet
 				? hasArgs ? "expected return type and actual argument types" : "expected return type"
 				: "actual argument types";
@@ -326,6 +330,11 @@ namespace {
 				}
 				writeChar(writer, ' ');
 				writeName(writer, d.name);
+			},
+			[&](const Diag::DuplicateImports d) {
+				writeStatic(writer, "the symbol ");
+				writeName(writer, d.name);
+				writeStatic(writer, " appears in multiple modules");
 			},
 			[&](const Diag::ExpectedTypeIsNotALambda d) {
 				if (has(d.expectedType)) {
@@ -497,7 +506,7 @@ void printDiagnostics(const Diagnostics diagnostics) {
 	for (const Arr<const Diagnostic> group : groups) {
 		if (first(group).diag.isFileDoesNotExist()) {
 			assert(size(group) == 1);
-			writePath(&writer, only(group).where.path);
+			writePathAndStorageKind(&writer, only(group).where);
 			writeStatic(&writer, ": file does not exist\n");
 		} else
 			for (const Diagnostic d : group)

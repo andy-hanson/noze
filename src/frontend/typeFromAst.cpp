@@ -15,31 +15,50 @@ namespace {
 		return none<const T*>();
 	}
 
+	template <typename TDecl>
+	struct DeclAndModule {
+		const TDecl decl;
+		// none for this module (which isn't created yet)
+		const Opt<const Module*> module;
+	};
+
 	template<typename TDecl, typename GetTMap>
 	const Opt<TDecl> tryFindT(
 		CheckCtx* ctx,
 		const Sym name,
 		const SourceRange range,
 		const Dict<const Sym, TDecl, compareSym> dict,
-		Diag::NameNotFound::Kind kind,
+		const Diag::DuplicateImports::Kind duplicateImportKind,
+		Diag::NameNotFound::Kind nameNotFoundKind,
 		GetTMap getTMap
 	) {
-		Cell<const Opt<TDecl>> res = Cell<const Opt<TDecl>>{getAt<const Sym, TDecl, compareSym>(dict, name)};
+		using DAndM = const DeclAndModule<const TDecl>;
+		const Opt<TDecl> here = getAt<const Sym, TDecl, compareSym>(dict, name);
+		Cell<const Opt<const DAndM>> res = Cell<const Opt<const DAndM>>{
+			has(here) ? some<const DAndM>(DAndM{force(here), none<const Module*>()}) : none<const DAndM>()};
 
 		for (const Module* m : includeAndImportsRange(ctx)) {
 			const Opt<TDecl> fromModule = getAt<const Sym, TDecl, compareSym>(getTMap(m), name);
 			if (has(fromModule)) {
-				if (has(cellGet(&res)))
-					todo<void>("Duplicate imports from different modules");
-				else
-					cellSet<const Opt<TDecl>>(&res, fromModule);
+				if (has(cellGet(&res))) {
+					const DAndM already = force(cellGet(&res));
+					//TODO: include both modules in the diag
+					addDiag(ctx, range, Diag{Diag::DuplicateImports{duplicateImportKind, name}});
+					return none<TDecl>();
+				} else
+					cellSet<const Opt<const DAndM>>(
+						&res,
+						some<const DAndM>(DAndM{force(fromModule), some<const Module*>(m)}));
 			}
 		}
 
-		const Opt<TDecl> r = cellGet(&res);
-		if (!has(r))
-			addDiag(ctx, range, Diag{Diag::NameNotFound{name, kind}});
-		return r;
+		const Opt<const DAndM> r = cellGet(&res);
+		if (has(r)) {
+			return some<TDecl>(force(r).decl);
+		} else {
+			addDiag(ctx, range, Diag{Diag::NameNotFound{name, nameNotFoundKind}});
+			return none<TDecl>();
+		}
 	}
 }
 
@@ -49,11 +68,12 @@ const Opt<const StructInst*> instStructFromAst(
 	const StructsAndAliasesMap structsAndAliasesMap,
 	const TypeParamsScope typeParamsScope,
 	DelayStructInsts delayStructInsts) {
-	const Opt<const StructOrAlias> opDecl = tryFindT(
+	const Opt<const StructOrAlias> opDecl = tryFindT<const StructOrAlias>(
 		ctx,
 		ast.name,
 		ast.range,
 		structsAndAliasesMap,
+		Diag::DuplicateImports::Kind::structOrAlias,
 		Diag::NameNotFound::Kind::strukt,
 		[](const Module* m) { return m->structsAndAliasesMap; });
 	if (!has(opDecl))
@@ -115,9 +135,16 @@ const Opt<const SpecDecl*> tryFindSpec(
 	const Sym name,
 	const SourceRange range,
 	const SpecsMap specsMap) {
-	return tryFindT(ctx, name, range, specsMap, Diag::NameNotFound::Kind::spec, [](const Module* m) {
-		return m->specsMap;
-	});
+	return tryFindT<const SpecDecl*>(
+		ctx,
+		name,
+		range,
+		specsMap,
+		Diag::DuplicateImports::Kind::spec,
+		Diag::NameNotFound::Kind::spec,
+		[](const Module* m) {
+			return m->specsMap;
+		});
 }
 
 const Arr<const Type> typeArgsFromAsts(

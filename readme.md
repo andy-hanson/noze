@@ -49,14 +49,7 @@ you can't import from any parent directory of that.
 
 To install the Sublime Text syntax:
 
-bash:
-
-```
-ln -s `pwd`/noze.tmLanguage ~/.config/sublime-text-3/Packages/User/noze.tmLanguage
-```
-
-fish:
-
-```
-ln -s (pwd)/noze.tmLanguage ~/.config/sublime-text-3/Packages/User/noze.tmLanguage
+```sh
+bash -llc 'ln -s `pwd`/noze.sublime-syntax ~/.config/sublime-text-3/Packages/User/noze.sublime-syntax'
+bash -llc 'ln -s `pwd`/syntax_test_noze.nz ~/.config/sublime-text-3/Packages/User/syntax_test_noze.nz'
 ```

@@ -348,16 +348,25 @@ namespace {
 		writeNat(writer, c->id);
 	}
 
-	void writeConstantReference(Writer* writer, const Constant* c) {
-		auto writeref = [&](const CStr s) {
+	void writeConstantReference(Writer* writer, const Constant* c, const Bool isInsideConstant) {
+		auto writeRef = [&](const CStr s) {
 			writeStatic(writer, "_constant");
 			writeStatic(writer, s);
 			writeNat(writer, c->id);
 		};
 
+		auto maybeWriteCast = [&]() -> void {
+			if (!isInsideConstant) {
+				writeChar(writer, '(');
+				writeValueType(writer, c->type());
+				writeStatic(writer, ") ");
+			}
+		};
+
 		c->kind.match(
 			[&](const ConstantKind::Array) {
-				writeref("Arr");
+				maybeWriteCast();
+				writeRef("Arr");
 			},
 			[&](const Bool b) {
 				writeStatic(writer, b ? "1" : "0");
@@ -413,6 +422,8 @@ namespace {
 			[&](const ConstantKind::Record r) {
 				if (r.type.isPointer)
 					writeChar(writer, '&');
+				else
+					maybeWriteCast();
 				writeConstantRecordName(writer, c, r.type);
 			},
 			[&](const ConstantKind::Union u) {
@@ -426,7 +437,7 @@ namespace {
 
 	void writeConstantReferencesWithCommas(Writer* writer, const Arr<const Constant*> constants) {
 		writeWithCommas(writer, constants, /*leadingComma*/ False, [&](const Constant* c) {
-			writeConstantReference(writer, c);
+			writeConstantReference(writer, c, /*isInsideConstant*/ True);
 		});
 	}
 
@@ -475,15 +486,17 @@ namespace {
 					writeStatic(writer, ";\n");
 				}
 
-				writeStatic(writer, "static ");
-				writeValueType(writer, type);
+				writeStatic(writer, "#define ");
 				writeStatic(writer, " _constantArr");
 				writeNat(writer, id);
-				writeStatic(writer, " = { ");
+				// NOTE: we can't have a cast to the type here, because that causes it to be non-constant apparently.
+				//writeStatic(writer, " (");
+				//writeValueType(writer, type);
+				writeStatic(writer, " { ");
 				writeNat(writer, size);
 				writeStatic(writer, ", _constantArrBacking");
 				writeNat(writer, id);
-				writeStatic(writer, " };\n");
+				writeStatic(writer, " }\n");
 			},
 			[](const Bool) {},
 			[](const char) {},
@@ -503,17 +516,36 @@ namespace {
 			[&](const ConstantKind::Record r) {
 				ensureWrittenConstantDecls(writer, written, r.args);
 
-				writeStatic(writer, "static ");
-				writeType(writer, r.type);
-				writeChar(writer, ' ');
-				writeConstantRecordName(writer, c, r.type);
-				writeStatic(writer, " = { ");
-				if (isEmpty(r.args))
-					// C requires structs to be non-empty
-					writeStatic(writer, "0");
-				else
-					writeConstantReferencesWithCommas(writer, r.args);
-				writeStatic(writer, " };\n");
+				auto writeInitializer = [&]() -> void {
+					writeStatic(writer, "{ ");
+					if (isEmpty(r.args))
+						// C requires structs to be non-empty
+						writeStatic(writer, "0");
+					else
+						writeConstantReferencesWithCommas(writer, r.args);
+					writeStatic(writer, " }");
+				};
+
+				// For a by-ref type: use 'static' variable.
+				// For a by-val type: use a define
+				if (type.isPointer) {
+					writeStatic(writer, "static ");
+					writeType(writer, r.type);
+					writeChar(writer, ' ');
+					writeConstantRecordName(writer, c, r.type);
+					writeStatic(writer, " = ");
+					writeInitializer();
+					writeStatic(writer, ";\n");
+				} else {
+					writeStatic(writer, "#define ");
+					writeConstantRecordName(writer, c, r.type);
+					writeChar(writer, ' ');
+					//writeStatic(writer, " (");
+					//writeType(writer, r.type);
+					//writeStatic(writer,") ");
+					writeInitializer();
+					writeStatic(writer, "\n");
+				}
 			},
 			[&](const ConstantKind::Union u) {
 				ensureWrittenConstantDecl(writer, written, u.member);
@@ -525,7 +557,7 @@ namespace {
 				writeStatic(writer, " = ");
 				writeValueType(writer, u.unionType);
 				writeChar(writer, '(');
-				writeConstantReference(writer, u.member);
+				writeConstantReference(writer, u.member, /*isInsideConstant*/ True);
 				writeStatic(writer, ");\n");
 			},
 			[](const ConstantKind::Void) {});
@@ -554,7 +586,7 @@ namespace {
 	void writeConstantOrExpr(WriterWithIndent* writer, const ConstantOrExpr ce) {
 		ce.match(
 			[&](const Constant* c) {
-				writeConstantReference(writer->writer, c);
+				writeConstantReference(writer->writer, c, /*isInsideConstant*/ False);
 			},
 			[&](const ConcreteExpr* e) {
 				writeConcreteExpr(writer, *e);
@@ -683,6 +715,12 @@ namespace {
 				writeArg(0);
 				break;
 
+			case BuiltinFunKind::bitwiseAndNat16:
+			case BuiltinFunKind::bitwiseAndNat32:
+			case BuiltinFunKind::bitwiseAndNat64:
+				binaryOperator("&");
+				break;
+
 			case BuiltinFunKind::callFunPtr:
 				writeArg(0);
 				writeStatic(writer, "(");
@@ -736,6 +774,7 @@ namespace {
 				break;
 
 			case BuiltinFunKind::subFloat64:
+			case BuiltinFunKind::subPtrNat:
 			case BuiltinFunKind::wrapSubNat64:
 				binaryOperator("-");
 				break;
@@ -745,10 +784,12 @@ namespace {
 				binaryOperator("*");
 				break;
 
+			case BuiltinFunKind::asAnyPtr:
 			case BuiltinFunKind::toIntFromInt16:
 			case BuiltinFunKind::toIntFromInt32:
 			case BuiltinFunKind::toNatFromNat16:
 			case BuiltinFunKind::toNatFromNat32:
+			case BuiltinFunKind::toNatFromPtr:
 				writeCastToType(writer->writer, e.returnType());
 				writeArg(0);
 				break;
@@ -1003,27 +1044,46 @@ namespace {
 			[&](const ConcreteExpr::Seq e) {
 				// (a,
 				// b)
-				writeStatic(writer, "(");
+				writeChar(writer, '(');
 				writeConcreteExpr(writer, *e.first);
-				writeStatic(writer, ",");
+				writeChar(writer, ',');
 				newline(writer);
 				writeConstantOrExpr(writer, e.then);
-				writeStatic(writer, ")");
+				writeChar(writer, ')');
+			},
+			[&](const ConcreteExpr::SpecialUnary e) {
+				switch (e.kind) {
+					case ConcreteExpr::SpecialUnary::Kind::deref:
+						writeStatic(writer, "*(");
+						writeConcreteExpr(writer, *e.arg);
+						writeChar(writer, ')');
+						break;
+					default:
+						assert(0);
+				}
 			},
 			[&](const ConcreteExpr::SpecialBinary e) {
 				writeStatic(writer, "(");
 				writeConstantOrExpr(writer, e.left);
 				using Kind = ConcreteExpr::SpecialBinary::Kind;
-				switch (e.kind) {
-					case Kind::less:
-						writeStatic(writer, " < ");
-						break;
-					case Kind::_or:
-						writeStatic(writer, " || ");
-						break;
-					default:
-						assert(0);
-				}
+				writeChar(writer, ' ');
+				writeStatic(writer, [&]() {
+					switch (e.kind) {
+						case Kind::add:
+							return "+";
+						case Kind::eq:
+							return "==";
+						case Kind::less:
+							return "<";
+						case Kind::_or:
+							return "||";
+						case Kind::sub:
+							return "-";
+						default:
+							assert(0);
+					}
+				}());
+				writeChar(writer, ' ');
 				writeConstantOrExpr(writer, e.right);
 				writeStatic(writer, ")");
 			});
@@ -1082,7 +1142,7 @@ namespace {
 	void writeFunWithConstantBody(Writer* writer, const ConcreteFun* fun, const Constant* body) {
 		writeFunWithBodyWorker(writer, fun, [&]() {
 			writeStatic(writer, "return ");
-			writeConstantReference(writer, body);
+			writeConstantReference(writer, body, /*isInsideExpr*/ False);
 			writeStatic(writer, ";");
 		});
 	}

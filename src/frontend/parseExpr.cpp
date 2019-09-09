@@ -59,7 +59,6 @@ namespace {
 	const ExprAndDedent parseLetOrThen(Lexer* lexer, const Pos start, const NameAndRange name, const Bool isArrow) {
 		const ExprAndDedent initAndDedent = parseExprNoLet(lexer);
 		if (initAndDedent.dedents != 0) {
-			printf("????? %zd\n", initAndDedent.dedents);
 			return throwDiag<const ExprAndDedent>(range(lexer, start), ParseDiag{ParseDiag::LetMustHaveThen{}});
 		} else {
 			const ExprAst* init = alloc(lexer, initAndDedent.expr);

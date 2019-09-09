@@ -40,7 +40,7 @@ namespace {
 		Path const* path = rootPath(lexer->arena, takeNameAsStr(lexer));
 		while (tryTake(lexer, '.'))
 			path = childPath(lexer->arena, path, takeNameAsStr(lexer));
-		path = addExtension(lexer->arena, path, strLiteral(".nz"));
+		path = addExtension(lexer->arena, path, strLiteral("nz"));
 		return ImportAst{range(lexer, start), nDots, path};
 	}
 

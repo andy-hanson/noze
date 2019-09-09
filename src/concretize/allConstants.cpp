@@ -90,7 +90,7 @@ const Constant* constantArr(
 			return newConstant(
 				arena,
 				allConstants,
-				ConcreteType::fromStruct(arrayType),
+				concreteType_fromStruct(arrayType),
 				ConstantKind{ConstantKind::Array{key}},
 				Nat64{allConstants->nextArrId++});
 		});

@@ -250,7 +250,7 @@ namespace {
 				[&](const Arr<const Module*> modules) {
 					return Program{
 						includeCheck.module,
-						last(modules),
+						first(modules),
 						prepend<const Module*>(modelArena, includeCheck.module, modules),
 						includeCheck.commonTypes,
 						lineAndColumnGetters

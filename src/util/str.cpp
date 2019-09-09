@@ -13,7 +13,7 @@ Comparison compareStr(const Str a, const Str b) {
 	else if (isEmpty(b))
 		return Comparison::greater;
 	else {
-		const Comparison res = comparePrimitive<const char>(at(a, 0), at(b, 0));
+		const Comparison res = comparePrimitive<const char>(first(a), first(b));
 		return res != Comparison::equal ? res : compareStr(tail(a), tail(b));
 	}
 }

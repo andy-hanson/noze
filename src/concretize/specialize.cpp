@@ -34,7 +34,7 @@ namespace {
 			const ConstantOrExpr closure = shouldAllocateClosureForDynamicLambda(closureType)
 				? nuExpr(
 					ctx->arena,
-					closureType.changeToByRef(),
+					changeToByRef(closureType),
 					range,
 					none<const KnownLambdaBody*>(),
 					ConcreteExpr::Alloc{getAllocFun(ctx), e})
@@ -144,7 +144,10 @@ const SpecializeOnArgs getSpecializeOnArgsForFun(
 
 namespace {
 	template <typename ForVariable>
-	const Opt<const ConcreteType> getSpecializedParamType(const ConstantOrLambdaOrVariable clv, ForVariable forVariable) {
+	const Opt<const ConcreteType> getSpecializedParamType(
+		const ConstantOrLambdaOrVariable clv,
+		ForVariable forVariable
+	) {
 		return clv.match(
 			[&](const ConstantOrLambdaOrVariable::Variable) {
 				return some<const ConcreteType>(forVariable());
@@ -171,7 +174,10 @@ const Arr<const ConcreteField> concretizeClosureFieldsAndSpecialize(
 			return getConcreteType(ctx, c->type, typeArgsScope);
 		});
 		if (has(t))
-			add<const ConcreteField>(ctx->arena, &res, ConcreteField{/*isMutable*/ False, mangleName(ctx->arena, c->name), force(t)});
+			add<const ConcreteField>(
+				ctx->arena,
+				&res,
+				ConcreteField{/*isMutable*/ False, mangleName(ctx->arena, c->name), force(t)});
 	}
 	return finishArr(&res);
 }

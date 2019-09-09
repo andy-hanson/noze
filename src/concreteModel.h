@@ -5,6 +5,8 @@
 #include "./util/sourceRange.h"
 #include "./util/writer.h"
 
+#include "./concretize/mangleName.h"
+
 enum class BuiltinStructKind {
 	_bool,
 	byte,
@@ -31,7 +33,11 @@ enum class BuiltinFunKind {
 	addPtr,
 	_and,
 	as,
+	asAnyPtr,
 	asNonConst,
+	bitwiseAndNat16,
+	bitwiseAndNat32,
+	bitwiseAndNat64,
 	callFunPtr,
 	compareExchangeStrong,
 	compare, // the `<=>` operator
@@ -59,15 +65,18 @@ enum class BuiltinFunKind {
 	setPtr,
 	sizeOf,
 	subFloat64,
+	subPtrNat,
 	toIntFromInt16,
 	toIntFromInt32,
 	toNatFromNat16,
 	toNatFromNat32,
+	toNatFromPtr,
 	_true,
 	unsafeDivFloat64,
 	unsafeDivInt64,
 	unsafeDivNat64,
 	unsafeModNat64,
+	unsafeNat64ToNat32,
 	unsafeNat64ToInt64,
 	unsafeInt64ToNat64,
 	wrapAddInt16,
@@ -211,9 +220,36 @@ public:
 	}
 };
 
-enum class SpecialStructKind {
-	arr,
-	mutArr,
+struct ConcreteStruct;
+
+struct ConcreteType {
+	// NOTE: ConcreteType for 'ptr' (e.g. 'ptr byte') will *not* have isPointer set -- since it's not a ptr*
+	const Bool isPointer;
+	const ConcreteStruct* strukt;
+
+	inline const Bool eq(const ConcreteType other) const {
+		return _and(isPointer == other.isPointer, ptrEquals(strukt, other.strukt));
+	}
+
+	inline const ConcreteStruct* mustBePointer() const {
+		assert(isPointer);
+		return strukt;
+	}
+
+	// Union and iface should never be pointers
+	inline const ConcreteStruct* mustBeNonPointer() const {
+		assert(!isPointer);
+		return strukt;
+	}
+};
+
+struct SpecialStructInfo {
+	enum class Kind {
+		arr,
+		mutArr,
+	};
+	const Kind kind;
+	const ConcreteType elementType;
 };
 
 struct ConcreteStructInfo {
@@ -225,13 +261,13 @@ struct ConcreteStructInfo {
 
 struct ConcreteStruct {
 	const Str mangledName;
-	const Opt<const SpecialStructKind> special;
+	const Opt<const SpecialStructInfo> special;
 	Late<const ConcreteStructInfo> _info;
 
 	ConcreteStruct(const ConcreteStruct&) = delete;
 
-	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructKind> sp) : mangledName{mn}, special{sp} {}
-	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructKind> sp, const ConcreteStructInfo info)
+	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructInfo> sp) : mangledName{mn}, special{sp} {}
+	inline ConcreteStruct(const Str mn, const Opt<const SpecialStructInfo> sp, const ConcreteStructInfo info)
 		: mangledName{mn}, special{sp}, _info{info} {}
 
 	inline const ConcreteStructInfo info() const {
@@ -263,55 +299,34 @@ struct ConcreteStruct {
 	}
 };
 
-struct ConcreteType {
-	// NOTE: ConcreteType for 'ptr' (e.g. 'ptr byte') will *not* have isPointer set -- since it's not a ptr*
-	const Bool isPointer;
-	const ConcreteStruct* strukt;
+inline size_t sizeOrPointerSizeBytes(const ConcreteType t) {
+	return t.isPointer ? sizeof(void*) : t.strukt->sizeBytes();
+}
 
-	static inline ConcreteType pointer(const ConcreteStruct* strukt) {
-		return ConcreteType{True, strukt};
-	}
+inline const ConcreteType concreteType_pointer(const ConcreteStruct* strukt) {
+	return ConcreteType{True, strukt};
+}
 
-	static inline ConcreteType value(const ConcreteStruct* strukt) {
-		return ConcreteType{False, strukt};
-	}
+inline const ConcreteType concreteType_value(const ConcreteStruct* strukt) {
+	return ConcreteType{False, strukt};
+}
 
-	static inline const ConcreteType fromStruct(const ConcreteStruct* s) {
-		return ConcreteType{s->defaultIsPointer(), s};
-	}
+inline const ConcreteType byRef(const ConcreteType t) {
+	return concreteType_pointer(t.strukt);
+}
 
-	inline const Bool eq(const ConcreteType other) const {
-		return _and(isPointer == other.isPointer, ptrEquals(strukt, other.strukt));
-	}
+inline const ConcreteType byVal(const ConcreteType t) {
+	return concreteType_value(t.strukt);
+}
 
-	inline size_t sizeOrPointerSizeBytes() const {
-		return isPointer ? sizeof(void*) : strukt->sizeBytes();
-	}
+inline const ConcreteType changeToByRef(const ConcreteType t) {
+	assert(!t.isPointer);
+	return byRef(t);
+}
 
-	inline const ConcreteStruct* mustBePointer() const {
-		assert(isPointer);
-		return strukt;
-	}
-
-	// Union and iface should never be pointers
-	inline const ConcreteStruct* mustBeNonPointer() const {
-		assert(!isPointer);
-		return strukt;
-	}
-
-	inline const ConcreteType changeToByRef() const {
-		assert(!isPointer);
-		return byRef();
-	}
-
-	inline const ConcreteType byRef() const {
-		return ConcreteType::pointer(strukt);
-	}
-
-	inline const ConcreteType byVal() const {
-		return ConcreteType::value(strukt);
-	}
-};
+inline const ConcreteType concreteType_fromStruct(const ConcreteStruct* s) {
+	return ConcreteType{s->defaultIsPointer(), s};
+}
 
 inline void writeConcreteType(Writer* writer, const ConcreteType t) {
 	writeStr(writer, t.strukt->mangledName);
@@ -357,6 +372,11 @@ struct ConcreteSig {
 	// this should store the closure (or be omitted if none).
 	// (Above does not apply to iface messages which are never specialized)
 	const Arr<const ConcreteParam> params;
+
+	inline ConcreteSig(const Str _mangledName, const ConcreteType _returnType, const Arr<const ConcreteParam> _params)
+		: mangledName{_mangledName}, returnType{_returnType}, params{_params} {
+		assert(isMangledName(mangledName));
+	}
 
 	inline size_t arity() const {
 		return size(params);
@@ -1251,10 +1271,21 @@ struct ConcreteExpr {
 		const ConstantOrExpr then;
 	};
 
+	struct SpecialUnary {
+		enum class Kind {
+			deref,
+		};
+		const Kind kind;
+		const ConcreteExpr* arg;
+	};
+
 	struct SpecialBinary {
 		enum class Kind {
+			add,
+			eq,
 			less,
 			_or,
+			sub,
 		};
 
 		const Kind kind;
@@ -1282,6 +1313,7 @@ private:
 		recordFieldAccess,
 		recordFieldSet,
 		seq,
+		specialUnary,
 		specialBinary,
 	};
 	// This is the type it's *supposed* to have. KnownLambdaBody may better reflect the actual type.
@@ -1310,6 +1342,7 @@ private:
 		const RecordFieldAccess recordFieldAccess;
 		const RecordFieldSet recordFieldSet;
 		const Seq seq;
+		const SpecialUnary specialUnary;
 		const SpecialBinary specialBinary;
 	};
 
@@ -1441,6 +1474,12 @@ public:
 		const ConcreteType type,
 		const SourceRange range,
 		const Opt<const KnownLambdaBody*> klb,
+		const SpecialUnary a)
+		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::specialUnary}, specialUnary{a} {}
+	inline ConcreteExpr(
+		const ConcreteType type,
+		const SourceRange range,
+		const Opt<const KnownLambdaBody*> klb,
 		const SpecialBinary a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::specialBinary}, specialBinary{a} {}
 
@@ -1486,6 +1525,7 @@ public:
 		typename CbRecordFieldAccess,
 		typename CbRecordFieldSet,
 		typename CbSeq,
+		typename CbSpecialUnary,
 		typename CbSpecialBinary
 	>
 	inline auto match(
@@ -1507,6 +1547,7 @@ public:
 		CbRecordFieldAccess cbRecordFieldAccess,
 		CbRecordFieldSet cbRecordFieldSet,
 		CbSeq cbSeq,
+		CbSpecialUnary cbSpecialUnary,
 		CbSpecialBinary cbSpecialBinary
 	) const {
 		switch (kind) {
@@ -1546,6 +1587,8 @@ public:
 				return cbRecordFieldSet(recordFieldSet);
 			case Kind::seq:
 				return cbSeq(seq);
+			case Kind::specialUnary:
+				return cbSpecialUnary(specialUnary);
 			case Kind::specialBinary:
 				return cbSpecialBinary(specialBinary);
 			default:

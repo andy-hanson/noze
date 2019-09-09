@@ -1,0 +1,264 @@
+
+u-long alias
+	nat
+u-long-long alias
+	nat
+u-int alias
+	nat32
+s-long alias
+	int
+s-long-long alias
+	int
+dev-t alias
+	u-long-long
+ino-t alias
+	u-long
+mode-t alias
+	u-int
+nlink-t alias
+	u-int
+uid-t alias
+	u-long
+gid-t alias
+	u-long
+off-t alias
+	s-long-long
+blksize-t alias
+	u-long
+blkcnt-t alias
+	u-long
+time-t alias
+	u-long
+
+| based on my /usr/include/x86_64-linux-gnu/asm/stat.h `struct stat64`
+stat-t record mut
+	st-dev mut dev-t
+	pad0 mut nat32
+	st-ino-unused mut ino-t
+	st-mode mut mode-t
+	st-nlink mut nlink-t
+	st-uid mut uid-t
+	st-gid mut gid-t
+	st-rdev mut dev-t
+	pad1 mut nat32
+	st-size mut off-t
+	st-blksize mut blksize-t
+	st-blocks mut blkcnt-t
+	st-atime mut time-t
+	st-atime-nsec mut u-long
+	st-mtime mut time-t
+	st-mtime-nsec mut u-long
+	st-ctime mut time-t
+	st-ctime-msec mut u-long
+	st-ino mut u-long-long
+	unused mut u-long-long
+
+err-t alias
+	int32
+
+enoent err-t()
+	two
+
+get-errno err-t() summon builtin
+
+stat int32(path c-str, buf stat-t) extern
+
+get-stat opt stat-t(path c-str) summon trusted
+	z3 = zero as<nat32>
+	z = zero as<u-long>
+	s = new<stat-t> z, z3, z, z3, z3, z, z, z, z3, zero, z, z, z, z, z, z, z, z, z, z
+	err = path stat s
+	when
+		err == zero
+			s some
+		else
+			assert: err == neg-one
+			errno = get-errno
+			when
+				errno == enoent
+					none
+				else
+					print-sync: "stat failed: "
+					print-sync: errno.to-str
+					todo
+
+s-ifmt nat32()
+	| TODO: "octal170000"
+	61440
+
+s-ifdir nat32()
+	| TODO: "octal40000"
+	16384
+
+is-dir? bool(path c-str) summon
+	match path get-stat
+		none
+			| raise exception
+			todo
+		some s
+			mode = s.value.st-mode
+			mode bits-and s-ifmt == s-ifdir
+
+is-dir? bool(path str) summon
+	path.to-c-str is-dir?
+
+| TODO: move to io.nz
+path-exists? bool(path c-str) summon
+	path.get-stat has?
+
+path-exists? bool(path str) summon
+	path.to-c-str path-exists?
+
+fd-t alias
+	int32
+oflag-t alias
+	int32
+
+o-rdonly oflag-t()
+	zero
+
+open fd-t(path c-str, oflag oflag-t) summon extern
+close void(f fd-t) summon extern
+lseek off-t(f fd-t, offset off-t, whence int32) summon extern
+read int(fd fd-t, buf any-ptr, count nat) summon extern
+
+bytes16 record
+	by-val
+	n0 nat
+	n1 nat
+
+zero bytes16() noctx
+	new zero, zero
+
+zero bytes64() noctx
+	new zero, zero, zero, zero
+
+zero bytes256() noctx
+	new zero, zero, zero, zero
+
+
+bytes64 record
+	by-val
+	n0 bytes16
+	n1 bytes16
+	n2 bytes16
+	n3 bytes16
+
+| TODO: remove
+bytes256 record
+	by-val
+	n0 bytes64
+	n1 bytes64
+	n2 bytes64
+	n3 bytes64
+
+dirent record mut
+	d-ino mut ino-t
+	d-off mut off-t
+	d-reclen mut nat16
+	d-type mut char
+	| TODO: d-name char[256]
+	d-name mut bytes256
+
+get-dirent-name str(d dirent) unsafe noctx
+	| TODO: this is offsetof(d, d-name)
+	name-offset = size-of<ino-t> wrap-add size-of<off-t> wrap-add size-of<nat16> wrap-add size-of<char>
+	name-ptr = d.as-any-ptr + name-offset
+	name-ptr.ptr-cast<char, byte> to-str
+
+
+dirp alias
+	any-ptr
+
+opendir dirp(name c-str) summon extern
+readdir-r int(dirp dirp, entry dirent, result cell dirent) summon extern
+
+seek-set int32()
+	zero
+seek-cur int32()
+	one
+seek-end int32()
+	two
+
+
+read-dir arr str(path str) summon
+	path.to-c-str read-dir
+
+| Returns array of filenames in the directory.
+read-dir arr str(path c-str) trusted summon
+	dirp = path opendir
+	| TODO: handle errors
+	forbid: dirp == null
+	res = new-mut-arr<str>
+	dirp read-dir-recur res
+	res.freeze sort
+
+read-dir-recur void(dirp dirp, res mut-arr str) unsafe summon
+	| Initial value of entry / result should not matter
+	entry = new<dirent> zero, zero, zero, "\0", zero
+	result = entry new-cell<dirent>
+	err = dirp readdir-r entry, result
+	| TODO: handle error
+	assert: err == zero
+	when
+		result.get.as-any-ptr == null
+			| finished
+			pass
+		else
+			assert: result.get ptr-eq entry
+			name = entry.get-dirent-name
+			when
+				name == "." or: name == ".."
+					pass
+				else
+					res add entry.get-dirent-name
+			dirp read-dir-recur res
+
+
+read-file str(path str) summon
+	match path try-read-file
+		none
+			| exception: file does not exist
+			todo
+		some s
+			s.value
+
+try-read-file opt str(path str) summon
+	path.to-c-str try-read-file
+
+try-read-file opt str(path c-str) summon trusted
+	fd = path open o-rdonly
+	when
+		fd == neg-one
+			errno = get-errno
+			when
+				errno == enoent
+					none
+				else
+					print-sync: "failed to open file " + path.to-str
+					todo
+		else
+			file-size = fd lseek zero, seek-end
+			| TODO: handle errors
+			forbid: file-size == neg-one
+			assert: file-size < million
+			| TODO: handle empty files
+			forbid: file-size == zero
+
+			| Go back to beginning
+			off = fd lseek zero, seek-set
+			| TODO: handle errors
+			assert: off == 0
+
+			| TODO: allocation can fail, then 'fd' is left open. Need finalizers
+			file-size-nat = file-size.to-nat
+			res = file-size-nat.incr uninitialized-mut-arr<char>
+			n-bytes-read = fd read res.data.ptr-cast, file-size-nat
+			| TODO: handle errors
+			forbid: n-bytes-read == neg-one
+			assert: n-bytes-read == file-size
+
+			res set-at file-size.to-nat, "\0"
+
+			fd close
+			res.freeze some

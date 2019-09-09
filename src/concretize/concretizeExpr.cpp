@@ -162,7 +162,8 @@ namespace {
 				closureParam->type,
 				range,
 				ConcreteExpr::ParamRef{closureParam});
-			const Opt<const KnownLambdaBody*> itsKlb = getKnownLambdaBodyFromConstantOrLambdaOrVariable(specialized.clv);
+			const Opt<const KnownLambdaBody*> itsKlb =
+				getKnownLambdaBodyFromConstantOrLambdaOrVariable(specialized.clv);
 			return nuExpr(
 				getArena(ctx),
 				field->type,
@@ -208,7 +209,7 @@ namespace {
 		auto nonConstant = [&](const Arr<const ConstantOrExpr> nonConstantArgs) -> const ConstantOrExpr {
 			const ConstantOrExpr value = nuExpr(
 				arena,
-				type.byVal(),
+				byVal(type),
 				range,
 				ConcreteExpr::CreateRecord{makeLambdasDynamic_arr(ctx->concretizeCtx, range, nonConstantArgs)});
 			return type.isPointer
@@ -301,7 +302,8 @@ namespace {
 			ctx->typeArgsScope());
 
 		const Str typeMangledName = cat(arena, mangledName, strLiteral("___closure"));
-		const Opt<const ConcreteType> closureType = concreteTypeFromFields_neverPointer(arena, closureFields, typeMangledName);
+		const Opt<const ConcreteType> closureType =
+			concreteTypeFromFields_neverPointer(arena, closureFields, typeMangledName);
 		const Opt<const ConcreteParam> closureParam = has(closureType)
 			? some<const ConcreteParam>(ConcreteParam{strLiteral("_closure"), force(closureType)})
 			: none<const ConcreteParam>();
@@ -331,7 +333,8 @@ namespace {
 		if (e.isSendFun)
 			todo<void>("sendfun");
 
-		// Since we're just creating the lambda and not calling it, we can't specialize on params yet. (But we will specialize above.)
+		// Since we're just creating the lambda and not calling it, we can't specialize on params yet.
+		// (But we will specialize above.)
 		const Arr<const ConcreteParam> nonSpecializedParams = concretizeParamsNoSpecialize(
 			ctx->concretizeCtx, e.params, ctx->typeArgsScope());
 
@@ -416,7 +419,7 @@ namespace {
 		return makeLocalWorker(
 			ctx,
 			shortSymAlphaLiteral("matched"),
-			ConcreteType::value(matchedUnion),
+			concreteType_value(matchedUnion),
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 	}
 
@@ -467,7 +470,8 @@ namespace {
 				assert(u.unionType == matchedUnion);
 				const Expr::Match::Case kase = at(e.cases, u.memberIndex);
 				if (has(kase.local)) {
-					const ConcreteLocal* local = concretizeLocal(ctx, force(kase.local), ConstantOrLambdaOrVariable{u.member});
+					const ConcreteLocal* local =
+						concretizeLocal(ctx, force(kase.local), ConstantOrLambdaOrVariable{u.member});
 					return concretizeWithLocal(ctx, force(kase.local), local, *kase.then);
 				} else
 					return concretizeExpr(ctx, *kase.then);
@@ -489,7 +493,9 @@ namespace {
 								concretizeWithLocal(ctx, force(kase.local), local, *kase.then));
 							return ConcreteExpr::Match::Case{some<const ConcreteLocal*>(local), then};
 						} else
-							return ConcreteExpr::Match::Case{none<const ConcreteLocal*>(), concretizeExpr(ctx, *kase.then)};
+							return ConcreteExpr::Match::Case{
+								none<const ConcreteLocal*>(),
+								concretizeExpr(ctx, *kase.then)};
 					});
 				return ConstantOrExpr{nuExpr(
 					arena,
@@ -525,25 +531,27 @@ namespace {
 			writeNat(&writer, ctx->currentConcreteFun->nextNewIfaceImplIndex++);
 			return finishWriter(&writer);
 		}();
-		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls = mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
-			arena,
-			iface->body().asIface().messages,
-			e.messageImpls,
-			[&](const ConcreteSig sig, const Expr body) {
-				ConcretizeExprCtx newCtx = todo<ConcretizeExprCtx>("concretizeexprctx for iface message impl");
-				const ConstantOrExpr concreteBody = concretizeExpr(&newCtx, body);
-				const Str mangledName = [&]() {
-					Writer writer { arena };
-					writeStr(&writer, mangledNameBase);
-					writeStatic(&writer, "__");
-					writeStr(&writer, sig.mangledName);
-					return finishWriter(&writer);
-				}();
-				return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
-			});
+		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls =
+			mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
+				arena,
+				iface->body().asIface().messages,
+				e.messageImpls,
+				[&](const ConcreteSig sig, const Expr body) {
+					ConcretizeExprCtx newCtx = todo<ConcretizeExprCtx>("concretizeexprctx for iface message impl");
+					const ConstantOrExpr concreteBody = concretizeExpr(&newCtx, body);
+					const Str mangledName = [&]() {
+						Writer writer { arena };
+						writeStr(&writer, mangledNameBase);
+						writeStatic(&writer, "__");
+						writeStr(&writer, sig.mangledName);
+						return finishWriter(&writer);
+					}();
+					return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
+				});
 		const Opt<const ConcreteType> fieldsType = concreteTypeFromFields(arena, fields, mangledNameBase);
-		const ConcreteExpr::NewIfaceImpl impl = ConcreteExpr::NewIfaceImpl{iface, fieldsType, fieldInitializers, messageImpls};
-		return nuExpr(arena, ConcreteType::fromStruct(iface), range, impl);
+		const ConcreteExpr::NewIfaceImpl impl =
+			ConcreteExpr::NewIfaceImpl{iface, fieldsType, fieldInitializers, messageImpls};
+		return nuExpr(arena, concreteType_fromStruct(iface), range, impl);
 	}
 
 	const ConcreteParam* findCorrespondingConcreteParam(const ConcretizeExprCtx* ctx, const size_t paramIndex) {
@@ -556,14 +564,21 @@ namespace {
 
 	const ConstantOrExpr concretizeParamRef(ConcretizeExprCtx* ctx, const SourceRange range, const Expr::ParamRef e) {
 		const size_t paramIndex = e.param->index;
-		// NOTE: we'll never see a ParamRef to a param from outside of a lambda -- that would be a ClosureFieldRef instead.
+		// NOTE: we'll never see a ParamRef to a param from outside of a lambda --
+		// that would be a ClosureFieldRef instead.
 		const ConstantOrLambdaOrVariable paramSpecialize = at(ctx->concreteFunSource.paramsSpecialize, paramIndex);
 		if (paramSpecialize.isConstant())
 			return ConstantOrExpr{paramSpecialize.asConstant()};
 		else {
 			const ConcreteParam* concreteParam = findCorrespondingConcreteParam(ctx, paramIndex);
-			const Opt<const KnownLambdaBody*> knownLambdaBody = getKnownLambdaBodyFromConstantOrLambdaOrVariable(paramSpecialize);
-			return nuExpr(getArena(ctx), concreteParam->type, range, knownLambdaBody, ConcreteExpr::ParamRef{concreteParam});
+			const Opt<const KnownLambdaBody*> knownLambdaBody =
+				getKnownLambdaBodyFromConstantOrLambdaOrVariable(paramSpecialize);
+			return nuExpr(
+				getArena(ctx),
+				concreteParam->type,
+				range,
+				knownLambdaBody,
+				ConcreteExpr::ParamRef{concreteParam});
 		}
 	}
 
@@ -660,7 +675,11 @@ namespace {
 		const ConcreteField* field = getMatchingField(ctx, e.targetType, e.field);
 		const ConstantOrExpr value = concretizeExpr(ctx, *e.value);
 		const ConcreteType voidType = ctx->concretizeCtx->voidType();
-		return nuExpr(getArena(ctx), voidType, range, ConcreteExpr::RecordFieldSet{targetType.isPointer, target, field, value});
+		return nuExpr(
+			getArena(ctx),
+			voidType,
+			range,
+			ConcreteExpr::RecordFieldSet{targetType.isPointer, target, field, value});
 	}
 
 	const ConstantOrExpr concretizeExpr(ConcretizeExprCtx* ctx, const Expr expr) {
@@ -706,7 +725,7 @@ namespace {
 							elementType,
 							getAllocFun(ctx->concretizeCtx),
 							makeLambdasDynamic_arr(ctx->concretizeCtx, range, nonConstantArgs)};
-						return nuExpr(arena, ConcreteType::fromStruct(arrayType), range, ca);
+						return nuExpr(arena, concreteType_fromStruct(arrayType), range, ca);
 					});
 			},
 			[&](const Expr::CreateRecord e) {

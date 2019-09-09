@@ -13,7 +13,7 @@ ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a
 	assert(called->arityExcludingCtxIncludingClosure() == size(args));
 
 	if (has(called->closureParam)) {
-		assert(concreteTypeEq(force(at(args, 0).typeWithKnownLambdaBody()), force(called->closureParam).type));
+		assert(concreteTypeEq(force(first(args).typeWithKnownLambdaBody()), force(called->closureParam).type));
 	}
 	for (const size_t i : Range{size(called->paramsExcludingCtxAndClosure())}) {
 		const ConcreteParam param = at(called->paramsExcludingCtxAndClosure(), i);
@@ -49,7 +49,7 @@ ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const Co
 	: fun{_fun}, closure{_closure} {
 	assert(fun->hasClosure()); // All dynamic funs take a closure, even if it's just void*
 	const ConcreteType closureType = closure.typeWithoutKnownLambdaBody();
-	assert(closureType.sizeOrPointerSizeBytes() == sizeof(void*));
+	assert(sizeOrPointerSizeBytes(closureType) == sizeof(void*));
 	assert(concreteTypeEq(closureType, force(fun->closureType())));
 	closure.match(
 		[&](const Constant* c) {

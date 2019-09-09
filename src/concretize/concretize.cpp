@@ -24,8 +24,10 @@ namespace {
 		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(
 			program.mainModule->funsMap,
 			shortSymAlphaLiteral("main"));
-		if (size(mainFuns) != 1)
+		if (size(mainFuns) != 1) {
+			printf("%lu\n", size(mainFuns));
 			todo<void>("wrong number main funs");
+		}
 		const FunDecl* mainFun = only(mainFuns);
 		checkMainSignature(&program.commonTypes, mainFun);
 		return mainFun;

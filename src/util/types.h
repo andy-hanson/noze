@@ -148,6 +148,12 @@ inline const Int64 int64FromNat64(const Nat64 n) {
 	return Int64{static_cast<int64_t>(n.value)};
 }
 
+inline const Nat32 nat32FromNat64(const Nat64 n) {
+	const uint64_t highestNat32 = (static_cast<uint64_t>(1) << 32) - 1;
+	assert(n.value <= highestNat32);
+	return Nat32{static_cast<uint32_t>(n.value)};
+}
+
 struct Float64 {
 	double value;
 };

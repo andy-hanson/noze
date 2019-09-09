@@ -62,14 +62,18 @@ namespace {
 		return finishWriter(&writer);
 	}
 
-	const Opt<const SpecialStructKind> getSpecialStructKind(const StructInst* i, const CommonTypes* commonTypes) {
+	const Opt<const SpecialStructInfo> getSpecialStructInfo(
+		const StructInst* i,
+		const CommonTypes* commonTypes,
+		const Arr<const ConcreteType> typeArgs
+	) {
 		const StructDecl* decl = i->decl;
-		if (ptrEquals(decl, commonTypes->arr))
-			return some<const SpecialStructKind>(SpecialStructKind::arr);
-		else if (ptrEquals(decl, commonTypes->mutArr))
-			return some<const SpecialStructKind>(SpecialStructKind::mutArr);
+		if (ptrEquals(decl, commonTypes->arr)) {
+			return some<const SpecialStructInfo>(SpecialStructInfo{SpecialStructInfo::Kind::arr, only(typeArgs)});
+		} else if (ptrEquals(decl, commonTypes->mutArr))
+			return some<const SpecialStructInfo>(SpecialStructInfo{SpecialStructInfo::Kind::mutArr, only(typeArgs)});
 		else
-			return none<const SpecialStructKind>();
+			return none<const SpecialStructInfo>();
 	}
 
 	size_t sizeFromConcreteFields(const Arr<const ConcreteField> fields) {
@@ -77,7 +81,7 @@ namespace {
 		size_t s = 0;
 		size_t maxFieldAlign = 1;
 		for (const ConcreteField field : fields) {
-			const size_t itsSize = field.type.sizeOrPointerSizeBytes();
+			const size_t itsSize = sizeOrPointerSizeBytes(field.type);
 			const size_t itsAlign = min<const size_t>(itsSize, 8); //TODO: this is wrong!
 			maxFieldAlign = max<const size_t>(maxFieldAlign, itsAlign);
 			while (s % itsAlign != 0)
@@ -156,19 +160,28 @@ namespace {
 				};
 			},
 			[&](const StructBody::Record r) {
-				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(ctx->arena, r.fields, [&](const RecordField f) {
-					return ConcreteField{f.isMutable, mangleName(ctx->arena, f.name), getConcreteType(ctx, f.type, typeArgsScope)};
-				});
+				const Arr<const ConcreteField> fields = map<const ConcreteField>{}(
+					ctx->arena,
+					r.fields,
+					[&](const RecordField f) {
+						return ConcreteField{
+							f.isMutable,
+							mangleName(ctx->arena, f.name),
+							getConcreteType(ctx, f.type, typeArgsScope)};
+					});
 				return getConcreteStructInfoForFields(r.forcedByValOrRef, fields);
 			},
 			[&](const StructBody::Union u) {
-				const Arr<const ConcreteType> members = map<const ConcreteType>{}(ctx->arena, u.members, [&](const StructInst* si) {
-					return getConcreteType_forStructInst(ctx, si, typeArgsScope);
-				});
+				const Arr<const ConcreteType> members = map<const ConcreteType>{}(
+					ctx->arena,
+					u.members,
+					[&](const StructInst* si) {
+						return getConcreteType_forStructInst(ctx, si, typeArgsScope);
+					});
 
 				size_t maxMember = 0;
 				for (const ConcreteType ct : members)
-					maxMember = max<const size_t>(maxMember, ct.sizeOrPointerSizeBytes());
+					maxMember = max<const size_t>(maxMember, sizeOrPointerSizeBytes(ct));
 				// Must factor in the 'kind' size. It seems that enums are int-sized.
 				const size_t sizeBytes = roundUp(sizeof(int) + maxMember, sizeof(void*));
 
@@ -180,12 +193,15 @@ namespace {
 				};
 			},
 			[&](const StructBody::Iface i) {
-				const Arr<const ConcreteSig> messages = map<const ConcreteSig>{}(ctx->arena, i.messages, [&](const Message msg) {
-					return ConcreteSig{
-						mangleName(ctx->arena, msg.sig.name),
-						getConcreteType(ctx, msg.sig.returnType, typeArgsScope),
-						concretizeParamsNoSpecialize(ctx, msg.sig.params, typeArgsScope)};
-				});
+				const Arr<const ConcreteSig> messages = map<const ConcreteSig>{}(
+					ctx->arena,
+					i.messages,
+					[&](const Message msg) {
+						return ConcreteSig{
+							mangleName(ctx->arena, msg.sig.name),
+							getConcreteType(ctx, msg.sig.returnType, typeArgsScope),
+							concretizeParamsNoSpecialize(ctx, msg.sig.params, typeArgsScope)};
+					});
 				return ConcreteStructInfo{
 					ConcreteStructBody{ConcreteStructBody::Iface{messages}},
 					sizeof(void*) * 2,
@@ -226,9 +242,13 @@ namespace {
 
 		const TypeArgsScope typeScope = key.typeArgsScope();
 		const ConcreteType returnType = getConcreteType(ctx, decl->returnType(), typeScope);
-		const Arr<const ConcreteParam> params = concretizeParamsAndSpecialize(ctx, decl->params(), key.specializeOnArgs, typeScope);
+		const Arr<const ConcreteParam> params = concretizeParamsAndSpecialize(
+			ctx,
+			decl->params(),
+			key.specializeOnArgs,
+			typeScope);
 		const Str mangledName = decl->isExtern()
-			? strOfSym(ctx->arena, decl->name())
+			? mangleExternFunName(ctx->arena, decl->name())
 			: getConcreteFunMangledName(
 				ctx->arena,
 				decl->name(),
@@ -323,10 +343,18 @@ namespace {
 		// If False, this is called directly.
 		const Bool isForDynamic
 	) {
-		const Str mangledName = getLambdaInstanceMangledName(ctx->arena, klb->mangledName, specializeOnArgs, isForDynamic);
+		const Str mangledName = getLambdaInstanceMangledName(
+			ctx->arena,
+			klb->mangledName,
+			specializeOnArgs,
+			isForDynamic);
 		const LambdaInfo info = mustGetAt_mut(&ctx->knownLambdaBodyToInfo, klb);
-		const ConcreteType returnType = klb->nonSpecializedSig.returnType; // specialization never changes the return type
-		const Arr<const ConcreteParam> params = specializeParamsForLambdaInstance(ctx, klb->nonSpecializedSig.params, specializeOnArgs);
+		// specialization never changes the return type
+		const ConcreteType returnType = klb->nonSpecializedSig.returnType;
+		const Arr<const ConcreteParam> params = specializeParamsForLambdaInstance(
+			ctx,
+			klb->nonSpecializedSig.params,
+			specializeOnArgs);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
 
 		// For a dynamic lambda, the closure should always be a pointer.
@@ -335,7 +363,7 @@ namespace {
 				if (klb->hasClosure()) {
 					const ConcreteParam closureParam = force(klb->closureParam);
 					return shouldAllocateClosureForDynamicLambda(closureParam.type)
-						? closureParam.withType(closureParam.type.byRef())
+						? closureParam.withType(byRef(closureParam.type))
 						: closureParam;
 				} else
 					return ConcreteParam{strLiteral("__unused"), ctx->anyPtrType()};
@@ -364,9 +392,13 @@ namespace {
 	}
 
 	ConcreteFun* getOrAddConcreteFunWithoutFillingBody(ConcretizeCtx* ctx, const ConcreteFunKey key) {
-		return getOrAdd<const ConcreteFunKey, ConcreteFun*, compareConcreteFunKey> {}(ctx->arena, &ctx->allConcreteFuns, key, [&]() {
-			return getConcreteFunFromKey(ctx, key);
-		});
+		return getOrAdd<const ConcreteFunKey, ConcreteFun*, compareConcreteFunKey> {}(
+			ctx->arena,
+			&ctx->allConcreteFuns,
+			key,
+			[&]() {
+				return getConcreteFunFromKey(ctx, key);
+			});
 	}
 
 	Comparison compareConcreteFunInst(const ConcreteFunInst a, const ConcreteFunInst b) {
@@ -375,7 +407,9 @@ namespace {
 			return cmpDecl;
 		else {
 			const Comparison res = compareConcreteTypeArr(a.typeArgs, b.typeArgs);
-			return res != Comparison::equal ? res : compareArr<const ConcreteFunInst, compareConcreteFunInst>(a.specImpls, b.specImpls);
+			return res != Comparison::equal
+				? res
+				: compareArr<const ConcreteFunInst, compareConcreteFunInst>(a.specImpls, b.specImpls);
 		}
 	}
 }
@@ -389,7 +423,8 @@ Comparison compareConcreteFunKey(const ConcreteFunKey a, const ConcreteFunKey b)
 	const Comparison res = compareConcreteFunInst(a.funInst, b.funInst);
 	return res != Comparison::equal
 		? res
-		: compareArr<const ConstantOrLambdaOrVariable, compareConstantOrLambdaOrVariable>(a.specializeOnArgs, b.specializeOnArgs);
+		: compareArr<const ConstantOrLambdaOrVariable, compareConstantOrLambdaOrVariable>(
+			a.specializeOnArgs, b.specializeOnArgs);
 }
 
 const ConcreteType ConcretizeCtx::boolType() {
@@ -474,7 +509,7 @@ const ConcreteType getConcreteType_forStructInst(
 ) {
 	const Arr<const ConcreteType> typeArgs = typesToConcreteTypes(ctx, i->typeArgs, typeArgsScope);
 	if (ptrEquals(i->decl, ctx->commonTypes->byVal))
-		return getConcreteType(ctx, only(i->typeArgs), typeArgsScope).byVal();
+		return byVal(getConcreteType(ctx, only(i->typeArgs), typeArgsScope));
 	else {
 		const ConcreteStructKey key = ConcreteStructKey{i->decl, typeArgs};
 		Cell<const Bool> didAdd { False };
@@ -492,11 +527,11 @@ const ConcreteType getConcreteType_forStructInst(
 				return nu<ConcreteStruct>{}(
 					ctx->arena,
 					getConcreteStructMangledName(ctx->arena, i->decl->name, key.typeArgs),
-					getSpecialStructKind(i, ctx->commonTypes));
+					getSpecialStructInfo(i, ctx->commonTypes, typeArgs));
 			});
 		if (cellGet(&didAdd))
 			initializeConcreteStruct(ctx, typeArgs, i, res, typeArgsScope);
-		return ConcreteType::fromStruct(res);
+		return concreteType_fromStruct(res);
 	}
 }
 
@@ -516,7 +551,11 @@ const ConcreteType getConcreteType(ConcretizeCtx* ctx, const Type t, const TypeA
 		});
 }
 
-const Arr<const ConcreteType> typesToConcreteTypes(ConcretizeCtx* ctx, const Arr<const Type> types, const TypeArgsScope typeArgsScope) {
+const Arr<const ConcreteType> typesToConcreteTypes(
+	ConcretizeCtx* ctx,
+	const Arr<const Type> types,
+	const TypeArgsScope typeArgsScope
+) {
 	return map<const ConcreteType>{}(ctx->arena, types, [&](const Type t) {
 		return getConcreteType(ctx, t, typeArgsScope);
 	});
@@ -535,15 +574,19 @@ namespace {
 			ConcreteStruct* cs = nu<ConcreteStruct>{}(
 				arena,
 				mangledName,
-				none<const SpecialStructKind>(),
+				none<const SpecialStructInfo>(),
 				getConcreteStructInfoForFields(none<const ForcedByValOrRef>(), fields));
 			return some<const ConcreteType>(
-				neverPointer ? ConcreteType::value(cs) : ConcreteType::fromStruct(cs));
+				neverPointer ? concreteType_value(cs) : concreteType_fromStruct(cs));
 		}
 	}
 }
 
-const Opt<const ConcreteType> concreteTypeFromFields(Arena* arena, const Arr<const ConcreteField> fields, const Str mangledName) {
+const Opt<const ConcreteType> concreteTypeFromFields(
+	Arena* arena,
+	const Arr<const ConcreteField> fields,
+	const Str mangledName
+) {
 	return concreteTypeFromFieldsCommon(arena, fields, mangledName, False);
 }
 

@@ -71,10 +71,9 @@ namespace {
 		return ExpressionToken{NameAndRange{range(lexer, begin), getSymFromOperator(lexer->allSymbols, name)}};
 	}
 
-	const Str takeStringLiteral(Lexer* lexer) {
+	const Str takeStringLiteralAfterQuote(Lexer* lexer) {
 		const CStr begin = lexer->ptr;
 		size_t nEscapes = 0;
-		lexer->ptr++;
 		// First get the max size
 		while (*lexer->ptr != '"') {
 			if (*lexer->ptr == '\\') {
@@ -285,7 +284,7 @@ const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 		case '\\':
 			return ExpressionToken{ExpressionToken::Kind::lambda};
 		case '"':
-			return ExpressionToken{LiteralAst{LiteralAst::Kind::string, takeStringLiteral(lexer)}};
+			return ExpressionToken{LiteralAst{LiteralAst::Kind::string, takeStringLiteralAfterQuote(lexer)}};
 		case '+':
 		case '-':
 			return isDigit(*lexer->ptr)

@@ -931,7 +931,7 @@ struct Expr {
 
 		// For a sendFun this is missing the 'fut'
 		inline const Type nonFutReturnType() const {
-			return at(type->typeArgs, 0);
+			return first(type->typeArgs);
 		}
 	};
 

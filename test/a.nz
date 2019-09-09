@@ -1,81 +1,8 @@
+import io
 
-u-long alias
-	nat
-s-long alias
-	int
-dev-t alias
-	u-long
-ino-t alias
-	u-long
-mode-t alias
-	u-long
-nlink-t alias
-	u-long
-uid-t alias
-	u-long
-gid-t alias
-	u-long
-off-t alias
-	s-long
-blksize-t alias
-	s-long
-blkcnt-t alias
-	s-long
-time-t alias
-	s-long
-stat-t record mut
-	st-dev mut dev-t
-	st-ino mut ino-t
-	st-mode mut mode-t
-	st-nlink mut nlink-t
-	st-uid mut uid-t
-	st-gid mut gid-t
-	st-rdev mut dev-t
-	pad mut u-long
-	st-size mut off-t
-	st-blksize mut blksize-t
-	st-blocks mut blkcnt-t
-	st-atime mut time-t
-	st-atime-nsec mut u-long
-	st-mtime mut time-t
-	st-mtime-nsec mut u-long
-	st-ctime mut time-t
-	st-ctime-msec mut u-long
-	unused mut u-long
-
-err-t alias
-	int32
-
-enoent err-t()
-	two
-
-get-errno err-t() summon builtin
-
-stat int32(path c-str, buf stat-t) extern
-
-get-stat opt stat-t(path c-str) summon trusted
-	s = new<stat-t> zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero
-	err = path stat s
-	when
-		err == zero
-			new<some<stat-t>> s
-		else
-			assert: err == neg-one
-			errno = get-errno
-			when
-				errno == enoent
-					new<none>
-				else
-					print-sync: "stat failed: "
-					print-sync: errno.to-str
-					todo
-
-| TODO: move to io.nz
-file-exists? bool(path c-str) summon
-	path.get-stat has?
-
-file-exists? bool(path str) summon
-	path.data file-exists?
+my-record record mut
+	x mut int
+	y int
 
 my-spec<?t> spec
 	zero ?t()
@@ -94,7 +21,6 @@ main int() trusted noctx summon
 	n-threads = one as<nat>
 	gctx-by-val = n-threads new-global-ctx
 	gctx = gctx-by-val ref-of-val
-
 	vat-by-val = new-vat: gctx, zero, n-threads
 	vat = vat-by-val ref-of-val
 
@@ -104,7 +30,7 @@ main int() trusted noctx summon
 
 	| Before we start the engine, add a task.
 	| Create a ctx manually so we can call functions that need it when creating the task
-	ctx-by-val = new-ctx: gctx, vat, new<some<nat>> zero
+	ctx-by-val = new-ctx: gctx, vat, zero some
 	ctx = ctx-by-val ref-of-val
 	ctx call-with-ctx<void, global-ctx, vat> &add-first-task, gctx, vat
 
@@ -116,7 +42,7 @@ main int() trusted noctx summon
 
 | TODO: if mut-bag-node is in unmanaged memory, don't need ctx for this
 add-first-task void(gctx global-ctx, vat vat)
-	actor-id = new<some<actor-id>> vat new-actor-id
+	actor-id = vat.new-actor-id some
 	| TODO: store the main fut somewhere so we can test for errors
 	t = new<task> actor-id, &user-main-drop
 	vat add-task t
@@ -155,6 +81,108 @@ f nat(s stream nat)
 user-main-drop void() summon
 	user-main drop
 
+
+
+
+lines arr str(s str)
+	res = new-mut-arr<str>
+	last-nl = zero new-cell<nat>
+	s each-with-index \c index
+		when
+			c == "\n"
+				res add: s slice-from-to (last-nl swap index.incr), index
+			else
+				pass
+	res add: s slice-from-to last-nl.get, s.size
+	res.freeze
+
+
+max-line-length nat()
+	120
+
+n-tabs nat(line str)
+	when
+		line.empty?.not and: line.first == "\t"
+			line.tail.n-tabs incr
+		else
+			zero
+
+tab-size nat()
+	4
+
+line-len nat(line str)
+	line.n-tabs * (tab-size - 1) + line.size
+
+
+| Returns nubmer of errors
+lint-file nat(file-name str) summon
+	text = file-name.read-file
+	n-errors = 0 new-cell<nat>
+	text.lines each-with-index \line line-num
+		width = line line-len
+		when
+			width > max-line-length
+				loc = file-name + ":" + line-num.incr.to-str
+				print-sync: loc + " line is " + width.to-str + " columns long, should be <= " + max-line-length.to-str
+				n-errors cell-incr
+			else
+				pass
+	n-errors get
+
+
+child-path str(a str, child-name str)
+	a + "/" + child-name
+
+each-child-recursive void(d str, filter fun1 bool str, f fun1 void str) summon
+	when
+		d is-dir?
+			d.read-dir each \child-name
+				when
+					filter call child-name
+						d child-path child-name each-child-recursive filter, f
+					else
+						pass
+		else
+			f call d
+
+last-index-of opt nat(s str, c char)
+	when
+		s empty?
+			none
+		s.last == c
+			s.size.decr some
+		else
+			s.rtail last-index-of c
+
+get-ext opt str(name str)
+	match name last-index-of "."
+		none
+			none
+		some s
+			name slice s.value some
+
+| IGNORE_EXTS = Set({ ".c", ".data", ".o", ".tmLanguage" })
+ignore-ext bool(ext str)
+	(new-arr<str> ".c", ".data", ".o", ".out", ".tmLanguage") contains ext
+
+ignore-ext-of-name bool(name str)
+	match name get-ext
+		none
+			| Ignore extensionless files
+			true
+		some s
+			s.value ignore-ext
+
+
+base-name str(path str)
+	i = path last-index-of "/"
+	match i
+		none
+			path
+		some s
+			path slice s.value.incr
+
+
 | Main function normally seen by users
 user-main fut void() trusted summon
 	| rgs = (zero to 1000).to-stream<range-nat, nat>
@@ -163,12 +191,43 @@ user-main fut void() trusted summon
 	| assert: x == 233168
 	| print-sync: x.to-str
 
-	print-sync: "hello world"
+	| files = new-arr<str> "test/a.nz", "test/b.nz"
+	| files each \file
+	| 	ex = file file-exists?
+	| 	print-sync: file + " exists? " + ex.to-str
 
-	files = new-arr<str> "test/a.nz", "test/b.nz"
-	files each \file
-		a = file.file-exists?
-		print-sync: file + " exists? " + a.to-str
+	| files = "test" read-dir
+	| files each &print-sync
+
+	| print-sync: "test".is-dir? to-str
+
+	n-files = 0 new-cell<nat>
+	n-errors = 0 new-cell<nat>
+
+	| TODO: not: etc (one liner)
+	"." each-child-recursive {not: it.first == "." or: it == "libfirm"}, \child
+		when
+			child.base-name ignore-ext-of-name
+				pass
+			else
+				n-files cell-incr
+				n-errors cell-add child.lint-file
+
+	print-sync: "Linted " + n-files.get.to-str + " files, " + n-errors.get.to-str + " errors"
+
+	| print-sync: "test".is-dir?.to-str
+
+	| print-sync: "noze".as-non-const.ignore-ext-of-name to-str
+
+	| st = "test/a.nz" try-read-file
+	| match st
+	|	none
+	|		print-sync: "does note exist"
+	|	some s
+	|		"test/a.nz" lint-str s.value
+
+	| str = "abc\ndef\nghi"
+	| str.lines each &print-sync
 
 	resolved: pass
 

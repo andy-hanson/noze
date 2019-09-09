@@ -90,7 +90,7 @@ const Opt<const Path*> resolvePath(Arena* arena, const Path* path, const RelPath
 
 namespace {
 	const RelPath parseRelPath(Arena* arena, const Str s) {
-		if (at(s, 0) == '.') {
+		if (first(s) == '.') {
 			if (at(s, 1) == '/')
 				return parseRelPath(arena, slice(s, 2));
 			else if (at(s, 1) == '.' && at(s, 2) == '/') {
@@ -105,7 +105,7 @@ namespace {
 }
 
 const AbsoluteOrRelPath parseAbsoluteOrRelPath(Arena* arena, const Str s) {
-	switch (at(s, 0)) {
+	switch (first(s)) {
 		case '.':
 			return AbsoluteOrRelPath{parseRelPath(arena, s)};
 		case '/':

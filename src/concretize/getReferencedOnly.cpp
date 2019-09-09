@@ -150,6 +150,9 @@ namespace {
 				setReferencedInExpr(ctx, *e.first);
 				setReferencedInConstantOrExpr(ctx, e.then);
 			},
+			[&](const ConcreteExpr::SpecialUnary e) {
+				setReferencedInExpr(ctx, *e.arg);
+			},
 			[&](const ConcreteExpr::SpecialBinary e) {
 				setReferencedInConstantOrExpr(ctx, e.left);
 				setReferencedInConstantOrExpr(ctx, e.right);
