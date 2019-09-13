@@ -134,6 +134,7 @@ struct LambdaInfo {
 struct ConcretizeCtx {
 	Arena* arena;
 	const FunDecl* allocFun;
+	const FunDecl* getVatAndActorFun;
 	const Arr<const FunDecl*> ifFuns;
 	const Arr<const FunDecl*> callFuns;
 	const CommonTypes* commonTypes;
@@ -158,12 +159,14 @@ struct ConcretizeCtx {
 	ConcretizeCtx(
 		Arena* _arena,
 		const FunDecl* _allocFun,
+		const FunDecl* _getVatAndActorFun,
 		const Arr<const FunDecl*> _ifFuns,
 		const Arr<const FunDecl*> _callFuns,
 		const CommonTypes* _commonTypes
 	) :
 		arena{_arena},
 		allocFun{_allocFun},
+		getVatAndActorFun{_getVatAndActorFun},
 		ifFuns{_ifFuns},
 		callFuns{_callFuns},
 		commonTypes{_commonTypes},
@@ -236,3 +239,8 @@ const ConstantOrExpr nuExpr(Arena* arena, const ConcreteType type, const SourceR
 inline const ConcreteFun* getAllocFun(ConcretizeCtx* ctx) {
 	return getOrAddNonTemplateConcreteFunAndFillBody(ctx, ctx->allocFun);
 }
+
+inline const ConcreteFun* getGetVatAndActorFun(ConcretizeCtx* ctx) {
+	return getOrAddNonTemplateConcreteFunAndFillBody(ctx, ctx->getVatAndActorFun);
+}
+

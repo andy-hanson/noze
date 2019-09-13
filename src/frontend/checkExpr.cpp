@@ -125,20 +125,27 @@ namespace {
 		Expected* expected
 	) {
 		Cell<const Bool> cellTypeIsFromExpected { False };
-		const Type t = [&]() {
+		const Opt<const Type> opT = [&]() {
 			if (has(ast.type))
-				return typeFromAst(ctx, force(ast.type));
+				return some<const Type>(typeFromAst(ctx, force(ast.type)));
 			else {
 				cellSet<const Bool>(&cellTypeIsFromExpected, True);
 				const Opt<const Type> opT = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
 				if (!has(opT))
-					todo<void>("checkCreateRecord -- no expected type");
-				return force(opT);
+					ctx->addDiag(range, Diag{Diag::CantCreateRecordWithoutExpectedType{}});
+				return opT;
 			}
 		}();
+		if (!has(opT))
+			return bogus(expected, range);
+		const Type t = force(opT);
+		if (!t.isStructInst()) {
+			if (!t.isBogus())
+				ctx->addDiag(range, Diag{Diag::CantCreateNonRecordType{t}});
+			return bogus(expected, range);
+		}
+
 		const Bool typeIsFromExpected = cellGet(&cellTypeIsFromExpected);
-		if (!t.isStructInst())
-			todo<void>("checkCreateRecord -- not a struct type");
 		const StructInst* si = t.asStructInst();
 		const StructDecl* decl = si->decl;
 
@@ -198,15 +205,14 @@ namespace {
 			}
 		} else {
 			if (!decl->body().isBogus())
-				ctx->addDiag(range, Diag{Diag::CantCreateNonRecordStruct{decl}});
+				ctx->addDiag(range, Diag{Diag::CantCreateNonRecordType{t}});
 			return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : bogus(expected, range);
 		}
 	}
 
 	struct ExpectedLambdaType {
 		const StructDecl* funStruct;
-		const StructDecl* nonSendFunStruct;
-		const Bool isSendFun;
+		const FunKind kind;
 		const Arr<const Type> paramTypes;
 		const Type nonInstantiatedPossiblyFutReturnType;
 	};
@@ -217,36 +223,36 @@ namespace {
 		Expected* expected
 	) {
 		const Opt<const Type> expectedType = shallowInstantiateType(expected);
-		if (!has(expectedType) && !force(expectedType).isStructInst()) {
+		if (!has(expectedType) || !force(expectedType).isStructInst()) {
 			ctx->addDiag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
 			return none<const ExpectedLambdaType>();
 		}
 		const StructInst* expectedStructInst = force(expectedType).asStructInst();
 		const StructDecl* funStruct = expectedStructInst->decl;
 
-		const Opt<const CommonTypes::LambdaInfo> opInfo = ctx->commonTypes->getFunStructInfo(funStruct);
-		if (!has(opInfo)) {
+		const Opt<const FunKind> opKind = ctx->commonTypes->getFunStructInfo(funStruct);
+		if (!has(opKind)) {
 			ctx->addDiag(range, Diag{Diag::ExpectedTypeIsNotALambda{expectedType}});
 			return none<const ExpectedLambdaType>();
+		} else {
+			const FunKind kind = force(opKind);
+			const Type nonInstantiatedNonFutReturnType = first(expectedStructInst->typeArgs);
+			const Arr<const Type> nonInstantiatedParamTypes = tail(expectedStructInst->typeArgs);
+			const Arr<const Type> paramTypes = map<const Type>{}(
+				ctx->arena(),
+				nonInstantiatedParamTypes,
+				[&](const Type it) {
+					const Opt<const Type> op = tryGetDeeplyInstantiatedTypeFor(ctx->arena(), expected, it);
+					if (!has(op))
+						todo<void>("getExpectedLambdaType");
+					return force(op);
+				});
+			const Type nonInstantiatedReturnType = kind == FunKind::send
+				? ctx->makeFutType(nonInstantiatedNonFutReturnType)
+				: nonInstantiatedNonFutReturnType;
+			return some<const ExpectedLambdaType>(
+				ExpectedLambdaType{funStruct, kind, paramTypes, nonInstantiatedReturnType});
 		}
-
-		const CommonTypes::LambdaInfo info = force(opInfo);
-		const Type nonInstantiatedNonFutReturnType = first(expectedStructInst->typeArgs);
-		const Arr<const Type> nonInstantiatedParamTypes = tail(expectedStructInst->typeArgs);
-		const Arr<const Type> paramTypes = map<const Type>{}(
-			ctx->arena(),
-			nonInstantiatedParamTypes,
-			[&](const Type it) {
-				const Opt<const Type> op = tryGetDeeplyInstantiatedTypeFor(ctx->arena(), expected, it);
-				if (!has(op))
-					todo<void>("getExpectedLambdaType");
-				return force(op);
-			});
-		const Type nonInstantiatedReturnType = info.isSend
-			? ctx->makeFutType(nonInstantiatedNonFutReturnType)
-			: nonInstantiatedNonFutReturnType;
-		return some<const ExpectedLambdaType>(
-			ExpectedLambdaType{funStruct, info.nonSend, info.isSend, paramTypes, nonInstantiatedReturnType});
 	}
 
 	const CheckedExpr checkFunAsLambda(
@@ -309,7 +315,7 @@ namespace {
 				todo<void>("checkFunAsLambda -- param types don't match");
 		});
 
-		return check(ctx, expected, Type{type}, Expr{range, Expr::FunAsLambda{fun, type, et.isSendFun}});
+		return check(ctx, expected, Type{type}, Expr{range, Expr::FunAsLambda{fun, type, et.kind}});
 	}
 
 	const Opt<const Expr> getIdentifierInLambda(
@@ -515,9 +521,17 @@ namespace {
 			return ctx->alloc(checkExpr(ctx, bodyAst, &returnTypeInferrer));
 		});
 
+		const Arr<const ClosureField*> closureFields = freeze(&info.closureFields);
+		const FunKind kind = et.kind;
+
+		if (kind == FunKind::plain)
+			for (const ClosureField* cf : closureFields)
+				if (cf->type.purity() == Purity::mut)
+					ctx->addDiag(range, Diag{Diag::LambdaClosesOverMut{cf}});
+
 		const Type actualPossiblyFutReturnType = inferred(&returnTypeInferrer);
 		const Opt<const Type> actualNonFutReturnType = [&]() {
-			if (et.isSendFun) {
+			if (kind == FunKind::send) {
 				if (actualPossiblyFutReturnType.isStructInst()) {
 					const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
 					return ptrEquals(ap->decl, ctx->commonTypes->fut)
@@ -534,16 +548,13 @@ namespace {
 		} else {
 			const StructInst* instFunStruct = instantiateStructNeverDelay(
 				arena, et.funStruct, prepend<const Type>(arena, force(actualNonFutReturnType), et.paramTypes));
-
 			const Expr::Lambda lambda = Expr::Lambda{
 				params,
 				body,
-				freeze(&info.closureFields),
+				closureFields,
 				instFunStruct,
-				et.nonSendFunStruct,
-				et.isSendFun,
+				kind,
 				actualPossiblyFutReturnType};
-
 			return CheckedExpr{Expr{range, lambda}};
 		}
 	}

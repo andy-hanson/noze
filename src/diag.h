@@ -194,9 +194,10 @@ struct Diag {
 		const FunDecl* caller;
 	};
 
-	struct CantCreateNonRecordStruct {
-		const StructDecl* strukt;
+	struct CantCreateNonRecordType {
+		const Type type;
 	};
+	struct CantCreateRecordWithoutExpectedType {};
 	struct CantInferTypeArguments {};
 	struct CircularImport {};
 	struct CommonTypesMissing {};
@@ -229,6 +230,9 @@ struct Diag {
 	struct FunAsLambdaWrongReturnType {
 		const Type actual;
 		const Type expected;
+	};
+	struct LambdaClosesOverMut {
+		const ClosureField* field;
 	};
 	struct LocalShadowsPrevious {
 		const Sym name;
@@ -317,7 +321,8 @@ private:
 		callMultipleMatches,
 		callNoMatch,
 		cantCall,
-		cantCreateNonRecordStruct,
+		cantCreateNonRecordType,
+		cantCreateRecordWithoutExpectedType,
 		cantInferTypeArguments,
 		circularImport,
 		commonTypesMissing,
@@ -328,6 +333,7 @@ private:
 		fileDoesNotExist,
 		funAsLambdaCantOverload,
 		funAsLambdaWrongReturnType,
+		lambdaClosesOverMut,
 		localShadowsPrevious,
 		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
@@ -353,7 +359,8 @@ private:
 		const CallMultipleMatches callMultipleMatches;
 		const CallNoMatch callNoMatch;
 		const CantCall cantCall;
-		const CantCreateNonRecordStruct cantCreateNonRecordStruct;
+		const CantCreateNonRecordType cantCreateNonRecordType;
+		const CantCreateRecordWithoutExpectedType cantCreateRecordWithoutExpectedType;
 		const CantInferTypeArguments cantInferTypeArguments;
 		const CircularImport circularImport;
 		const CommonTypesMissing commonTypesMissing;
@@ -364,6 +371,7 @@ private:
 		const FileDoesNotExist fileDoesNotExist;
 		const FunAsLambdaCantOverload funAsLambdaCantOverload;
 		const FunAsLambdaWrongReturnType funAsLambdaWrongReturnType;
+		const LambdaClosesOverMut lambdaClosesOverMut;
 		const LocalShadowsPrevious localShadowsPrevious;
 		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
@@ -392,8 +400,10 @@ public:
 		: kind{Kind::callNoMatch}, callNoMatch{d} {}
 	explicit inline Diag(const CantCall d)
 		: kind{Kind::cantCall}, cantCall{d} {}
-	explicit inline Diag(const CantCreateNonRecordStruct d)
-		: kind{Kind::cantCreateNonRecordStruct}, cantCreateNonRecordStruct{d} {}
+	explicit inline Diag(const CantCreateNonRecordType d)
+		: kind{Kind::cantCreateNonRecordType}, cantCreateNonRecordType{d} {}
+	explicit inline Diag(const CantCreateRecordWithoutExpectedType d)
+		: kind{Kind::cantCreateRecordWithoutExpectedType}, cantCreateRecordWithoutExpectedType{d} {}
 	explicit inline Diag(const CantInferTypeArguments d)
 		: kind{Kind::cantInferTypeArguments}, cantInferTypeArguments{d} {}
 	explicit inline Diag(const CircularImport d)
@@ -414,6 +424,8 @@ public:
 		: kind{Kind::funAsLambdaCantOverload}, funAsLambdaCantOverload{d} {}
 	explicit inline Diag(const FunAsLambdaWrongReturnType d)
 		: kind{Kind::funAsLambdaWrongReturnType}, funAsLambdaWrongReturnType{d} {}
+	explicit inline Diag(const LambdaClosesOverMut d)
+		: kind{Kind::lambdaClosesOverMut}, lambdaClosesOverMut{d} {}
 	explicit inline Diag(const LocalShadowsPrevious d)
 		: kind{Kind::localShadowsPrevious}, localShadowsPrevious{d} {}
 	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d)
@@ -461,7 +473,8 @@ public:
 		typename CbCallMultipleMatches,
 		typename CbCallNoMatch,
 		typename CbCantCall,
-		typename CbCantCreateNonRecordStruct,
+		typename CbCantCreateNonRecordType,
+		typename CbCantCreateRecordWithoutExpectedType,
 		typename CbCantInferTypeArguments,
 		typename CbCircularImport,
 		typename CbCommonTypesMissing,
@@ -472,6 +485,7 @@ public:
 		typename CbFileDoesNotExist,
 		typename CbFunAsLambdaCantOverload,
 		typename CbFunAsLambdaWrongReturnType,
+		typename CbLambdaClosesOverMut,
 		typename CbLocalShadowsPrevious,
 		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
@@ -495,7 +509,8 @@ public:
 		CbCallMultipleMatches cbCallMultipleMatches,
 		CbCallNoMatch cbCallNoMatch,
 		CbCantCall cbCantCall,
-		CbCantCreateNonRecordStruct cbCantCreateNonRecordStruct,
+		CbCantCreateNonRecordType cbCantCreateNonRecordType,
+		CbCantCreateRecordWithoutExpectedType cbCantCreateRecordWithoutExpectedType,
 		CbCantInferTypeArguments cbCantInferTypeArguments,
 		CbCircularImport cbCircularImport,
 		CbCommonTypesMissing cbCommonTypesMissing,
@@ -506,6 +521,7 @@ public:
 		CbFileDoesNotExist cbFileDoesNotExist,
 		CbFunAsLambdaCantOverload cbFunAsLambdaCantOverload,
 		CbFunAsLambdaWrongReturnType cbFunAsLambdaWrongReturnType,
+		CbLambdaClosesOverMut cbLambdaClosesOverMut,
 		CbLocalShadowsPrevious cbLocalShadowsPrevious,
 		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
@@ -533,8 +549,10 @@ public:
 				return cbCallNoMatch(callNoMatch);
 			case Kind::cantCall:
 				return cbCantCall(cantCall);
-			case Kind::cantCreateNonRecordStruct:
-				return cbCantCreateNonRecordStruct(cantCreateNonRecordStruct);
+			case Kind::cantCreateNonRecordType:
+				return cbCantCreateNonRecordType(cantCreateNonRecordType);
+			case Kind::cantCreateRecordWithoutExpectedType:
+				return cbCantCreateRecordWithoutExpectedType(cantCreateRecordWithoutExpectedType);
 			case Kind::cantInferTypeArguments:
 				return cbCantInferTypeArguments(cantInferTypeArguments);
 			case Kind::circularImport:
@@ -555,6 +573,8 @@ public:
 				return cbFunAsLambdaCantOverload(funAsLambdaCantOverload);
 			case Kind::funAsLambdaWrongReturnType:
 				return cbFunAsLambdaWrongReturnType(funAsLambdaWrongReturnType);
+			case Kind::lambdaClosesOverMut:
+				return cbLambdaClosesOverMut(lambdaClosesOverMut);
 			case Kind::localShadowsPrevious:
 				return cbLocalShadowsPrevious(localShadowsPrevious);
 			case Kind::matchCaseStructNamesDoNotMatch:

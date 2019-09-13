@@ -58,10 +58,11 @@ namespace {
 		const StructsAndAliasesMap structsAndAliasesMap,
 		MutArr<StructInst*>* delayedStructInsts
 	) {
+		Arena* arena = ctx->arena;
 		// non-template types
 		auto nonTemplate = [&](const CStr s) -> const Opt<const StructInst*> {
 			return getCommonNonTemplateType(
-				ctx->arena,
+				arena,
 				structsAndAliasesMap,
 				shortSymAlphaLiteral(s),
 				delayedStructInsts);
@@ -90,6 +91,9 @@ namespace {
 			fun0 = com("fun0", 1),
 			fun1 = com("fun1", 2),
 			fun2 = com("fun2", 3),
+			funMut0 = com("fun-mut0", 1),
+			funMut1 = com("fun-mut1", 2),
+			funMut2 = com("fun-mut2", 3),
 			sendFun0 = com("send-fun0", 1),
 			sendFun1 = com("send-fun1", 2),
 			sendFun2 = com("send-fun2", 3);
@@ -98,6 +102,7 @@ namespace {
 			has(opt) && has(some) && has(none) &&
 			has(byVal) && has(arr) && has(fut) &&
 			has(fun0) && has(fun1) && has(fun2) &&
+			has(funMut0) && has(funMut1) && has(funMut2) &&
 			has(sendFun0) && has(sendFun1) && has(sendFun2))
 			return success<const CommonTypes, const Arr<const Diagnostic>>(
 				CommonTypes{
@@ -108,19 +113,36 @@ namespace {
 					force(str),
 					force(_void),
 					force(anyPtr),
-					arrLiteral<const StructDecl*>(ctx->arena, { force(opt), force(some), force(none) }),
+					arrLiteral<const StructDecl*>(arena, { force(opt), force(some), force(none) }),
 					force(byVal),
 					force(arr),
 					force(mutArr),
 					force(fut),
-					arrLiteral<const StructDecl*>(ctx->arena, { force(fun0), force(fun1), force(fun2) }),
-					arrLiteral<const StructDecl*>(ctx->arena, { force(sendFun0), force(sendFun1), force(sendFun2) })});
+					arrLiteral<const FunKindAndStructs>(
+						arena,
+						{
+							FunKindAndStructs{
+								FunKind::plain,
+								arrLiteral<const StructDecl*>(
+									arena,
+									{ force(fun0), force(fun1), force(fun2) })},
+							FunKindAndStructs{
+								FunKind::mut,
+								arrLiteral<const StructDecl*>(
+									arena,
+									{ force(funMut0), force(funMut1), force(funMut2) })},
+							FunKindAndStructs{
+								FunKind::send,
+								arrLiteral<const StructDecl*>(
+									arena,
+									{ force(sendFun0), force(sendFun1), force(sendFun2) })}
+						})});
 		else {
 			const Diagnostic diag = Diagnostic{ctx->path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
 			return failure<
 				const CommonTypes,
 				const Arr<const Diagnostic>
-			>(arrLiteral<const Diagnostic>(ctx->arena, { diag }));
+			>(arrLiteral<const Diagnostic>(arena, { diag }));
 		}
 	}
 

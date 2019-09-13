@@ -46,6 +46,17 @@ namespace {
 		return allocFun;
 	}
 
+	const FunDecl* getGetVatAndActorFun(const Program program) {
+		const Arr<const FunDecl*> funs = multiDictGetAt<
+			const Sym,
+			const FunDecl*,
+			compareSym
+		>(program.includeModule->funsMap, shortSymAlphaLiteral("cur-actor"));
+		if (size(funs) != 1)
+			todo<void>("wrong number get-vat-and-actor funs");
+		return only(funs);
+	}
+
 	const Arr<const FunDecl*> getIfFuns(const Program program) {
 		const Arr<const FunDecl*> ifFuns = multiDictGetAt<
 			const Sym,
@@ -67,11 +78,10 @@ namespace {
 		>(program.includeModule->funsMap, shortSymAlphaLiteral("call"));
 		const Arr<const FunDecl*> res = filter(arena, allCallFuns, [&](const FunDecl* f) {
 			const StructDecl* decl = first(f->params()).type.asStructInst()->decl;
-			return exists(program.commonTypes.funTypes, [&](const StructDecl* funStruct) {
-				return ptrEquals(decl, funStruct);
-			});
+			const Opt<const FunKind> kind = program.commonTypes.getFunStructInfo(decl);
+			return has(kind) && force(kind) != FunKind::send;
 		});
-		assert(size(res) == 3);
+		assert(size(res) == 6);
 		return res;
 	}
 }
@@ -80,6 +90,7 @@ const ConcreteProgram concretize(Arena* arena, const Program program) {
 	ConcretizeCtx ctx {
 		arena,
 		getAllocFun(program),
+		getGetVatAndActorFun(program),
 		getIfFuns(program),
 		getCallFuns(arena, program),
 		&program.commonTypes

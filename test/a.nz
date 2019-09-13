@@ -30,9 +30,10 @@ main int() trusted noctx summon
 
 	| Before we start the engine, add a task.
 	| Create a ctx manually so we can call functions that need it when creating the task
-	ctx-by-val = new-ctx: gctx, vat, zero some
+	ctx-by-val = new-ctx: gctx, vat, zero
 	ctx = ctx-by-val ref-of-val
-	ctx call-with-ctx<void, global-ctx, vat> &add-first-task, gctx, vat
+	add = &add-first-task as<fun2<void, global-ctx, vat>>
+	ctx call-with-ctx<void, global-ctx, vat> add, gctx, vat
 
 	| TODO: more than one thread
 	thread-function: zero, gctx
@@ -41,11 +42,9 @@ main int() trusted noctx summon
 	zero
 
 | TODO: if mut-bag-node is in unmanaged memory, don't need ctx for this
-add-first-task void(gctx global-ctx, vat vat)
-	actor-id = vat.new-actor-id some
+add-first-task void(gctx global-ctx, vat vat) unsafe
 	| TODO: store the main fut somewhere so we can test for errors
-	t = new<task> actor-id, &user-main-drop
-	vat add-task t
+	vat add-task new<task> vat.new-actor-id, &user-main-drop
 
 
 test void() trusted summon
@@ -54,13 +53,13 @@ test void() trusted summon
 	m add 2, 2
 	m add 3, 3
 	d = m freeze
-	identity = as-non-const<fun1<nat, nat>>: {it}
+	identity = as-non-const<fun-mut1<nat, nat>>: {it}
 	uno = as-non-const<nat>: 1
 	dos = uno + uno
 	| Closure should be by value
-	add-one = as-non-const<fun1<nat, nat>>: {it + uno}
+	add-one = as-non-const<fun-mut1<nat, nat>>: {it + uno}
 	| Closure should be a pointer
-	add-three = as-non-const<fun1<nat, nat>>: {it + uno + dos}
+	add-three = as-non-const<fun-mut1<nat, nat>>: {it + uno + dos}
 	d2 = d map-values identity
 	d3 = d map-values add-one
 	d4 = d map-values add-three
@@ -130,7 +129,7 @@ lint-file nat(file-name str) summon
 child-path str(a str, child-name str)
 	a + "/" + child-name
 
-each-child-recursive void(d str, filter fun1 bool str, f fun1 void str) summon
+each-child-recursive void(d str, filter fun-mut1 bool str, f fun-mut1 void str) summon
 	when
 		d is-dir?
 			d.read-dir each \child-name
@@ -180,28 +179,11 @@ base-name str(path str)
 			path slice s.value.incr
 
 
-| Main function normally seen by users
-user-main fut void() trusted summon
-	| rgs = (zero to 1000).to-stream<range-nat, nat>
-	| filtered = rgs filter {it is-multiple? 3 or: it is-multiple? 5}
-	| x = filtered sum
-	| assert: x == 233168
-	| print-sync: x.to-str
-
-	| files = new-arr<str> "test/a.nz", "test/b.nz"
-	| files each \file
-	| 	ex = file file-exists?
-	| 	print-sync: file + " exists? " + ex.to-str
-
-	| files = "test" read-dir
-	| files each &print-sync
-
-	| print-sync: "test".is-dir? to-str
+lint void() summon
 
 	n-files = 0 new-cell<nat>
 	n-errors = 0 new-cell<nat>
 
-	| TODO: not: etc (one liner)
 	"." each-child-recursive {not: it.first == "." or: it == "libfirm"}, \child
 		when
 			child.base-name ignore-ext-of-name
@@ -212,28 +194,18 @@ user-main fut void() trusted summon
 
 	print-sync: "Linted " + n-files.get.to-str + " files, " + n-errors.get.to-str + " errors"
 
-	| print-sync: "test".is-dir?.to-str
 
-	| print-sync: "noze".as-non-const.ignore-ext-of-name to-str
+| Main function normally seen by users
+user-main fut void() trusted summon
+	fut-two = async<nat>: \
+		resolved: two
 
-	| st = "test/a.nz" try-read-file
-	| match st
-	|	none
-	|		print-sync: "does note exist"
-	|	some s
-	|		"test/a.nz" lint-str s.value
+	three = fut-two then \tw
+		resolved: tw.incr
 
-	| str = "abc\ndef\nghi"
-	| str.lines each &print-sync
+	three then \thr
+		resolved: print-sync: thr.to-str
 
-	resolved: pass
-
-	| n = (new-arr<nat> 1, 2, 3) my-sum
-	| print-sync: n.to-str
-
-	| count-down
-
-	| pass
 
 
 | printer iface

@@ -182,27 +182,60 @@ fun-ptr4<?r, ?p0, ?p1, ?p2, ?p3> builtin
 
 | A fun is two pointers -- one to the fun pointer, one to the closure.
 | TODO: point to the vtable, and have vtable also store layout information
-| A send-fun is a fun plus a vat and actor id.
 fun0<?r> record mut
+	by-val
 	fun-ptr fun-ptr2 ?r ctx any-ptr
 	closure any-ptr
 fun1<?r, ?p0> record mut
+	by-val
 	fun-ptr fun-ptr3 ?r ctx any-ptr ?p0
 	closure any-ptr
 fun2<?r, ?p0, ?p1> record mut
+	by-val
+	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
+	closure any-ptr
+
+| A fun-mut may close over 'mut' state.
+| (A normal 'fun' may still closue over mutable state that is sendable.)
+fun-mut0<?r> record mut
+	by-val
+	fun-ptr fun-ptr2 ?r ctx any-ptr
+	closure any-ptr
+fun-mut1<?r, ?p0> record mut
+	by-val
+	fun-ptr fun-ptr3 ?r ctx any-ptr ?p0
+	closure any-ptr
+fun-mut2<?r, ?p0, ?p1> record mut
+	by-val
 	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
 	closure any-ptr
 
 | A normal fun is non-sendable, a send-fun becomes sendable by storing the vat/actor that will provide its ctx.
 send-fun0<?r> record force-sendable
+	by-val
 	vat-and-actor vat-and-actor-id
-	fun fun0 ?r
+	fun fun-mut0 fut<?r>
 send-fun1<?r, ?p0> record force-sendable
+	by-val
 	vat-and-actor vat-and-actor-id
-	fun fun1 ?r ?p0
+	fun fun-mut1 fut<?r> ?p0
 send-fun2<?r, ?p0, ?p1> record force-sendable
+	by-val
 	vat-and-actor vat-and-actor-id
-	fun fun2 ?r ?p0 ?p1
+	fun fun-mut2 fut<?r> ?p0 ?p1
+
+| This fun is required by the compiler.
+cur-actor vat-and-actor-id() unsafe
+	new get-ctx.vat.id, get-ctx.actor-id
+
+to-send-fun0 send-fun0 ?r(f fun-mut0 fut<?r>) trusted
+	new cur-actor, f
+
+to-send-fun1 send-fun1 ?r ?p0(f fun-mut1 fut<?r> ?p0) trusted
+	new cur-actor, f
+
+to-send-fun2 send-fun2 ?r ?p0 ?p1(f fun-mut2 fut<?r> ?p0 ?p1) trusted
+	new cur-actor, f
 
 | calling a fun-ptr is a primitive operation
 call ?r(f fun-ptr0 ?r) noctx builtin
@@ -219,10 +252,22 @@ call ?r(f fun0 ?r) trusted
 call-with-ctx ?r(c ctx, f fun0 ?r) noctx
 	f.fun-ptr call c, f.closure
 
+call ?r(f fun-mut0 ?r) trusted
+	get-ctx call-with-ctx f
+
+call-with-ctx ?r(c ctx, f fun-mut0 ?r) noctx
+	f.fun-ptr call c, f.closure
+
 call ?r(f fun1 ?r ?p0, p0 ?p0) trusted
 	get-ctx call-with-ctx f, p0
 
 call-with-ctx ?r(c ctx, f fun1 ?r ?p0, p0 ?p0) noctx
+	f.fun-ptr call c, f.closure, p0
+
+call ?r(f fun-mut1 ?r ?p0, p0 ?p0) trusted
+	get-ctx call-with-ctx f, p0
+
+call-with-ctx ?r(c ctx, f fun-mut1 ?r ?p0, p0 ?p0) noctx
 	f.fun-ptr call c, f.closure, p0
 
 call ?r(f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
@@ -231,27 +276,48 @@ call ?r(f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
 call-with-ctx ?r(c ctx, f fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx
 	f.fun-ptr call c, f.closure, p0, p1
 
-call fut ?r(f send-fun0 ?r) trusted
-	| Create a future
-	| Put the task on the vat, that will write to the future
-	| Return the future
-	ctx = get-ctx
-	gctx = ctx.gctx
-	vat-i = f.vat-and-actor.vat
-	actor-i = f.vat-and-actor.actor
-	vat = gctx.vats at vat-i
-	res = new-unresolved-fut<?r>
-	| Add a task to resolve it
-	t = new<task> actor-i.some, \
-		res resolve: f.fun.call
-	vat add-task t
+call ?r(f fun-mut2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
+	get-ctx call-with-ctx f, p0, p1
+
+call-with-ctx ?r(c ctx, f fun-mut2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx
+	f.fun-ptr call c, f.closure, p0, p1
+
+
+| Runs 'f' asynchronously.
+| Since 'f' is 'fun' and not 'fun-mut' it is guaranteed to not close over 'mut' data.
+| So we can run it in parallel.
+async fut ?t(f fun0 fut<?t>) trusted
+	res = new-unresolved-fut<?t>
+	vat = get-ctx.vat
+	vat add-task new<task> vat.new-actor-id, \
+		f.call forward-to res
 	res
 
-call fut ?r(f send-fun1 ?r ?p0, p0 ?p0)
-	todo
+get-vat vat(vat-id vat-id) unsafe
+	get-ctx.gctx.vats at vat-id
 
-call fut ?r(f send-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1)
-	todo
+call fut ?r(f send-fun0 ?r) trusted
+	vat = f.vat-and-actor.vat get-vat
+	res = new-unresolved-fut<?r>
+	vat add-task new<task> f.vat-and-actor.actor, \
+		f.fun.call forward-to res
+	res
+
+call fut ?r(f send-fun1 ?r ?p0, p0 ?p0) trusted
+	vat = f.vat-and-actor.vat get-vat
+	res = new-unresolved-fut<?r>
+	vat add-task new<task> f.vat-and-actor.actor, \
+		f.fun call p0 forward-to res
+	res
+
+call fut ?r(f send-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
+	vat = f.vat-and-actor.vat get-vat
+	res = new-unresolved-fut<?r>
+	vat add-task new<task> f.vat-and-actor.actor, \
+		f.fun call p0, p1 forward-to res
+	res
+
+
 
 region Arithmetic
 
@@ -634,7 +700,7 @@ region fut
 
 fut-callback-node<?t> record mut
 	| WARN: the cb will be called with whatever ctx resolves the fut
-	cb fun1 void ?t
+	cb fun-mut1 void ?t
 	next-node opt fut-callback-node<?t>
 
 fut-state-callbacks<?t> record mut
@@ -678,7 +744,7 @@ resolve-recur void(node opt fut-callback-node<?t>, value ?t)
 			s.value.next-node resolve-recur value
 
 | NOTE: The function will be called with whatever ctx the fut terminates with!!!
-then-void void(f fut ?t, cb fun1 void ?t) unsafe
+then-void void(f fut ?t, cb fun-mut1 void ?t) unsafe
 	f.lk.ref-of-val acquire-lock
 	res = match f.state
 		fut-state-callbacks cbs
@@ -786,7 +852,6 @@ at ?t(a arr ?t, index nat) trusted
 	zero to b.size each \i
 		m set-at: (i + a.size), (b at i)
 	m freeze
-
 
 mut-slice<?t> record mut
 	size nat
@@ -982,10 +1047,10 @@ add void(a mut-arr ?t, value ?t) trusted
 	(a.data + a.size) set value
 	a.size := a.size incr
 
-make-arr arr ?t(size nat, f fun1 ?t nat)
+make-arr arr ?t(size nat, f fun-mut1 ?t nat)
 	size make-mut-arr f freeze
 
-make-mut-arr mut-arr ?t(size nat, f fun1 ?t nat) trusted
+make-mut-arr mut-arr ?t(size nat, f fun-mut1 ?t nat) trusted
 	res = uninitialized-mut-arr<?t>: size
 	zero to size each \i
 		res set-at: i, f call i
@@ -1124,13 +1189,13 @@ add void(m mut-dict ?k ?v, key ?k, value ?v)
 	m.keys add key
 	m.values add value
 
-map arr ?out(a arr ?in, mapper fun1 ?out ?in) trusted
+map arr ?out(a arr ?in, mapper fun-mut1 ?out ?in) trusted
 	out = uninitialized-mut-arr<?out>: a.size
 	zero to a.size each \i
 		out set-at: i, mapper call: a at i
 	out freeze
 
-map-values dict ?k ?v-out(d dict ?k ?v-in, mapper fun1 ?v-out ?v-in)
+map-values dict ?k ?v-out(d dict ?k ?v-in, mapper fun-mut1 ?v-out ?v-in)
 	new-values = d.values map mapper
 	new d.keys, new-values
 
@@ -1170,14 +1235,14 @@ region iterator
 
 | TODO: ALIAS
 iterator<?t> record mut
-	get-next fun0 opt<?t>
+	get-next fun-mut0 opt<?t>
 
 next opt ?t(i iterator ?t)
 	i.get-next call
 
 | Iterator that can be started over from the beginning.
 stream<?t> record mut
-	get-iter fun0 iterator<?t>
+	get-iter fun-mut0 iterator<?t>
 
 iter iterator ?t(s stream ?t)
 	s.get-iter call
@@ -1215,13 +1280,13 @@ tail range-nat(r range-nat)
 	r.empty? forbid
 	r.lo.incr to r.hi
 
-each void(s stream ?t, f fun1 void ?t)
+each void(s stream ?t, f fun-mut1 void ?t)
 	s.iter each-recur f
 
-each void(r range-nat, f fun1 void nat)
+each void(r range-nat, f fun-mut1 void nat)
 	r.iter each-recur f
 
-each-recur void(i iterator ?t, f fun1 void ?t)
+each-recur void(i iterator ?t, f fun-mut1 void ?t)
 	match i next
 		none
 			pass
@@ -1229,7 +1294,7 @@ each-recur void(i iterator ?t, f fun1 void ?t)
 			f call s.value
 			i each-recur f
 
-each void(a arr ?t, f fun1 void ?t)
+each void(a arr ?t, f fun-mut1 void ?t)
 	when
 		a empty?
 			pass
@@ -1237,16 +1302,16 @@ each void(a arr ?t, f fun1 void ?t)
 			f call a.first
 			a.tail each f
 
-each void(a mut-arr ?t, f fun1 void ?t) trusted
+each void(a mut-arr ?t, f fun-mut1 void ?t) trusted
 	was-frozen = a.frozen
 	a.frozen := true
 	a.temp-as-arr each f
 	a.frozen := was-frozen
 
-each-with-index void(a arr ?t, f fun2 void ?t nat)
+each-with-index void(a arr ?t, f fun-mut2 void ?t nat)
 	a each-with-index-recur f, zero
 
-each-with-index-recur void(a arr ?t, f fun2 void ?t nat, n nat)
+each-with-index-recur void(a arr ?t, f fun-mut2 void ?t nat, n nat)
 	when
 		n == a.size
 			pass
@@ -1255,12 +1320,12 @@ each-with-index-recur void(a arr ?t, f fun2 void ?t nat, n nat)
 			a each-with-index-recur f, n.incr
 
 
-filter stream ?t(in stream ?t, pred fun1 bool ?t)
+filter stream ?t(in stream ?t, pred fun-mut1 bool ?t)
 	new \
 		itr = in iter
 		new {itr filter-helper pred}
 
-filter-helper opt ?t(i iterator ?t, pred fun1 bool ?t)
+filter-helper opt ?t(i iterator ?t, pred fun-mut1 bool ?t)
 	match i next
 		none
 			none
@@ -1432,6 +1497,7 @@ actor-id alias
 	nat
 
 vat-and-actor-id record
+	by-val
 	vat vat-id
 	actor actor-id
 
@@ -1473,8 +1539,8 @@ task record mut
 	| Unlike a send-fun, this is stored in the vat already, so no need to store vat here too.
 	| Also, the fun just returns 'void'. You can just use a fut-returning fun and drop the fut.
 	| The fun runs using a ctx created from the actor-id.
-	actor-id opt actor-id
-	fun fun0 void
+	actor-id actor-id
+	fun fun-mut0 void
 
 
 
@@ -1523,7 +1589,8 @@ vat record mut
 	| not protected by tasks-lock, thread-safe on its own
 	next-actor-id by-val thread-safe-counter
 
-add-task void(v vat, t task) trusted
+| Unsafe because you must ensure 'task' is safe to run in parallel.
+add-task void(v vat, t task) unsafe
 	| Do allocation outside of the lock
 	node = t new-mut-bag-node
 
@@ -1540,14 +1607,15 @@ new-vat by-val vat(gctx global-ctx, id vat-id, max-threads nat) noctx unsafe
 	actors = max-threads new-mut-arr-by-val-with-capacity-from-unmanaged-memory<actor-id>
 	new gctx, id, new-gc, new-lock, new-mut-bag, actors, zero, new-thread-safe-counter
 
+
 ctx record mut
 	gctx global-ctx
 	vat vat
-	actor-id opt actor-id
+	actor-id actor-id
 	| TODO: GC allocation context
 	| TODO: exception context
 
-new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id opt actor-id) noctx
+new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id actor-id) noctx
 	new gctx, vat, actor-id
 
 
@@ -1596,11 +1664,7 @@ do-task void(gctx global-ctx, chosen-task chosen-task) noctx unsafe
 			ctx = new-ctx: gctx, vat, task.actor-id
 			ctx.ref-of-val call-with-ctx task.fun
 			vat.tasks-lock.ref-of-val acquire-lock
-			match task.actor-id
-				none
-					pass
-				some some-actor-id
-					vat.currently-running-actors.ref-of-val noctx-must-remove-unordered some-actor-id.value
+			vat.currently-running-actors.ref-of-val noctx-must-remove-unordered task.actor-id
 			vat.tasks-lock.ref-of-val release-lock
 
 	| We incremented this when choosing the task.
@@ -1717,22 +1781,16 @@ find-and-remove-first-doable-task-recur opt task-and-nodes(vat vat, opt-node opt
 		some s
 			node = s.value
 			task = node.value
-			task-ok = match task.actor-id
-				none
-					| No actor id means always safe to run
+			| Can't do this task if the actor is busy.
+			| (If we don't have space to expand currently-running-actors,
+			| shouldn't be starting a new task anyway.)
+			actors = vat.currently-running-actors ref-of-val
+			task-ok = when
+				actors contains task.actor-id
+					false
+				else
+					actors push-capacity-must-be-sufficient task.actor-id
 					true
-				some ss
-					actor = ss.value
-					| Can't do this task if the actor is busy.
-					| (If we don't have space to expand currently-running-actors,
-					| shouldn't be starting a new task anyway.)
-					actors = vat.currently-running-actors ref-of-val
-					when
-						actors contains actor
-							false
-						else
-							actors push-capacity-must-be-sufficient actor
-							true
 			when
 				task-ok
 					| Extract this task (return just its tail)

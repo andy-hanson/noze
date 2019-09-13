@@ -809,6 +809,17 @@ struct Module {
 
 #define N_FUN_TYPES 3
 
+enum class FunKind {
+	plain,
+	mut,
+	send
+};
+
+struct FunKindAndStructs {
+	const FunKind kind;
+	const Arr<const StructDecl*> structs;
+};
+
 struct CommonTypes {
 	const StructInst* _bool; // Needed for 'when'
 	const StructInst* _char;
@@ -822,22 +833,9 @@ struct CommonTypes {
 	const StructDecl* arr;
 	const StructDecl* mutArr;
 	const StructDecl* fut;
-	const Arr<const StructDecl*> funTypes;
-	const Arr<const StructDecl*> sendFunTypes;
+	const Arr<const FunKindAndStructs> funKindsAndStructs;
 
-	struct LambdaInfo {
-		const Bool isSend;
-		const StructDecl* nonSend;
-	};
-
-	inline const Bool isNonsendFunType(const StructDecl* s) const {
-		for (const StructDecl* p : funTypes)
-			if (ptrEquals(p, s))
-				return True;
-		return False;
-	}
-
-	const Opt<const LambdaInfo> getFunStructInfo(const StructDecl* s) const;
+	const Opt<const FunKind> getFunStructInfo(const StructDecl* s) const;
 };
 
 struct Program {
@@ -902,11 +900,11 @@ struct Expr {
 	struct FunAsLambda {
 		const FunDecl* fun;
 		const StructInst* type;
-		const Bool isSendFun;
+		const FunKind kind;
 
 		inline FunAsLambda(
-			const FunDecl* _fun, const StructInst* _type, const Bool _isSendFun)
-			: fun{_fun}, type{_type}, isSendFun{_isSendFun} {
+			const FunDecl* _fun, const StructInst* _type, const FunKind _kind)
+			: fun{_fun}, type{_type}, kind{_kind} {
 			assert(!fun->isTemplate());
 		}
 	};
@@ -924,12 +922,11 @@ struct Expr {
 		const Arr<const ClosureField*> closure;
 		// This is the funN type.
 		const StructInst* type;
-		const StructDecl* nonSendType;
-		const Bool isSendFun;
-		// For sendFun this includes 'fut'
+		const FunKind kind;
+		// For FunKind::send this includes 'fut' wrapper
 		const Type returnType;
 
-		// For a sendFun this is missing the 'fut'
+		// For FunKind::send this is missing the 'fut' wrapper
 		inline const Type nonFutReturnType() const {
 			return first(type->typeArgs);
 		}

@@ -291,10 +291,13 @@ namespace {
 				writeStatic(writer, "\ncaller: ");
 				writeName(writer, c.caller->name());
 			},
-			[&](const Diag::CantCreateNonRecordStruct d) {
-				writeStatic(writer, "non-record struct ");
-				writeName(writer, d.strukt->name);
+			[&](const Diag::CantCreateNonRecordType d) {
+				writeStatic(writer, "non-record type ");
+				writeType(writer, d.type);
 				writeStatic(writer, " can't be constructed");
+			},
+			[&](const Diag::CantCreateRecordWithoutExpectedType) {
+				writeStatic(writer, "don't know what to 'new' (maybe provide a type argument)");
 			},
 			[&](const Diag::CantInferTypeArguments) {
 				writeStatic(writer, "can't infer type arguments");
@@ -356,6 +359,13 @@ namespace {
 				writeType(writer, d.actual);
 				writeStatic(writer, "\nexpected: ");
 				writeType(writer, d.expected);
+			},
+			[&](const Diag::LambdaClosesOverMut d) {
+				writeStatic(writer, "lambda is a plain 'fun' but closes over ");
+				writeName(writer, d.field->name);
+				writeStatic(writer, " of of 'mut' type ");
+				writeType(writer, d.field->type);
+				writeStatic(writer, " (should it be a 'fun-mut'?)");
 			},
 			[&](const Diag::LocalShadowsPrevious d) {
 				writeName(writer, d.name);

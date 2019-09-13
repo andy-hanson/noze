@@ -43,16 +43,13 @@ Purity Type::purity() const {
 		});
 }
 
-const Opt<const CommonTypes::LambdaInfo> CommonTypes::getFunStructInfo(const StructDecl* s) const {
-	for (const StructDecl* p : funTypes)
-		if (ptrEquals(p, s))
-			return some<const CommonTypes::LambdaInfo>(LambdaInfo{False, s});
-
-	for (const size_t i : Range{size(sendFunTypes)})
-		if (ptrEquals(at(sendFunTypes, i), s))
-			return some<const CommonTypes::LambdaInfo>(LambdaInfo{True, at(funTypes, i)});
-
-	return none<const CommonTypes::LambdaInfo>();
+const Opt<const FunKind> CommonTypes::getFunStructInfo(const StructDecl* s) const {
+	//TODO: use arrUtils
+	for (const FunKindAndStructs fs : funKindsAndStructs)
+		for (const StructDecl* funStruct : fs.structs)
+			if (ptrEquals(s, funStruct))
+				return some<const FunKind>(fs.kind);
+	return none<const FunKind>();
 }
 
 const Bool Expr::typeIsBogus(Arena* arena) const {

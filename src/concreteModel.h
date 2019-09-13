@@ -1150,6 +1150,8 @@ struct ConcreteExpr {
 		const ConstantOrExpr then;
 	};
 
+	// NOTE: This if for a lambda of *known* closure and KnownLambdaBody.
+	// A dynamic lambda will be LambdaToDynamic.
 	// This expression is for instantiating the closure of the lambda;
 	// the lambda body itself is stored in knownLambdaBody on this ConcreteExpr.
 	struct Lambda {

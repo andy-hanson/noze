@@ -135,6 +135,7 @@ namespace {
 			assert(resPid == pid);
 			if (!WIFEXITED(status))
 				todo<void>("process exited non-normally");
+
 			const int exitCode = WEXITSTATUS(status); // only valid if WIFEXITED
 			return exitCode;
 		} else
