@@ -2,6 +2,7 @@
 
 #include <initializer_list>
 
+#include "./cell.h"
 #include "./mutArr.h"
 #include "./result.h"
 #include "./resultUtil.h"
@@ -30,14 +31,19 @@ inline const T* onlyPtr(const Arr<T> a) {
 	return ptrAt(a, 0);
 }
 
+template <typename T, typename U, typename Cb>
+inline const T fold(const T start, const Arr<U> a, Cb cb) {
+	Cell<const T> cell = Cell<const T>{start};
+	for (const U x : a)
+		cellSet<const T>(&cell, cb(cellGet(&cell), x));
+	return cellGet<const T>(&cell);
+}
+
 template <typename T, typename Cb>
 inline size_t sum(const Arr<T> a, Cb cb) {
-	size_t res = 0;
-	for (const T x : a) {
-		const size_t n = cb(x);
-		res += n;
-	}
-	return res;
+	return fold(0, a, [&](const size_t l, const T t) {
+		return l + cb(t);
+	});
 }
 
 template <typename T>

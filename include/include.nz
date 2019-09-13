@@ -296,21 +296,29 @@ async fut ?t(f fun0 fut<?t>) trusted
 get-vat vat(vat-id vat-id) unsafe
 	get-ctx.gctx.vats at vat-id
 
-call fut ?r(f send-fun0 ?r) trusted
+| A type is data if it is:
+| * A primitive
+| * A record or union of pure types
+data<?t> builtin-spec
+
+| A type is sendable if it does not have any thread-unsafe mutable state.
+send<?t> builtin-spec
+
+call fut ?r(f send-fun0 ?r) trusted send<?r>
 	vat = f.vat-and-actor.vat get-vat
 	res = new-unresolved-fut<?r>
 	vat add-task new<task> f.vat-and-actor.actor, \
 		f.fun.call forward-to res
 	res
 
-call fut ?r(f send-fun1 ?r ?p0, p0 ?p0) trusted
+call fut ?r(f send-fun1 ?r ?p0, p0 ?p0) trusted send<?r> send<?p0>
 	vat = f.vat-and-actor.vat get-vat
 	res = new-unresolved-fut<?r>
 	vat add-task new<task> f.vat-and-actor.actor, \
 		f.fun call p0 forward-to res
 	res
 
-call fut ?r(f send-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
+call fut ?r(f send-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted send<?r> send<?p0> send<?p1>
 	vat = f.vat-and-actor.vat get-vat
 	res = new-unresolved-fut<?r>
 	vat add-task new<task> f.vat-and-actor.actor, \
@@ -759,7 +767,7 @@ forward-to void(from fut ?t, to fut ?t) unsafe
 	from then-void \value
 		to resolve value
 
-then fut ?out(f fut ?in, cb send-fun1 ?out ?in) trusted
+then fut ?out(f fut ?in, cb send-fun1 ?out ?in) trusted send<?out> send<?in>
 	res = new-unresolved-fut<?out>
 	f then-void \value
 		cb call value forward-to res
@@ -774,14 +782,14 @@ joiner<?out, ?in0, ?in1> record force-sendable
 	| We need to atomically decrement the counter so we only call 'fun' once
 	n-remaining-args by-val thread-safe-counter
 
-decr-joiner void(j joiner ?out ?in0 ?in1) unsafe
+decr-joiner void(j joiner ?out ?in0 ?in1) unsafe send<?out> send<?in0> send<?in1>
 	when
 		j.n-remaining-args.ref-of-val decrement
 			j.fun call j.arg0.force, j.arg1.force forward-to j.res
 		else
 			pass
 
-join fut ?out(a fut ?in0, b fut ?in1, fun send-fun2 ?out ?in0 ?in1) trusted
+join fut ?out(a fut ?in0, b fut ?in1, fun send-fun2 ?out ?in0 ?in1) trusted send<?out> send<?in0> send<?in1>
 	res = new-unresolved-fut<?out>
 	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, none, none, new-thread-safe-counter: 2
 	a then-void \value

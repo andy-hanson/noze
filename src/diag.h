@@ -255,7 +255,6 @@ struct Diag {
 		enum class Kind {
 			strukt,
 			spec,
-			iface,
 			typeParam,
 		};
 
@@ -279,6 +278,11 @@ struct Diag {
 	};
 	struct SendFunDoesNotReturnFut {
 		const Type actualReturnType;
+	};
+	struct SpecBuiltinNotSatisfied {
+		const SpecBody::Builtin::Kind kind;
+		const Type type;
+		const FunDecl* called;
 	};
 	struct SpecImplNotFound {
 		const Sym sigName;
@@ -344,6 +348,7 @@ private:
 		purityOfFieldWorseThanRecord,
 		purityOfMemberWorseThanUnion,
 		sendFunDoesNotReturnFut,
+		specBuiltinNotSatisfied,
 		specImplHasSpecs,
 		specImplNotFound,
 		typeConflict,
@@ -382,6 +387,7 @@ private:
 		const PurityOfFieldWorseThanRecord purityOfFieldWorseThanRecord;
 		const PurityOfMemberWorseThanUnion purityOfMemberWorseThanUnion;
 		const SendFunDoesNotReturnFut sendFunDoesNotReturnFut;
+		const SpecBuiltinNotSatisfied specBuiltinNotSatisfied;
 		const SpecImplHasSpecs specImplHasSpecs;
 		const SpecImplNotFound specImplNotFound;
 		const TypeConflict typeConflict;
@@ -446,6 +452,8 @@ public:
 		: kind{Kind::purityOfMemberWorseThanUnion}, purityOfMemberWorseThanUnion{d} {}
 	explicit inline Diag(const SendFunDoesNotReturnFut d)
 		: kind{Kind::sendFunDoesNotReturnFut}, sendFunDoesNotReturnFut{d} {}
+	explicit inline Diag(const SpecBuiltinNotSatisfied d)
+		: kind{Kind::specBuiltinNotSatisfied}, specBuiltinNotSatisfied{d} {}
 	explicit inline Diag(const SpecImplHasSpecs d)
 		: kind{Kind::specImplHasSpecs}, specImplHasSpecs{d} {}
 	explicit inline Diag(const SpecImplNotFound d)
@@ -496,6 +504,7 @@ public:
 		typename CbPurityOfFieldWorseThanRecord,
 		typename CbPurityOfMemberWorseThanUnion,
 		typename CbSendFunDoesNotReturnFut,
+		typename CbSpecBuiltinNotSatisfied,
 		typename CbSpecImplHasSpecs,
 		typename CbSpecImplNotFound,
 		typename CbTypeConflict,
@@ -532,6 +541,7 @@ public:
 		CbPurityOfFieldWorseThanRecord cbPurityOfFieldWorseThanRecord,
 		CbPurityOfMemberWorseThanUnion cbPurityOfMemberWorseThanUnion,
 		CbSendFunDoesNotReturnFut cbSendFunDoesNotReturnFut,
+		CbSpecBuiltinNotSatisfied cbSpecBuiltinNotSatisfied,
 		CbSpecImplHasSpecs cbSpecImplHasSpecs,
 		CbSpecImplNotFound cbSpecImplNotFound,
 		CbTypeConflict cbTypeConflict,
@@ -595,6 +605,8 @@ public:
 				return cbPurityOfMemberWorseThanUnion(purityOfMemberWorseThanUnion);
 			case Kind::sendFunDoesNotReturnFut:
 				return cbSendFunDoesNotReturnFut(sendFunDoesNotReturnFut);
+			case Kind::specBuiltinNotSatisfied:
+				return cbSpecBuiltinNotSatisfied(specBuiltinNotSatisfied);
 			case Kind::specImplHasSpecs:
 				return cbSpecImplHasSpecs(specImplHasSpecs);
 			case Kind::specImplNotFound:

@@ -46,7 +46,6 @@ add-first-task void(gctx global-ctx, vat vat) unsafe
 	| TODO: store the main fut somewhere so we can test for errors
 	vat add-task new<task> vat.new-actor-id, &user-main-drop
 
-
 test void() trusted summon
 	m = empty-mut-dict<nat, nat>
 	m add 1, 1
@@ -200,21 +199,18 @@ user-main fut void() trusted summon
 	fut-two = async<nat>: \
 		resolved: two
 
-	three = fut-two then \tw
-		resolved: tw.incr
+	printer <- make-printer
+	tw <- fut-two
+	thr = tw.incr
+	printer call thr.to-str
 
-	three then \thr
-		resolved: print-sync: thr.to-str
+printer alias
+	send-fun1 void str
 
-
-
-| printer iface
-|	print void(s str)
-
-| make-printer printer() summon
-|	new-actor()
-|		print(s)
-|			resolved: print-sync: s
+make-printer fut printer() summon
+	async: \
+		resolved: \s
+			resolved: print-sync: s
 
 
 n-times void(n nat, f fun1 void nat)

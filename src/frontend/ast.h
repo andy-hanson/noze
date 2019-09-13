@@ -123,29 +123,6 @@ struct MatchAst {
 	const Arr<const CaseAst> cases;
 };
 
-struct MessageSendAst {
-	const ExprAst* target;
-	const Sym messageName;
-	const Arr<const ExprAst> args;
-};
-
-struct NewActorAst {
-	struct Field {
-		const Bool isMutable;
-		const Sym name;
-		const ExprAst* expr;
-	};
-
-	struct MessageImpl {
-		const Sym name;
-		const Arr<const NameAndRange> paramNames;
-		const ExprAst* body;
-	};
-
-	const Arr<const Field> fields;
-	const Arr<const MessageImpl> messages;
-};
-
 struct SeqAst {
 	const ExprAst* first;
 	const ExprAst* then;
@@ -176,8 +153,6 @@ private:
 		let,
 		literal,
 		match,
-		messageSend,
-		newActor,
 		seq,
 		// no RecordFieldAccess, that's just 'call'
 		recordFieldSet,
@@ -195,8 +170,6 @@ private:
 		const LetAst let;
 		const LiteralAst literal;
 		const MatchAst _match;
-		const MessageSendAst messageSend;
-		const NewActorAst newActor;
 		const SeqAst seq;
 		const RecordFieldSetAst recordFieldSet;
 		const ThenAst then;
@@ -213,8 +186,6 @@ public:
 	explicit inline ExprAstKind(const LetAst a) : kind{Kind::let}, let{a} {}
 	explicit inline ExprAstKind(const LiteralAst a) : kind{Kind::literal}, literal{a} {}
 	explicit inline ExprAstKind(const MatchAst a) : kind{Kind::match}, _match{a} {}
-	explicit inline ExprAstKind(const MessageSendAst a) : kind{Kind::messageSend}, messageSend{a} {}
-	explicit inline ExprAstKind(const NewActorAst a) : kind{Kind::newActor}, newActor{a} {}
 	explicit inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
 	explicit inline ExprAstKind(const RecordFieldSetAst a) : kind{Kind::recordFieldSet}, recordFieldSet{a} {}
 	explicit inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
@@ -248,8 +219,6 @@ public:
 		typename CbLet,
 		typename CbLiteral,
 		typename CbMatch,
-		typename CbMessageSend,
-		typename CbNewActor,
 		typename CbSeq,
 		typename CbRecordFieldSet,
 		typename CbThen
@@ -265,8 +234,6 @@ public:
 		CbLet cbLet,
 		CbLiteral cbLiteral,
 		CbMatch cbMatch,
-		CbMessageSend cbMessageSend,
-		CbNewActor cbNewActor,
 		CbSeq cbSeq,
 		CbRecordFieldSet cbRecordFieldSet,
 		CbThen cbThen
@@ -292,10 +259,6 @@ public:
 				return cbLiteral(literal);
 			case Kind::match:
 				return cbMatch(_match);
-			case Kind::messageSend:
-				return cbMessageSend(messageSend);
-			case Kind::newActor:
-				return cbNewActor(newActor);
 			case Kind::seq:
 				return cbSeq(seq);
 			case Kind::recordFieldSet:
@@ -374,15 +337,11 @@ struct StructDeclAst {
 		struct Union {
 			const Arr<const TypeAst::InstStruct> members;
 		};
-		struct Iface {
-			const Arr<const SigAst> messages;
-		};
 
 		enum class Kind {
 			builtin,
 			record,
 			_union,
-			iface
 		};
 	private:
 		const Kind kind;
@@ -390,14 +349,12 @@ struct StructDeclAst {
 			const Builtin builtin;
 			const Record record;
 			const Union _union;
-			const Iface iface;
 		};
 
 	public:
 		explicit inline Body(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
 		explicit inline Body(const Record _record) : kind{Kind::record}, record{_record} {}
 		explicit inline Body(const Union _union) : kind{Kind::_union}, _union{_union} {}
-		explicit inline Body(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
 		inline const Bool isRecord() const {
 			return enumEq(kind, Kind::record);
@@ -405,12 +362,9 @@ struct StructDeclAst {
 		inline const Bool isUnion() const {
 			return enumEq(kind, Kind::_union);
 		}
-		inline const Bool isIface() const {
-			return enumEq(kind, Kind::iface);
-		}
 
-		template <typename CbBuiltin, typename CbRecord, typename CbUnion, typename CbIface>
-		inline auto match(CbBuiltin cbBuiltin, CbRecord cbRecord, CbUnion cbUnion, CbIface cbIface) const {
+		template <typename CbBuiltin, typename CbRecord, typename CbUnion>
+		inline auto match(CbBuiltin cbBuiltin, CbRecord cbRecord, CbUnion cbUnion) const {
 			switch (kind) {
 				case Kind::builtin:
 					return cbBuiltin(builtin);
@@ -418,8 +372,6 @@ struct StructDeclAst {
 					return cbRecord(record);
 				case Kind::_union:
 					return cbUnion(_union);
-				case Kind::iface:
-					return cbIface(iface);
 				default:
 					assert(0);
 			}
@@ -434,12 +386,41 @@ struct StructDeclAst {
 	const Body body;
 };
 
+struct SpecBodyAst {
+	struct Builtin {};
+private:
+	enum class Kind {
+		builtin,
+		sigs,
+	};
+	const Kind kind;
+	union {
+		const Builtin builtin;
+		const Arr<const SigAst> sigs;
+	};
+public:
+	explicit inline SpecBodyAst(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	explicit inline SpecBodyAst(const Arr<const SigAst> _sigs) : kind{Kind::sigs}, sigs{_sigs} {}
+
+	template <typename CbBuiltin, typename CbSigs>
+	inline auto match(CbBuiltin cbBuiltin, CbSigs cbSigs) const {
+		switch (kind) {
+			case Kind::builtin:
+				return cbBuiltin(builtin);
+			case Kind::sigs:
+				return cbSigs(sigs);
+			default:
+				assert(0);
+		}
+	}
+};
+
 struct SpecDeclAst {
 	const SourceRange range;
 	const Bool isPublic;
 	const Sym name;
 	const Arr<const TypeParamAst> typeParams;
-	const Arr<const SigAst> sigs;
+	const SpecBodyAst body;
 };
 
 struct FunBodyAst {

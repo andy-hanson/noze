@@ -134,17 +134,12 @@ struct ConcreteStructBody {
 		const Arr<const ConcreteType> members;
 	};
 
-	struct Iface {
-		const Arr<const ConcreteSig> messages;
-	};
-
 private:
 	enum class Kind {
 		bogus,
 		builtin,
 		record,
 		_union,
-		iface,
 	};
 	const Kind kind;
 	union {
@@ -152,7 +147,6 @@ private:
 		const Builtin builtin;
 		const Record record;
 		const Union _union;
-		const Iface iface;
 	};
 
 public:
@@ -160,7 +154,6 @@ public:
 	explicit inline ConcreteStructBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
 	explicit inline ConcreteStructBody(const Record _record) : kind{Kind::record}, record{_record} {}
 	explicit inline ConcreteStructBody(const Union __union) : kind{Kind::_union}, _union{__union} {}
-	explicit inline ConcreteStructBody(const Iface _iface) : kind{Kind::iface}, iface{_iface} {}
 
 	inline const Bool isBuiltin() const {
 		return enumEq(kind, Kind::builtin);
@@ -170,9 +163,6 @@ public:
 	}
 	inline const Bool isUnion() const {
 		return enumEq(kind, Kind::_union);
-	}
-	inline const Bool isIface() const {
-		return enumEq(kind, Kind::iface);
 	}
 	inline const Builtin asBuiltin() const {
 		assert(isBuiltin());
@@ -186,22 +176,16 @@ public:
 		assert(isUnion());
 		return _union;
 	}
-	inline const Iface asIface() const {
-		assert(isIface());
-		return iface;
-	}
 
 	template <
 		typename CbBuiltin,
 		typename CbRecord,
-		typename CbUnion,
-		typename CbIface
+		typename CbUnion
 	>
 	inline auto match(
 		CbBuiltin cbBuiltin,
 		CbRecord cbRecord,
-		CbUnion cbUnion,
-		CbIface cbIface
+		CbUnion cbUnion
 	) const {
 		switch (kind) {
 			case Kind::bogus:
@@ -212,8 +196,6 @@ public:
 				return cbRecord(record);
 			case Kind::_union:
 				return cbUnion(_union);
-			case Kind::iface:
-				return cbIface(iface);
 			default:
 				assert(0);
 		}
@@ -236,7 +218,7 @@ struct ConcreteType {
 		return strukt;
 	}
 
-	// Union and iface should never be pointers
+	// Union should never be a pointer
 	inline const ConcreteStruct* mustBeNonPointer() const {
 		assert(!isPointer);
 		return strukt;
@@ -364,13 +346,12 @@ struct ConcreteParam {
 };
 
 struct ConcreteSig {
-	// For a ConcreteFun this should be globally unique. For an iface it just needs to be unique among its messages.
+	// This should be globally unique.
 	const Str mangledName;
 	const ConcreteType returnType;
 	// NOTE: when a parameter has been specialized to a constant, it should be omitted here.
 	// When a parameter has been specialized with a KnownLambdaBody,
 	// this should store the closure (or be omitted if none).
-	// (Above does not apply to iface messages which are never specialized)
 	const Arr<const ConcreteParam> params;
 
 	inline ConcreteSig(const Str _mangledName, const ConcreteType _returnType, const Arr<const ConcreteParam> _params)
@@ -972,7 +953,6 @@ public:
 // Each instantiation of a FunDecl
 // Each *instance* of a KnownLambdaBody inside a ConcreteFun
 //   (since these may be specialized at each callsite)
-// TODO: and for iface impls
 struct ConcreteFun {
 	const Bool needsCtx;
 	const Opt<const ConcreteParam> closureParam;
@@ -981,7 +961,6 @@ struct ConcreteFun {
 	const Bool isCallFun; // `call` is not a builtin, but we treat it specially
 
 	Late<const ConcreteFunBody> _body = {};
-	size_t nextNewIfaceImplIndex = 0;
 	size_t nextLambdaIndex = 0;
 
 	inline ConcreteFun(
@@ -1195,50 +1174,6 @@ struct ConcreteExpr {
 		}
 	};
 
-	struct MessageSend {
-		const ConstantOrExpr target;
-		const ConcreteSig* message;
-		const Arr<const ConstantOrExpr> args;
-	};
-
-	struct NewIfaceImpl {
-		//TODO: use ConcreteFun for this
-		struct MessageImpl {
-			const Str mangledName;
-			const ConstantOrExpr body;
-		};
-
-		const ConcreteStruct* iface;
-		const Opt<const ConcreteType> fieldsStruct;
-		// TODO:PERF if it's a constant, don't make it a field
-		const Arr<const ConstantOrExpr> fieldInitializers;
-		const Arr<const MessageImpl> messageImpls;
-
-		inline NewIfaceImpl(
-			const ConcreteStruct* _iface,
-			const Opt<const ConcreteType> _fieldsStruct,
-			const Arr<const ConstantOrExpr> _fieldInitializers,
-			const Arr<const MessageImpl> _messageImpls
-		) :
-			iface{_iface},
-			fieldsStruct{_fieldsStruct},
-			fieldInitializers{_fieldInitializers},
-			messageImpls{_messageImpls}
-		{
-			if (has(fieldsStruct)) {
-				const ConcreteStruct* strukt = force(fieldsStruct).strukt;
-				assert(sizeEq(strukt->body().asRecord().fields, fieldInitializers));
-			} else
-				assert(isEmpty(fieldInitializers));
-
-			assert(sizeEq(iface->body().asIface().messages, messageImpls));
-		}
-
-		inline const Arr<const ConcreteSig> messagesSigs() const {
-			return iface->body().asIface().messages;
-		}
-	};
-
 	struct ParamRef {
 		const ConcreteParam* param;
 	};
@@ -1309,8 +1244,6 @@ private:
 		let,
 		localRef,
 		match,
-		messageSend,
-		newIfaceImpl,
 		paramRef,
 		recordFieldAccess,
 		recordFieldSet,
@@ -1338,8 +1271,6 @@ private:
 		const Let let;
 		const LocalRef localRef;
 		const Match _match;
-		const MessageSend messageSend;
-		const NewIfaceImpl newIfaceImpl;
 		const ParamRef paramRef;
 		const RecordFieldAccess recordFieldAccess;
 		const RecordFieldSet recordFieldSet;
@@ -1440,18 +1371,6 @@ public:
 		const ConcreteType type,
 		const SourceRange range,
 		const Opt<const KnownLambdaBody*> klb,
-		const MessageSend a)
-		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::messageSend}, messageSend{a} {}
-	inline ConcreteExpr(
-		const ConcreteType type,
-		const SourceRange range,
-		const Opt<const KnownLambdaBody*> klb,
-		const NewIfaceImpl a)
-		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::newIfaceImpl}, newIfaceImpl{a} {}
-	inline ConcreteExpr(
-		const ConcreteType type,
-		const SourceRange range,
-		const Opt<const KnownLambdaBody*> klb,
 		const ParamRef a)
 		: _type{type}, _range{range}, _knownLambdaBody{klb}, kind{Kind::paramRef}, paramRef{a} {}
 	inline ConcreteExpr(
@@ -1521,8 +1440,6 @@ public:
 		typename CbLet,
 		typename CbLocalRef,
 		typename CbMatch,
-		typename CbMessageSend,
-		typename CbNewIfaceImpl,
 		typename CbParamRef,
 		typename CbRecordFieldAccess,
 		typename CbRecordFieldSet,
@@ -1543,8 +1460,6 @@ public:
 		CbLet cbLet,
 		CbLocalRef cbLocalRef,
 		CbMatch cbMatch,
-		CbMessageSend cbMessageSend,
-		CbNewIfaceImpl cbNewIfaceImpl,
 		CbParamRef cbParamRef,
 		CbRecordFieldAccess cbRecordFieldAccess,
 		CbRecordFieldSet cbRecordFieldSet,
@@ -1577,10 +1492,6 @@ public:
 				return cbLocalRef(localRef);
 			case Kind::match:
 				return cbMatch(_match);
-			case Kind::messageSend:
-				return cbMessageSend(messageSend);
-			case Kind::newIfaceImpl:
-				return cbNewIfaceImpl(newIfaceImpl);
 			case Kind::paramRef:
 				return cbParamRef(paramRef);
 			case Kind::recordFieldAccess:
@@ -1604,6 +1515,5 @@ struct ConcreteProgram {
 	const Arr<const ConcreteStruct*> allStructs;
 	const Arr<const Constant*> allConstants;
 	const Arr<const ConcreteFun*> allFuns;
-	const Arr<const ConcreteExpr::NewIfaceImpl> allNewIfaceImpls;
 	const ConcreteStruct* ctxType;
 };

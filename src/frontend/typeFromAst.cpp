@@ -159,23 +159,6 @@ const Arr<const Type> typeArgsFromAsts(
 	});
 }
 
-const Bool typeIsPossiblySendable(const Type type) {
-	return type.match(
-		[](const Type::Bogus) {
-			return True;
-		},
-		[](const TypeParam*) {
-			// type param *might* have a sendable type arg.
-			// Issue errors when instantiating a template iface, not declaring it.
-			return True;
-		},
-		[](const StructInst* i) {
-			return _and(
-				i->decl->purity != Purity::mut,
-				every(i->typeArgs, typeIsPossiblySendable));
-		});
-}
-
 const Type makeFutType(Arena* arena, const CommonTypes* commonTypes, const Type type) {
 	return Type{instantiateStructNeverDelay(arena, commonTypes->fut, arrLiteral<const Type>(arena, { type }))};
 }

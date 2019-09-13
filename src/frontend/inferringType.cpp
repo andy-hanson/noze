@@ -388,9 +388,6 @@ const Opt<const StructAndField> tryGetRecordField(const Type targetType, const S
 				},
 				[](const StructBody::Union) {
 					return none<const StructAndField>();
-				},
-				[](const StructBody::Iface) {
-					return none<const StructAndField>();
 				});
 		});
 }

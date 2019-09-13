@@ -33,9 +33,6 @@ namespace {
 			},
 			[](const ConcreteStructBody::Union) {
 				return todo<ir_type*>("UNION");
-			},
-			[](const ConcreteStructBody::Iface) {
-				return todo<ir_type*>("IFACE");
 			});
 	}
 
@@ -51,9 +48,6 @@ namespace {
 			[](const ConcreteStructBody::Union) {
 				// A noze union compiles to a struct with 2 fields -- a 'kind' enum, and a union of the members.
 				todo<void>("UNION");
-			},
-			[](const ConcreteStructBody::Iface) {
-				todo<void>("IFACE");
 			});
 	}
 

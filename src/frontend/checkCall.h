@@ -6,11 +6,14 @@ template <typename Cb>
 void eachFunInScope(ExprCtx* ctx, const Sym funName, Cb cb) {
 	size_t totalIndex = 0;
 	for (const SpecInst* specInst : ctx->outermostFun->specs) {
-		const Arr<const Sig> sigs = specInst->sigs;
-		for (const size_t i : indices(sigs))
-			if (symEq(at(sigs, i).name, funName))
-				cb(CalledDecl{SpecSig{specInst, ptrAt(sigs, i), totalIndex + i}});
-		totalIndex += size(sigs);
+		specInst->body.match(
+			[](const SpecBody::Builtin) {},
+			[&](const Arr<const Sig> sigs) {
+				for (const size_t i : indices(sigs))
+					if (symEq(at(sigs, i).name, funName))
+						cb(CalledDecl{SpecSig{specInst, ptrAt(sigs, i), totalIndex + i}});
+				totalIndex += size(sigs);
+			});
 	}
 
 	for (const FunDecl* f : multiDictGetAt<const Sym, const FunDecl*, compareSym>(ctx->funsMap, funName))

@@ -797,9 +797,6 @@ namespace {
 			},
 			[&](const ConcreteStructBody::Union) {
 				return todo<const ConcreteFunExprBody>("compare union");
-			},
-			[&](const ConcreteStructBody::Iface) {
-				return todo<const ConcreteFunExprBody>("compare iface");
 			});
 	}
 }

@@ -401,8 +401,6 @@ namespace {
 							return "struct";
 						case Diag::NameNotFound::Kind::spec:
 							return "spec";
-						case Diag::NameNotFound::Kind::iface:
-							return "interface";
 						case Diag::NameNotFound::Kind::typeParam:
 							return "type parameter";
 						default:
@@ -427,7 +425,7 @@ namespace {
 				writeStatic(writer, ", but field type ");
 				writeType(writer, d.fieldType);
 				writeStatic(writer, " has purity ");
-				writePurity(writer, d.fieldType.purity());
+				writePurity(writer, d.fieldType.bestCasePurity());
 			},
 			[&](const Diag::PurityOfMemberWorseThanUnion d) {
 				writeStatic(writer, "union ");
@@ -437,11 +435,28 @@ namespace {
 				writeStatic(writer, ", but member type ");
 				writeStructInst(writer, d.member);
 				writeStatic(writer, " has purity ");
-				writePurity(writer, d.member->purity);
+				writePurity(writer, d.member->bestCasePurity);
 			},
 			[&](const Diag::SendFunDoesNotReturnFut d) {
 				writeStatic(writer, "send-fun should return a fut, but returns ");
 				writeType(writer, d.actualReturnType);
+			},
+			[&](const Diag::SpecBuiltinNotSatisfied d) {
+				writeStatic(writer, "trying to call ");
+				writeName(writer, d.called->name());
+				writeStatic(writer, ", but ");
+				writeType(writer, d.type);
+				const char* message = [&]() {
+					switch (d.kind) {
+						case SpecBody::Builtin::Kind::data:
+							return " is not 'data'";
+						case SpecBody::Builtin::Kind::send:
+							return " is not 'send'";
+						default:
+							assert(0);
+					}
+				}();
+				writeStatic(writer, message);
 			},
 			[&](const Diag::SpecImplHasSpecs d) {
 				writeStatic(writer, "spec implementation ");

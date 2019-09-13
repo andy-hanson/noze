@@ -14,8 +14,6 @@ namespace {
 		MutArr<const ConcreteStruct*> allReferencedStructs {};
 		MutArr<const Constant*> allReferencedConstants {};
 		MutArr<const ConcreteFun*> allReferencedFuns {};
-		// TODO: these should just be several ConcreteFuns
-		MutArr<const ConcreteExpr::NewIfaceImpl> allReferencedNewIfaceImpls {};
 		SetReferencedCtx(const SetReferencedCtx*) = delete;
 	};
 
@@ -31,11 +29,6 @@ namespace {
 		pushIfNotContained(ctx->arena, &ctx->allReferencedFuns, f);
 	}
 
-	void addNewIfaceImpl(SetReferencedCtx* ctx, const ConcreteExpr::NewIfaceImpl impl) {
-		// These don't have isReferenced, but we'll only walk the function containing them once.
-		push<const ConcreteExpr::NewIfaceImpl>(ctx->arena, &ctx->allReferencedNewIfaceImpls, impl);
-	}
-
 	void setReferencedInType(SetReferencedCtx* ctx, const ConcreteType t) {
 		addStruct(ctx, t.strukt);
 	}
@@ -47,7 +40,7 @@ namespace {
 	}
 
 	void setReferencedInStruct(SetReferencedCtx* ctx, const ConcreteStruct* s) {
-		return s->body().match(
+		s->body().match(
 			[&](const ConcreteStructBody::Builtin b) {
 				for (const ConcreteType s : b.typeArgs)
 					setReferencedInType(ctx, s);
@@ -59,10 +52,6 @@ namespace {
 			[&](const ConcreteStructBody::Union u) {
 				for (const ConcreteType member : u.members)
 					setReferencedInType(ctx, member);
-			},
-			[&](const ConcreteStructBody::Iface i) {
-				for (const ConcreteSig message : i.messages)
-					setReferencedInSig(ctx, message);
 			});
 	}
 
@@ -131,13 +120,6 @@ namespace {
 				for (const ConcreteExpr::Match::Case kase : e.cases)
 					setReferencedInConstantOrExpr(ctx, kase.then);
 			},
-			[&](const ConcreteExpr::MessageSend e) {
-				setReferencedInConstantOrExpr(ctx, e.target);
-				setReferencedInConstantOrExprs(ctx, e.args);
-			},
-			[&](const ConcreteExpr::NewIfaceImpl e) {
-				addNewIfaceImpl(ctx, e);
-			},
 			[](const ConcreteExpr::ParamRef) {},
 			[&](const ConcreteExpr::RecordFieldAccess e) {
 				setReferencedInConstantOrExpr(ctx, e.target);
@@ -178,16 +160,6 @@ namespace {
 				}
 				setReferencedInExpr(ctx, *e.expr);
 			});
-	}
-
-	void setReferencedInNewIfaceImpl(SetReferencedCtx* ctx, const ConcreteExpr::NewIfaceImpl impl) {
-		addStruct(ctx, impl.iface);
-		if (has(impl.fieldsStruct))
-			setReferencedInType(ctx, force(impl.fieldsStruct));
-		for (const ConstantOrExpr ce : impl.fieldInitializers)
-			setReferencedInConstantOrExpr(ctx, ce);
-		for (const ConcreteExpr::NewIfaceImpl::MessageImpl m : impl.messageImpls)
-			setReferencedInConstantOrExpr(ctx, m.body);
 	}
 
 	void setReferencedInConstant(SetReferencedCtx* ctx, const Constant* c) {
@@ -234,7 +206,6 @@ const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun
 	size_t nextStructIndexToScan = 0;
 	size_t nextConstantIndexToScan = 0;
 	size_t nextFunIndexToScan = 0;
-	size_t nextNewIfaceImplIndexToScan = 0;
 
 	for (;;) {
 		if (nextStructIndexToScan < mutArrSize(&ctx.allReferencedStructs))
@@ -243,8 +214,6 @@ const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun
 			setReferencedInConstant(&ctx, mutArrAt(&ctx.allReferencedConstants, nextConstantIndexToScan++));
 		else if (nextFunIndexToScan < mutArrSize(&ctx.allReferencedFuns))
 			setReferencedInFun(&ctx, mutArrAt(&ctx.allReferencedFuns, nextFunIndexToScan++));
-		else if (nextNewIfaceImplIndexToScan < mutArrSize(&ctx.allReferencedNewIfaceImpls))
-			setReferencedInNewIfaceImpl(&ctx, mutArrAt(&ctx.allReferencedNewIfaceImpls, nextNewIfaceImplIndexToScan++));
 		else
 			break;
 	}
@@ -253,6 +222,5 @@ const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun
 		freeze(&ctx.allReferencedStructs),
 		freeze(&ctx.allReferencedConstants),
 		freeze(&ctx.allReferencedFuns),
-		freeze(&ctx.allReferencedNewIfaceImpls),
 		ctxStruct};
 }

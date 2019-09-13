@@ -28,8 +28,6 @@ namespace {
 			// TODO: check all branches
 			[](const MatchAst) { return True; },
 			// Always returns fut
-			[](const MessageSendAst) { return False; },
-			[](const NewActorAst) { return False; },
 			[](const SeqAst e) { return exprMightHaveProperties(*e.then); },
 			[](const RecordFieldSetAst) { return False; },
 			// Always returns fut
@@ -240,6 +238,52 @@ namespace {
 		}
 	}
 
+	// See if e.g. 'data<?t>' is declared on this function.
+	const Bool findBuiltinSpecOnType(
+		ExprCtx* ctx,
+		const SpecBody::Builtin::Kind kind,
+		const Type type
+	) {
+		return exists(ctx->outermostFun->specs, [&](const SpecInst* inst) {
+			return inst->body.match(
+				[&](const SpecBody::Builtin b) {
+					return _and(
+						enumEq(b.kind, kind),
+						typeEquals(only(inst->typeArgs), type));
+				},
+				[](const Arr<const Sig>) {
+					//TODO: s might inherit from builtin spec?
+					return False;
+				});
+		});
+	}
+
+	const Bool checkBuiltinSpec(
+		ExprCtx* ctx,
+		const FunDecl* called,
+		const SourceRange range,
+		const SpecBody::Builtin::Kind kind,
+		const Type typeArg
+	) {
+		// TODO: Instead of worstCasePurity(), it type is a type parameter,
+		// see if the current function has its own spec requiring that it be data / send
+		const Bool typeIsGood = _or(
+			[&]() {
+				switch (kind) {
+					case SpecBody::Builtin::Kind::data:
+						return enumEq(typeArg.worstCasePurity(), Purity::data);
+					case SpecBody::Builtin::Kind::send:
+						return isDataOrSendable(typeArg.worstCasePurity());
+					default:
+						return unreachable<const Bool>();
+				}
+			}(),
+			findBuiltinSpecOnType(ctx, kind, typeArg));
+		if (!typeIsGood)
+			ctx->addDiag(range, Diag{Diag::SpecBuiltinNotSatisfied{kind, typeArg, called}});
+		return typeIsGood;
+	}
+
 	// On failure, returns none.
 	const Opt<const Arr<const Called>> checkSpecImpls(
 		ExprCtx* ctx,
@@ -250,7 +294,7 @@ namespace {
 	) {
 		// We store the impls in a flat array. Calculate the size ahead of time.
 		const size_t nImpls = sum(called->specs, [](const SpecInst* specInst) {
-			return size(specInst->sigs);
+			return specInst->body.nSigs();
 		});
 		if (nImpls != 0 && !allowSpecs) {
 			ctx->addDiag(range, Diag{Diag::SpecImplHasSpecs{}});
@@ -258,6 +302,7 @@ namespace {
 		} else {
 			MutArr<const Called> res = newUninitializedMutArr<const Called>(ctx->arena(), nImpls);
 			size_t outI = 0;
+			Cell<const Bool> allSucceeded = Cell<const Bool>{True};
 			for (const SpecInst* specInst : called->specs) {
 				// Note: specInst was instantiated potentialyl based on f's params.
 				// Meed to instantiate it again.
@@ -265,16 +310,28 @@ namespace {
 					ctx->arena(),
 					specInst,
 					TypeParamsAndArgs{called->typeParams, typeArgs});
-				for (const Sig sig : specInstInstantiated->sigs) {
-					const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
-					if (!has(impl))
-						return none<const Arr<const Called>>();
-					setAt<const Called>(&res, outI, force(impl));
-					outI++;
-				}
+				const Bool succeeded = specInstInstantiated->body.match(
+					[&](const SpecBody::Builtin b) {
+						return checkBuiltinSpec(ctx, called, range, b.kind, only(specInstInstantiated->typeArgs));
+					},
+					[&](const Arr<const Sig> sigs) {
+						for (const Sig sig : sigs) {
+							const Opt<const Called> impl = findSpecSigImplementation(ctx, range, sig);
+							if (!has(impl))
+								return False;
+							setAt<const Called>(&res, outI, force(impl));
+							outI++;
+						}
+						return True;
+					});
+				if (!succeeded)
+					cellSet<const Bool>(&allSucceeded, False);
 			}
-			assert(outI == nImpls);
-			return some<const Arr<const Called>>(freeze(&res));
+			if (cellGet(&allSucceeded)) {
+				assert(outI == nImpls);
+				return some<const Arr<const Called>>(freeze(&res));
+			} else
+				return none<const Arr<const Called>>();
 		}
 	}
 

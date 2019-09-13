@@ -30,7 +30,7 @@ const Bool Type::typeEquals(const Type other) const {
 		});
 }
 
-Purity Type::purity() const {
+Purity Type::bestCasePurity() const {
 	return match(
 		[](const Type::Bogus) {
 			return Purity::data;
@@ -39,7 +39,20 @@ Purity Type::purity() const {
 			return Purity::data;
 		},
 		[](const StructInst* s) {
-			return s->purity;
+			return s->bestCasePurity;
+		});
+}
+
+Purity Type::worstCasePurity() const {
+	return match(
+		[](const Type::Bogus) {
+			return Purity::data;
+		},
+		[](const TypeParam*) {
+			return Purity::mut;
+		},
+		[](const StructInst* s) {
+			return s->worstCasePurity;
 		});
 }
 
@@ -75,9 +88,6 @@ const Bool Expr::typeIsBogus(Arena* arena) const {
 		[](const Expr::FunAsLambda) {
 			return False;
 		},
-		[](const Expr::IfaceImplFieldRef) {
-			return todo<const Bool>("typeIsBogus ifaceimplfieldref");
-		},
 		[](const Expr::ImplicitConvertToUnion) {
 			return False;
 		},
@@ -92,12 +102,6 @@ const Bool Expr::typeIsBogus(Arena* arena) const {
 		},
 		[](const Expr::Match e) {
 			return e.type.isBogus();
-		},
-		[](const Expr::MessageSend e) {
-			return e.getType().isBogus();
-		},
-		[](const Expr::NewIfaceImpl) {
-			return todo<const Bool>("typeIsBogus newIfaceImpl");
 		},
 		[](const Expr::ParamRef e) {
 			return e.param->type.isBogus();
@@ -139,9 +143,6 @@ const Type Expr::getType(Arena* arena, const CommonTypes* commonTypes) const {
 		[](const Expr::FunAsLambda) {
 			return todo<const Type>("getType funAsLambda");
 		},
-		[](const Expr::IfaceImplFieldRef) {
-			return todo<const Type>("getType ifaceImplFieldRef");
-		},
 		[](const Expr::ImplicitConvertToUnion e) {
 			return Type(e.unionType);
 		},
@@ -156,12 +157,6 @@ const Type Expr::getType(Arena* arena, const CommonTypes* commonTypes) const {
 		},
 		[](const Expr::Match) {
 			return todo<const Type>("getType match");
-		},
-		[](const Expr::MessageSend e) {
-			return e.getType();
-		},
-		[](const Expr::NewIfaceImpl) {
-			return todo<const Type>("getType newifaceimpl");
 		},
 		[](const Expr::ParamRef e) {
 			return e.param->type;
@@ -285,9 +280,6 @@ const Sexpr exprToSexpr(Arena* arena, const Expr expr) {
 		[&](const Expr::FunAsLambda) {
 			return todo<const Sexpr>("funaslambda");
 		},
-		[&](const Expr::IfaceImplFieldRef) {
-			return todo<const Sexpr>("ifaceimplfieldref");
-		},
 		[&](const Expr::ImplicitConvertToUnion) {
 			return todo<const Sexpr>("implicitconverttounion");
 		},
@@ -302,12 +294,6 @@ const Sexpr exprToSexpr(Arena* arena, const Expr expr) {
 		},
 		[&](const Expr::Match) {
 			return todo<const Sexpr>("match");
-		},
-		[&](const Expr::MessageSend) {
-			return todo<const Sexpr>("messagesend");
-		},
-		[&](const Expr::NewIfaceImpl) {
-			return todo<const Sexpr>("newifaceimpl");
 		},
 		[&](const Expr::ParamRef) {
 			return todo<const Sexpr>("paramref");

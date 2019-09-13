@@ -219,7 +219,6 @@ namespace {
 			case shortSymAlphaLiteralValue("builtin"):
 			case shortSymAlphaLiteralValue("else"):
 			case shortSymAlphaLiteralValue("extern"):
-			case shortSymAlphaLiteralValue("iface"):
 			case shortSymAlphaLiteralValue("import"):
 			case shortSymAlphaLiteralValue("match"):
 			case shortSymAlphaLiteralValue("mut"):
@@ -303,8 +302,6 @@ const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 							return ExpressionToken{ExpressionToken::Kind::match};
 						case shortSymAlphaLiteralValue("new"):
 							return ExpressionToken{ExpressionToken::Kind::_new};
-						case shortSymAlphaLiteralValue("new-actor"):
-							return ExpressionToken{ExpressionToken::Kind::newActor};
 						case shortSymAlphaLiteralValue("new-arr"):
 							return ExpressionToken{ExpressionToken::Kind::newArr};
 						case shortSymAlphaLiteralValue("when"):

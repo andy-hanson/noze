@@ -12,9 +12,6 @@ namespace {
 		const ConcreteFunSource concreteFunSource;
 		ConcreteFun* currentConcreteFun; // This is the ConcreteFun* for a lambda, not its containing fun
 
-		//TODO: this should go in the ConcreteFunSource
-		const Arr<const ConcreteField> fields; // If this is inside a new iface
-
 		// Note: this dict contains only the locals that are currently in scope.
 		MutDict<const Local*, const ConcreteLocal*, comparePtr<const Local>> locals {};
 		// Contains *all* locals
@@ -203,14 +200,6 @@ namespace {
 		return map<const ConstantOrExpr>{}(getArena(ctx), argExprs, [&](const Expr arg) {
 			return concretizeExpr(ctx, arg);
 		});
-	}
-
-	const Arr<const ConstantOrExpr> getArgsNonConstWithDynamicLambdas(
-		ConcretizeExprCtx* ctx,
-		const SourceRange range,
-		const Arr<const Expr> argExprs
-	) {
-		return makeLambdasDynamic_arr(ctx->concretizeCtx, range, getArgsNonConst(ctx, argExprs));
 	}
 
 	const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> getArgs(
@@ -566,55 +555,6 @@ namespace {
 			});
 	}
 
-	const ConstantOrExpr concretizeNewIfaceImpl(
-		ConcretizeExprCtx* ctx,
-		const SourceRange range,
-		const Expr::NewIfaceImpl e
-	) {
-		Arena* arena = getArena(ctx);
-		const ConcreteStruct* iface = ctx->getConcreteType_forStructInst(e.iface).mustBeNonPointer();
-		const Arr<const ConcreteField> fields = map<const ConcreteField>{}(
-			arena,
-			e.fields,
-			[&](const Expr::NewIfaceImpl::Field f) {
-				return ConcreteField{f.isMutable, mangleName(arena, f.name), ctx->getConcreteType(f.type)};
-			});
-		const Arr<const ConstantOrExpr> fieldInitializers = map<const ConstantOrExpr>{}(
-			arena,
-			e.fields,
-			[&](const Expr::NewIfaceImpl::Field f) {
-				return concretizeExpr(ctx, *f.expr);
-			});
-		const Str mangledNameBase = [&]() {
-			Writer writer { arena };
-			writeStr(&writer, ctx->currentConcreteFun->mangledName());
-			writeStatic(&writer, "__ifaceImpl");
-			writeNat(&writer, ctx->currentConcreteFun->nextNewIfaceImplIndex++);
-			return finishWriter(&writer);
-		}();
-		const Arr<const ConcreteExpr::NewIfaceImpl::MessageImpl> messageImpls =
-			mapZip<const ConcreteExpr::NewIfaceImpl::MessageImpl>{}(
-				arena,
-				iface->body().asIface().messages,
-				e.messageImpls,
-				[&](const ConcreteSig sig, const Expr body) {
-					ConcretizeExprCtx newCtx = todo<ConcretizeExprCtx>("concretizeexprctx for iface message impl");
-					const ConstantOrExpr concreteBody = concretizeExpr(&newCtx, body);
-					const Str mangledName = [&]() {
-						Writer writer { arena };
-						writeStr(&writer, mangledNameBase);
-						writeStatic(&writer, "__");
-						writeStr(&writer, sig.mangledName);
-						return finishWriter(&writer);
-					}();
-					return ConcreteExpr::NewIfaceImpl::MessageImpl{mangledName, concreteBody};
-				});
-		const Opt<const ConcreteType> fieldsType = concreteTypeFromFields(arena, fields, mangledNameBase);
-		const ConcreteExpr::NewIfaceImpl impl =
-			ConcreteExpr::NewIfaceImpl{iface, fieldsType, fieldInitializers, messageImpls};
-		return nuExpr(arena, concreteType_fromStruct(iface), range, impl);
-	}
-
 	const ConcreteParam* findCorrespondingConcreteParam(const ConcretizeExprCtx* ctx, const size_t paramIndex) {
 		size_t paramI = 0;
 		for (const size_t i : Range{paramIndex})
@@ -795,10 +735,6 @@ namespace {
 			[&](const Expr::FunAsLambda e) {
 				return concretizeFunAsLambda(ctx, range, e);
 			},
-			[&](const Expr::IfaceImplFieldRef) {
-				// never a constant
-				return todo<const ConstantOrExpr>("newfieldref");
-			},
 			[&](const Expr::ImplicitConvertToUnion e) {
 				const ConstantOrExpr inner = concretizeExpr(ctx, *e.inner);
 				const ConcreteType unionType = ctx->getConcreteType_forStructInst(e.unionType);
@@ -835,18 +771,6 @@ namespace {
 			},
 			[&](const Expr::Match e) {
 				return concretizeMatch(ctx, range, e);
-			},
-			[&](const Expr::MessageSend e) {
-				// never a constant
-				const ConstantOrExpr target = concretizeExpr(ctx, *e.target);
-				const ConcreteStruct* iface = ctx->getConcreteType_forStructInst(e.iface).mustBeNonPointer();
-				const ConcreteSig* message = ptrAt(iface->body().asIface().messages, e.messageIndex);
-				const Arr<const ConstantOrExpr> args = getArgsNonConstWithDynamicLambdas(ctx, range, e.args);
-				const ConcreteType type = ctx->getConcreteType(e.getType());
-				return nuExpr(arena, type, range, ConcreteExpr::MessageSend{target, message, args});
-			},
-			[&](const Expr::NewIfaceImpl e) {
-				return concretizeNewIfaceImpl(ctx, range, e);
 			},
 			[&](const Expr::ParamRef e) {
 				return concretizeParamRef(ctx, range, e);
@@ -896,7 +820,7 @@ const ConcreteFunBody concretizeExpr(
 	ConcreteFun* cf,
 	const Expr e
 ) {
-	ConcretizeExprCtx exprCtx {ctx, source, cf, emptyArr<const ConcreteField>()};
+	ConcretizeExprCtx exprCtx {ctx, source, cf};
 	const ConstantOrExpr res = concretizeExpr(&exprCtx, e);
 	return res.match(
 		[](const Constant* c) {

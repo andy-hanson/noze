@@ -102,7 +102,7 @@ namespace {
 	enum class NonFunKeyword {
 		alias,
 		builtin,
-		iface,
+		builtinSpec,
 		record,
 		spec,
 		_union,
@@ -144,10 +144,13 @@ namespace {
 		switch (curChar(lexer)) {
 			case 'a':
 				return tryTake(lexer, "alias ", "alias\n", NonFunKeyword::alias);
-			case 'b':
-				return tryTake(lexer, "builtin ", "builtin\n", NonFunKeyword::builtin);
-			case 'i':
-				return tryTake(lexer, "iface ", "iface\n", NonFunKeyword::iface);
+			case 'b': {
+				const Opt<const NonFunKeywordAndIndent> res =
+					tryTake(lexer, "builtin ", "builtin\n", NonFunKeyword::builtin);
+				return has(res)
+					? res
+					: tryTake(lexer, "builtin-spec ", "builtin-spec\n", NonFunKeyword::builtinSpec);
+			}
 			case 'r':
 				return tryTake(lexer, "record ", "record\n", NonFunKeyword::record);
 			case 's':
@@ -359,6 +362,20 @@ namespace {
 					lexer->arena,
 					structAliases,
 					StructAliasAst{range(lexer, start), isPublic, name, typeParams, target});
+			} else if (kw == NonFunKeyword::builtinSpec) {
+				if (tookIndent)
+					todo<void>("builtin-spec has no body");
+				if (has(purity))
+					todo<void>("spec shouldn't have purity");
+				add<const SpecDeclAst>(
+					lexer->arena,
+					specs,
+					SpecDeclAst{
+						range(lexer, start),
+						isPublic,
+						name,
+						typeParams,
+						SpecBodyAst{SpecBodyAst::Builtin{}}});
 			} else if (kw == NonFunKeyword::spec) {
 				if (!tookIndent)
 					todo<void>("always indent spec");
@@ -368,7 +385,7 @@ namespace {
 				add<const SpecDeclAst>(
 					lexer->arena,
 					specs,
-					SpecDeclAst{range(lexer, start), isPublic, name, typeParams, sigs});
+					SpecDeclAst{range(lexer, start), isPublic, name, typeParams, SpecBodyAst{sigs}});
 			} else {
 				using Body = StructDeclAst::Body;
 				const Body body = [&]() {
@@ -389,10 +406,6 @@ namespace {
 							return tookIndent
 								? Body{Body::Union{parseUnionMembers(lexer)}}
 								: throwAtChar<const Body>(lexer, ParseDiag{ParseDiag::UnionCantBeEmpty{}});
-						case NonFunKeyword::iface:
-							if (!tookIndent)
-								todo<void>("iface can't be empty");
-							return Body{Body::Iface{parseIndentedSigs(lexer)}};
 						default:
 							return unreachable<const Body>();
 					}

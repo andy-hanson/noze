@@ -92,7 +92,6 @@ struct ExpressionToken {
 		match,
 		nameAndRange,
 		_new,
-		newActor,
 		newArr,
 		when
 	};

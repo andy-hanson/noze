@@ -43,6 +43,4 @@ const Arr<const Type> typeArgsFromAsts(
 	DelayStructInsts delayStructInsts
 );
 
-const Bool typeIsPossiblySendable(const Type type);
-
 const Type makeFutType(Arena* arena, const CommonTypes* commonTypes, const Type type);

@@ -3,12 +3,6 @@
 #include "../model.h"
 #include "./typeFromAst.h" // makeFutType
 
-struct NewAndMessageInfo {
-	const Arr<const Param> instantiatedParams;
-	const Arr<const Expr::NewIfaceImpl::Field> fields;
-	const Message* message;
-};
-
 struct LambdaInfo {
 	const Arr<const Param> lambdaParams;
 	MutArr<const Local*> locals = MutArr<const Local*>{};
@@ -23,12 +17,10 @@ struct ExprCtx {
 	const FunsMap funsMap;
 	const CommonTypes* commonTypes;
 	const FunDecl* outermostFun;
-	const Opt<const NewAndMessageInfo> newAndMessageInfo;
 
 	// Locals of the function or message. Lambda locals are stored in the lambda.
 	// (Note the Let stores the local and this points to that.)
 	MutArr<const Local*> messageOrFunctionLocals = MutArr<const Local*>{};
-	// Note: if inside newAndMessageInfo, these are only the lambdas *inside* of it.
 	// TODO: these are pointers because MutArr currently only works on copyable values,
 	// and LambdaInfo should not be copied.
 	MutArr<LambdaInfo*> lambdas = MutArr<LambdaInfo*>{};

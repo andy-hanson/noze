@@ -7,20 +7,6 @@
 
 namespace {
 	template <typename Cb>
-	inline auto withMessageImpl(ExprCtx* ctx, const NewAndMessageInfo info, Cb cb) {
-		// Since 'new' is not a closure, discard lambdas from outside of it.
-		// Note: 'messageOrFunctionLocals' and 'lambdas' intentionally not passed down.
-		ExprCtx newCtx {
-			ctx->checkCtx,
-			ctx->structsAndAliasesMap,
-			ctx->funsMap,
-			ctx->commonTypes,
-			ctx->outermostFun,
-			some<const NewAndMessageInfo>(info)};
-		return cb(&newCtx);
-	}
-
-	template <typename Cb>
 	inline auto withLambda(ExprCtx* ctx, LambdaInfo* info, Cb cb) {
 		push(ctx->arena(), &ctx->lambdas, info);
 		auto res = cb();
@@ -169,9 +155,6 @@ namespace {
 				return some<const RecordAndIsBuiltinByVal>(RecordAndIsBuiltinByVal{r, False});
 			},
 			[](const StructBody::Union) {
-				return none<const RecordAndIsBuiltinByVal>();
-			},
-			[](const StructBody::Iface) {
 				return none<const RecordAndIsBuiltinByVal>();
 			});
 
@@ -363,21 +346,10 @@ namespace {
 				return some<const IdentifierAndLambdas>(
 					IdentifierAndLambdas{Expr{range, Expr::LocalRef{local}}, allLambdas});
 
-		if (has(ctx->newAndMessageInfo)) {
-			const NewAndMessageInfo nmi = force(ctx->newAndMessageInfo);
-			for (const Param* param : ptrsRange(nmi.instantiatedParams))
-				if (symEq(param->name, name))
-					return some<const IdentifierAndLambdas>(
-						IdentifierAndLambdas{Expr{range, Expr::ParamRef{param}}, allLambdas});
-			for (const Expr::NewIfaceImpl::Field* field : ptrsRange(nmi.fields))
-				if (symEq(field->name, name))
-					return some<const IdentifierAndLambdas>(
-						IdentifierAndLambdas{Expr{range, Expr::IfaceImplFieldRef{field}}, allLambdas});
-		} else
-			for (const Param* param : ptrsRange(ctx->outermostFun->params()))
-				if (symEq(param->name, name))
-					return some<const IdentifierAndLambdas>(
-						IdentifierAndLambdas{Expr{range, Expr::ParamRef{param}}, allLambdas});
+		for (const Param* param : ptrsRange(ctx->outermostFun->params()))
+			if (symEq(param->name, name))
+				return some<const IdentifierAndLambdas>(
+					IdentifierAndLambdas{Expr{range, Expr::ParamRef{param}}, allLambdas});
 
 		return none<const IdentifierAndLambdas>();
 	}
@@ -526,7 +498,7 @@ namespace {
 
 		if (kind == FunKind::plain)
 			for (const ClosureField* cf : closureFields)
-				if (cf->type.purity() == Purity::mut)
+				if (cf->type.worstCasePurity() == Purity::mut)
 					ctx->addDiag(range, Diag{Diag::LambdaClosesOverMut{cf}});
 
 		const Type actualPossiblyFutReturnType = inferred(&returnTypeInferrer);
@@ -641,90 +613,6 @@ namespace {
 		}
 	}
 
-	const Arr<const Message> getMessages(const StructInst* ifaceInst) {
-		//TODO: what to do if asIface() fails?
-		return ifaceInst->body().asIface().messages;
-	}
-
-	const CheckedExpr checkMessageSend(
-		ExprCtx* ctx,
-		const SourceRange range,
-		const MessageSendAst ast,
-		Expected* expected
-	) {
-		const ExprAndType targetAndType = checkAndInfer(ctx, *ast.target);
-		const Expr* target = ctx->alloc(targetAndType.expr);
-		const Type targetType = targetAndType.type;
-
-		return targetType.match(
-			[&](const Type::Bogus) {
-				return bogus(expected, range);
-			},
-			[&](const TypeParam*) {
-				return todo<CheckedExpr>("checkMessageSend on type parameter -- report a diagnostic");
-			},
-			[&](const StructInst* instIface) {
-				const Opt<const Message*> opMessage = findPtr(
-					getMessages(instIface),
-					[&](const Message* m) {
-						return symEq(m->sig.name, ast.messageName);
-					});
-				if (!has(opMessage))
-					todo<void>("checkMessageSend");
-				const Message* message = force(opMessage);
-				const Sig messageSig = message->sig;
-				if (size(ast.args) != arity(messageSig))
-					todo<void>("checkMessageSend");
-				const Arr<const Expr> args = mapZip<const Expr>{}(
-					ctx->arena(),
-					ast.args,
-					messageSig.params,
-					[&](const ExprAst argAst, const Param& param) {
-						return checkAndExpect(ctx, argAst, instantiateType(ctx->arena(), param.type, instIface));
-					});
-				const Type returnType = instantiateType(ctx->arena(), messageSig.returnType, instIface);
-				return check(
-					ctx,
-					expected,
-					returnType,
-					Expr{range, Expr::MessageSend{target, instIface, message->index, args}});
-			});
-	}
-
-	const CheckedExpr checkNewActor(ExprCtx* ctx, const SourceRange range, const NewActorAst ast, Expected* expected) {
-		const Opt<const Type> t = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
-		if (!has(t) || !force(t).isStructInst())
-			todo<void>("checkNewActor");
-		const StructInst* instIface = force(t).asStructInst();
-		const Arr<const Expr::NewIfaceImpl::Field> fields = mapWithIndex<const Expr::NewIfaceImpl::Field>{}(
-			ctx->arena(),
-			ast.fields,
-			[&](const NewActorAst::Field field, const size_t index) {
-				const ExprAndType et = checkAndInfer(ctx, *field.expr);
-				return Expr::NewIfaceImpl::Field{field.isMutable, field.name, ctx->alloc(et.expr), et.type, index};
-			});
-		const Arr<const Expr> messageImpls = mapZipPtrs<const Expr>{}(
-			ctx->arena(),
-			getMessages(instIface),
-			ast.messages,
-			[&](const Message* message, const NewActorAst::MessageImpl* impl) {
-				if (!symEq(message->sig.name, impl->name))
-					todo<void>("checkNewActor");
-				zip(message->sig.params, impl->paramNames, [&](const Param param, const NameAndRange paramName) {
-					if (!symEq(param.name, paramName.name))
-						todo<void>("checkNewActor -- param names don't match");
-				});
-				return withMessageImpl(
-					ctx,
-					NewAndMessageInfo{message->sig.params, fields, message},
-					[&](ExprCtx* newCtx) {
-						// message->sig.returnType is already wrapped in `fut`
-						return checkAndExpect(newCtx, impl->body, message->sig.returnType);
-					});
-			});
-		return check(ctx, expected, Type{instIface}, Expr{range, Expr::NewIfaceImpl{instIface, fields, messageImpls}});
-	}
-
 	const CheckedExpr checkSeq(ExprCtx* ctx, const SourceRange range, const SeqAst ast, Expected* expected) {
 		const Expr* first = ctx->alloc(checkAndExpect(ctx, ast.first, ctx->commonTypes->_void));
 		const Expr* then = ctx->alloc(checkExpr(ctx, ast.then, expected));
@@ -807,12 +695,6 @@ namespace {
 			[&](const MatchAst a) {
 				return checkMatch(ctx, range, a, expected);
 			},
-			[&](const MessageSendAst a) {
-				return checkMessageSend(ctx, range, a, expected);
-			},
-			[&](const NewActorAst a) {
-				return checkNewActor(ctx, range, a, expected);
-			},
 			[&](const SeqAst a) {
 				return checkSeq(ctx, range, a, expected);
 			},
@@ -833,7 +715,7 @@ const Expr* checkFunctionBody(
 	const FunDecl* fun,
 	const CommonTypes* commonTypes
 ) {
-	ExprCtx exprCtx {checkCtx, structsAndAliasesMap, funsMap, commonTypes, fun, none<const NewAndMessageInfo>()};
+	ExprCtx exprCtx {checkCtx, structsAndAliasesMap, funsMap, commonTypes, fun};
 	return exprCtx.alloc(checkAndExpect(&exprCtx, ast, fun->returnType()));
 }
 

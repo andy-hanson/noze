@@ -73,7 +73,7 @@ namespace {
 		}
 	}
 
-	const ExprAndMaybeDedent parseCallOrMessage(Lexer* lexer, const ExprAst target, const Bool allowBlock) {
+	const ExprAndMaybeDedent parseCall(Lexer* lexer, const ExprAst target, const Bool allowBlock) {
 		const Pos start = curPos(lexer);
 		if (tryTake(lexer, '.')) {
 			const Sym funName = takeName(lexer);
@@ -81,14 +81,12 @@ namespace {
 			const CallAst call = CallAst{funName, typeArgs, arrLiteral<const ExprAst>(lexer->arena, { target })};
 			return noDedent(ExprAst{range(lexer, start), ExprAstKind{call}});
 		} else {
-			const Bool isMessage = tryTake(lexer, '!');
 			const Sym funName = takeName(lexer);
 			const Bool colon = tryTake(lexer, ':');
-			const Arr<const TypeAst> typeArgs = isMessage ? emptyArr<const TypeAst>() : tryParseTypeArgs(lexer);
+			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
 			const ArgsAndMaybeDedent args = parseArgs(lexer, ArgCtx{allowBlock, /*allowcall*/ colon});
-			const ExprAstKind exprKind = isMessage
-				? ExprAstKind{MessageSendAst{alloc(lexer, target), funName, args.args}}
-				: ExprAstKind{CallAst{funName, typeArgs, prepend<const ExprAst>(lexer->arena, target, args.args)}};
+			const ExprAstKind exprKind = ExprAstKind{
+				CallAst{funName, typeArgs, prepend<const ExprAst>(lexer->arena, target, args.args)}};
 			return ExprAndMaybeDedent{ExprAst{range(lexer, start), exprKind}, args.dedent};
 		}
 	}
@@ -118,7 +116,7 @@ namespace {
 			return parseCallsAndRecordFieldSets(
 				lexer,
 				start,
-				parseCallOrMessage(lexer, ed.expr, allowBlock), allowBlock);
+				parseCall(lexer, ed.expr, allowBlock), allowBlock);
 		else
 			return ed;
 	}
@@ -162,12 +160,6 @@ namespace {
 				return False;
 			},
 			[](const MatchAst) {
-				return unreachable<const Bool>();
-			},
-			[&](const MessageSendAst e) {
-				return _or(recur(*e.target), exists(e.args, recur));
-			},
-			[](const NewActorAst) {
 				return unreachable<const Bool>();
 			},
 			[](const SeqAst) {
@@ -263,64 +255,6 @@ namespace {
 		return parseWhenLoop(lexer, start);
 	}
 
-	const ExprAndMaybeDedent parseActor(Lexer* lexer, const Pos start) {
-		const Arr<const NewActorAst::Field> fields = [&]() {
-			take(lexer, '(');
-			if (tryTake(lexer, ')'))
-				return emptyArr<const NewActorAst::Field>();
-			else {
-				ArrBuilder<const NewActorAst::Field> res {};
-				do {
-					const Bool isMutable = tryTake(lexer, "mut ");
-					const Sym name = takeName(lexer);
-					if (!tryTake(lexer, " = "))
-						todo<void>("parseNew");
-					const ExprAst init = parseExprNoBlock(lexer);
-					add<const NewActorAst::Field>(
-						lexer->arena,
-						&res,
-						NewActorAst::Field{isMutable, name, alloc(lexer, init)});
-				} while (tryTake(lexer, ", "));
-				take(lexer, ')');
-				return finishArr(&res);
-			}
-		}();
-
-		takeIndent(lexer);
-		ArrBuilder<const NewActorAst::MessageImpl> messages {};
-		const size_t extraDedents = [&]() {
-			for (;;) {
-				const Sym messageName = takeName(lexer);
-				take(lexer, '(');
-				const Arr<const NameAndRange> paramNames = [&]() {
-					if (tryTake(lexer, ')'))
-						return emptyArr<const NameAndRange>();
-					else {
-						ArrBuilder<const NameAndRange> res {};
-						add<const NameAndRange>(lexer->arena, &res, takeNameAndRange(lexer));
-						while (tryTake(lexer, ", "))
-							add<const NameAndRange>(lexer->arena, &res, takeNameAndRange(lexer));
-						take(lexer, ')');
-						return finishArr(&res);
-					}
-				}();
-				takeIndent(lexer);
-				const ExprAndDedent bodyAndDedent = parseStatementsAndDedent(lexer);
-				add<const NewActorAst::MessageImpl>(
-					lexer->arena,
-					&messages,
-					NewActorAst::MessageImpl{messageName, paramNames, alloc(lexer, bodyAndDedent.expr)});
-				if (bodyAndDedent.dedents != 0)
-					return bodyAndDedent.dedents - 1;
-			}
-		}();
-
-		const NewActorAst newActor = NewActorAst{fields, finishArr(&messages)};
-		return ExprAndMaybeDedent{
-			ExprAst{range(lexer, start), ExprAstKind{newActor}},
-			some<const size_t>(extraDedents)};
-	}
-
 	const ExprAndMaybeDedent parseLambda(Lexer* lexer, const Pos start) {
 		ArrBuilder<const LambdaAst::Param> parameters {};
 		Cell<const Bool> isFirst { True };
@@ -403,9 +337,6 @@ namespace {
 					return noDedent(tryParseDots(lexer, expr));
 				}
 			}
-			case Kind::newActor:
-				checkBlockAllowed();
-				return parseActor(lexer, start);
 			case Kind::_new:
 			case Kind::newArr:{
 				const Opt<const TypeAst> type = tryParseTypeArg(lexer);

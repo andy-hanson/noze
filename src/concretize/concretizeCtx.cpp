@@ -191,25 +191,7 @@ namespace {
 					/*isSelfMutable*/ False,
 					/*defaultIsPointer*/ False
 				};
-			},
-			[&](const StructBody::Iface i) {
-				const Arr<const ConcreteSig> messages = map<const ConcreteSig>{}(
-					ctx->arena,
-					i.messages,
-					[&](const Message msg) {
-						return ConcreteSig{
-							mangleName(ctx->arena, msg.sig.name),
-							getConcreteType(ctx, msg.sig.returnType, typeArgsScope),
-							concretizeParamsNoSpecialize(ctx, msg.sig.params, typeArgsScope)};
-					});
-				return ConcreteStructInfo{
-					ConcreteStructBody{ConcreteStructBody::Iface{messages}},
-					sizeof(void*) * 2,
-					/*isSelfMutable*/ False,
-					/*defaultIsPoiner*/ False
-				};
 			});
-
 		lateSetOverwrite<const ConcreteStructInfo>(&res->_info, info);
 	}
 

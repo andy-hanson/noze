@@ -103,7 +103,7 @@ struct ConcreteFunSource {
 	// Note: this does not include the closure parameter (which is always specialized anyway)
 	const Arr<const ConstantOrLambdaOrVariable> paramsSpecialize;
 	// Similarly, body of the current fun, not the outer one.
-	// For a lambda or iface this is always an Expr.
+	// For a lambda this is always an Expr.
 	const FunBody body;
 	const Opt<const KnownLambdaBody*> knownLambdaBody;
 

@@ -84,19 +84,6 @@ const StructBody instantiateStructBody(Arena* arena, const StructDecl* decl, con
 				return instantiateStructInst(arena, i, typeParamsAndArgs);
 			});
 			return StructBody{StructBody::Union{members}};
-		},
-		[&](const StructBody::Iface i) {
-			const Arr<const Message> messages = map<const Message>{}(arena, i.messages, [&](const Message m) {
-				const Arr<const Param> params = map<const Param>{}(arena, m.sig.params, [&](const Param p) {
-					return Param{p.range, p.name, instantiateType(arena, p.type, typeParamsAndArgs), p.index};
-				});
-				const Sig sig = Sig{
-					m.sig.range,
-					m.sig.name,
-					instantiateType(arena, m.sig.returnType, typeParamsAndArgs), params};
-				return Message{sig, m.index};
-			});
-			return StructBody{StructBody::Iface{messages}};
 		});
 }
 
@@ -110,14 +97,14 @@ const StructInst* instantiateStruct(
 		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
 			return si;
 
-	const Purity purity = [&]() {
-		Purity pur = decl->purity;
-		for (const Type typeArg : typeArgs)
-			pur = worsePurity(pur, typeArg.purity());
-		return pur;
-	}();
+	const Purity bestCasePurity = fold(decl->purity, typeArgs, [&](const Purity pur, const Type typeArg) {
+		return worsePurity(pur, typeArg.bestCasePurity());
+	});
+	const Purity worstCasePurity = fold(decl->purity, typeArgs, [&](const Purity pur, const Type typeArg) {
+		return worsePurity(pur, typeArg.worstCasePurity());
+	});
 
-	StructInst* res = nu<StructInst>{}(arena, decl, typeArgs, purity);
+	StructInst* res = nu<StructInst>{}(arena, decl, typeArgs, bestCasePurity, worstCasePurity);
 	push<const StructInst*>(arena, &decl->insts, res);
 
 	if (decl->bodyIsSet())
@@ -146,10 +133,17 @@ const SpecInst* instantiateSpec(Arena* arena, const SpecDecl* decl, const Arr<co
 		if (eachCorresponds(si->typeArgs, typeArgs, typeEquals))
 			return si;
 
-	const Arr<const Sig> sigs = map<const Sig>{}(arena, decl->sigs, [&](const Sig sig) {
-		return instantiateSig(arena, sig, TypeParamsAndArgs{decl->typeParams, typeArgs});
-	});
-	const SpecInst* res = nu<const SpecInst>{}(arena, decl, typeArgs, sigs);
+	const SpecBody body = decl->body.match(
+		[](const SpecBody::Builtin b) {
+			return SpecBody{SpecBody::Builtin{b.kind}};
+		},
+		[&](const Arr<const Sig> sigs) {
+			return SpecBody{map<const Sig>{}(arena, sigs, [&](const Sig sig) {
+				return instantiateSig(arena, sig, TypeParamsAndArgs{decl->typeParams, typeArgs});
+			})};
+		});
+
+	const SpecInst* res = nu<const SpecInst>{}(arena, decl, typeArgs, body);
 	push<const SpecInst*>(arena, &decl->insts, res);
 	return res;
 }

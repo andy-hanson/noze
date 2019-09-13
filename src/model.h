@@ -53,6 +53,10 @@ enum class Purity {
 	mut,
 };
 
+inline const Bool isDataOrSendable(const Purity p) {
+	return _not(enumEq(p, Purity::mut));
+}
+
 inline const Bool isPurityWorse(const Purity a, const Purity b) {
 	return gt(static_cast<size_t>(a), static_cast<size_t>(b));
 }
@@ -130,7 +134,8 @@ public:
 
 	const Bool containsUnresolvedTypeParams() const;
 	const Bool typeEquals(const Type other) const;
-	Purity purity() const;
+	Purity bestCasePurity() const;
+	Purity worstCasePurity() const;
 };
 
 //TODO:MOVE?
@@ -201,9 +206,6 @@ struct StructBody {
 	struct Union {
 		const Arr<const StructInst*> members;
 	};
-	struct Iface {
-		const Arr<const Message> messages;
-	};
 
 private:
 	enum class Kind {
@@ -211,7 +213,6 @@ private:
 		builtin,
 		record,
 		_union,
-		iface,
 	};
 	const Kind kind;
 	union {
@@ -219,7 +220,6 @@ private:
 		const Builtin builtin;
 		const Record record;
 		const Union _union;
-		const Iface iface;
 	};
 
 public:
@@ -231,8 +231,6 @@ public:
 		: kind{Kind::record}, record{_record} {}
 	explicit inline StructBody(const Union __union)
 		: kind{Kind::_union}, _union{__union} {}
-	explicit inline StructBody(const Iface _iface)
-		: kind{Kind::iface}, iface{_iface} {}
 
 	inline const Bool isBogus() const {
 		return enumEq(kind, Kind::bogus);
@@ -254,27 +252,18 @@ public:
 		assert(isUnion());
 		return _union;
 	}
-	inline const Bool isIface() const {
-		return enumEq(kind, Kind::iface);
-	}
-	inline const Iface asIface() const {
-		assert(isIface());
-		return iface;
-	}
 
 	template <
 		typename CbBogus,
 		typename CbBuiltin,
 		typename CbRecord,
-		typename CbUnion,
-		typename CbIface
+		typename CbUnion
 	>
 	inline auto match(
 		CbBogus cbBogus,
 		CbBuiltin cbBuiltin,
 		CbRecord cbRecord,
-		CbUnion cbUnion,
-		CbIface cbIface
+		CbUnion cbUnion
 	) const {
 		switch (kind) {
 			case Kind::bogus:
@@ -285,8 +274,6 @@ public:
 				return cbRecord(record);
 			case Kind::_union:
 				return cbUnion(_union);
-			case Kind::iface:
-				return cbIface(iface);
 			default:
 				assert(0);
 		}
@@ -337,8 +324,6 @@ public:
 		return lateGet(&_body);
 	}
 	inline void setBody(StructBody value) {
-		if (value.isIface())
-			assert(purity == Purity::sendable);
 		lateSet<const StructBody>(&_body, value);
 	}
 
@@ -361,7 +346,8 @@ public:
 struct StructInst {
 	const StructDecl* decl;
 	const Arr<const Type> typeArgs;
-	const Purity purity;
+	const Purity bestCasePurity;
+	const Purity worstCasePurity;
 private:
 	// Like decl->body, but has type args filled in.
 	Late<StructBody> _body;
@@ -369,8 +355,9 @@ public:
 	inline StructInst(
 		const StructDecl* d,
 		const Arr<const Type> t,
-		const Purity p
-	) : decl{d}, typeArgs{t}, purity{p}, _body{} {
+		const Purity bp,
+		const Purity wp
+	) : decl{d}, typeArgs{t}, bestCasePurity{bp}, worstCasePurity{wp}, _body{} {
 		assert(sizeEq(d->typeParams, t));
 	}
 	inline StructBody body() const {
@@ -383,12 +370,57 @@ public:
 
 struct SpecInst;
 
+struct SpecBody {
+	struct Builtin {
+		enum class Kind {
+			data,
+			send,
+		};
+		const Kind kind;
+	};
+private:
+	enum class Kind {
+		builtin,
+		sigs,
+	};
+	const Kind kind;
+	union {
+		const Builtin builtin;
+		const Arr<const Sig> sigs;
+	};
+public:
+	explicit inline SpecBody(const Builtin _builtin) : kind{Kind::builtin}, builtin{_builtin} {}
+	explicit inline SpecBody(const Arr<const Sig> _sigs) : kind{Kind::sigs}, sigs{_sigs} {}
+
+	template <typename CbBuiltin, typename CbSigs>
+	inline auto match(CbBuiltin cbBuiltin, CbSigs cbSigs) const {
+		switch (kind) {
+			case Kind::builtin:
+				return cbBuiltin(builtin);
+			case Kind::sigs:
+				return cbSigs(sigs);
+			default:
+				assert(0);
+		}
+	}
+
+	inline size_t nSigs() const {
+		return match(
+			[](const SpecBody::Builtin) {
+				return static_cast<size_t>(0);
+			},
+			[](const Arr<const Sig> sigs) {
+				return size(sigs);
+			});
+	}
+};
+
 struct SpecDecl {
 	const SourceRange range;
 	const Bool isPublic;
 	const Sym name;
 	const Arr<const TypeParam> typeParams;
-	const Arr<const Sig> sigs;
+	const SpecBody body;
 	mutable MutArr<const SpecInst*> insts {};
 };
 
@@ -397,7 +429,7 @@ struct SpecInst {
 	const SpecDecl* decl;
 	const Arr<const Type> typeArgs;
 	// Instantiated signatures
-	const Arr<const Sig> sigs;
+	const SpecBody body;
 
 	inline const Sym name() const {
 		return decl->name;
@@ -521,7 +553,7 @@ struct FunDecl {
 	inline size_t nSpecImpls() const {
 		size_t n = 0;
 		for (const SpecInst* s : specs)
-			n += size(s->sigs);
+			n += s->body.nSigs();
 		return n;
 	}
 
@@ -954,46 +986,6 @@ struct Expr {
 		const Type type;
 	};
 
-	struct MessageSend {
-		const Expr* target;
-		const StructInst* iface;
-		const size_t messageIndex;
-		const Arr<const Expr> args;
-
-		inline const Type getType() const {
-			return at(iface->body().asIface().messages, messageIndex).sig.returnType;
-		}
-	};
-
-	struct NewIfaceImpl {
-		struct Field {
-			const Bool isMutable;
-			const Sym name;
-			const Expr* expr;
-			const Type type;
-			const size_t index;
-		};
-
-		const StructInst* iface;
-		const Arr<const Field> fields;
-		// Corresponds to each message of the iface
-		const Arr<const Expr> messageImpls; // parmams are on the iface
-
-		inline NewIfaceImpl(
-			const StructInst* _iface, const Arr<const Field> _fields, const Arr<const Expr> _messageImpls)
-			: iface{_iface}, fields{_fields}, messageImpls{_messageImpls} {
-			assert(sizeEq(messageImpls, ifaceBody().messages));
-		}
-
-		inline StructBody::Iface ifaceBody() const {
-			return iface->body().asIface();
-		}
-	};
-
-	struct IfaceImplFieldRef {
-		const NewIfaceImpl::Field* field;
-	};
-
 	struct ParamRef {
 		const Param* param;
 	};
@@ -1047,14 +1039,11 @@ private:
 		createArr,
 		createRecord,
 		funAsLambda,
-		ifaceImplFieldRef,
 		implicitConvertToUnion,
 		lambda,
 		let,
 		localRef,
 		match,
-		messageSend,
-		newIfaceImpl,
 		paramRef,
 		recordFieldAccess,
 		recordFieldSet,
@@ -1071,14 +1060,11 @@ private:
 		const CreateArr createArr;
 		const CreateRecord createRecord;
 		const FunAsLambda funAsLambda;
-		const IfaceImplFieldRef ifaceImplFieldRef;
 		const ImplicitConvertToUnion implicitConvertToUnion;
 		const Lambda lambda;
 		const Let let;
 		const LocalRef localRef;
 		const Match _match;
-		const MessageSend messageSend;
-		const NewIfaceImpl newIfaceImpl;
 		const ParamRef paramRef;
 		const RecordFieldAccess recordFieldAccess;
 		const RecordFieldSet recordFieldSet;
@@ -1104,8 +1090,6 @@ public:
 		: _range{range}, kind{Kind::createRecord}, createRecord{_createRecord} {}
 	inline Expr(const SourceRange range, const FunAsLambda _funAsLambda)
 		: _range{range}, kind{Kind::funAsLambda}, funAsLambda{_funAsLambda} {}
-	inline Expr(const SourceRange range, const IfaceImplFieldRef _ifaceImplFieldRef)
-		: _range{range}, kind{Kind::ifaceImplFieldRef}, ifaceImplFieldRef{_ifaceImplFieldRef} {}
 	inline Expr(const SourceRange range, const ImplicitConvertToUnion _implicitConvertToUnion)
 		: _range{range}, kind{Kind::implicitConvertToUnion}, implicitConvertToUnion{_implicitConvertToUnion} {}
 	inline Expr(const SourceRange range, const Lambda _lambda)
@@ -1116,10 +1100,6 @@ public:
 		: _range{range}, kind{Kind::localRef}, localRef{_localRef} {}
 	inline Expr(const SourceRange range, const Match match)
 		: _range{range}, kind{Kind::match}, _match{match} {}
-	inline Expr(const SourceRange range, const MessageSend _messageSend)
-		: _range{range}, kind{Kind::messageSend}, messageSend{_messageSend} {}
-	inline Expr(const SourceRange range, const NewIfaceImpl _newIfaceImpl)
-		: _range{range}, kind{Kind::newIfaceImpl}, newIfaceImpl{_newIfaceImpl} {}
 	inline Expr(const SourceRange range, const ParamRef _paramRef)
 		: _range{range}, kind{Kind::paramRef}, paramRef{_paramRef} {}
 	inline Expr(const SourceRange range, const RecordFieldAccess _recordFieldAccess)
@@ -1143,14 +1123,11 @@ public:
 		typename CbCreateArr,
 		typename CbCreateRecord,
 		typename CbFunAsLambda,
-		typename CbIfaceImplFieldRef,
 		typename CbImplicitConvertToUnion,
 		typename CbLambda,
 		typename CbLet,
 		typename CbLocalRef,
 		typename CbMatch,
-		typename CbMessageSend,
-		typename CbNewIfaceImpl,
 		typename CbParamRef,
 		typename CbRecordFieldAccess,
 		typename CbRecordFieldSet,
@@ -1165,14 +1142,11 @@ public:
 		CbCreateArr cbCreateArr,
 		CbCreateRecord cbCreateRecord,
 		CbFunAsLambda cbFunAsLambda,
-		CbIfaceImplFieldRef cbIfaceImplFieldRef,
 		CbImplicitConvertToUnion cbImplicitConvertToUnion,
 		CbLambda cbLambda,
 		CbLet cbLet,
 		CbLocalRef cbLocalRef,
 		CbMatch cbMatch,
-		CbMessageSend cbMessageSend,
-		CbNewIfaceImpl cbNewIfaceImpl,
 		CbParamRef cbParamRef,
 		CbRecordFieldAccess cbRecordFieldAccess,
 		CbRecordFieldSet cbRecordFieldSet,
@@ -1194,8 +1168,6 @@ public:
 				return cbCreateRecord(createRecord);
 			case Kind::funAsLambda:
 				return cbFunAsLambda(funAsLambda);
-			case Kind::ifaceImplFieldRef:
-				return cbIfaceImplFieldRef(ifaceImplFieldRef);
 			case Kind::implicitConvertToUnion:
 				return cbImplicitConvertToUnion(implicitConvertToUnion);
 			case Kind::lambda:
@@ -1206,10 +1178,6 @@ public:
 				return cbLocalRef(localRef);
 			case Kind::match:
 				return cbMatch(_match);
-			case Kind::messageSend:
-				return cbMessageSend(messageSend);
-			case Kind::newIfaceImpl:
-				return cbNewIfaceImpl(newIfaceImpl);
 			case Kind::paramRef:
 				return cbParamRef(paramRef);
 			case Kind::recordFieldAccess:

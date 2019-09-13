@@ -64,6 +64,8 @@ contexts:
     - match: spec
       scope: comment
       push: spec
+    - match: builtin-spec
+      scope: comment
     - match: union
       scope: comment
       push: union

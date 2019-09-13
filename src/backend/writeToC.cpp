@@ -51,13 +51,6 @@ namespace {
 		writeChar(writer, ')');
 	}
 
-	void writeJustParamsAlwaysComma(Writer* writer, const Arr<const ConcreteParam> params) {
-		for (const ConcreteParam p : params) {
-			writeStatic(writer, ", ");
-			doWriteParam(writer, p);
-		}
-	}
-
 	void writeBuiltinAliasForStruct(
 		Writer* writer,
 		const Str name,
@@ -172,49 +165,6 @@ namespace {
 		writeStructEnd(writer);
 	}
 
-	void writeIfaceStruct(Writer* writer, const Str mangledName, const Arr<const ConcreteSig> messages) {
-		writeStructHead(writer, mangledName);
-
-		// Create a vtable struct containing its fields.
-		// And add funs to call those.
-		writeStatic(writer, "\n\tstruct Funs {");
-		for (const ConcreteSig msg : messages) {
-			writeStatic(writer, "\n\t\t");
-			writeType(writer, msg.returnType);
-			writeStatic(writer, " (*)(ctx* ctx, void* closure");
-			writeJustParamsAlwaysComma(writer, msg.params);
-			writeChar(writer, ' ');
-			writeStr(writer, msg.mangledName);
-			writeChar(writer, ';');
-		}
-		todo<void>("do without mixins");
-
-		// For convenience, write a method for calling each of the funs.
-		// E.g.:
-		// fut<_void>* doSomething(ctx* ctx, bool param0) {
-		//	return vtable.funs.push(ctx, data, param0);
-		// }
-
-		for (const ConcreteSig msg : messages) {
-			writeStatic(writer, "\n\t");
-			writeType(writer, msg.returnType);
-			writeChar(writer, ' ');
-			writeStr(writer, msg.mangledName);
-			writeStatic(writer, "ctx* ctx");
-			writeJustParamsAlwaysComma(writer, msg.params);
-			writeStatic(writer, " {\n\t\treturn vtable->funs.");
-			writeStr(writer, msg.mangledName);
-			writeStatic(writer, "(ctx, data");
-			for (const ConcreteParam p : msg.params) {
-				writeStatic(writer, ", ");
-				writeStr(writer, p.mangledName);
-			}
-			writeStatic(writer, ");\n\t}");
-		}
-
-		writeStructEnd(writer);
-	}
-
 	enum class StructState {
 		declared,
 		defined
@@ -235,14 +185,6 @@ namespace {
 			}
 		else
 			return False;
-	}
-
-	const Bool sigCanReferenceTypes(const ConcreteSig s, const StructStates* structStates) {
-		return _and(
-			canReferenceType(s.returnType, structStates),
-			every(s.params, [&](const ConcreteParam p) {
-				return canReferenceType(p.type, structStates);
-			}));
 	}
 
 	void declareStruct(Writer* writer, const ConcreteStruct* strukt) {
@@ -288,14 +230,6 @@ namespace {
 				if (every(u.members, [&](const ConcreteType t) { return canReferenceType(t, structStates); })) {
 					declare();
 					writeUnionStruct(writer, strukt->mangledName, u.members);
-					return defined;
-				} else
-					return declare();
-			},
-			[&](const ConcreteStructBody::Iface i) {
-				if (every(i.messages, [&](const ConcreteSig s) { return sigCanReferenceTypes(s, structStates); })) {
-					declare();
-					writeIfaceStruct(writer, strukt->mangledName, i.messages);
 					return defined;
 				} else
 					return declare();
@@ -574,12 +508,6 @@ namespace {
 		// So we'll just make sure to write a constant's dependencies immediately before writing it.
 		WrittenConstants written {};
 		ensureWrittenConstantDecls(writer, &written, allConstants);
-	}
-
-	void writeNewIfaceImpl(Writer* writer, const ConcreteExpr::NewIfaceImpl impl) {
-		unused(writer);
-		unused(impl);
-		todo<void>("writeNewIfaceImpl");
 	}
 
 	void writeConcreteExpr(WriterWithIndent* writer, const ConcreteExpr ex);
@@ -915,12 +843,6 @@ namespace {
 			call();
 	}
 
-	void writeNewIfaceImpl(WriterWithIndent* writer, const ConcreteExpr::NewIfaceImpl e) {
-		unused(writer);
-		unused(e);
-		todo<void>("writenewifaceimpl");
-	}
-
 	//TODO:MOVE?
 	const ConcreteType getMemberType(const ConcreteExpr ce, const ConcreteExpr::ImplicitConvertToUnion e) {
 		return at(ce.typeWithoutKnownLambdaBody().strukt->body().asUnion().members, e.memberIndex);
@@ -1018,15 +940,6 @@ namespace {
 			},
 			[&](const ConcreteExpr::Match e) {
 				writeMatch(writer, ce, e);
-			},
-			[&](const ConcreteExpr::MessageSend e) {
-				writeConstantOrExpr(writer, e.target);
-				writeStatic(writer, ".");
-				writeStr(writer, e.message->mangledName);
-				writeArgsWithCtx(writer, e.args);
-			},
-			[&](const ConcreteExpr::NewIfaceImpl e) {
-				writeNewIfaceImpl(writer, e);
 			},
 			[&](const ConcreteExpr::ParamRef e) {
 				writeStr(writer, e.param->mangledName);
@@ -1278,9 +1191,6 @@ const Str writeToC(Arena* arena, const ConcreteProgram program) {
 	writeStructs(&writer, program.allStructs);
 	writeConstants(&writer, program.allConstants);
 	writeInitAndFailFuns(&writer, program.allStructs);
-
-	for (const ConcreteExpr::NewIfaceImpl impl : program.allNewIfaceImpls)
-		writeNewIfaceImpl(&writer, impl);
 
 	for (const ConcreteFun* fun : program.allFuns)
 		writeConcreteFunDeclaration(&writer, fun);
