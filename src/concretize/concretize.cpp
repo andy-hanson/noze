@@ -40,10 +40,21 @@ namespace {
 			compareSym
 		>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
 		if (size(allocFuns) != 1)
-			todo<void>("wrong number allocate-bytes funs");
+			todo<void>("wrong number alloc funs");
 		const FunDecl* allocFun = only(allocFuns);
 		// TODO: check the signature!
 		return allocFun;
+	}
+
+	const Arr<const FunDecl*> getIfFuns(const Program program) {
+		const Arr<const FunDecl*> ifFuns = multiDictGetAt<
+			const Sym,
+			const FunDecl*,
+			compareSym
+		>(program.includeModule->funsMap, shortSymAlphaLiteral("if"));
+		if (size(ifFuns) != 2)
+			todo<void>("wrong number 'if' funs");
+		return ifFuns;
 	}
 
 	// Gets 'call' for 'fun'
@@ -66,7 +77,13 @@ namespace {
 }
 
 const ConcreteProgram concretize(Arena* arena, const Program program) {
-	ConcretizeCtx ctx { arena, getAllocFun(program), getCallFuns(arena, program), &program.commonTypes };
+	ConcretizeCtx ctx {
+		arena,
+		getAllocFun(program),
+		getIfFuns(program),
+		getCallFuns(arena, program),
+		&program.commonTypes
+	};
 	const ConcreteFun* mainConcreteFun = getOrAddNonTemplateConcreteFunAndFillBody(&ctx, getMainFun(program));
 	// We remove items from these dicts when we process them.
 	assert(mutDictIsEmpty(&ctx.concreteFunToSource));

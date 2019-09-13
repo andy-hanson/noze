@@ -312,15 +312,82 @@ namespace {
 		return check(ctx, expected, Type{type}, Expr{range, Expr::FunAsLambda{fun, type, et.isSendFun}});
 	}
 
+	const Opt<const Expr> getIdentifierInLambda(
+		const SourceRange range,
+		const Sym name,
+		LambdaInfo* lambda
+	) {
+		for (const Local* local : tempAsArr(&lambda->locals))
+			if (symEq(local->name, name))
+				return some<const Expr>(Expr{range, Expr::LocalRef{local}});
+		for (const Param* param : ptrsRange(lambda->lambdaParams))
+			if (symEq(param->name, name))
+				return some<const Expr>(Expr{range, Expr::ParamRef{param}});
+		// Check if we've already added something with this name to closureFields to avoid adding it twice.
+		for (const ClosureField* field : tempAsArr(&lambda->closureFields))
+			if (symEq(field->name, name))
+				return some<const Expr>(Expr{range, Expr::ClosureFieldRef{field}});
+		return none<const Expr>();
+	}
+
+	struct IdentifierAndLambdas {
+		const Expr expr;
+		// Lambdas outside of this identifier. Se must note those as closures.
+		const Arr<LambdaInfo*> outerLambdas;
+	};
+
+	const Opt<const IdentifierAndLambdas> getIdentifierNonCall(
+		const ExprCtx* ctx,
+		const SourceRange range,
+		const Sym name
+	) {
+		// Innermost lambda first
+		for (const size_t i : RangeDown{mutArrSize(&ctx->lambdas)}) {
+			LambdaInfo* lambda = mutArrAt(&ctx->lambdas, i);
+			const Opt<const Expr> id = getIdentifierInLambda(range, name, lambda);
+			if (has(id))
+				return some<const IdentifierAndLambdas>(
+					IdentifierAndLambdas{force(id), slice(tempAsArr(&ctx->lambdas), i + 1)});
+		}
+
+		const Arr<LambdaInfo*> allLambdas = tempAsArr(&ctx->lambdas);
+
+		for (const Local* local : tempAsArr(&ctx->messageOrFunctionLocals))
+			if (symEq(local->name, name))
+				return some<const IdentifierAndLambdas>(
+					IdentifierAndLambdas{Expr{range, Expr::LocalRef{local}}, allLambdas});
+
+		if (has(ctx->newAndMessageInfo)) {
+			const NewAndMessageInfo nmi = force(ctx->newAndMessageInfo);
+			for (const Param* param : ptrsRange(nmi.instantiatedParams))
+				if (symEq(param->name, name))
+					return some<const IdentifierAndLambdas>(
+						IdentifierAndLambdas{Expr{range, Expr::ParamRef{param}}, allLambdas});
+			for (const Expr::NewIfaceImpl::Field* field : ptrsRange(nmi.fields))
+				if (symEq(field->name, name))
+					return some<const IdentifierAndLambdas>(
+						IdentifierAndLambdas{Expr{range, Expr::IfaceImplFieldRef{field}}, allLambdas});
+		} else
+			for (const Param* param : ptrsRange(ctx->outermostFun->params()))
+				if (symEq(param->name, name))
+					return some<const IdentifierAndLambdas>(
+						IdentifierAndLambdas{Expr{range, Expr::ParamRef{param}}, allLambdas});
+
+		return none<const IdentifierAndLambdas>();
+	}
+
+	const Bool nameIsParameterOrLocalInScope(const ExprCtx* ctx, const Sym name) {
+		return has(getIdentifierNonCall(ctx, SourceRange::empty(), name));
+	}
+
 	const CheckedExpr checkRef(
 		ExprCtx* ctx,
 		const Expr expr,
-		const SourceRange range,
 		const Sym name,
-		const Type type,
 		const Arr<LambdaInfo*> passedLambdas,
 		Expected* expected
 	) {
+		const Type type = expr.getType(ctx->arena(), ctx->commonTypes);
 		if (isEmpty(passedLambdas))
 			return check(ctx, expected, type, expr);
 		else {
@@ -341,42 +408,11 @@ namespace {
 			push<const ClosureField*>(ctx->arena(), &l0->closureFields, field);
 			return checkRef(
 				ctx,
-				Expr{range, Expr::ClosureFieldRef{field}},
-				range,
+				Expr{expr.range(), Expr::ClosureFieldRef{field}},
 				name,
-				type,
 				tail(passedLambdas),
 				expected);
 		}
-	}
-
-	const Bool nameIsParameterOrLocalInScope(const ExprCtx* ctx, const Sym name) {
-		for (const LambdaInfo* lambda : tempAsArr(&ctx->lambdas)) {
-			for (const Local* local : tempAsArr(&lambda->locals))
-				if (symEq(local->name, name))
-					return True;
-			for (const Param* param : ptrsRange(lambda->lambdaParams))
-				if (symEq(param->name, name))
-					return True;
-		}
-		for (const Local* local : tempAsArr(&ctx->messageOrFunctionLocals))
-			if (symEq(local->name, name))
-				return True;
-
-		if (has(ctx->newAndMessageInfo)) {
-			const NewAndMessageInfo nmi = force(ctx->newAndMessageInfo);
-			for (const Param* param : ptrsRange(nmi.instantiatedParams))
-				if (symEq(param->name, name))
-					return True;
-			for (const Expr::NewIfaceImpl::Field* field : ptrsRange(nmi.fields))
-				if (symEq(field->name, name))
-					return True;
-		} else
-			for (const Param* param : ptrsRange(ctx->outermostFun->params()))
-				if (symEq(param->name, name))
-					return True;
-
-		return False;
 	}
 
 	const CheckedExpr checkIdentifier(
@@ -386,80 +422,16 @@ namespace {
 		Expected* expected
 	) {
 		const Sym name = ast.name;
-
-		if (!mutArrIsEmpty(&ctx->lambdas)) {
-			// Innermost lambda first
-			for (const size_t i : RangeDown{mutArrSize(&ctx->lambdas)}) {
-				LambdaInfo* lambda = mutArrAt(&ctx->lambdas, i);
-				// Lambdas we skipped past that need closures
-				const Arr<LambdaInfo*> passedLambdas = slice(tempAsArr(&ctx->lambdas), i + 1);
-
-				for (const Local* local : tempAsArr(&lambda->locals))
-					if (symEq(local->name, name))
-						return checkRef(
-							ctx,
-							Expr{range, Expr::LocalRef{local}},
-							range,
-							name,
-							local->type,
-							passedLambdas,
-							expected);
-
-				for (const Param* param : ptrsRange(lambda->lambdaParams))
-					if (symEq(param->name, name))
-						return checkRef(
-							ctx,
-							Expr{range, Expr::ParamRef{param}},
-							range,
-							name,
-							param->type,
-							passedLambdas,
-							expected);
-
-				// Check if we've already added something with this name to closureFields to avoid adding it twice.
-				for (const ClosureField* field : tempAsArr(&lambda->closureFields))
-					if (symEq(field->name, name))
-						return checkRef(
-							ctx,
-							Expr{range, Expr::ClosureFieldRef{field}},
-							range,
-							name,
-							field->type,
-							passedLambdas,
-							expected);
-			}
-		}
-
-		const Arr<LambdaInfo*> allLambdas = tempAsArr(&ctx->lambdas);
-
-		for (const Local* local : tempAsArr(&ctx->messageOrFunctionLocals))
-			if (symEq(local->name, name))
-				return checkRef(
-					ctx, Expr{range, Expr::LocalRef{local}}, range, name, local->type, allLambdas, expected);
-
-		if (has(ctx->newAndMessageInfo)) {
-			const NewAndMessageInfo nmi = force(ctx->newAndMessageInfo);
-			for (const Param* param : ptrsRange(nmi.instantiatedParams))
-				if (symEq(param->name, name))
-					return checkRef(
-						ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
-			for (const Expr::NewIfaceImpl::Field* field : ptrsRange(nmi.fields))
-				if (symEq(field->name, name))
-					return checkRef(
-						ctx,
-						Expr{range, Expr::IfaceImplFieldRef{field}},
-						range,
-						name,
-						field->type,
-						allLambdas,
-						expected);
-		} else
-			for (const Param* param : ptrsRange(ctx->outermostFun->params()))
-				if (symEq(param->name, name))
-					return checkRef(
-						ctx, Expr{range, Expr::ParamRef{param}}, range, name, param->type, allLambdas, expected);
-
-		return checkIdentifierCall(ctx, range, name, expected);
+		const Opt<const IdentifierAndLambdas> opIdentifier = getIdentifierNonCall(ctx, range, name);
+		if (has(opIdentifier))
+			return checkRef(
+				ctx,
+				force(opIdentifier).expr,
+				name,
+				force(opIdentifier).outerLambdas,
+				expected);
+		else
+			return checkIdentifierCall(ctx, range, name, expected);
 	}
 
 	const CheckedExpr checkNoCallLiteral(ExprCtx* ctx, const SourceRange range, const Str literal, Expected* expected) {

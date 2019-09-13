@@ -134,6 +134,7 @@ struct LambdaInfo {
 struct ConcretizeCtx {
 	Arena* arena;
 	const FunDecl* allocFun;
+	const Arr<const FunDecl*> ifFuns;
 	const Arr<const FunDecl*> callFuns;
 	const CommonTypes* commonTypes;
 	AllConstants* allConstants;
@@ -157,11 +158,13 @@ struct ConcretizeCtx {
 	ConcretizeCtx(
 		Arena* _arena,
 		const FunDecl* _allocFun,
+		const Arr<const FunDecl*> _ifFuns,
 		const Arr<const FunDecl*> _callFuns,
 		const CommonTypes* _commonTypes
 	) :
 		arena{_arena},
 		allocFun{_allocFun},
+		ifFuns{_ifFuns},
 		callFuns{_callFuns},
 		commonTypes{_commonTypes},
 		allConstants{newAllConstants(arena)}

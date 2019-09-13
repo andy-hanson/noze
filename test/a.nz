@@ -48,9 +48,6 @@ add-first-task void(gctx global-ctx, vat vat)
 	vat add-task t
 
 
-
-
-
 test void() trusted summon
 	m = empty-mut-dict<nat, nat>
 	m add 1, 1

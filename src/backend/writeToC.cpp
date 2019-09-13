@@ -427,6 +427,7 @@ namespace {
 				writeConstantRecordName(writer, c, r.type);
 			},
 			[&](const ConstantKind::Union u) {
+				maybeWriteCast();
 				writeConstantUnionName(writer, c, u.unionType);
 			},
 			[&](const ConstantKind::Void) {
@@ -550,15 +551,15 @@ namespace {
 			[&](const ConstantKind::Union u) {
 				ensureWrittenConstantDecl(writer, written, u.member);
 
-				writeStatic(writer, "static ");
-				writeValueType(writer, u.unionType);
-				writeChar(writer, ' ');
+				writeStatic(writer, "#define ");
 				writeConstantUnionName(writer, c, u.unionType);
+				writeStatic(writer, " { ");
+				writeNat(writer, u.memberIndex);
+				writeStatic(writer, ", .as_");
+				writeStr(writer, u.member->type().strukt->mangledName);
 				writeStatic(writer, " = ");
-				writeValueType(writer, u.unionType);
-				writeChar(writer, '(');
 				writeConstantReference(writer, u.member, /*isInsideConstant*/ True);
-				writeStatic(writer, ");\n");
+				writeStatic(writer, " }\n");
 			},
 			[](const ConstantKind::Void) {});
 	}
@@ -738,6 +739,8 @@ namespace {
 
 			case BuiltinFunKind::_if:
 				writeStatic(writer, "(");
+				// If the condition is a constant, we should have only compiled 'then' or 'else'.
+				assert(first(e.args).isConcreteExpr());
 				writeArg(0);
 				writeStatic(writer, " ? ");
 				writeArg(1);
@@ -805,9 +808,7 @@ namespace {
 				break;
 
 			case BuiltinFunKind::unsafeNat64ToInt64:
-				todo<void>("unsafeNat64ToInt64");
-				break;
-
+			case BuiltinFunKind::unsafeNat64ToNat32:
 			case BuiltinFunKind::unsafeInt64ToNat64:
 				writeCastToType(writer->writer, e.returnType());
 				writeArg(0);

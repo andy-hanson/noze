@@ -85,61 +85,87 @@ namespace {
 	};
 
 	const ConstantOrExpr concretizeCall(ConcretizeExprCtx* ctx, const SourceRange range, const Expr::Call e) {
-		const Arr<const ConstantOrExpr> args = map<const ConstantOrExpr>{}(getArena(ctx), e.args, [&](const Expr arg) {
-			return concretizeExpr(ctx, arg);
-		});
-		const FunAndArgs funAndArgs = [&]() {
-			const ConcreteFunInst concreteCalled = getConcreteFunInstFromCalled(ctx, e.called);
-			const Opt<const KnownLambdaBody*> opKnownLambdaBody = isEmpty(args)
-				? none<const KnownLambdaBody*>()
-				: getKnownLambdaBodyFromConstantOrExpr(first(args));
+		const ConcreteFunInst concreteCalled = getConcreteFunInstFromCalled(ctx, e.called);
 
-			// TODO: also handle isCallFunPtr
-			if (isCallFun(ctx->concretizeCtx, concreteCalled.decl) && has(opKnownLambdaBody)) {
-				const KnownLambdaBody* klb = force(opKnownLambdaBody);
-				assert(isEmpty(concreteCalled.specImpls));
-				const Arr<const ConstantOrExpr> itsArgs = tail(args);
-				const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(
-					ctx->concretizeCtx,
-					range,
-					concreteCalled.decl,
-					itsArgs);
-				const ConcreteFun* actualCalled = instantiateKnownLambdaBodyForDirectCall(
-					ctx->concretizeCtx,
-					klb,
-					itsSpecializeOnArgs.specializeOnArgs);
-				const Arr<const ConstantOrExpr> itsNonOmittedArgs = itsSpecializeOnArgs.nonOmittedArgs;
-				// If arg0 is a constant, completely omit it. Else pass it as the closure arg.
-				const Arr<const ConstantOrExpr> allArgs = klb->hasClosure()
-					? prepend<const ConstantOrExpr>(getArena(ctx), first(args), itsNonOmittedArgs)
-					: itsNonOmittedArgs;
-				return FunAndArgs{actualCalled, allArgs};
-			} else {
-				const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(
-					ctx->concretizeCtx,
-					range,
-					concreteCalled.decl,
-					args);
-				const ConcreteFun* fun = getConcreteFunForCallAndFillBody(
-					ctx->concretizeCtx,
-					concreteCalled,
-					specializeOnArgs.specializeOnArgs);
-				return FunAndArgs{fun, specializeOnArgs.nonOmittedArgs};
-			}
-		}();
+		const auto concretizeArg = [&](const size_t index) -> const ConstantOrExpr {
+			return concretizeExpr(ctx, at(e.args, index));
+		};
 
-		const ConcreteFunBody body = funAndArgs.fun->body();
-		// TODO: actually, if args have no *side effects* (and do not throw exceptions)
-		// is the only condition we need to make the whole thing a constant
-		if (body.isConstant() && allConstant(args))
-			return ConstantOrExpr{body.asConstant()};
-		else {
-			const ConcreteExpr::Call callFun = ConcreteExpr::Call{funAndArgs.fun, funAndArgs.nonOmittedArgs};
-			return nuExpr(
+		const Opt<const ConstantOrExpr> arg0 = isEmpty(e.args)
+			? none<const ConstantOrExpr>()
+			: some<const ConstantOrExpr>(concretizeArg(0));
+
+		if (contains<const FunDecl*, ptrEquals<const FunDecl>>(ctx->concretizeCtx->ifFuns, concreteCalled.decl)
+			&& force(arg0).isConstant()) {
+			const Bool condition = force(arg0).asConstant()->kind.asBool();
+			if (size(e.args) == 2)
+				return condition
+					? concretizeArg(1)
+					: ConstantOrExpr{constantVoid(getArena(ctx), ctx->allConstants(), ctx->concretizeCtx->voidType())};
+			else if (size(e.args) == 3)
+				return condition ? concretizeArg(1) : concretizeArg(2);
+			else
+				return unreachable<const ConstantOrExpr>();
+		} else {
+			const Arr<const ConstantOrExpr> args = fillArr<const ConstantOrExpr>{}(
 				getArena(ctx),
-				funAndArgs.fun->returnType(),
-				range,
-				knownLambdaBodyFromConcreteFunBody(body), callFun);
+				size(e.args),
+				[&](const size_t i) {
+					return i == 0 ? force(arg0) : concretizeArg(i);
+				});
+
+			const FunAndArgs funAndArgs = [&]() {
+				const Opt<const KnownLambdaBody*> opKnownLambdaBody = isEmpty(args)
+					? none<const KnownLambdaBody*>()
+					: getKnownLambdaBodyFromConstantOrExpr(first(args));
+
+				// TODO: also handle isCallFunPtr
+				if (isCallFun(ctx->concretizeCtx, concreteCalled.decl) && has(opKnownLambdaBody)) {
+					const KnownLambdaBody* klb = force(opKnownLambdaBody);
+					assert(isEmpty(concreteCalled.specImpls));
+					const Arr<const ConstantOrExpr> itsArgs = tail(args);
+					const SpecializeOnArgs itsSpecializeOnArgs = getSpecializeOnArgsForFun(
+						ctx->concretizeCtx,
+						range,
+						concreteCalled.decl,
+						itsArgs);
+					const ConcreteFun* actualCalled = instantiateKnownLambdaBodyForDirectCall(
+						ctx->concretizeCtx,
+						klb,
+						itsSpecializeOnArgs.specializeOnArgs);
+					const Arr<const ConstantOrExpr> itsNonOmittedArgs = itsSpecializeOnArgs.nonOmittedArgs;
+					// If arg0 is a constant, completely omit it. Else pass it as the closure arg.
+					const Arr<const ConstantOrExpr> allArgs = klb->hasClosure()
+						? prepend<const ConstantOrExpr>(getArena(ctx), first(args), itsNonOmittedArgs)
+						: itsNonOmittedArgs;
+					return FunAndArgs{actualCalled, allArgs};
+				} else {
+					const SpecializeOnArgs specializeOnArgs = getSpecializeOnArgsForFun(
+						ctx->concretizeCtx,
+						range,
+						concreteCalled.decl,
+						args);
+					const ConcreteFun* fun = getConcreteFunForCallAndFillBody(
+						ctx->concretizeCtx,
+						concreteCalled,
+						specializeOnArgs.specializeOnArgs);
+					return FunAndArgs{fun, specializeOnArgs.nonOmittedArgs};
+				}
+			}();
+
+			const ConcreteFunBody body = funAndArgs.fun->body();
+			// TODO: actually, if args have no *side effects* (and do not throw exceptions)
+			// is the only condition we need to make the whole thing a constant
+			if (body.isConstant() && allConstant(args))
+				return ConstantOrExpr{body.asConstant()};
+			else {
+				const ConcreteExpr::Call callFun = ConcreteExpr::Call{funAndArgs.fun, funAndArgs.nonOmittedArgs};
+				return nuExpr(
+					getArena(ctx),
+					funAndArgs.fun->returnType(),
+					range,
+					knownLambdaBodyFromConcreteFunBody(body), callFun);
+			}
 		}
 	}
 
@@ -404,7 +430,9 @@ namespace {
 			mangleName(getArena(ctx), name),
 			tempAsArr(&ctx->allLocalsInThisFun));
 		const ConcreteLocal* res = nu<const ConcreteLocal>{}(getArena(ctx), mangledName, type, clv);
-		push(getArena(ctx), &ctx->allLocalsInThisFun, res);
+		// If a constant, this won't be accessed through a local.
+		if (!clv.isConstant())
+			push(getArena(ctx), &ctx->allLocalsInThisFun, res);
 		return res;
 	}
 
@@ -739,11 +767,19 @@ namespace {
 				return todo<const ConstantOrExpr>("newfieldref");
 			},
 			[&](const Expr::ImplicitConvertToUnion e) {
+				const ConstantOrExpr inner = concretizeExpr(ctx, *e.inner);
 				const ConcreteType unionType = ctx->getConcreteType_forStructInst(e.unionType);
-				//const ConcreteType memberType = ctx->getConcreteType_forStructInst(e.memberType);
-				return nuExpr(arena, unionType, range, ConcreteExpr::ImplicitConvertToUnion{
-					e.memberIndex,
-					makeLambdasDynamic(ctx->concretizeCtx, range, concretizeExpr(ctx, *e.inner))});
+				if (inner.isConstant())
+					return ConstantOrExpr{constantUnion(
+						getArena(ctx),
+						ctx->allConstants(),
+						unionType,
+						e.memberIndex,
+						inner.asConstant())};
+				else
+					return nuExpr(arena, unionType, range, ConcreteExpr::ImplicitConvertToUnion{
+						e.memberIndex,
+						makeLambdasDynamic(ctx->concretizeCtx, range, inner)});
 			},
 			[&](const Expr::Lambda e) {
 				return concretizeLambda(ctx, range, e);

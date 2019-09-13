@@ -126,20 +126,31 @@ const SpecializeOnArgs getSpecializeOnArgsForLambdaCall(
 		: dontSpecialize(ctx, range, args);
 }
 
+namespace {
+	const Bool shouldSpecializeOnArgsForFun(
+		ConcretizeCtx* ctx,
+		const FunDecl* f
+	) {
+		// Don't specialize just because a single arg is a constant.
+		// If *every* arg is a constant, we always specialize on all args.
+		// Else, specialize if some arg has a known lambda body. (TODO: and that lambda is *only* called.)
+		return _not(_or3(
+			f->isExtern(),
+			isNonSpecializableBuiltin(f),
+			isCallFun(ctx, f)));
+	}
+}
+
 const SpecializeOnArgs getSpecializeOnArgsForFun(
 	ConcretizeCtx* ctx,
 	const SourceRange range,
 	const FunDecl* f,
 	const Arr<const ConstantOrExpr> args
 ) {
-	// Don't specialize just because a single arg is a constant.
-	// If *every* arg is a constant, we always specialize on all args.
-	// Else, specialize if some arg has a known lambda body. (TODO: and that lambda is *only* called.)
-
 	// Never specialize on 'call' -- though we do treat it specially in 'concretizeCall'
-	return f->isExtern() || isNonSpecializableBuiltin(f) || isCallFun(ctx, f)
-		? dontSpecialize(ctx, range, args)
-		: getSpecializeOnArgsForLambdaCall(ctx, range, args, f->isSummon());
+	return shouldSpecializeOnArgsForFun(ctx, f)
+		? getSpecializeOnArgsForLambdaCall(ctx, range, args, f->isSummon())
+		: dontSpecialize(ctx, range, args);
 }
 
 namespace {

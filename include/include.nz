@@ -80,6 +80,15 @@ comparison union
 	equal
 	greater
 
+to-str str(c comparison)
+	match c
+		less
+			"less"
+		equal
+			"equal"
+		greater
+			"greater"
+
 <=> comparison(a ?t, b ?t) noctx builtin
 
 == bool(a ?t, b ?t) noctx
@@ -551,18 +560,10 @@ drop void(t ?t) noctx
 	pass
 
 hard-assert void(condition bool) noctx unsafe
-	when
-		condition
-			pass
-		else
-			"Assertion failed!" hard-fail
+	condition if pass, "Assertion failed!".hard-fail
 
 assert void(condition bool)
-	when
-		condition
-			pass
-		else
-			"Assertion failed!" fail
+	condition if pass, "Assertion failed!".fail
 
 hard-forbid void(condition bool) noctx unsafe
 	condition.not hard-assert
