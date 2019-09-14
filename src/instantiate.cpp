@@ -116,6 +116,10 @@ const StructInst* instantiateStruct(
 	return res;
 }
 
+const StructInst* instantiateNonTemplateStruct(Arena* arena, const StructDecl* decl) {
+	return instantiateStruct(arena, decl, emptyArr<const Type>(), none<MutArr<StructInst*>*>());
+}
+
 const StructInst* instantiateStructInst(
 	Arena* arena,
 	const StructInst* structInst,

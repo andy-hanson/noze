@@ -47,6 +47,7 @@ ConcreteExpr::Cond::Cond(const ConcreteExpr* _cond, const ConstantOrExpr _then, 
 
 ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const ConstantOrExpr _closure)
 	: fun{_fun}, closure{_closure} {
+	// We will never create LambdaToDynamic for a fun-ptr, it's fine as it is with no need to convert.
 	assert(fun->hasClosure()); // All dynamic funs take a closure, even if it's just void*
 	const ConcreteType closureType = closure.typeWithoutKnownLambdaBody();
 	assert(sizeOrPointerSizeBytes(closureType) == sizeof(void*));

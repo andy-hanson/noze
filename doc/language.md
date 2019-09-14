@@ -6,12 +6,11 @@ A few interesting aspects of noze:
   It has no subtyping or casts and only a few kinds of implicit conversions, making it safe.
 * There normally is no global state. A normal function can access only its arguments.
   The exception is `summon` functions, which can only be called by other `summon` functions.
-  Similarly, a normal function can not perform I/O, except through an argument of interface types.
-  A normal function with no interface parameters performs no I/O,
-  and a normal function with no mutable parameters is a pure function.
-* It's designed for parallelism.
-  Interfaces always return `fut` (futures) allowing them to run in parallel,
-  and the type system tracks what data can safely be send to an interface.
+  Similarly, a normal function can not perform I/O, except by taking an I/O-performing function as a parameter.
+  A normal function with no function parameters performs no I/O,
+  and a normal function with no function parameters or mutable parameters is a pure function.
+* It's designed for parallelism. The type system tracks which types are `sendable`.
+  It has `fun-ref` for remote function invocation, which returns a `fut` allowing it to run in parallel.
 
 ## syntax
 
@@ -19,13 +18,12 @@ A noze file consists of many top-level declarations.
 There are no nested declarations.
 (Local variables may appear in nested expressions but those are not considered declarations for this purpose.)
 Each declaration is declared like `name type`, with an indented block following.
-The language is fairly strict with whitespace --
-an indentation must be exactly one tab, and leading / trailing spaces on a line are illegal.
-"Extra" whitespaces in random places are also illegal,
+The language is fairly strict with whitespace.
+Indentation must be one tab, two spaces, or four spaces; detected based on the first indented line.
+"Extra" whitespaces (such as before a comma or after the end of a line) are also illegal,
 as are missing whitespaces where they are normally expected, such as after a comma.
 It is also a syntax error to have multiple spaces in a row,
 or to fail to put spaces around an operator (which is parsed much like a regular name).
-
 
 Noze is an expression-based language -- it has only expressions and no concept of a statement.
 A function body is an expression and no `return` is necessary.
@@ -45,7 +43,6 @@ An operator name consists of a sequence the characters `+-*/<>=`.
 You can build any operator you want, e.g. `+/<`. Try not to abuse this!
 `=` is not an operator though, it is a keyword.
 But `==` is an operator, an ordinary name.
-There is no `!=` operator since `!` is used for other purposes (see the section on interfaces).
 
 Despite having an alpha / operator distinction, there *must* be spaces around operators.
 `a+b` is a syntax error, it must be `a + b`.
@@ -89,7 +86,7 @@ A line may not mix comment and non-comment content -- a comment must go on its o
 
 ## type
 
-There are only a few basic kinds of types -- [records](#record), [unions](#union), and [interfaces](#iface).
+There are only two basic kinds of types -- [records](#record) and [unions](#union).
 There are also type parameters, though those of course must resolve to one of the above eventually.
 See the section on [templates](#templates) for those.
 
@@ -156,7 +153,7 @@ shape union
 	square
 ```
 
-The members of a union can be records or interfaces, but not other unions.
+The members of a union should be records, not other unions.
 
 A member of the union implicitly converts to the union, and this is actually the only way to create a union value.
 Where there is no expected type, you can create it using the function `as` which is just the identify function:
@@ -191,67 +188,6 @@ then an indented block providing a result for that type.
 
 There are no enum types, but a union of empty records can be used instead.
 (This is why the match case's local variable name is optional -- it's useless for an empty type.)
-
-
-### iface
-
-WARNING: Interfaces are not finished yet (though they should get past the type-checker at least),
-this section is merely a plan.
-
-An interface type is declared like so:
-
-```nz
-printer iface
-	print void(s str)
-```
-
-An interface has a set of signatures which may be implemented by a new actor.
-
-```nz
-stdout-printer printer() summon
-	new-actor
-		print(s)
-			s print-sync
-```
-
-And called like:
-
-```nz
-call-it fut void(p printer)
-	p !print "hello"
-```
-
-The implementation of an interface will run in parallel,
-meaning the caller of the interface will keep running rather than wait for the implementation to run.
-All interface methods implicitly return a `fut` (a future) -- interfaces are never synchronous.
-
-Interfaces in noze are very different from those in Java -- interfaces are not implemented by types,
-they are implemented by `new-actor` expressions.
-There is no subtyping involved -- an interface is a concrete type.
-Interfaces cannot currently subtype each other.
-
-In the above example the `new-actor` doesn't use anything from the outer context.
-A `new-actor` can also close over outer variables, though unlike lambdas this must be explicit.
-
-```nz
-printer-to-mut-arr printer(m mut-arr char) summon
-	new-actor(mut m)
-		print(s)
-			m push-all s
-```
-
-This actor closes over `m`, which is a `mut-arr` and is not thread safe.
-So, it will be tagged with the same ID as the current actor (the one that called `printer-to-mut-arr`),
-so that it can't run in parallel with that.
-The actor may still run in parallel to its *caller* though.
-
-For interfaces with a single method, you might just use a `send-fun` type and implement it using a [lambda](#lambdas).
-
-Interfaces are also the normal way to perform I/O (without `summon`).
-Since I/O operations may take a long time, it's useful that interfaces always return `fut`.
-The exceptional functions that run synchronously usually have names that end in `sync` (and are usually `summon`).
-However, it's not considered unsafe behavior for a function to take a long time,
-since that's possible without performing any I/O at all -- to handle that interrupts should be added to the runtime.
 
 
 ### arr
@@ -320,19 +256,27 @@ but this is a common source of bugs and doesn't allow for number types bigger th
 
 #### lambdas
 
-Noze has two different kinds of dynamically-invokable function types:
+Noze has three different kinds of dynamically-invokable function types:
 
-* `fun`: This is a `mut` type for a function that will be synchronously invoked.
-  It's `mut` because the function might close over `mut` objects.
-  This is the more common kind of fun, used to e.g. map over an array.
-* `send-fun`: This is a `sendable` type that acts like an interface.
-  It may close over `mut` objects, but like with `new-actor`, it won't be run synchronously,
-  it will run in the appropriate context with exclusive access to any `mut` things it closes over.
+* `fun0`, `fun1`, etc...:
+  This is a function that will be synchronously invoked by the caller.
+  It is not sendable.
+  There is no truly-sendable function because that would require serializing code as data.)
+  A plain `fun` is not allowed to close over `mut` data. This means that it could be invoked in parallel.
+* `fun-mut0`, `fun-mut1`, etc...:
+  This is identical to `fun` except that it is allowed to close over `mut` data.
+* `fun-ref0`, `fun-ref1`, etc...:
+  This is a `sendable` type. It references the vat a fun is running in.
+  When you create a fun-ref, if it closes over mutable data,
+  it will be given the same execution ID as the enclosing scope which prevents it from running in parallel with it.
+  If you don't close over any mutable data, this can run in parallel with anything.
+  Since this runs asynchronously, it always returns a `fut`.
+  E.g. `fun-ref0 nat` should return a `fut nat`.
 
-The same syntactical kind of expression handles both depending on the expected type, and looks like this:
+The same syntactical kind of expression handles all function kinds depending on the expected type, and looks like this:
 
 ```nz
-n-times void(n nat, f fun1 void nat)
+n-times void(n nat, f fun-mut1 void nat)
 	f call n
 	n == 0 if: pass, n.decr n-times f
 
@@ -376,7 +320,8 @@ Parameters work the same way.
 ## function attributes
 
 A normal function has no attributes.
-It cannot perform I/O except through interfaces and cannot do dangerous things like pointer arithmetic.
+It cannot perform I/O except through passed in functions (usually `fun-ref`s)
+and cannot do dangerous things like pointer arithmetic.
 
 Function attributes share the same syntax as [specs](#specs) --
 they are written after the parentheses on a function declaration.
@@ -384,7 +329,7 @@ they are written after the parentheses on a function declaration.
 
 #### summon
 
-A `summon` function is allowed to perform I/O without being passed an interface --
+A `summon` function is allowed to perform I/O without needing the capability to be passed in --
 it "summon"s the ability to perform I/O out of thin air.
 
 ```nz
@@ -394,7 +339,8 @@ say-hi void() summon
 
 Only `summon` functions can call `summon` functions.
 (Meaning, `main` will have to be summon for your program to do anything.)
-However, a `summon` function can return an interface, and normal functions can perform I/O through that interface.
+However, a `summon` function can return a function (usually a `fun-ref`),
+and normal functions can perform I/O by calling that.
 
 
 #### unsafe / trusted
@@ -407,7 +353,7 @@ Any function can call a `trusted` function.
 A safe function should never be able to:
 * Access memory that was not passed in as a parameter (or reachable from there)
 * Mutate immutable values
-* Perform I/O without `summon` or an interface reachable from a parameter.
+* Perform I/O without `summon` or calling a function passed in.
   (`summon` functions may still be safe, with the one exception of being able to perform I/O.)
 * Fail with a hard assertion failure (catchable exceptions are OK)
 * Other bad stuff I haven't thought of yet
@@ -432,10 +378,9 @@ Normal functions have an implicit `ctx` parameter that lets them use the runtime
 
 * Allocate memory
 * Throw exceptions
-* Create new actors
 * Enqueue new tasks
 
-The vast majority of functions require a `ctx`, even `+` since that may throw an exception on overflow.
+The vast majority of functions require a `ctx`, even `+`, since that may throw an exception on overflow.
 `noctx` functions effectively have no runtime, making it possible to implement the runtime in noze itself.
 
 
@@ -460,9 +405,9 @@ Every type (except type parameters) has a purity. The three values of purity are
 The purity specifier goes after specifying the kind of type,
 e.g. `r record mut` or `u union sendable`.
 `data` is the default.
-You can't specify purity for an interfaces because those are all `sendable`.
 
 The constituents of a type must be at least as pure as that type. This applies transitively.
+The below is a compile error:
 
 ```nz
 i-am-mutable record mut
@@ -472,13 +417,13 @@ what-am-i record
 	m i-am-mutable
 ```
 
-The above example is a compile error:
 `what-am-i` should be marked `mut` even though it has no `mut` fields itself,
 because `mut` data is eventually reachable through it.
 
 (It may also be marked `force-sendable` which is used internally by the runtime to create the primitive sendable types.)
 
-Everything in an interface must be sendable -- meaning the return types and parameter types of all of its signatures.
+When a type contains a parameter, you only need to give this type the best-case purity.
+The actual purity may be worse when the type parameter is instantiated.
 
 
 ## templates
@@ -575,7 +520,7 @@ This is not transitive, so B can import things without affecting its callers.
 Module import cycles are not allowed.
 If two functions depend on each other but for some reason you want them in different modules,
 you could use a spec to allow each to declare their dependency on the other without a direct import.
-You could also define them to take a lambda (or interface) instead of a direct dependency.
+You could also define them to take a lambda instead of a direct dependency.
 
 Import syntax looks like so:
 

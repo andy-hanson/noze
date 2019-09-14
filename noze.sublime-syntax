@@ -12,6 +12,10 @@ variables:
   name:      '(([a-z0-9\-]+\??)|[\+\-\*\/\<\>\=\?]+)'
   type_name: '\??[a-z0-9\-]+'
   spec_name: '\??[a-z0-9\-]+'
+  # Declarations end at the next unindented line.
+  # We don't want to consume any characters at that line,
+  # so use lookahead to match the beginning of a line, then any non-whitespace character.
+  unindented_line: '(?=^\S)'
 
 name: noze
 file_extensions:
@@ -27,10 +31,8 @@ contexts:
       scope: invalid
     - match: \|\|?\s.*
       scope: comment
-    - match: '^\s*(region)[^\n]*\n'
+    - match: '^\s*region[^\n]*\n'
       scope: comment
-      captures:
-        1: keyword
 
   type_args:
     # TODO: this shouldn't be necessary to explicitly include the prototype, right?
@@ -52,12 +54,14 @@ contexts:
       push: decl_after_name
 
   decl_after_name:
-    # Ends at the first un-indented line
-    - match: (?=^[^\t])
+    - match: '{{unindented_line}}'
       pop: true
     - match: alias
       scope: comment
       push: alias
+    - match: builtin
+      scope: comment
+      pop: true
     - match: record
       scope: comment
       push: record
@@ -81,16 +85,14 @@ contexts:
       pop: true
 
   alias:
-    # Ends at the first un-indented line
-    - match: (?=^[^\t])
+    - match: '{{unindented_line}}'
       pop: true
     - match: '[a-z0-9\-]+'
       scope: identifier
       push: type_ending_in_nl
 
   record:
-    # Ends at the first un-indented line
-    - match: (?=^[^\t])
+    - match: '{{unindented_line}}'
       pop: true
     - match: 'force-sendable|mut|sendable'
       scope: keyword
@@ -98,8 +100,7 @@ contexts:
       push: record_body
 
   record_body:
-    # Ends at the first un-indented line
-    - match: (?=^[^\t])
+    - match: '{{unindented_line}}'
       pop: true
     - match: 'by-ref|by-val'
       scope: keyword
@@ -108,8 +109,7 @@ contexts:
       push: type_ending_in_nl
 
   spec:
-    # Ends at the first un-indented line
-    - match: ^(?=[^\t])
+    - match: '{{unindented_line}}'
       pop: true
     # Each line is a signature
     - match: '{{name}}'
@@ -127,8 +127,7 @@ contexts:
 
   union:
     - meta_scope: storage.type
-    # Ends at the first un-indented line
-    - match: ^(?=[^\t])
+    - match: '{{unindented_line}}'
       pop: true
 
   type_ending_in_nl:
@@ -146,8 +145,7 @@ contexts:
       push: fun_signature_starting_at_l_paren
     - match: $
       push: expression
-    # Ends at the first un-indented line
-    - match: (?=^[^\t])
+    - match: '{{unindented_line}}'
       pop: true
 
   fun_signature_starting_at_l_paren:
@@ -180,8 +178,7 @@ contexts:
       pop: true
 
   expression:
-    # Ends at the first un-indented line
-    - match: (?=^[^\t])
+    - match: '{{unindented_line}}'
       pop: true
     # Skip beginning-of-line indent
     - match: ^\s+

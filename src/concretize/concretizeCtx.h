@@ -137,6 +137,7 @@ struct ConcretizeCtx {
 	const FunDecl* getVatAndActorFun;
 	const Arr<const FunDecl*> ifFuns;
 	const Arr<const FunDecl*> callFuns;
+	const StructInst* ctxStructInst;
 	const CommonTypes* commonTypes;
 	AllConstants* allConstants;
 	MutDict<const ConcreteStructKey, ConcreteStruct*, compareConcreteStructKey> allConcreteStructs {};
@@ -162,6 +163,7 @@ struct ConcretizeCtx {
 		const FunDecl* _getVatAndActorFun,
 		const Arr<const FunDecl*> _ifFuns,
 		const Arr<const FunDecl*> _callFuns,
+		const StructInst* _ctxStructInst,
 		const CommonTypes* _commonTypes
 	) :
 		arena{_arena},
@@ -169,6 +171,7 @@ struct ConcretizeCtx {
 		getVatAndActorFun{_getVatAndActorFun},
 		ifFuns{_ifFuns},
 		callFuns{_callFuns},
+		ctxStructInst{_ctxStructInst},
 		commonTypes{_commonTypes},
 		allConstants{newAllConstants(arena)}
 	{}

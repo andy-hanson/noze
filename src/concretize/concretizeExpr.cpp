@@ -257,7 +257,7 @@ namespace {
 		const Expr::FunAsLambda e
 	) {
 		Arena* arena = getArena(ctx);
-		if (e.kind == FunKind::send)
+		if (e.kind == FunKind::ref)
 			todo<void>("funaslambda sendfun");
 
 		const ConcreteFun* cf = getOrAddNonTemplateConcreteFunAndFillBody(ctx->concretizeCtx, e.fun);
@@ -265,30 +265,40 @@ namespace {
 
 		const ConcreteType dynamicType = ctx->getConcreteType_forStructInst(e.type);
 
-		const KnownLambdaBody* klb = nu<KnownLambdaBody>{}(
-			arena,
-			dynamicType,
-			cf->sig,
-			mangledName,
-			none<const ConcreteParam>(),
-			emptyArr<const ClosureSingleSpecialize>());
-		const Arr<const Expr> args = mapPtrs<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
-			return Expr{range, Expr::ParamRef{p}};
-		});
-		const Expr* body = nu<const Expr>{}(
-			arena,
-			range,
-			Expr::Call{
-				// TODO: this should technically use the model arena and not the concrete arena?
-				Called{instantiateNonTemplateFun(getArena(ctx), e.fun)},
-				args});
-		const LambdaInfo info = LambdaInfo{ctx->concreteFunSource.containingFunInst, body};
-		addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(
-			arena,
-			&ctx->concretizeCtx->knownLambdaBodyToInfo,
-			klb,
-			info);
-		return ConstantOrExpr{constantLambda(arena, ctx->allConstants(), klb)};
+		if (e.kind == FunKind::ptr) {
+			return ConstantOrExpr{constantFunPtr(
+				getArena(ctx),
+				ctx->allConstants(),
+				dynamicType,
+				cf)};
+		} else {
+			if (!cf->needsCtx)
+				todo<void>("I think there might be a bug if we use a noctx fun as lambda");
+			const KnownLambdaBody* klb = nu<KnownLambdaBody>{}(
+				arena,
+				dynamicType,
+				cf->sig,
+				mangledName,
+				none<const ConcreteParam>(),
+				emptyArr<const ClosureSingleSpecialize>());
+			const Arr<const Expr> args = mapPtrs<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
+				return Expr{range, Expr::ParamRef{p}};
+			});
+			const Expr* body = nu<const Expr>{}(
+				arena,
+				range,
+				Expr::Call{
+					// TODO: this should technically use the model arena and not the concrete arena?
+					Called{instantiateNonTemplateFun(getArena(ctx), e.fun)},
+					args});
+			const LambdaInfo info = LambdaInfo{ctx->concreteFunSource.containingFunInst, body};
+			addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(
+				arena,
+				&ctx->concretizeCtx->knownLambdaBodyToInfo,
+				klb,
+				info);
+			return ConstantOrExpr{constantLambda(arena, ctx->allConstants(), klb)};
+		}
 	}
 
 	struct ClosureSpecialize {
@@ -367,6 +377,13 @@ namespace {
 			return finishWriter(&writer);
 		}();
 
+		if (e.kind == FunKind::ptr)
+			// For a fun-ptr:
+			// Create a new ConcreteFun
+			// Return as a ConstantKind::FunPtr
+			todo<void>("concretizeLambda ptr");
+
+
 		const Arr<const ConstantOrExpr> closureArgsWithConstants = map<const ConstantOrExpr>{}(
 			arena,
 			e.closure,
@@ -383,8 +400,8 @@ namespace {
 			nonSpecializedParams};
 
 		const ConcreteType possiblySendType = ctx->getConcreteType_forStructInst(e.type);
-		// For a send-fun, this is the inner fun-mut type.
-		const ConcreteType dynamicType = e.kind == FunKind::send
+		// For a fun-ref, this is the inner fun-mut type.
+		const ConcreteType dynamicType = e.kind == FunKind::ref
 			? [&]() {
 				const Arr<const ConcreteField> fields = possiblySendType.strukt->body().asRecord().fields;
 				assert(size(fields) == 2);
@@ -394,7 +411,7 @@ namespace {
 			}()
 			: possiblySendType;
 
-		// Even for a send-fun, we always create the one KnwonLambdaBody for the non-specialized case.
+		// Even for a fun-ref, we always create the one KnwonLambdaBody for the non-specialized case.
 		const KnownLambdaBody* klb = nu<const KnownLambdaBody>()(
 			arena,
 			dynamicType,
@@ -419,7 +436,7 @@ namespace {
 				some<const KnownLambdaBody*>(klb), ConcreteExpr::Lambda{closureSpecialize.nonConstantArgs})
 			: ConstantOrExpr{constantLambda(arena, ctx->allConstants(), klb)};
 
-		if (e.kind == FunKind::send) {
+		if (e.kind == FunKind::ref) {
 			const ConcreteField vatAndActorField = at(possiblySendType.strukt->body().asRecord().fields, 0);
 			assert(strEqLiteral(vatAndActorField.mangledName, "vat_and_actor"));
 			const ConstantOrExpr vatAndActor = getGetVatAndActor(ctx, vatAndActorField.type, range);
@@ -433,7 +450,7 @@ namespace {
 					{ vatAndActor, makeLambdasDynamic(ctx->concretizeCtx, range, res) })});
 		} else
 			return res;
-		}
+	}
 
 	const Str chooseUniqueName(Arena* arena, const Str mangledName, const Arr<const ConcreteLocal*> allLocals) {
 		return exists(allLocals, [&](const ConcreteLocal* l) { return strEq(l->mangledName, mangledName); })

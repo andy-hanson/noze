@@ -1163,11 +1163,16 @@ namespace {
 			writeStatic(writer, "() {\n\tassert(0);\n}\n\n");
 		}
 
-		writeStatic(writer, "void* _failVoidPtr() { assert(0); }");
+		writeStatic(writer, "void* _failVoidPtr() { assert(0); }\n");
 	}
 
-	void writeMain(Writer* writer, const Arr<const ConcreteStruct*> allStructs) {
-		writeStatic(writer, "\n\nint main() {");
+	void writeMain(
+		Writer* writer,
+		const ConcreteFun* rtMain,
+		const ConcreteFun* userMain,
+		const Arr<const ConcreteStruct*> allStructs
+	) {
+		writeStatic(writer, "\n\nint main(int argc, char** argv) {");
 		for (const ConcreteStruct* strukt : allStructs) {
 			writeStatic(writer, "\n\tassert(sizeof(");
 			writeStr(writer, strukt->mangledName);
@@ -1175,7 +1180,12 @@ namespace {
 			writeNat(writer, strukt->sizeBytes());
 			writeStatic(writer, ");");
 		}
-		writeStatic(writer,"\n\treturn (int) main___int();\n}\n");
+
+		writeStatic(writer,"\n\n\treturn ");
+		writeStr(writer, rtMain->mangledName());
+		writeStatic(writer, "(argc, argv, ");
+		writeStr(writer, userMain->mangledName());
+		writeStatic(writer, ");\n}\n");
 	}
 }
 
@@ -1198,6 +1208,6 @@ const Str writeToC(Arena* arena, const ConcreteProgram program) {
 	for (const ConcreteFun* fun : program.allFuns)
 		writeConcreteFunDefinition(&writer, fun);
 
-	writeMain(&writer, program.allStructs);
+	writeMain(&writer, program.rtMain, program.userMain, program.allStructs);
 	return finishWriter(&writer);
 }

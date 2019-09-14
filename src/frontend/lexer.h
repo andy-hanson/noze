@@ -1,9 +1,13 @@
 #pragma once
 
-#include "../diag.h" // ParseDiag
-#include "./parse.h" // ParseDiagnostic
+#include "../parseDiag.h"
+#include "./ast.h"
 
-#include "../util/arrUtil.h" // copyStr
+enum class IndentKind {
+	tabs,
+	spaces2,
+	spaces4
+};
 
 struct Lexer {
 	Arena* arena;
@@ -12,6 +16,7 @@ struct Lexer {
 	const CStr sourceBegin;
 	// Starts at sourceBegin and proceeds until it hits NUL
 	CStr ptr;
+	IndentKind indentKind;
 	size_t indent = 0;
 };
 

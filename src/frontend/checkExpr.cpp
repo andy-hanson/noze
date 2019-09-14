@@ -230,7 +230,7 @@ namespace {
 						todo<void>("getExpectedLambdaType");
 					return force(op);
 				});
-			const Type nonInstantiatedReturnType = kind == FunKind::send
+			const Type nonInstantiatedReturnType = kind == FunKind::ref
 				? ctx->makeFutType(nonInstantiatedNonFutReturnType)
 				: nonInstantiatedNonFutReturnType;
 			return some<const ExpectedLambdaType>(
@@ -238,23 +238,10 @@ namespace {
 		}
 	}
 
-	const CheckedExpr checkFunAsLambda(
-		ExprCtx* ctx,
-		const SourceRange range,
-		const FunAsLambdaAst ast,
-		Expected* expected
-	) {
-		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
-		if (!has(opEt))
-			return bogus(expected, range);
-
-		const ExpectedLambdaType et = force(opEt);
-
-		//TODO: overload resolution. For now, requires that only 1 fun exists.
-
+	const Opt<const FunDecl*> getOnlyFunInScope(ExprCtx* ctx, const SourceRange range, const Sym funName) {
 		const Arr<const FunDecl*> funsInScope = [&]() {
 			ArrBuilder<const FunDecl*> funsInScopeBuilder {};
-			eachFunInScope(ctx, ast.funName, [&](const CalledDecl called) {
+			eachFunInScope(ctx, funName, [&](const CalledDecl called) {
 				called.match(
 					[&](const FunDecl* f) {
 						add(ctx->arena(), &funsInScopeBuilder, f);
@@ -266,19 +253,34 @@ namespace {
 			return finishArr(&funsInScopeBuilder);
 		}();
 
+		//TODO: overload resolution. For now, requires that only 1 fun exists.
 		if (size(funsInScope) != 1) {
 			ctx->addDiag(range, Diag{Diag::FunAsLambdaCantOverload{}});
+			return none<const FunDecl*>();
+		} else
+			return some<const FunDecl*>(only(funsInScope));
+	}
+
+	const CheckedExpr checkFunAsLambda(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const FunAsLambdaAst ast,
+		Expected* expected
+	) {
+		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
+		if (!has(opEt))
+			return bogus(expected, range);
+		const ExpectedLambdaType et = force(opEt);
+
+		const Opt<const FunDecl*> opFun = getOnlyFunInScope(ctx, range, ast.funName);
+		if (!has(opFun))
+			return bogus(expected, range);
+		const FunDecl* fun = force(opFun);
+
+		if (fun->isTemplate()) {
+			ctx->addDiag(range, Diag{Diag::FunAsLambdaNoTemplate{}});
 			return bogus(expected, range);
 		}
-
-		const FunDecl* fun = only(funsInScope);
-
-		if (!sizeEq(ast.typeArgs, fun->typeParams))
-			// TODO: type inference
-			todo<void>("checkFunAsLambda");
-
-		if (!isEmpty(fun->typeParams))
-			todo<void>("checkFunAsLambda");
 
 		const Type returnType = fun->returnType();
 		const StructInst* type = instantiateStructNeverDelay(
@@ -292,6 +294,12 @@ namespace {
 				Diag{Diag::FunAsLambdaWrongReturnType{returnType, et.nonInstantiatedPossiblyFutReturnType}});
 			return bogus(expected, range);
 		}
+
+		if (et.kind == FunKind::ptr && !fun->noCtx())
+			todo<void>("fun-as-lambda for fun-ptr must take a noctx fun");
+
+		if (size(et.paramTypes) != arity(fun))
+			todo<void>("checkFunAsLambda -- arity doesn't match");
 
 		zip(et.paramTypes, fun->params(), [&](const Type paramType, const Param param) {
 			if (!typeEquals(paramType, param.type))
@@ -464,13 +472,7 @@ namespace {
 			});
 	}
 
-	const CheckedExpr checkLambdaWorker(
-		ExprCtx* ctx,
-		const SourceRange range,
-		const Arr<const LambdaAst::Param> paramAsts,
-		const ExprAst bodyAst,
-		Expected* expected
-	) {
+	const CheckedExpr checkLambda(ExprCtx* ctx, const SourceRange range, const LambdaAst ast, Expected* expected) {
 		Arena* arena = ctx->arena();
 		const Opt<const ExpectedLambdaType> opEt = getExpectedLambdaType(ctx, range, expected);
 		if (!has(opEt))
@@ -478,40 +480,56 @@ namespace {
 
 		const ExpectedLambdaType et = force(opEt);
 
-		if (!sizeEq(paramAsts, et.paramTypes)) {
-			printf("Number of params should be %zu, got %zu\n", size(et.paramTypes), size(paramAsts));
+		if (!sizeEq(ast.params, et.paramTypes)) {
+			printf("Number of params should be %zu, got %zu\n", size(et.paramTypes), size(ast.params));
 			todo<void>("checkLambdaWorker -- # params is wrong");
 		}
 
-		const Arr<const Param> params = checkFunOrSendFunParamsForLambda(arena, paramAsts, et.paramTypes);
+		const Arr<const Param> params = checkFunOrSendFunParamsForLambda(arena, ast.params, et.paramTypes);
 		LambdaInfo info = LambdaInfo{params};
 		Expected returnTypeInferrer = copyWithNewExpectedType(expected, et.nonInstantiatedPossiblyFutReturnType);
 
 		const Expr* body = withLambda(ctx, &info, [&]() {
 			// Note: checking the body of the lambda may fill in candidate type args
 			// if the expected return type contains candidate's type params
-			return ctx->alloc(checkExpr(ctx, bodyAst, &returnTypeInferrer));
+			return ctx->alloc(checkExpr(ctx, *ast.body, &returnTypeInferrer));
 		});
 
 		const Arr<const ClosureField*> closureFields = freeze(&info.closureFields);
 		const FunKind kind = et.kind;
 
-		if (kind == FunKind::plain)
-			for (const ClosureField* cf : closureFields)
-				if (cf->type.worstCasePurity() == Purity::mut)
-					ctx->addDiag(range, Diag{Diag::LambdaClosesOverMut{cf}});
+		switch (kind) {
+			case FunKind::ptr:
+				for (const ClosureField* cf : closureFields)
+					ctx->addDiag(range, Diag{Diag::LambdaForFunPtrHasClosure{cf}});
+				break;
+			case FunKind::plain:
+				for (const ClosureField* cf : closureFields)
+					if (cf->type.worstCasePurity() == Purity::mut)
+						ctx->addDiag(range, Diag{Diag::LambdaClosesOverMut{cf}});
+			case FunKind::mut:
+			case FunKind::ref:
+				break;
+			default:
+				assert(0);
+		}
 
 		const Type actualPossiblyFutReturnType = inferred(&returnTypeInferrer);
 		const Opt<const Type> actualNonFutReturnType = [&]() {
-			if (kind == FunKind::send) {
-				if (actualPossiblyFutReturnType.isStructInst()) {
-					const StructInst* ap = actualPossiblyFutReturnType.asStructInst();
-					return ptrEquals(ap->decl, ctx->commonTypes->fut)
-						? some<const Type>(only(ap->typeArgs))
-						: none<const Type>();
-				} else
-					return none<const Type>();
-			} else
+			if (kind == FunKind::ref)
+				return actualPossiblyFutReturnType.match(
+					[](const Type::Bogus) {
+						return some<const Type>(Type{Type::Bogus{}});
+					},
+					[](const TypeParam*) {
+						return none<const Type>();
+					},
+					[&](const StructInst* ap) {
+						return ptrEquals(ap->decl, ctx->commonTypes->fut)
+							? some<const Type>(only(ap->typeArgs))
+							: none<const Type>();
+					});
+			else
 				return some<const Type>(actualPossiblyFutReturnType);
 		}();
 		if (!has(actualNonFutReturnType)) {
@@ -529,10 +547,6 @@ namespace {
 				actualPossiblyFutReturnType};
 			return CheckedExpr{Expr{range, lambda}};
 		}
-	}
-
-	const CheckedExpr checkLambda(ExprCtx* ctx, const SourceRange range, const LambdaAst ast, Expected* expected) {
-		return checkLambdaWorker(ctx, range, ast.params, *ast.body, expected);
 	}
 
 	const CheckedExpr checkLet(ExprCtx* ctx, const SourceRange range, const LetAst ast, Expected* expected) {

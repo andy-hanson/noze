@@ -17,8 +17,8 @@ namespace {
 		const Opt<const StructOrAlias> res =
 			getAt<const Sym, const StructOrAlias, compareSym>(structsAndAliasesMap, name);
 		if (has(res)) {
-			// may fail -- builtin Template should not be an alias
-			const StructDecl* decl = force(res).asDecl();
+			// TODO: may fail -- builtin Template should not be an alias
+			const StructDecl* decl = force(res).asStructDecl();
 			if (size(decl->typeParams) != expectedTypeParams)
 				todo<void>("getCommonTemplateType");
 			return some<const StructDecl*>(decl);
@@ -69,9 +69,8 @@ namespace {
 		};
 		const Opt<const StructInst*>
 			_bool = nonTemplate("bool"),
-			int64 = nonTemplate("int"),
+			int32 = nonTemplate("int32"),
 			_char = nonTemplate("char"),
-			_ctx = nonTemplate("ctx"),
 			str = nonTemplate("str"),
 			_void = nonTemplate("void"),
 			anyPtr = nonTemplate("any-ptr");
@@ -91,25 +90,34 @@ namespace {
 			fun0 = com("fun0", 1),
 			fun1 = com("fun1", 2),
 			fun2 = com("fun2", 3),
+			fun3 = com("fun3", 4),
 			funMut0 = com("fun-mut0", 1),
 			funMut1 = com("fun-mut1", 2),
 			funMut2 = com("fun-mut2", 3),
-			sendFun0 = com("send-fun0", 1),
-			sendFun1 = com("send-fun1", 2),
-			sendFun2 = com("send-fun2", 3);
+			funMut3 = com("fun-mut3", 4),
+			funPtr0 = com("fun-ptr0", 1),
+			funPtr1 = com("fun-ptr1", 2),
+			funPtr2 = com("fun-ptr2", 3),
+			funPtr3 = com("fun-ptr3", 4),
+			funPtr4 = com("fun-ptr4", 5),
+			funPtr5 = com("fun-ptr5", 6),
+			funPtr6 = com("fun-ptr6", 7),
+			funRef0 = com("fun-ref0", 1),
+			funRef1 = com("fun-ref1", 2),
+			funRef2 = com("fun-ref2", 3),
+			funRef3 = com("fun-ref3", 4);
 
-		if (has(_bool) && has(_char) && has(int64) && has(str) && has(_void) && has(anyPtr) &&
+		if (has(_bool) && has(_char) && has(int32) && has(str) && has(_void) && has(anyPtr) &&
 			has(opt) && has(some) && has(none) &&
 			has(byVal) && has(arr) && has(fut) &&
-			has(fun0) && has(fun1) && has(fun2) &&
-			has(funMut0) && has(funMut1) && has(funMut2) &&
-			has(sendFun0) && has(sendFun1) && has(sendFun2))
+			has(fun0) && has(fun1) && has(fun2) && has(fun3) &&
+			has(funMut0) && has(funMut1) && has(funMut2) && has(funMut3) &&
+			has(funRef0) && has(funRef1) && has(funRef2) && has(funRef3))
 			return success<const CommonTypes, const Arr<const Diagnostic>>(
 				CommonTypes{
 					force(_bool),
 					force(_char),
-					force(_ctx),
-					force(int64),
+					force(int32),
 					force(str),
 					force(_void),
 					force(anyPtr),
@@ -122,20 +130,33 @@ namespace {
 						arena,
 						{
 							FunKindAndStructs{
+								FunKind::ptr,
+								arrLiteral<const StructDecl*>(
+									arena,
+									{
+										force(funPtr0),
+										force(funPtr1),
+										force(funPtr2),
+										force(funPtr3),
+										force(funPtr4),
+										force(funPtr5),
+										force(funPtr6)
+									})},
+							FunKindAndStructs{
 								FunKind::plain,
 								arrLiteral<const StructDecl*>(
 									arena,
-									{ force(fun0), force(fun1), force(fun2) })},
+									{ force(fun0), force(fun1), force(fun2), force(fun3) })},
 							FunKindAndStructs{
 								FunKind::mut,
 								arrLiteral<const StructDecl*>(
 									arena,
-									{ force(funMut0), force(funMut1), force(funMut2) })},
+									{ force(funMut0), force(funMut1), force(funMut2), force(funMut3) })},
 							FunKindAndStructs{
-								FunKind::send,
+								FunKind::ref,
 								arrLiteral<const StructDecl*>(
 									arena,
-									{ force(sendFun0), force(sendFun1), force(sendFun2) })}
+									{ force(funRef0), force(funRef1), force(funRef2), force(funRef3) })}
 						})});
 		else {
 			const Diagnostic diag = Diagnostic{ctx->path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};

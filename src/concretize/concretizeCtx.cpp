@@ -435,7 +435,7 @@ const ConcreteType ConcretizeCtx::anyPtrType() {
 
 const ConcreteType ConcretizeCtx::ctxPtrType() {
 	return lazilySet(&_ctxPtrType, [&]() {
-		const ConcreteType res = getConcreteType_forStructInst(this, commonTypes->ctx, TypeArgsScope::empty());
+		const ConcreteType res = getConcreteType_forStructInst(this, ctxStructInst, TypeArgsScope::empty());
 		assert(res.isPointer);
 		return res;
 	});

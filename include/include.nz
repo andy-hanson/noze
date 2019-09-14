@@ -179,6 +179,8 @@ fun-ptr1<?r, ?p0> builtin
 fun-ptr2<?r, ?p0, ?p1> builtin
 fun-ptr3<?r, ?p0, ?p1, ?p2> builtin
 fun-ptr4<?r, ?p0, ?p1, ?p2, ?p3> builtin
+fun-ptr5<?r, ?p0, ?p1, ?p2, ?p3, ?p4> builtin
+fun-ptr6<?r, ?p0, ?p1, ?p2, ?p3, ?p4, ?p5> builtin
 
 | A fun is two pointers -- one to the fun pointer, one to the closure.
 | TODO: point to the vtable, and have vtable also store layout information
@@ -193,6 +195,10 @@ fun1<?r, ?p0> record mut
 fun2<?r, ?p0, ?p1> record mut
 	by-val
 	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
+	closure any-ptr
+fun3<?r, ?p0, ?p1, ?p2> record mut
+	by-val
+	fun-ptr fun-ptr5 ?r ctx any-ptr ?p0 ?p1 ?p2
 	closure any-ptr
 
 | A fun-mut may close over 'mut' state.
@@ -209,32 +215,52 @@ fun-mut2<?r, ?p0, ?p1> record mut
 	by-val
 	fun-ptr fun-ptr4 ?r ctx any-ptr ?p0 ?p1
 	closure any-ptr
+fun-mut3<?r, ?p0, ?p1, ?p2> record mut
+	by-val
+	fun-ptr fun-ptr5 ?r ctx any-ptr ?p0 ?p1 ?p2
+	closure any-ptr
 
-| A normal fun is non-sendable, a send-fun becomes sendable by storing the vat/actor that will provide its ctx.
-send-fun0<?r> record force-sendable
+vat-id alias
+	nat
+actor-id alias
+	nat
+
+vat-and-actor-id record
+	by-val
+	vat vat-id
+	actor actor-id
+
+| A normal fun is non-sendable, a fun-ref becomes sendable by storing the vat/actor that will provide its ctx.
+| As the name implies, we have a reference to the fun, but when we call it,
+| the one who created it runs the code, not us.
+fun-ref0<?r> record force-sendable
 	by-val
 	vat-and-actor vat-and-actor-id
 	fun fun-mut0 fut<?r>
-send-fun1<?r, ?p0> record force-sendable
+fun-ref1<?r, ?p0> record force-sendable
 	by-val
 	vat-and-actor vat-and-actor-id
 	fun fun-mut1 fut<?r> ?p0
-send-fun2<?r, ?p0, ?p1> record force-sendable
+fun-ref2<?r, ?p0, ?p1> record force-sendable
 	by-val
 	vat-and-actor vat-and-actor-id
 	fun fun-mut2 fut<?r> ?p0 ?p1
+fun-ref3<?r, ?p0, ?p1, ?p2> record force-sendable
+	by-val
+	vat-and-actor vat-and-actor-id
+	fun fun-mut3 fut<?r> ?p0 ?p1 ?p2
 
 | This fun is required by the compiler.
 cur-actor vat-and-actor-id() unsafe
 	new get-ctx.vat.id, get-ctx.actor-id
 
-to-send-fun0 send-fun0 ?r(f fun-mut0 fut<?r>) trusted
+to-fun-ref0 fun-ref0 ?r(f fun-mut0 fut<?r>) trusted
 	new cur-actor, f
 
-to-send-fun1 send-fun1 ?r ?p0(f fun-mut1 fut<?r> ?p0) trusted
+to-fun-ref1 fun-ref1 ?r ?p0(f fun-mut1 fut<?r> ?p0) trusted
 	new cur-actor, f
 
-to-send-fun2 send-fun2 ?r ?p0 ?p1(f fun-mut2 fut<?r> ?p0 ?p1) trusted
+to-fun-ref2 fun-ref2 ?r ?p0 ?p1(f fun-mut2 fut<?r> ?p0 ?p1) trusted
 	new cur-actor, f
 
 | calling a fun-ptr is a primitive operation
@@ -243,6 +269,8 @@ call ?r(f fun-ptr1 ?r ?p0, p0 ?p0) noctx builtin
 call ?r(f fun-ptr2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx builtin
 call ?r(f fun-ptr3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) noctx builtin
 call ?r(f fun-ptr4 ?r ?p0 ?p1 ?p2 ?p3, p0 ?p0, p1 ?p1, p2 ?p2, p3 ?p3) noctx builtin
+call ?r(f fun-ptr5 ?r ?p0 ?p1 ?p2 ?p3 ?p4, p0 ?p0, p1 ?p1, p2 ?p2, p3 ?p3, p4 ?p4) noctx builtin
+call ?r(f fun-ptr6 ?r ?p0 ?p1 ?p2 ?p3 ?p4 ?p5, p0 ?p0, p1 ?p1, p2 ?p2, p3 ?p3, p4 ?p4, p5 ?p5) noctx builtin
 
 | Note: this is the implementation for a dynamic call.
 | But the compiler may call the function dynamically instead
@@ -282,16 +310,17 @@ call ?r(f fun-mut2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted
 call-with-ctx ?r(c ctx, f fun-mut2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx
 	f.fun-ptr call c, f.closure, p0, p1
 
+call ?r(f fun3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) trusted
+	get-ctx call-with-ctx3 f, p0, p1, p2
 
-| Runs 'f' asynchronously.
-| Since 'f' is 'fun' and not 'fun-mut' it is guaranteed to not close over 'mut' data.
-| So we can run it in parallel.
-async fut ?t(f fun0 fut<?t>) trusted
-	res = new-unresolved-fut<?t>
-	vat = get-ctx.vat
-	vat add-task new<task> vat.new-actor-id, \
-		f.call forward-to res
-	res
+call-with-ctx3 ?r(c ctx, f fun3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) noctx
+	f.fun-ptr call c, f.closure, p0, p1, p2
+
+call ?r(f fun-mut3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) trusted
+	get-ctx call-with-ctx f, p0, p1, p2
+
+call-with-ctx ?r(c ctx, f fun-mut3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) noctx
+	f.fun-ptr call c, f.closure, p0, p1, p2
 
 get-vat vat(vat-id vat-id) unsafe
 	get-ctx.gctx.vats at vat-id
@@ -303,27 +332,6 @@ data<?t> builtin-spec
 
 | A type is sendable if it does not have any thread-unsafe mutable state.
 send<?t> builtin-spec
-
-call fut ?r(f send-fun0 ?r) trusted send<?r>
-	vat = f.vat-and-actor.vat get-vat
-	res = new-unresolved-fut<?r>
-	vat add-task new<task> f.vat-and-actor.actor, \
-		f.fun.call forward-to res
-	res
-
-call fut ?r(f send-fun1 ?r ?p0, p0 ?p0) trusted send<?r> send<?p0>
-	vat = f.vat-and-actor.vat get-vat
-	res = new-unresolved-fut<?r>
-	vat add-task new<task> f.vat-and-actor.actor, \
-		f.fun call p0 forward-to res
-	res
-
-call fut ?r(f send-fun2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted send<?r> send<?p0> send<?p1>
-	vat = f.vat-and-actor.vat get-vat
-	res = new-unresolved-fut<?r>
-	vat add-task new<task> f.vat-and-actor.actor, \
-		f.fun call p0, p1 forward-to res
-	res
 
 
 
@@ -724,81 +732,6 @@ fut-state<?t> union mut
 fut<?t> record force-sendable
 	lk by-val lock
 	state mut fut-state ?t
-
-| Considered unsafe because normally it should not be possible to never resolve a fut
-new-unresolved-fut fut ?t() unsafe
-	new new-lock, new<fut-state-callbacks<?t>> none
-
-resolved fut ?t(value ?t)
-	new new-lock, new<fut-state-resolved<?t>> value
-
-resolve void(f fut ?t, value ?t) unsafe
-	f.lk.ref-of-val acquire-lock
-	match f.state
-		fut-state-callbacks cbs
-			cbs.head resolve-recur value
-		fut-state-resolved
-			hard-fail: "resolving an already-resolved fut"
-	f.state := new<fut-state-resolved<?t>> value
-	f.lk.ref-of-val release-lock
-
-resolve-recur void(node opt fut-callback-node<?t>, value ?t)
-	match node
-		none
-			pass
-		some s
-			| the send-fun will return a fut<void>, just ignore it
-			drop: s.value.cb call value
-			s.value.next-node resolve-recur value
-
-| NOTE: The function will be called with whatever ctx the fut terminates with!!!
-then-void void(f fut ?t, cb fun-mut1 void ?t) unsafe
-	f.lk.ref-of-val acquire-lock
-	res = match f.state
-		fut-state-callbacks cbs
-			| create a new callback
-			f.state := new<fut-state-callbacks<?t>> some: new cb, cbs.head
-		fut-state-resolved r
-			cb call r.value
-	f.lk.ref-of-val release-lock
-	res
-
-forward-to void(from fut ?t, to fut ?t) unsafe
-	from then-void \value
-		to resolve value
-
-then fut ?out(f fut ?in, cb send-fun1 ?out ?in) trusted send<?out> send<?in>
-	res = new-unresolved-fut<?out>
-	f then-void \value
-		cb call value forward-to res
-	res
-
-joiner<?out, ?in0, ?in1> record force-sendable
-	res fut ?out
-	fun send-fun2 ?out ?in0 ?in1
-	arg0 mut opt ?in0
-	arg1 mut opt ?in1
-	| NOTE: we can't just check that both arg0 and arg1 are done -- we might try calling 'fun' twice.
-	| We need to atomically decrement the counter so we only call 'fun' once
-	n-remaining-args by-val thread-safe-counter
-
-decr-joiner void(j joiner ?out ?in0 ?in1) unsafe send<?out> send<?in0> send<?in1>
-	when
-		j.n-remaining-args.ref-of-val decrement
-			j.fun call j.arg0.force, j.arg1.force forward-to j.res
-		else
-			pass
-
-join fut ?out(a fut ?in0, b fut ?in1, fun send-fun2 ?out ?in0 ?in1) trusted send<?out> send<?in0> send<?in1>
-	res = new-unresolved-fut<?out>
-	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, none, none, new-thread-safe-counter: 2
-	a then-void \value
-		joiner.arg0 := value some
-		joiner decr-joiner
-	b then-void \value
-		joiner.arg1 := value some
-		joiner decr-joiner
-	res
 
 region arr
 
@@ -1483,7 +1416,112 @@ get-and-decrement nat(t thread-safe-counter) noctx trusted
 	l release-lock
 	res
 
-region runtime
+
+region mut-bag
+
+| NOTE: currently this is a linked list, but we actually want to pseudorandomly take out nodes.
+
+mut-bag-node<?t> record mut
+	value ?t
+	next-node mut opt mut-bag-node<?t>
+
+| Expose construction of nodes, because it's better to do this outside of a lock
+new-mut-bag-node mut-bag-node ?t(value ?t)
+	new value, none
+
+mut-bag<?t> record mut
+	head mut opt mut-bag-node<?t>
+
+new-mut-bag by-val mut-bag<?t>() noctx
+	new none
+
+add void(bag mut-bag ?t, node mut-bag-node ?t) noctx
+	| TODO: insert randomly somewhere
+	node.next-node := bag.head
+	bag.head := node some
+
+empty? bool(m mut-bag ?t) noctx
+	m.head empty?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+| MOVE BELOW TO RUNTIME.NZ
+
+rt-main int32(argc int32, argv ptr c-str, user-main-ptr fun-ptr2 fut<int32> ctx arr<str>) trusted noctx summon
+	| TODO: more threads
+	n-threads = one as<nat>
+	gctx-by-val = n-threads new-global-ctx
+	gctx = gctx-by-val ref-of-val
+	vat-by-val = new-vat: gctx, zero, n-threads
+	vat = vat-by-val ref-of-val
+
+	vats = new<arr<vat>> one, vat.ptr-to
+
+	gctx.vats := vats
+
+	| Before we start the engine, add a task.
+	| Create a ctx manually so we can call functions that need it when creating the task
+	ctx-by-val = new-ctx: gctx, vat, zero
+	ctx = ctx-by-val ref-of-val
+	| TODO: just 'as'
+	add = &add-first-task as-non-const<fun3<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>>>
+	args = new<arr<c-str>> argc.to-int.unsafe-to-nat, argv
+	| TODO: shouldn't need user-main-ptr.as-non-const
+	ctx call-with-ctx3<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>> add, vat, args, user-main-ptr.as-non-const
+
+	| TODO: more than one thread
+	thread-function: zero, gctx
+
+	| TODO: return number from main fn
+	zero
+
+| Runs 'f' asynchronously.
+| Since 'f' is 'fun' and not 'fun-mut' it is guaranteed to not close over 'mut' data.
+| So we can run it in parallel.
+async fut ?t(f fun0 fut<?t>) trusted
+	res = new-unresolved-fut<?t>
+	vat = get-ctx.vat
+	vat add-task new<task> vat.new-actor-id, \
+		f.call forward-to res
+	res
+
+call fut ?r(f fun-ref0 ?r) trusted send<?r>
+	vat = f.vat-and-actor.vat get-vat
+	res = new-unresolved-fut<?r>
+	vat add-task new<task> f.vat-and-actor.actor, \
+		f.fun.call forward-to res
+	res
+
+call fut ?r(f fun-ref1 ?r ?p0, p0 ?p0) trusted send<?r> send<?p0>
+	vat = f.vat-and-actor.vat get-vat
+	res = new-unresolved-fut<?r>
+	vat add-task new<task> f.vat-and-actor.actor, \
+		f.fun call p0 forward-to res
+	res
+
+call fut ?r(f fun-ref2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted send<?r> send<?p0> send<?p1>
+	vat = f.vat-and-actor.vat get-vat
+	res = new-unresolved-fut<?r>
+	vat add-task new<task> f.vat-and-actor.actor, \
+		f.fun call p0, p1 forward-to res
+	res
 
 global-ctx record mut
 	lk by-val lock
@@ -1496,18 +1534,31 @@ global-ctx record mut
 	may-be-work-to-do by-val condition
 	is-shut-down mut bool
 
+vat record mut
+	gctx global-ctx
+	id vat-id
+	gc by-val gc
+
+	| these variables are all protected by tasks-lock
+	tasks-lock by-val lock
+	tasks by-val mut-bag<task>
+	| TODO: mut-set
+	currently-running-actors by-val mut-arr<actor-id>
+	| Number of threads currently performing tasks in this vat
+	n-threads-running mut nat
+
+	| not protected by tasks-lock, thread-safe on its own
+	next-actor-id by-val thread-safe-counter
+
+ctx record mut
+	gctx global-ctx
+	vat vat
+	actor-id actor-id
+	| TODO: GC allocation context
+	| TODO: exception context
+
 new-global-ctx by-val global-ctx(n-threads nat) noctx
 	new new-lock, empty-arr<vat>, n-threads, new-condition, false
-
-vat-id alias
-	nat
-actor-id alias
-	nat
-
-vat-and-actor-id record
-	by-val
-	vat vat-id
-	actor actor-id
 
 gc record mut
 	lk by-val lock
@@ -1544,58 +1595,97 @@ unmanaged-alloc-elements ptr ?t(size-elements nat) noctx unsafe
 
 task record mut
 	by-val
-	| Unlike a send-fun, this is stored in the vat already, so no need to store vat here too.
+	| Unlike a fun-ref, this is stored in the vat already, so no need to store vat here too.
 	| Also, the fun just returns 'void'. You can just use a fut-returning fun and drop the fut.
 	| The fun runs using a ctx created from the actor-id.
 	actor-id actor-id
 	fun fun-mut0 void
 
 
+| Considered unsafe because normally it should not be possible to never resolve a fut
+new-unresolved-fut fut ?t() unsafe
+	new new-lock, new<fut-state-callbacks<?t>> none
 
-region mut-bag
+resolved fut ?t(value ?t)
+	new new-lock, new<fut-state-resolved<?t>> value
 
-| NOTE: currently this is a linked list, but we actually want to pseudorandomly take out nodes.
+resolve void(f fut ?t, value ?t) unsafe
+	f.lk.ref-of-val acquire-lock
+	match f.state
+		fut-state-callbacks cbs
+			cbs.head resolve-recur value
+		fut-state-resolved
+			hard-fail: "resolving an already-resolved fut"
+	f.state := new<fut-state-resolved<?t>> value
+	f.lk.ref-of-val release-lock
 
-mut-bag-node<?t> record mut
-	value ?t
-	next-node mut opt mut-bag-node<?t>
+resolve-recur void(node opt fut-callback-node<?t>, value ?t)
+	match node
+		none
+			pass
+		some s
+			| the fun-ref will return a fut<void>, just ignore it
+			drop: s.value.cb call value
+			s.value.next-node resolve-recur value
 
-| Expose construction of nodes, because it's better to do this outside of a lock
-new-mut-bag-node mut-bag-node ?t(value ?t)
-	new value, none
+joiner<?out, ?in0, ?in1> record force-sendable
+	res fut ?out
+	fun fun-ref2 ?out ?in0 ?in1
+	arg0 mut opt ?in0
+	arg1 mut opt ?in1
+	| NOTE: we can't just check that both arg0 and arg1 are done -- we might try calling 'fun' twice.
+	| We need to atomically decrement the counter so we only call 'fun' once
+	n-remaining-args by-val thread-safe-counter
 
-mut-bag<?t> record mut
-	head mut opt mut-bag-node<?t>
+decr-joiner void(j joiner ?out ?in0 ?in1) unsafe send<?out> send<?in0> send<?in1>
+	when
+		j.n-remaining-args.ref-of-val decrement
+			j.fun call j.arg0.force, j.arg1.force forward-to j.res
+		else
+			pass
 
-new-mut-bag by-val mut-bag<?t>() noctx
-	new none
+join fut ?out(a fut ?in0, b fut ?in1, fun fun-ref2 ?out ?in0 ?in1) trusted send<?out> send<?in0> send<?in1>
+	res = new-unresolved-fut<?out>
+	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, none, none, new-thread-safe-counter: 2
+	a then-void \value
+		joiner.arg0 := value some
+		joiner decr-joiner
+	b then-void \value
+		joiner.arg1 := value some
+		joiner decr-joiner
+	res
 
-add void(bag mut-bag ?t, node mut-bag-node ?t) noctx
-	| TODO: insert randomly somewhere
-	node.next-node := bag.head
-	bag.head := node some
+| NOTE: The function will be called with whatever ctx the fut terminates with!!!
+then-void void(f fut ?t, cb fun-mut1 void ?t) unsafe
+	f.lk.ref-of-val acquire-lock
+	res = match f.state
+		fut-state-callbacks cbs
+			| create a new callback
+			f.state := new<fut-state-callbacks<?t>> some: new cb, cbs.head
+		fut-state-resolved r
+			cb call r.value
+	f.lk.ref-of-val release-lock
+	res
 
-empty? bool(m mut-bag ?t) noctx
-	m.head empty?
+forward-to void(from fut ?t, to fut ?t) unsafe
+	from then-void \value
+		to resolve value
 
+then fut ?out(f fut ?in, cb fun-ref1 ?out ?in) trusted send<?out> send<?in>
+	res = new-unresolved-fut<?out>
+	f then-void \value
+		cb call value forward-to res
+	res
 
-region vat
+new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id actor-id) noctx
+	new gctx, vat, actor-id
 
-vat record mut
-	gctx global-ctx
-	id vat-id
-	gc by-val gc
+new-actor-id actor-id(v vat) noctx trusted
+	v.next-actor-id.ref-of-val get-and-increment
 
-	| these variables are all protected by tasks-lock
-	tasks-lock by-val lock
-	tasks by-val mut-bag<task>
-	| TODO: mut-set
-	currently-running-actors by-val mut-arr<actor-id>
-	| Number of threads currently performing tasks in this vat
-	n-threads-running mut nat
-
-	| not protected by tasks-lock, thread-safe on its own
-	next-actor-id by-val thread-safe-counter
+new-vat by-val vat(gctx global-ctx, id vat-id, max-threads nat) noctx unsafe
+	actors = max-threads new-mut-arr-by-val-with-capacity-from-unmanaged-memory<actor-id>
+	new gctx, id, new-gc, new-lock, new-mut-bag, actors, zero, new-thread-safe-counter
 
 | Unsafe because you must ensure 'task' is safe to run in parallel.
 add-task void(v vat, t task) unsafe
@@ -1608,27 +1698,13 @@ add-task void(v vat, t task) unsafe
 
 	v.gctx.may-be-work-to-do.ref-of-val broadcast
 
-new-actor-id actor-id(v vat) noctx trusted
-	v.next-actor-id.ref-of-val get-and-increment
-
-new-vat by-val vat(gctx global-ctx, id vat-id, max-threads nat) noctx unsafe
-	actors = max-threads new-mut-arr-by-val-with-capacity-from-unmanaged-memory<actor-id>
-	new gctx, id, new-gc, new-lock, new-mut-bag, actors, zero, new-thread-safe-counter
-
-
-ctx record mut
-	gctx global-ctx
-	vat vat
-	actor-id actor-id
-	| TODO: GC allocation context
-	| TODO: exception context
-
-new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id actor-id) noctx
-	new gctx, vat, actor-id
-
-
-
-
+| TODO: if mut-bag-node is in unmanaged memory, don't need ctx for this
+add-first-task void(vat vat, args arr c-str, user-main-ptr fun-ptr2 fut<int32> ctx arr<str>) unsafe
+	| TODO: store the main fut somewhere so we can test for errors
+	vat add-task new<task> vat.new-actor-id, \
+		| TODO: &to-str (requires overload resolution in funaslambda)
+		real-args = args map {it.to-str}
+		drop: user-main-ptr call get-ctx, real-args
 
 thread-function void(thread-id nat, gctx global-ctx) noctx unsafe
 	when
@@ -1766,7 +1842,6 @@ choose-task-in-vat opt task-or-gc(vat vat) noctx unsafe
 
 	res
 
-
 task-and-nodes record mut
 	by-val
 	task task
@@ -1826,3 +1901,5 @@ assert-vats-are-shut-down void(i nat, vats arr vat) noctx unsafe
 			vat.tasks-lock.ref-of-val release-lock
 
 			assert-vats-are-shut-down: i.noctx-incr, vats
+
+

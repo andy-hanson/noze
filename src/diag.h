@@ -1,168 +1,7 @@
 #pragma once
 
 #include "./model.h"
-
-struct ParseDiag {
-	struct ExpectedCharacter {
-		const char ch;
-	};
-	struct ExpectedDedent {};
-	struct ExpectedIndent {};
-	struct ExpectedPurityAfterSpace {};
-	struct LeadingSpace {};
-	struct LetMustHaveThen {};
-	struct MatchWhenNewMayNotAppearInsideArg {};
-	struct MustEndInBlankLine {};
-	struct ReservedName {
-		const Sym name;
-	};
-	struct TrailingSpace {};
-	struct TypeParamCantHaveTypeArgs {};
-	struct UnexpectedCharacter {
-		const char ch;
-	};
-	struct UnexpectedIndent {};
-	struct UnionCantBeEmpty {};
-	struct WhenMustHaveElse {};
-
-private:
-	enum class Kind {
-		expectedCharacter,
-		expectedDedent,
-		expectedIndent,
-		expectedPurityAfterSpace,
-		leadingSpace,
-		letMustHaveThen,
-		matchWhenNewMayNotAppearInsideArg,
-		mustEndInBlankLine,
-		reservedName,
-		trailingSpace,
-		typeParamCantHaveTypeArgs,
-		unexpectedCharacter,
-		unexpectedIndent,
-		unionCantBeEmpty,
-		whenMustHaveElse,
-	};
-	const Kind kind;
-	union {
-		const ExpectedCharacter expectedCharacter;
-		const ExpectedDedent expectedDedent;
-		const ExpectedIndent expectedIndent;
-		const ExpectedPurityAfterSpace expectedPurityAfterSpace;
-		const LeadingSpace leadingSpace;
-		const LetMustHaveThen letMustHaveThen;
-		const MatchWhenNewMayNotAppearInsideArg matchWhenNewMayNotAppearInsideArg;
-		const MustEndInBlankLine mustEndInBlankLine;
-		const ReservedName reservedName;
-		const TrailingSpace trailingSpace;
-		const TypeParamCantHaveTypeArgs typeParamCantHaveTypeArgs;
-		const UnexpectedCharacter unexpectedCharacter;
-		const UnexpectedIndent unexpectedIndent;
-		const UnionCantBeEmpty unionCantBeEmpty;
-		const WhenMustHaveElse whenMustHaveElse;
-	};
-
-public:
-	explicit inline ParseDiag(const ExpectedCharacter d)
-		: kind{Kind::expectedCharacter}, expectedCharacter{d} {}
-	explicit inline ParseDiag(const ExpectedDedent d)
-		: kind{Kind::expectedDedent}, expectedDedent{d} {}
-	explicit inline ParseDiag(const ExpectedIndent d)
-		: kind{Kind::expectedIndent}, expectedIndent{d} {}
-	explicit inline ParseDiag(const ExpectedPurityAfterSpace d)
-		: kind{Kind::expectedPurityAfterSpace}, expectedPurityAfterSpace{d} {}
-	explicit inline ParseDiag(const LeadingSpace d)
-		: kind{Kind::leadingSpace}, leadingSpace{d} {}
-	explicit inline ParseDiag(const LetMustHaveThen d)
-		: kind{Kind::letMustHaveThen}, letMustHaveThen{d} {}
-	explicit inline ParseDiag(const MatchWhenNewMayNotAppearInsideArg d)
-		: kind{Kind::matchWhenNewMayNotAppearInsideArg}, matchWhenNewMayNotAppearInsideArg{d} {}
-	explicit inline ParseDiag(const MustEndInBlankLine d)
-		: kind{Kind::mustEndInBlankLine}, mustEndInBlankLine{d} {}
-	explicit inline ParseDiag(const ReservedName d)
-		: kind{Kind::reservedName}, reservedName{d} {}
-	explicit inline ParseDiag(const TrailingSpace d)
-		: kind{Kind::trailingSpace}, trailingSpace{d} {}
-	explicit inline ParseDiag(const TypeParamCantHaveTypeArgs d)
-		: kind{Kind::typeParamCantHaveTypeArgs}, typeParamCantHaveTypeArgs{d} {}
-	explicit inline ParseDiag(const UnexpectedCharacter d)
-		: kind{Kind::unexpectedCharacter}, unexpectedCharacter{d} {}
-	explicit inline ParseDiag(const UnexpectedIndent d)
-		: kind{Kind::unexpectedIndent}, unexpectedIndent{d} {}
-	explicit inline ParseDiag(const UnionCantBeEmpty d)
-		: kind{Kind::unionCantBeEmpty}, unionCantBeEmpty{d} {}
-	explicit inline ParseDiag(const WhenMustHaveElse d)
-		: kind{Kind::whenMustHaveElse}, whenMustHaveElse{d} {}
-
-	template <
-		typename CbExpectedCharacter,
-		typename CbExpectedDedent,
-		typename CbExpectedIndent,
-		typename CbExpectedPurityAfterSpace,
-		typename CbLeadingSpace,
-		typename CbMatchWhenNewMayNotAppearInsideArg,
-		typename CbMustEndInBlankLine,
-		typename CbLetMustHaveThen,
-		typename CbReservedName,
-		typename CbTrailingSpace,
-		typename CbTypeParamCantHaveTypeArgs,
-		typename CbUnexpectedCharacter,
-		typename CbUnexpectedIndent,
-		typename CbUnionCantBeEmpty,
-		typename CbWhenMustHaveElse
-	> inline auto match(
-		CbExpectedCharacter cbExpectedCharacter,
-		CbExpectedDedent cbExpectedDedent,
-		CbExpectedIndent cbExpectedIndent,
-		CbExpectedPurityAfterSpace cbExpectedPurityAfterSpace,
-		CbLeadingSpace cbLeadingSpace,
-		CbLetMustHaveThen cbLetMustHaveThen,
-		CbMatchWhenNewMayNotAppearInsideArg cbMatchWhenNewMayNotAppearInsideArg,
-		CbMustEndInBlankLine cbMustEndInBlankLine,
-		CbReservedName cbReservedName,
-		CbTrailingSpace cbTrailingSpace,
-		CbTypeParamCantHaveTypeArgs cbTypeParamCantHaveTypeArgs,
-		CbUnexpectedCharacter cbUnexpectedCharacter,
-		CbUnexpectedIndent cbUnexpectedIndent,
-		CbUnionCantBeEmpty cbUnionCantBeEmpty,
-		CbWhenMustHaveElse cbWhenMustHaveElse
-	) const {
-		switch (kind) {
-			case Kind::expectedCharacter:
-				return cbExpectedCharacter(expectedCharacter);
-			case Kind::expectedDedent:
-				return cbExpectedDedent(expectedDedent);
-			case Kind::expectedIndent:
-				return cbExpectedIndent(expectedIndent);
-			case Kind::expectedPurityAfterSpace:
-				return cbExpectedPurityAfterSpace(expectedPurityAfterSpace);
-			case Kind::leadingSpace:
-				return cbLeadingSpace(leadingSpace);
-			case Kind::letMustHaveThen:
-				return cbLetMustHaveThen(letMustHaveThen);
-			case Kind::matchWhenNewMayNotAppearInsideArg:
-				return cbMatchWhenNewMayNotAppearInsideArg(matchWhenNewMayNotAppearInsideArg);
-			case Kind::mustEndInBlankLine:
-				return cbMustEndInBlankLine(mustEndInBlankLine);
-			case Kind::reservedName:
-				return cbReservedName(reservedName);
-			case Kind::trailingSpace:
-				return cbTrailingSpace(trailingSpace);
-			case Kind::typeParamCantHaveTypeArgs:
-				return cbTypeParamCantHaveTypeArgs(typeParamCantHaveTypeArgs);
-			case Kind::unexpectedCharacter:
-				return cbUnexpectedCharacter(unexpectedCharacter);
-			case Kind::unexpectedIndent:
-				return cbUnexpectedIndent(unexpectedIndent);
-			case Kind::unionCantBeEmpty:
-				return cbUnionCantBeEmpty(unionCantBeEmpty);
-			case Kind::whenMustHaveElse:
-				return cbWhenMustHaveElse(whenMustHaveElse);
-			default:
-				assert(0);
-		}
-	}
-};
+#include "./parseDiag.h"
 
 struct Diag {
 	// Note: this error is issued *before* resolving specs.
@@ -227,11 +66,15 @@ struct Diag {
 	};
 	struct FileDoesNotExist {};
 	struct FunAsLambdaCantOverload {};
+	struct FunAsLambdaNoTemplate {};
 	struct FunAsLambdaWrongReturnType {
 		const Type actual;
 		const Type expected;
 	};
 	struct LambdaClosesOverMut {
+		const ClosureField* field;
+	};
+	struct LambdaForFunPtrHasClosure {
 		const ClosureField* field;
 	};
 	struct LocalShadowsPrevious {
@@ -336,8 +179,10 @@ private:
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
 		funAsLambdaCantOverload,
+		funAsLambdaNoTemplate,
 		funAsLambdaWrongReturnType,
 		lambdaClosesOverMut,
+		lambdaForFunPtrHasClosure,
 		localShadowsPrevious,
 		matchCaseStructNamesDoNotMatch,
 		matchOnNonUnion,
@@ -375,8 +220,10 @@ private:
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
 		const FunAsLambdaCantOverload funAsLambdaCantOverload;
+		const FunAsLambdaNoTemplate funAsLambdaNoTemplate;
 		const FunAsLambdaWrongReturnType funAsLambdaWrongReturnType;
 		const LambdaClosesOverMut lambdaClosesOverMut;
+		const LambdaForFunPtrHasClosure lambdaForFunPtrHasClosure;
 		const LocalShadowsPrevious localShadowsPrevious;
 		const MatchCaseStructNamesDoNotMatch matchCaseStructNamesDoNotMatch;
 		const MatchOnNonUnion matchOnNonUnion;
@@ -428,10 +275,14 @@ public:
 		: kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
 	explicit inline Diag(const FunAsLambdaCantOverload d)
 		: kind{Kind::funAsLambdaCantOverload}, funAsLambdaCantOverload{d} {}
+	explicit inline Diag(const FunAsLambdaNoTemplate d)
+		: kind{Kind::funAsLambdaNoTemplate}, funAsLambdaNoTemplate{d} {}
 	explicit inline Diag(const FunAsLambdaWrongReturnType d)
 		: kind{Kind::funAsLambdaWrongReturnType}, funAsLambdaWrongReturnType{d} {}
 	explicit inline Diag(const LambdaClosesOverMut d)
 		: kind{Kind::lambdaClosesOverMut}, lambdaClosesOverMut{d} {}
+	explicit inline Diag(const LambdaForFunPtrHasClosure d)
+		: kind{Kind::lambdaForFunPtrHasClosure}, lambdaForFunPtrHasClosure{d} {}
 	explicit inline Diag(const LocalShadowsPrevious d)
 		: kind{Kind::localShadowsPrevious}, localShadowsPrevious{d} {}
 	explicit inline Diag(const MatchCaseStructNamesDoNotMatch d)
@@ -492,8 +343,10 @@ public:
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
 		typename CbFunAsLambdaCantOverload,
+		typename CbFunAsLambdaNoTemplate,
 		typename CbFunAsLambdaWrongReturnType,
 		typename CbLambdaClosesOverMut,
+		typename CbLambdaForFunPtrHasClosure,
 		typename CbLocalShadowsPrevious,
 		typename CbMatchCaseStructNamesDoNotMatch,
 		typename CbMatchOnNonUnion,
@@ -529,8 +382,10 @@ public:
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
 		CbFunAsLambdaCantOverload cbFunAsLambdaCantOverload,
+		CbFunAsLambdaNoTemplate cbFunAsLambdaNoTemplate,
 		CbFunAsLambdaWrongReturnType cbFunAsLambdaWrongReturnType,
 		CbLambdaClosesOverMut cbLambdaClosesOverMut,
+		CbLambdaForFunPtrHasClosure cbLambdaForFunPtrHasClosure,
 		CbLocalShadowsPrevious cbLocalShadowsPrevious,
 		CbMatchCaseStructNamesDoNotMatch cbMatchCaseStructNamesDoNotMatch,
 		CbMatchOnNonUnion cbMatchOnNonUnion,
@@ -581,10 +436,14 @@ public:
 				return cbFileDoesNotExist(fileDoesNotExist);
 			case Kind::funAsLambdaCantOverload:
 				return cbFunAsLambdaCantOverload(funAsLambdaCantOverload);
+			case Kind::funAsLambdaNoTemplate:
+				return cbFunAsLambdaNoTemplate(funAsLambdaNoTemplate);
 			case Kind::funAsLambdaWrongReturnType:
 				return cbFunAsLambdaWrongReturnType(funAsLambdaWrongReturnType);
 			case Kind::lambdaClosesOverMut:
 				return cbLambdaClosesOverMut(lambdaClosesOverMut);
+			case Kind::lambdaForFunPtrHasClosure:
+				return cbLambdaForFunPtrHasClosure(lambdaForFunPtrHasClosure);
 			case Kind::localShadowsPrevious:
 				return cbLocalShadowsPrevious(localShadowsPrevious);
 			case Kind::matchCaseStructNamesDoNotMatch:

@@ -53,6 +53,8 @@ namespace {
 				case shortSymAlphaLiteralValue("fun-ptr2"):
 				case shortSymAlphaLiteralValue("fun-ptr3"):
 				case shortSymAlphaLiteralValue("fun-ptr4"):
+				case shortSymAlphaLiteralValue("fun-ptr5"):
+				case shortSymAlphaLiteralValue("fun-ptr6"):
 					return True;
 				default:
 					return False;
@@ -245,6 +247,8 @@ const BuiltinStructInfo getBuiltinStructInfo(const StructDecl* s) {
 		case shortSymAlphaLiteralValue("fun-ptr2"):
 		case shortSymAlphaLiteralValue("fun-ptr3"):
 		case shortSymAlphaLiteralValue("fun-ptr4"):
+		case shortSymAlphaLiteralValue("fun-ptr5"):
+		case shortSymAlphaLiteralValue("fun-ptr6"):
 			return BuiltinStructInfo{BuiltinStructKind::funPtrN, sizeof(void(*))};
 		case shortSymAlphaLiteralValue("int16"):
 			return BuiltinStructInfo{BuiltinStructKind::int16, sizeof(Int16)};

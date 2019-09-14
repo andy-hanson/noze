@@ -133,7 +133,6 @@ public:
 	}
 
 	const Bool containsUnresolvedTypeParams() const;
-	const Bool typeEquals(const Type other) const;
 	Purity bestCasePurity() const;
 	Purity worstCasePurity() const;
 };
@@ -752,40 +751,40 @@ struct StructOrAlias {
 private:
 	enum class Kind {
 		alias,
-		decl,
+		structDecl,
 	};
 	const Kind kind;
 	union {
 		const StructAlias* alias;
-		const StructDecl* decl;
+		const StructDecl* structDecl;
 	};
 
 public:
 	explicit inline StructOrAlias(const StructAlias* _alias) : kind{Kind::alias}, alias{_alias} {}
-	explicit inline StructOrAlias(const StructDecl* _decl) : kind{Kind::decl}, decl{_decl} {}
+	explicit inline StructOrAlias(const StructDecl* _structDecl) : kind{Kind::structDecl}, structDecl{_structDecl} {}
 
 	inline const Bool isAlias() const {
 		return enumEq(kind, Kind::alias);
 	}
-	inline const Bool isDecl() const {
-		return enumEq(kind, Kind::decl);
+	inline const Bool isStructDecl() const {
+		return enumEq(kind, Kind::structDecl);
 	}
 	inline const StructAlias* asAlias() const {
 		assert(isAlias());
 		return alias;
 	}
-	inline const StructDecl* asDecl() const {
-		assert(isDecl());
-		return decl;
+	inline const StructDecl* asStructDecl() const {
+		assert(isStructDecl());
+		return structDecl;
 	}
 
-	template <typename CbAlias, typename CbDecl>
-	inline auto match(CbAlias cbAlias, CbDecl cbDecl) const {
+	template <typename CbAlias, typename CbStructDecl>
+	inline auto match(CbAlias cbAlias, CbStructDecl cbStructDecl) const {
 		switch (kind) {
 			case Kind::alias:
 				return cbAlias(alias);
-			case Kind::decl:
-				return cbDecl(decl);
+			case Kind::structDecl:
+				return cbStructDecl(structDecl);
 			default:
 				assert(0);
 		}
@@ -842,9 +841,10 @@ struct Module {
 #define N_FUN_TYPES 3
 
 enum class FunKind {
+	ptr,
 	plain,
 	mut,
-	send
+	ref
 };
 
 struct FunKindAndStructs {
@@ -855,8 +855,7 @@ struct FunKindAndStructs {
 struct CommonTypes {
 	const StructInst* _bool; // Needed for 'when'
 	const StructInst* _char;
-	const StructInst* ctx;
-	const StructInst* int64; // 'main' returns this
+	const StructInst* int32; // 'main' returns this
 	const StructInst* str; // Needed for str literals
 	const StructInst* _void;
 	const StructInst* anyPtr;
@@ -876,6 +875,7 @@ struct Program {
 	// Includes 'include.nz"'
 	const Arr<const Module*> allModules;
 	const CommonTypes commonTypes;
+	const StructInst* ctxStructInst;
 	const LineAndColumnGetters lineAndColumnGetters;
 };
 
@@ -930,7 +930,7 @@ struct Expr {
 
 	// Currently this only works on a non-template fun.
 	struct FunAsLambda {
-		const FunDecl* fun;
+		const FunDecl* fun; // Guaranteed to not be a template
 		const StructInst* type;
 		const FunKind kind;
 

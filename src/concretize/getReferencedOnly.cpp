@@ -197,9 +197,15 @@ namespace {
 	}
 }
 
-const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun, const ConcreteStruct* ctxStruct) {
+const ConcreteProgram getReferencedOnly(
+	Arena* arena,
+	const ConcreteFun* rtMain,
+	const ConcreteFun* userMain,
+	const ConcreteStruct* ctxStruct
+) {
 	SetReferencedCtx ctx { arena };
-	addFun(&ctx, mainFun);
+	addFun(&ctx, rtMain);
+	addFun(&ctx, userMain);
 
 	// For each of these -- we are collecting an array of all of them, and advancing an index of the ones we've scanned.
 	// When the index reaches the array's length we are done (at least until another is pushed)
@@ -222,5 +228,7 @@ const ConcreteProgram getReferencedOnly(Arena* arena, const ConcreteFun* mainFun
 		freeze(&ctx.allReferencedStructs),
 		freeze(&ctx.allReferencedConstants),
 		freeze(&ctx.allReferencedFuns),
+		rtMain,
+		userMain,
 		ctxStruct};
 }

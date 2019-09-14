@@ -1,5 +1,7 @@
 #include "./lexer.h"
 
+#include "../util/arrUtil.h"
+
 namespace {
 	template <typename T>
 	inline T throwUnexpected(Lexer* lexer) {
@@ -40,13 +42,6 @@ namespace {
 			isLowerCaseLetter(c),
 			c == '-',
 			isDigit(c));
-	}
-
-	uint takeTabs(Lexer* lexer) {
-		const CStr begin = lexer->ptr;
-		while (*lexer->ptr == '\t')
-			lexer->ptr++;
-		return safeSizeTToUint(lexer->ptr - begin);
 	}
 
 	const SourceRange range(Lexer* lexer, const CStr begin) {
@@ -135,11 +130,35 @@ namespace {
 		lexer->ptr++;
 	}
 
+	uint takeIndentAmount(Lexer* lexer) {
+		const CStr begin = lexer->ptr;
+		if (lexer->indentKind == IndentKind::tabs) {
+			while (*lexer->ptr == '\t')
+				lexer->ptr++;
+			if (*lexer->ptr == ' ')
+				throwAtChar<void>(lexer, ParseDiag{ParseDiag::IndentWrongCharacter{.expectedTabs = True}});
+			return safeSizeTToUint(lexer->ptr - begin);
+		} else {
+			const Pos start = curPos(lexer);
+			while (*lexer->ptr == ' ')
+				lexer->ptr++;
+			if (*lexer->ptr == '\t')
+				throwAtChar<void>(lexer, ParseDiag{ParseDiag::IndentWrongCharacter{.expectedTabs = False}});
+			const uint nSpaces = safeSizeTToUint(lexer->ptr - begin);
+			const uint nSpacesPerIndent = lexer->indentKind == IndentKind::spaces2 ? 2 : 4;
+			const uint res = nSpaces / nSpacesPerIndent;
+			if (res * nSpacesPerIndent != nSpaces)
+				throwDiag<void>(range(lexer, start), ParseDiag{ParseDiag::IndentNotDivisible{nSpaces, nSpacesPerIndent}});
+			return res;
+		}
+	}
+
 	// Returns the change in indent (and updates the indent)
 	// Note: does nothing if not looking at a newline!
 	int skipLinesAndGetIndentDelta(Lexer* lexer) {
 		// comment / region counts as a blank line no matter its indent level.
-		const uint newIndent = takeTabs(lexer);
+		const uint newIndent = takeIndentAmount(lexer);
+
 		if (tryTake(lexer, '\n'))
 			return skipLinesAndGetIndentDelta(lexer);
 		if (tryTake(lexer, '|')) {
@@ -325,6 +344,7 @@ void skipBlankLines(Lexer* lexer)  {
 }
 
 NewlineOrIndent takeNewlineOrIndent(Lexer* lexer) {
+	const Pos start = curPos(lexer);
 	take(lexer, '\n');
 	const int delta = skipLinesAndGetIndentDelta(lexer);
 	switch (delta) {
@@ -333,7 +353,9 @@ NewlineOrIndent takeNewlineOrIndent(Lexer* lexer) {
 		case 1:
 			return NewlineOrIndent::indent;
 		default:
-			return todo<const NewlineOrIndent>("diagnostic: took unexpected dedent, or too many indents");
+			return throwDiag<const NewlineOrIndent>(
+				range(lexer, start),
+				delta < 0 ? ParseDiag{ParseDiag::UnexpectedDedent{}} : ParseDiag{ParseDiag::UnexpectedIndent{}});
 	}
 }
 
@@ -391,30 +413,48 @@ const Bool tryTakeElseIndent(Lexer* lexer)  {
 	return res;
 }
 
+namespace {
+	// Note: Not issuing any diagnostics here. We'll fail later if we detect the wrong indent kind.
+	IndentKind detectIndentKind(const Str str) {
+		if (isEmpty(str))
+			// No indented lines, so it's irrelevant
+			return IndentKind::tabs;
+		else {
+			const char c0 = first(str);
+			if (c0 == '\t')
+				return IndentKind::tabs;
+			else if (c0 == ' ') {
+				// Count spaces
+				size_t i = 0;
+				for (; i < size(str); i++)
+					if (at(str, i) != ' ')
+						break;
+				// Only allowed amounts are 2 and 4.
+				return i == 2 ? IndentKind::spaces2 : IndentKind::spaces4;
+			} else {
+				for (size_t i = 0; i < size(str); i++)
+					if (at(str, i) == '\n')
+						return detectIndentKind(slice(str, i + 1));
+				return IndentKind::tabs;
+			}
+		}
+	}
+}
+
 Lexer createLexer(Arena* arena, AllSymbols* allSymbols, const NulTerminatedStr source) {
-	// Note: We *are* relying on the nul terminator to stop the lexer->
+	// Note: We *are* relying on the nul terminator to stop the lexer.
 	const Str str = stripNulTerminator(source);
 	const uint len = safeSizeTToUint(size(str));
-	assert(len < 99999);
-
-	if (len == 0)
-		todo<void>("empty file"); // TODO: allow this, but check that that's safe
-	else if (last(str) != '\n')
+	if (!isEmpty(str) && last(str) != '\n')
 		throw ParseDiagnostic{
 			SourceRange{len - 1, len},
 			ParseDiag{ParseDiag::MustEndInBlankLine{}}};
 
-	for (CStr ptr = str.begin(); ptr != str.end(); ptr++)
-		if (*ptr == '\n') {
-			const uint i = safeSizeTToUint(ptr - str.begin());
-			if (*(ptr + 1) == ' ')
-				throw ParseDiagnostic{SourceRange{i + 1, i + 2}, ParseDiag{ParseDiag::LeadingSpace{}}};
-			else if (ptr != str.begin()) {
-				const char prev = *(ptr - 1);
-				if (prev == ' ' || prev == '\t')
-					throw ParseDiagnostic{SourceRange{i - 1, i}, ParseDiag{ParseDiag::TrailingSpace{}}};
-			}
-		}
-
-	return Lexer{arena, allSymbols, /*sourceBegin*/ str.begin(), /*ptr*/ str.begin(), /*indent*/ 0};
+	return Lexer{
+		.arena = arena,
+		.allSymbols = allSymbols,
+		.sourceBegin = str.begin(),
+		.ptr = str.begin(),
+		.indentKind = detectIndentKind(str),
+		.indent = 0};
 }

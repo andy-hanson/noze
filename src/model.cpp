@@ -17,19 +17,6 @@ const Bool Type::containsUnresolvedTypeParams() const {
 		});
 }
 
-const Bool Type::typeEquals(const Type other) const {
-	return match(
-		[&](const Type::Bogus) {
-			return other.isBogus();
-		},
-		[&](const TypeParam* p) {
-			return _and(other.isTypeParam(), ptrEquals(p, other.asTypeParam()));
-		},
-		[&](const StructInst* s) {
-			return _and(other.isStructInst(), ptrEquals(s, other.asStructInst()));
-		});
-}
-
 Purity Type::bestCasePurity() const {
 	return match(
 		[](const Type::Bogus) {

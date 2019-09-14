@@ -60,6 +60,8 @@ const StructInst* instantiateStruct(
 	const Arr<const Type> typeArgs,
 	DelayStructInsts delayStructInsts);
 
+const StructInst* instantiateNonTemplateStruct(Arena* arena, const StructDecl* decl);
+
 const StructInst* instantiateStructInst(
 	Arena* arena,
 	const StructInst* structInst,

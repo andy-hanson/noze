@@ -5,6 +5,7 @@
 #include "../util/mutDict.h"
 #include "../util/mutSet.h"
 #include "../util/resultUtil.h"
+#include "../instantiate.h"
 #include "./check.h"
 #include "./parse.h"
 
@@ -248,11 +249,18 @@ namespace {
 			return mapSuccess<const Program>{}(
 				getModules(modelArena, &programState, includeCheck, allAsts.otherAsts),
 				[&](const Arr<const Module*> modules) {
+					const StructDecl* ctxStructDecl = mustGetAt<const Sym, const StructOrAlias, compareSym>(
+						includeCheck.module->structsAndAliasesMap,
+						shortSymAlphaLiteral("ctx")
+					).asStructDecl();
+					const StructInst* ctxStructInst = instantiateNonTemplateStruct(modelArena, ctxStructDecl);
+
 					return Program{
 						includeCheck.module,
 						first(modules),
 						prepend<const Module*>(modelArena, includeCheck.module, modules),
 						includeCheck.commonTypes,
+						ctxStructInst,
 						lineAndColumnGetters
 					};
 				});

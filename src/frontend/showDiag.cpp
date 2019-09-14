@@ -104,8 +104,18 @@ namespace {
 			[&](const ParseDiag::ExpectedPurityAfterSpace) {
 				writeStatic(writer, "after trialing space, expected to parse 'mutable' or 'sendable'");
 			},
-			[&](const ParseDiag::LeadingSpace) {
-				todo<void>("leadingspace");
+			[&](const ParseDiag::IndentNotDivisible d) {
+				writeStatic(writer, "expected indentation by ");
+				writeNat(writer, d.nSpacesPerIndent);
+				writeStatic(writer, " spaces, but got ");
+				writeNat(writer, d.nSpaces);
+				writeStatic(writer, " which is not divisible");
+			},
+			[&](const ParseDiag::IndentWrongCharacter d) {
+				writeStatic(writer, "expected indentation by ");
+				writeStatic(writer, d.expectedTabs ? "tabs" : "spaces");
+				writeStatic(writer, " (based on first indented line), but here there is a ");
+				writeStatic(writer, d.expectedTabs ? "space" : "tab");
 			},
 			[&](const ParseDiag::LetMustHaveThen) {
 				writeStatic(writer,
@@ -119,10 +129,7 @@ namespace {
 			},
 			[&](const ParseDiag::ReservedName d) {
 				writeName(writer, d.name);
-				writeStatic(writer, " is a reserved word and can't be used as a name.");
-			},
-			[&](const ParseDiag::TrailingSpace) {
-				todo<void>("trailingspace");
+				writeStatic(writer, " is a reserved word and can't be used as a name");
 			},
 			[&](const ParseDiag::TypeParamCantHaveTypeArgs) {
 				writeStatic(writer, "a type parameter can't have type arguments");
@@ -131,6 +138,9 @@ namespace {
 				writeStatic(writer, "unexpected character '");
 				showChar(writer, d.ch);
 				writeStatic(writer, "'");
+			},
+			[&](const ParseDiag::UnexpectedDedent) {
+				writeStatic(writer, "unexpected dedent");
 			},
 			[&](const ParseDiag::UnexpectedIndent) {
 				writeStatic(writer, "unexpected indent");
@@ -354,6 +364,9 @@ namespace {
 			[&](const Diag::FunAsLambdaCantOverload) {
 				writeStatic(writer, "fun has multiple overloads, can't convert to lambda");
 			},
+			[&](const Diag::FunAsLambdaNoTemplate) {
+				writeStatic(writer, "templates not allowed in fun-as-lambda expression");
+			},
 			[&](const Diag::FunAsLambdaWrongReturnType d) {
 				writeStatic(writer, "fun as lambda has wrong return type\nactual: ");
 				writeType(writer, d.actual);
@@ -366,6 +379,11 @@ namespace {
 				writeStatic(writer, " of of 'mut' type ");
 				writeType(writer, d.field->type);
 				writeStatic(writer, " (should it be a 'fun-mut'?)");
+			},
+			[&](const Diag::LambdaForFunPtrHasClosure d) {
+				writeStatic(writer, "lambda closes over ");
+				writeName(writer, d.field->name);
+				writeStatic(writer, "; a lambda for a 'fun-ptr' is not allowed to close over anything");
 			},
 			[&](const Diag::LocalShadowsPrevious d) {
 				writeName(writer, d.name);
@@ -438,7 +456,7 @@ namespace {
 				writePurity(writer, d.member->bestCasePurity);
 			},
 			[&](const Diag::SendFunDoesNotReturnFut d) {
-				writeStatic(writer, "send-fun should return a fut, but returns ");
+				writeStatic(writer, "a fun-ref should return a fut, but returns ");
 				writeType(writer, d.actualReturnType);
 			},
 			[&](const Diag::SpecBuiltinNotSatisfied d) {

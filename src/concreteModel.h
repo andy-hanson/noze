@@ -402,7 +402,8 @@ struct ConstantKind {
 		const ConcreteFun* fun;
 	};
 
-	// Note: A send-fun is never constant since that needs at least a vat id.
+	// Note: A fun-ref is never constant since that needs at least a vat id.
+	// A fun-ptr is a ConstantKind::FunPtr, not a ConstantKind::Lambda.
 	struct Lambda {
 		const KnownLambdaBody* knownLambdaBody;
 
@@ -1515,5 +1516,7 @@ struct ConcreteProgram {
 	const Arr<const ConcreteStruct*> allStructs;
 	const Arr<const Constant*> allConstants;
 	const Arr<const ConcreteFun*> allFuns;
+	const ConcreteFun* rtMain;
+	const ConcreteFun* userMain;
 	const ConcreteStruct* ctxType;
 };

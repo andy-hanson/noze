@@ -1,4 +1,4 @@
-import io
+import io runtime
 
 my-record record mut
 	x mut int
@@ -14,37 +14,6 @@ my-sum ?t(a arr ?t) my-spec<?t>
 			zero
 		else
 			a.first + a.tail.my-sum
-
-| actual main function
-main int() trusted noctx summon
-	| TODO: more threads
-	n-threads = one as<nat>
-	gctx-by-val = n-threads new-global-ctx
-	gctx = gctx-by-val ref-of-val
-	vat-by-val = new-vat: gctx, zero, n-threads
-	vat = vat-by-val ref-of-val
-
-	vats = new<arr<vat>> one, vat.ptr-to
-
-	gctx.vats := vats
-
-	| Before we start the engine, add a task.
-	| Create a ctx manually so we can call functions that need it when creating the task
-	ctx-by-val = new-ctx: gctx, vat, zero
-	ctx = ctx-by-val ref-of-val
-	add = &add-first-task as<fun2<void, global-ctx, vat>>
-	ctx call-with-ctx<void, global-ctx, vat> add, gctx, vat
-
-	| TODO: more than one thread
-	thread-function: zero, gctx
-
-	| TODO: if main fut failed, return error code here
-	zero
-
-| TODO: if mut-bag-node is in unmanaged memory, don't need ctx for this
-add-first-task void(gctx global-ctx, vat vat) unsafe
-	| TODO: store the main fut somewhere so we can test for errors
-	vat add-task new<task> vat.new-actor-id, &user-main-drop
 
 test void() trusted summon
 	m = empty-mut-dict<nat, nat>
@@ -72,12 +41,6 @@ is-multiple? bool(a nat, b nat)
 
 f nat(s stream nat)
 	s sum
-
-user-main-drop void() summon
-	user-main drop
-
-
-
 
 lines arr str(s str)
 	res = new-mut-arr<str>
@@ -195,17 +158,18 @@ lint void() summon
 
 
 | Main function normally seen by users
-user-main fut void() trusted summon
+user-main fut int32(args arr str) trusted summon
 	fut-two = async<nat>: \
 		resolved: two
 
 	printer <- make-printer
 	tw <- fut-two
 	thr = tw.incr
-	printer call thr.to-str
+	ignore <- printer call thr.to-str
+	resolved: zero
 
 printer alias
-	send-fun1 void str
+	fun-ref1 void str
 
 make-printer fut printer() summon
 	async: \
