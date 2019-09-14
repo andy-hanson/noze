@@ -65,7 +65,7 @@ namespace {
 
 	const FunDecl* getRtMainFun(const Program program) {
 		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(
-			program.includeModule->funsMap,
+			program.runtimeModule->funsMap,
 			shortSymAlphaLiteral("rt-main"));
 		if (size(mainFuns) != 1) {
 			printf("%lu\n", size(mainFuns));
@@ -94,7 +94,7 @@ namespace {
 			const Sym,
 			const FunDecl*,
 			compareSym
-		>(program.includeModule->funsMap, shortSymAlphaLiteral("alloc"));
+		>(program.gcModule->funsMap, shortSymAlphaLiteral("alloc"));
 		if (size(allocFuns) != 1)
 			todo<void>("wrong number alloc funs");
 		const FunDecl* allocFun = only(allocFuns);
@@ -107,9 +107,9 @@ namespace {
 			const Sym,
 			const FunDecl*,
 			compareSym
-		>(program.includeModule->funsMap, shortSymAlphaLiteral("cur-actor"));
+		>(program.runtimeModule->funsMap, shortSymAlphaLiteral("cur-actor"));
 		if (size(funs) != 1)
-			todo<void>("wrong number get-vat-and-actor funs");
+			todo<void>("wrong number cur-actor funs");
 		return only(funs);
 	}
 
@@ -173,5 +173,5 @@ const ConcreteProgram concretize(Arena* arena, const Program program) {
 	// We remove items from these dicts when we process them.
 	assert(mutDictIsEmpty(&ctx.concreteFunToSource));
 
-	return getReferencedOnly(arena, rtMainConcreteFun, userMainConcreteFun, ctx.ctxPtrType().strukt);
+	return getReferencedOnly(arena, rtMainConcreteFun, userMainConcreteFun, ctx.ctxType().strukt);
 }

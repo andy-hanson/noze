@@ -312,8 +312,11 @@ namespace {
 			[&](const Diag::CantInferTypeArguments) {
 				writeStatic(writer, "can't infer type arguments");
 			},
-			[&](const Diag::CircularImport) {
-				todo<void>("print circular import diag");
+			[&](const Diag::CircularImport d) {
+				writeStatic(writer, "circular import from ");
+				writePathAndStorageKind(writer, d.from);
+				writeStatic(writer, " to ");
+				writePathAndStorageKind(writer, d.to);
 			},
 			[&](const Diag::CommonTypesMissing) {
 				writeStatic(writer, "common types are missing from 'include.nz'");

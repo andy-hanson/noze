@@ -110,6 +110,8 @@ namespace {
 				return _operator(BuiltinFunKind::as);
 			case shortSymAlphaLiteralValue("as-any-ptr"):
 				return _operator(BuiltinFunKind::asAnyPtr);
+			case shortSymAlphaLiteralValue("as-ref"):
+				return _operator(BuiltinFunKind::asRef);
 			case shortSymAlphaLiteralValue("bits-and"):
 				return isNat16(rt) ? _operator(BuiltinFunKind::bitwiseAndNat16)
 					: isNat32(rt) ? _operator(BuiltinFunKind::bitwiseAndNat32)
@@ -147,11 +149,11 @@ namespace {
 			case shortSymAlphaLiteralValue("pass"):
 				return isVoid(rt) ? constant(BuiltinFunKind::pass) : no;
 			case shortSymAlphaLiteralValue("ptr-cast"):
-				return _operator(BuiltinFunKind::ptrCast);
+				return _operator(BuiltinFunKind::ptrCast, /*isNonSpecializable*/ True);
 			case shortSymAlphaLiteralValue("ptr-to"):
-				return _operator(BuiltinFunKind::ptrTo);
+				return _operator(BuiltinFunKind::ptrTo, /*isNonSpecializable*/ True);
 			case shortSymAlphaLiteralValue("ref-of-val"):
-				return _operator(BuiltinFunKind::refOfVal);
+				return _operator(BuiltinFunKind::refOfVal, /*isNonSpecializable*/ True);
 			case shortSymAlphaLiteralValue("set"):
 				return isPtr(p0) ? _operator(BuiltinFunKind::setPtr) : no;
 			case shortSymAlphaLiteralValue("size-of"):

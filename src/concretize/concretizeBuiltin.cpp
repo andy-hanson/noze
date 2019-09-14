@@ -740,8 +740,6 @@ namespace {
 						info.elementType,
 						a,
 						b);
-				case SpecialStructInfo::Kind::mutArr:
-					return todo<const ConcreteFunExprBody>("mutArr is not comparable");
 				default:
 					assert(0);
 			}

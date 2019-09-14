@@ -23,7 +23,7 @@ inline const Bool hasKey_mut(const MutDict<K, V, cmp>* d, const K key) {
 
 template <typename K, typename V, Cmp<K> cmp>
 inline const V mustGetAt_mut(const MutDict<K, V, cmp>* d, const K key) {
-	return force(getAt_mut(d, key));
+	return force(getAt_mut<K, V, cmp>(d, key));
 }
 
 template <typename K, typename V, Cmp<K> cmp>

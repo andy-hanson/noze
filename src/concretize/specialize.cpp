@@ -257,5 +257,7 @@ const Arr<const ConstantOrExpr> makeLambdasDynamic_arr(
 }
 
 const Bool isNonSpecializableBuiltin(const FunDecl* f) {
-	return _and(f->body().isBuiltin(), getBuiltinFunInfo(f->sig).isNonSpecializable);
+	return _and(
+		f->body().isBuiltin(),
+		getBuiltinFunInfo(f->sig).isNonSpecializable);
 }

@@ -155,7 +155,7 @@ struct ConcretizeCtx {
 	Late<const ConcreteType> _charType;
 	Late<const ConcreteType> _voidType;
 	Late<const ConcreteType> _anyPtrType;
-	Late<const ConcreteType> _ctxPtrType;
+	Late<const ConcreteType> _ctxType;
 
 	ConcretizeCtx(
 		Arena* _arena,
@@ -180,7 +180,7 @@ struct ConcretizeCtx {
 	const ConcreteType charType();
 	const ConcreteType voidType();
 	inline const ConcreteType anyPtrType();
-	const ConcreteType ctxPtrType();
+	const ConcreteType ctxType();
 };
 
 const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx* ctx, const FunDecl* decl);

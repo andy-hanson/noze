@@ -80,7 +80,7 @@ namespace {
 		return mtp_no_property;
 	}
 
-	void createProtoForFun(const ConcreteFun* cf, const TypesDict typesDict, ir_type* ctxPtrType) {
+	void createProtoForFun(const ConcreteFun* cf, const TypesDict typesDict, ir_type* ctxType) {
 
 		const size_t fullArity = cf->arityIncludingCtxAndClosure();
 		ir_type *proto_type = new_type_method(
@@ -93,7 +93,7 @@ namespace {
 			getAdditionalProperties(cf));
 
 		if (cf->needsCtx) {
-			set_method_param_type(proto_type, 0, ctxPtrType);
+			set_method_param_type(proto_type, 0, ctxType);
 		}
 
 		unused(typesDict);

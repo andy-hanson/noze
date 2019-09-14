@@ -1,0 +1,22 @@
+import .arr-utils
+
+literal char(s str) noctx
+	s noctx-at zero
+
+literal c-str(s str) noctx
+	s data
+
+to-c-str c-str(s str)
+	| Need to add the null character to the end
+	s + "\0" data
+
+to-str str(c c-str) unsafe noctx
+	end = c find-cstr-end
+	c arr-from-begin-end end
+
+find-cstr-end c-str(c c-str) unsafe noctx
+	when
+		c.deref == "\0"
+			c
+		else
+			c.incr find-cstr-end

@@ -76,16 +76,21 @@ const Path* changeExtension(Arena* arena, const Path* path, const Str extension)
 	return childPath(arena, path->parent, changeExtension(arena, path->baseName, extension));
 }
 
-const Opt<const Path*> resolvePath(Arena* arena, const Path* path, const RelPath relPath) {
-	Path const* cur = path;
-	for (uint i = 0; i < relPath.nParents; i++) {
-		if (!has(cur->parent))
-			return i == relPath.nParents - 1
-				? some<const Path*>(relPath.path)
-				: none<const Path*>();
-		cur = force(cur->parent);
-	}
-	return some<const Path*>(addManyChildren(arena, cur, relPath.path));
+const Opt<const Path*> resolvePath(Arena* arena, const Opt<const Path*> path, const RelPath relPath) {
+	if (has(path)) {
+		const Path* cur = force(path);
+		for (uint i = 0; i < relPath.nParents; i++) {
+			if (!has(cur->parent))
+				return i == relPath.nParents - 1
+					? some<const Path*>(relPath.path)
+					: none<const Path*>();
+			cur = force(cur->parent);
+		}
+		return some<const Path*>(addManyChildren(arena, cur, relPath.path));
+	} else
+		return relPath.nParents == 0
+			? some<const Path*>(relPath.path)
+			: none<const Path*>();
 }
 
 namespace {

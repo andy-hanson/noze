@@ -38,7 +38,10 @@ struct Diag {
 	};
 	struct CantCreateRecordWithoutExpectedType {};
 	struct CantInferTypeArguments {};
-	struct CircularImport {};
+	struct CircularImport {
+		const PathAndStorageKind from;
+		const PathAndStorageKind to;
+	};
 	struct CommonTypesMissing {};
 	struct CreateRecordByRefNoCtx {
 		const StructDecl* strukt;

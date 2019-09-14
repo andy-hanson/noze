@@ -85,7 +85,6 @@ namespace {
 			none = com("none", 0),
 			byVal = com("by-val", 1),
 			arr = com("arr", 1),
-			mutArr = com("mut-arr", 1),
 			fut = com("fut", 1),
 			fun0 = com("fun0", 1),
 			fun1 = com("fun1", 2),
@@ -124,7 +123,6 @@ namespace {
 					arrLiteral<const StructDecl*>(arena, { force(opt), force(some), force(none) }),
 					force(byVal),
 					force(arr),
-					force(mutArr),
 					force(fut),
 					arrLiteral<const FunKindAndStructs>(
 						arena,

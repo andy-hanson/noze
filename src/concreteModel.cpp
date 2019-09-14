@@ -12,6 +12,14 @@ ConstantKind::Lambda::Lambda(const KnownLambdaBody* klb) : knownLambdaBody{klb} 
 ConcreteExpr::Call::Call(const ConcreteFun* c, const Arr<const ConstantOrExpr> a) : called{c}, args{a} {
 	assert(called->arityExcludingCtxIncludingClosure() == size(args));
 
+	//TODO:KILL
+	if (called->body().isBuiltin()) {
+		const ConcreteFunBody::Builtin b = called->body().asBuiltin();
+		if (b.builtinInfo.kind == BuiltinFunKind::refOfVal) {
+			assert(size(a) == 1);
+		}
+	}
+
 	if (has(called->closureParam)) {
 		assert(concreteTypeEq(force(first(args).typeWithKnownLambdaBody()), force(called->closureParam).type));
 	}

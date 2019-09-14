@@ -662,7 +662,7 @@ namespace {
 				break;
 
 			case BuiltinFunKind::getCtx:
-				writeStatic(writer, "ctx");
+				writeStatic(writer, "_ctx");
 				break;
 
 			case BuiltinFunKind::_if:
@@ -716,11 +716,15 @@ namespace {
 				break;
 
 			case BuiltinFunKind::asAnyPtr:
+			case BuiltinFunKind::asRef:
 			case BuiltinFunKind::toIntFromInt16:
 			case BuiltinFunKind::toIntFromInt32:
 			case BuiltinFunKind::toNatFromNat16:
 			case BuiltinFunKind::toNatFromNat32:
 			case BuiltinFunKind::toNatFromPtr:
+			case BuiltinFunKind::unsafeNat64ToInt64:
+			case BuiltinFunKind::unsafeNat64ToNat32:
+			case BuiltinFunKind::unsafeInt64ToNat64:
 				writeCastToType(writer->writer, e.returnType());
 				writeArg(0);
 				break;
@@ -733,13 +737,6 @@ namespace {
 
 			case BuiltinFunKind::unsafeModNat64:
 				binaryOperator("%");
-				break;
-
-			case BuiltinFunKind::unsafeNat64ToInt64:
-			case BuiltinFunKind::unsafeNat64ToNat32:
-			case BuiltinFunKind::unsafeInt64ToNat64:
-				writeCastToType(writer->writer, e.returnType());
-				writeArg(0);
 				break;
 
 			case BuiltinFunKind::deref:
@@ -774,7 +771,7 @@ namespace {
 	}
 
 	void writeArgsWithCtx(WriterWithIndent* writer, const Arr<const ConstantOrExpr> args) {
-		writeStatic(writer, "(ctx");
+		writeStatic(writer, "(_ctx");
 		writeWithCommas(writer->writer, args, /*leadingComma*/ True, [&](const ConstantOrExpr e) {
 			writeConstantOrExpr(writer, e);
 		});
@@ -862,7 +859,7 @@ namespace {
 				writeStr(writer->writer, type.mustBePointer()->mangledName);
 				writeStatic(writer, "(");
 				writeStr(writer, alloc->mangledName());
-				writeStatic(writer, "(ctx, ");
+				writeStatic(writer, "(_ctx, ");
 				writeNat(writer->writer, type.mustBePointer()->sizeBytes());
 				writeStatic(writer, "), ");
 				writeConcreteExpr(writer, *e.inner);
@@ -1011,7 +1008,7 @@ namespace {
 	) {
 		writeChar(writer, '(');
 		if (needsCtx)
-			writeStatic(writer, "ctx* ctx");
+			writeStatic(writer, "ctx* _ctx");
 		if (has(closure)) {
 			if (needsCtx)
 				writeStatic(writer, ", ");

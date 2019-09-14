@@ -40,6 +40,7 @@ Dict<K, V, cmp> finishDictShouldBeNoConflict(DictBuilder<K, V, cmp>* db) {
 	Arr<KeyValuePair<K, V>> allPairs = finishArr(&db->builder);
 	for (const size_t i : Range{size(allPairs)})
 		for (const size_t j : Range{i})
+			// If this fails, there was a conflict somewhere
 			assert(cmp(at(allPairs, i).key, at(allPairs, j).key) != Comparison::equal);
 	return Dict<K, V, cmp>{allPairs};
 }

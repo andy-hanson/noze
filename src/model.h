@@ -25,6 +25,10 @@ inline Comparison comparePathAndStorageKind(const PathAndStorageKind a, const Pa
 	return res != Comparison::equal ? res : comparePath(a.path, b.path);
 }
 
+inline const Bool pathAndStorageKindEq(const PathAndStorageKind a, const PathAndStorageKind b) {
+	return enumEq(comparePathAndStorageKind(a, b), Comparison::equal);
+}
+
 struct AbsolutePathsGetter {
 	const AbsolutePath globalPath;
 	const AbsolutePath localPath;
@@ -862,7 +866,6 @@ struct CommonTypes {
 	const Arr<const StructDecl*> optionSomeNone;
 	const StructDecl* byVal;
 	const StructDecl* arr;
-	const StructDecl* mutArr;
 	const StructDecl* fut;
 	const Arr<const FunKindAndStructs> funKindsAndStructs;
 
@@ -871,6 +874,8 @@ struct CommonTypes {
 
 struct Program {
 	const Module* includeModule;
+	const Module* gcModule;
+	const Module* runtimeModule;
 	const Module* mainModule;
 	// Includes 'include.nz"'
 	const Arr<const Module*> allModules;

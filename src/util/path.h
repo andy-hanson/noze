@@ -85,7 +85,10 @@ struct RelPath {
 	const Path* path;
 };
 
-const Opt<const Path*> resolvePath(Arena* arena, const Path* path, const RelPath relPath);
+const Opt<const Path*> resolvePath(Arena* arena, const Opt<const Path*> path, const RelPath relPath);
+inline const Opt<const Path*> resolvePath(Arena* arena, const Path* path, const RelPath relPath) {
+	return resolvePath(arena, some<const Path*>(path), relPath);
+}
 
 inline const Opt<const AbsolutePath> resolvePath(Arena* arena, const AbsolutePath path, const RelPath relPath) {
 	const Opt<const Path*> p = resolvePath(arena, path.path, relPath);

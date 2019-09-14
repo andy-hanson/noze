@@ -68,10 +68,8 @@ namespace {
 		const Arr<const ConcreteType> typeArgs
 	) {
 		const StructDecl* decl = i->decl;
-		if (ptrEquals(decl, commonTypes->arr)) {
+		if (ptrEquals(decl, commonTypes->arr))
 			return some<const SpecialStructInfo>(SpecialStructInfo{SpecialStructInfo::Kind::arr, only(typeArgs)});
-		} else if (ptrEquals(decl, commonTypes->mutArr))
-			return some<const SpecialStructInfo>(SpecialStructInfo{SpecialStructInfo::Kind::mutArr, only(typeArgs)});
 		else
 			return none<const SpecialStructInfo>();
 	}
@@ -433,8 +431,8 @@ const ConcreteType ConcretizeCtx::anyPtrType() {
 	});
 }
 
-const ConcreteType ConcretizeCtx::ctxPtrType() {
-	return lazilySet(&_ctxPtrType, [&]() {
+const ConcreteType ConcretizeCtx::ctxType() {
+	return lazilySet(&_ctxType, [&]() {
 		const ConcreteType res = getConcreteType_forStructInst(this, ctxStructInst, TypeArgsScope::empty());
 		assert(res.isPointer);
 		return res;

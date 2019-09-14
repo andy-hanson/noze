@@ -35,6 +35,7 @@ enum class BuiltinFunKind {
 	as,
 	asAnyPtr,
 	asNonConst,
+	asRef,
 	bitwiseAndNat16,
 	bitwiseAndNat32,
 	bitwiseAndNat64,
@@ -228,7 +229,6 @@ struct ConcreteType {
 struct SpecialStructInfo {
 	enum class Kind {
 		arr,
-		mutArr,
 	};
 	const Kind kind;
 	const ConcreteType elementType;
