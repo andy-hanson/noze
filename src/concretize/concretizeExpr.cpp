@@ -55,19 +55,25 @@ namespace {
 
 	const ConstantOrExpr concretizeExpr(ConcretizeExprCtx* ctx, const Expr expr);
 
+	const ConcreteFunInst getConcreteFunInstFromCalled(ConcretizeExprCtx* ctx, const Called called);
+
+	const ConcreteFunInst getConcreteFunInstFromFunInst(ConcretizeExprCtx* ctx, const FunInst* funInst) {
+		const Arr<const ConcreteFunInst> specImpls = map<const ConcreteFunInst>{}(
+			getArena(ctx),
+			funInst->specImpls,
+			[&](const Called calledSpecImpl) {
+				return getConcreteFunInstFromCalled(ctx, calledSpecImpl);
+			});
+		return ConcreteFunInst{
+			funInst->decl,
+			ctx->typesToConcreteTypes(funInst->typeArgs),
+			specImpls};
+	}
+
 	const ConcreteFunInst getConcreteFunInstFromCalled(ConcretizeExprCtx* ctx, const Called called) {
 		return called.match(
 			[&](const FunInst* funInst) {
-				const Arr<const ConcreteFunInst> specImpls = map<const ConcreteFunInst>{}(
-					getArena(ctx),
-					funInst->specImpls,
-					[&](const Called calledSpecImpl) {
-						return getConcreteFunInstFromCalled(ctx, calledSpecImpl);
-					});
-				return ConcreteFunInst{
-					funInst->decl,
-					ctx->typesToConcreteTypes(funInst->typeArgs),
-					specImpls};
+				return getConcreteFunInstFromFunInst(ctx, funInst);
 			},
 			[&](const SpecSig specSig) {
 				return at(ctx->concreteFunSource.specImpls(), specSig.indexOverAllSpecUses);
@@ -260,7 +266,9 @@ namespace {
 		if (e.kind == FunKind::ref)
 			todo<void>("funaslambda sendfun");
 
-		const ConcreteFun* cf = getOrAddNonTemplateConcreteFunAndFillBody(ctx->concretizeCtx, e.fun);
+		const ConcreteFun* cf = getOrAddNonSpecializedConcreteFunAndFillBody(
+			ctx->concretizeCtx,
+			getConcreteFunInstFromFunInst(ctx, e.fun));
 		const Str mangledName = cat(arena, cf->mangledName(), strLiteral("__asLambda"));
 
 		const ConcreteType dynamicType = ctx->getConcreteType_forStructInst(e.type);
@@ -287,10 +295,7 @@ namespace {
 			const Expr* body = nu<const Expr>{}(
 				arena,
 				range,
-				Expr::Call{
-					// TODO: this should technically use the model arena and not the concrete arena?
-					Called{instantiateNonTemplateFun(getArena(ctx), e.fun)},
-					args});
+				Expr::Call{Called{e.fun}, args});
 			const LambdaInfo info = LambdaInfo{ctx->concreteFunSource.containingFunInst, body};
 			addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(
 				arena,

@@ -7,7 +7,6 @@ literal c-str(s str) noctx
 	s data
 
 to-c-str c-str(s str)
-	| Need to add the null character to the end
 	s + "\0" data
 
 to-str str(c c-str) unsafe noctx

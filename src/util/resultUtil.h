@@ -51,3 +51,20 @@ struct flatMapSuccess {
 			});
 	}
 };
+
+template <typename OutSuccess, typename Failure>
+struct joinResults {
+	template <typename InSuccess0, typename InSuccess1, typename Cb>
+	inline const Result<OutSuccess, Failure> operator()(
+		const Result<InSuccess0, Failure> r0,
+		const Result<InSuccess1, Failure> r1,
+		Cb cb
+	) {
+		return flatMapSuccess<const OutSuccess, Failure>{}(r0, [&](const InSuccess0 success0) {
+			return mapSuccess<const OutSuccess>{}(r1, [&](const InSuccess1 success1) {
+				return cb(success0, success1);
+			});
+		});
+	}
+};
+

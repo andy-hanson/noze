@@ -47,11 +47,6 @@ const FunInst* instantiateFun(
 	const Arr<const Type> typeArgs,
 	const Arr<const Called> specImpls);
 
-inline const FunInst* instantiateNonTemplateFun(Arena* arena, const FunDecl* decl) {
-	assert(!decl->isTemplate());
-	return instantiateFun(arena, decl, emptyArr<const Type>(), emptyArr<const Called>());
-}
-
 const StructBody instantiateStructBody(Arena* arena, const StructDecl* decl, const Arr<const Type> typeArgs);
 
 const StructInst* instantiateStruct(

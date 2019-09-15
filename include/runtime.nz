@@ -1,11 +1,11 @@
 | .str-utils for c-str.to-str
-import .arr-utils .bootstrap .gc .mut-bag .str-utils .thread-utils
-
+| TODO: don't import .io or .number-utils
+import .arr-utils .bootstrap .cell .gc .io .mut-bag .number-utils .os .str-utils .thread-utils
 
 | Treated specially by the compiler
 rt-main int32(argc int32, argv ptr c-str, user-main-ptr fun-ptr2 fut<int32> ctx arr<str>) trusted noctx summon
-	| TODO: more threads
-	n-threads = one as<nat>
+	| TODO: detect # hardware processors to use for n-threads
+	n-threads = two as<nat>
 	gctx-by-val = new<by-val<global-ctx>> new-lock, empty-arr<vat>, n-threads, new-condition, false
 	gctx = gctx-by-val ref-of-val
 	vat-by-val = new-vat: gctx, zero, n-threads
@@ -24,12 +24,74 @@ rt-main int32(argc int32, argv ptr c-str, user-main-ptr fun-ptr2 fut<int32> ctx 
 	args = new<arr<c-str>> argc.to-int.unsafe-to-nat, argv
 	ctx call-with-ctx<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>> add, vat, args, user-main-ptr
 
-	| TODO: more than one thread
-	tls = new<by-val<thread-local-stuff>> zero
-	thread-function: zero, gctx, tls.ref-of-val
+	n-threads run-threads gctx, &thread-function
 
 	| TODO: return number from main fn
 	zero
+
+thread-args<?t> record
+	by-ref
+	fun fun-ptr2 void nat ?t
+	thread-id nat
+	arg ?t
+
+| Each thread will get the thread ID, and the common arguments.
+| TODO: ?t must be a reference type
+run-threads void(n-threads nat, arg ?t, fun fun-ptr2 void nat ?t) noctx unsafe
+	threads = n-threads unmanaged-alloc-elements<pthread-t>
+	thread-args = n-threads unmanaged-alloc-elements<by-val<thread-args<?t>>>
+
+	zero run-threads-recur n-threads, threads, thread-args, arg, fun
+	zero join-threads-recur n-threads, threads
+
+	threads unmanaged-free
+	thread-args unmanaged-free
+
+run-threads-recur void(i nat, n-threads nat, threads ptr pthread-t, thread-args ptr by-val<thread-args<?t>>, arg ?t, fun fun-ptr2 void nat ?t) noctx unsafe
+	when
+		i == n-threads
+			pass
+		else
+			thread-arg-ptr = thread-args + i
+			thread-arg-ptr set new fun, i, arg
+			thread-ptr = threads + i
+			err = thread-ptr.as-cell pthread-create null, &thread-fun<?t>, thread-arg-ptr.as-any-ptr
+			when
+				err zero?
+					i.noctx-incr run-threads-recur n-threads, threads, thread-args, arg, fun
+				err == eagain
+					| TODO: warn and make do with the threads it does let us create (so long as there's at least one)
+					todo
+				else
+					| Fatal error
+					todo
+
+thread-fun<?t> any-ptr(args-ptr any-ptr) noctx unsafe
+	args = args-ptr as-ref<thread-args<?t>>
+	args.fun call args.thread-id, args.arg
+	null
+
+join-threads-recur void(i nat, n-threads nat, threads ptr pthread-t) noctx unsafe
+	when
+		i == n-threads
+			pass
+		else
+			(threads + i).deref join-one-thread
+			i.noctx-incr join-threads-recur n-threads, threads
+
+join-one-thread void(tid pthread-t) noctx unsafe
+	thread-return = new<by-val<cell<any-ptr>>> null
+	err = tid pthread-join thread-return.ref-of-val
+	when
+		err zero?
+			pass
+		err == einval
+			todo
+		err == esrch
+			todo
+		else
+			todo
+	hard-assert: thread-return.ref-of-val.get == null
 
 get-gctx global-ctx() unsafe
 	get-ctx.gctx-ptr as-ref
@@ -116,11 +178,16 @@ thread-local-stuff record mut
 	by-ref
 	ignore-me nat
 
-thread-function void(thread-id nat, gctx global-ctx, tls thread-local-stuff) noctx unsafe
+thread-function void(thread-id nat, gctx global-ctx) noctx unsafe
+	tls = as<by-val<thread-local-stuff>>: new zero
+	thread-function-recur: thread-id, gctx, tls.ref-of-val
+
+thread-function-recur void(thread-id nat, gctx global-ctx, tls thread-local-stuff) noctx unsafe
 	when
 		gctx is-shut-down
-			| Exit. Should be no tasks left.
 			gctx.lk.ref-of-val acquire-lock
+			| Remove this thread from live threads for good.
+			gctx.n-live-threads := gctx.n-live-threads noctx-decr
 			assert-vats-are-shut-down: zero, gctx.vats
 			gctx.lk.ref-of-val release-lock
 		else
@@ -141,8 +208,13 @@ thread-function void(thread-id nat, gctx global-ctx, tls thread-local-stuff) noc
 						else
 							gctx.may-be-work-to-do.ref-of-val wait-on last-checked
 
+					gctx.lk.ref-of-val acquire-lock
+					| We decremented this while holding the lock, increment it again
+					gctx.n-live-threads := gctx.n-live-threads noctx-incr
+					gctx.lk.ref-of-val release-lock
+
 			| Do another task
-			thread-function: thread-id, gctx, tls
+			thread-function-recur: thread-id, gctx, tls
 
 new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id actor-id) noctx unsafe
 	new gctx.as-any-ptr, vat.id, actor-id, vat.gc.ref-of-val.get-gc-ctx.as-any-ptr
@@ -201,6 +273,7 @@ choose-task result chosen-task no-chosen-task(gctx global-ctx) noctx unsafe
 			| Did not find a task to do.
 			| (Tasks may have been added concurrently;
 			| this is fine as we're about to wait on a condition and will immediately wake up if so.)
+			| Need to do this here while we hold the lock
 			gctx.n-live-threads := gctx.n-live-threads.noctx-decr
 			err: new<no-chosen-task> gctx.n-live-threads zero?
 		some s
@@ -318,5 +391,3 @@ assert-vats-are-shut-down void(i nat, vats arr vat) noctx unsafe
 			vat.tasks-lock.ref-of-val release-lock
 
 			assert-vats-are-shut-down: i.noctx-incr, vats
-
-

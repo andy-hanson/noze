@@ -3,13 +3,11 @@
 # http://www.sublimetext.com/docs/3/syntax.html
 # https://www.sublimetext.com/docs/3/scope_naming.html
 
-# NOTE: For an identifier I use this regex:
-# {{name}}
-# It appears many times. If changing it be sure to find and replace.
-# For types, prepend '\??' since it may be a type variable.
+# DEVELOPING:
+# In a '.nz' file, use ctrl-alt-shift-p to see the scope at the cursor.
 
 variables:
-  name:      '(([a-z0-9\-]+\??)|[\+\-\*\/\<\>\=\?]+)'
+  name: '(([a-z0-9\-]+\??)|[\+\-\*\/\<\>\=\?]+)'
   type_name: '\??[a-z0-9\-]+'
   spec_name: '\??[a-z0-9\-]+'
   # Declarations end at the next unindented line.
@@ -50,7 +48,10 @@ contexts:
       scope: keyword
       push: import
     - match: '{{name}}'
-      scope: keyword
+      # NOTE: Of course these won't all be functions.
+      # But we don't know what kind of declaration it is yet unfortunately.
+      # But luckily goto-definition will work even coming from a 'storage.type'.
+      scope: entity.name.function.noze
       push: decl_after_name
 
   decl_after_name:
@@ -74,7 +75,7 @@ contexts:
       scope: comment
       push: union
     - match: '{{type_name}}'
-      scope: entity.name.type
+      scope: storage.type
       push: function
 
   import:
@@ -113,7 +114,7 @@ contexts:
       pop: true
     # Each line is a signature
     - match: '{{name}}'
-      scope: entity.name.function
+      scope: entity.name.function.noze
       push: spec_signature
 
   spec_signature:
@@ -184,12 +185,12 @@ contexts:
     - match: ^\s+
     # `foo:`
     - match: '{{name}}(\:)\s+'
-      scope: entity.name.function
+      scope: meta.function-call.noze
       captures:
         3: comment
     # `.foo`
     - match: (\.){{name}}
-      scope: entity.name.function
+      scope: meta.function-call.noze
       captures:
         1: comment # punctuation.accessor
     # numbers
@@ -207,7 +208,7 @@ contexts:
       scope: identifier
     # FunAsLambda (&foo)
     - match: '\&{{name}}'
-      scope: entity.name.function
+      scope: meta.function-call.noze
     # Lambda `\x y`
     - match: '(\\).*$'
       # parameters are identifiers
@@ -227,7 +228,7 @@ contexts:
       scope: comment # punctuation.separator
     # Method call ` foo ` or ` foo: `
     - match: '\s+{{name}}(\:)?\s+'
-      scope: entity.name.function
+      scope: meta.function-call.noze
       captures:
         3: comment
 

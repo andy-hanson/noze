@@ -67,13 +67,24 @@ struct Diag {
 	struct ExpectedTypeIsNotALambda {
 		const Opt<const Type> expectedType;
 	};
-	struct FileDoesNotExist {};
+	struct FileDoesNotExist {
+		enum class Kind {
+			root,
+			import
+		};
+		const Kind kind;
+		const PathAndStorageKind path;
+	};
 	struct FunAsLambdaCantOverload {};
-	struct FunAsLambdaNoTemplate {};
+	struct FunAsLambdaWrongNumberTypeArgs {
+		const FunDecl* fun;
+		const size_t nProvidedTypeArgs;
+	};
 	struct FunAsLambdaWrongReturnType {
 		const Type actual;
 		const Type expected;
 	};
+	struct LambdaCantInferParamTypes {};
 	struct LambdaClosesOverMut {
 		const ClosureField* field;
 	};
@@ -121,6 +132,9 @@ struct Diag {
 	struct PurityOfMemberWorseThanUnion {
 		const StructDecl* strukt;
 		const StructInst* member;
+	};
+	struct RelativeImportReachesPastRoot {
+		const RelPath imported;
 	};
 	struct SendFunDoesNotReturnFut {
 		const Type actualReturnType;
@@ -182,8 +196,9 @@ private:
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
 		funAsLambdaCantOverload,
-		funAsLambdaNoTemplate,
+		funAsLambdaWrongNumberTypeArgs,
 		funAsLambdaWrongReturnType,
+		lambdaCantInferParamTypes,
 		lambdaClosesOverMut,
 		lambdaForFunPtrHasClosure,
 		localShadowsPrevious,
@@ -195,6 +210,7 @@ private:
 		parseDiag,
 		purityOfFieldWorseThanRecord,
 		purityOfMemberWorseThanUnion,
+		relativeImportReachesPastRoot,
 		sendFunDoesNotReturnFut,
 		specBuiltinNotSatisfied,
 		specImplHasSpecs,
@@ -223,8 +239,9 @@ private:
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
 		const FunAsLambdaCantOverload funAsLambdaCantOverload;
-		const FunAsLambdaNoTemplate funAsLambdaNoTemplate;
+		const FunAsLambdaWrongNumberTypeArgs funAsLambdaWrongNumberTypeArgs;
 		const FunAsLambdaWrongReturnType funAsLambdaWrongReturnType;
+		const LambdaCantInferParamTypes lambdaCantInferParamTypes;
 		const LambdaClosesOverMut lambdaClosesOverMut;
 		const LambdaForFunPtrHasClosure lambdaForFunPtrHasClosure;
 		const LocalShadowsPrevious localShadowsPrevious;
@@ -236,6 +253,7 @@ private:
 		const ParseDiag parseDiag;
 		const PurityOfFieldWorseThanRecord purityOfFieldWorseThanRecord;
 		const PurityOfMemberWorseThanUnion purityOfMemberWorseThanUnion;
+		const RelativeImportReachesPastRoot relativeImportReachesPastRoot;
 		const SendFunDoesNotReturnFut sendFunDoesNotReturnFut;
 		const SpecBuiltinNotSatisfied specBuiltinNotSatisfied;
 		const SpecImplHasSpecs specImplHasSpecs;
@@ -278,10 +296,12 @@ public:
 		: kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
 	explicit inline Diag(const FunAsLambdaCantOverload d)
 		: kind{Kind::funAsLambdaCantOverload}, funAsLambdaCantOverload{d} {}
-	explicit inline Diag(const FunAsLambdaNoTemplate d)
-		: kind{Kind::funAsLambdaNoTemplate}, funAsLambdaNoTemplate{d} {}
+	explicit inline Diag(const FunAsLambdaWrongNumberTypeArgs d)
+		: kind{Kind::funAsLambdaWrongNumberTypeArgs}, funAsLambdaWrongNumberTypeArgs{d} {}
 	explicit inline Diag(const FunAsLambdaWrongReturnType d)
 		: kind{Kind::funAsLambdaWrongReturnType}, funAsLambdaWrongReturnType{d} {}
+	explicit inline Diag(const LambdaCantInferParamTypes d)
+		: kind{Kind::lambdaCantInferParamTypes}, lambdaCantInferParamTypes{d} {}
 	explicit inline Diag(const LambdaClosesOverMut d)
 		: kind{Kind::lambdaClosesOverMut}, lambdaClosesOverMut{d} {}
 	explicit inline Diag(const LambdaForFunPtrHasClosure d)
@@ -304,6 +324,8 @@ public:
 		: kind{Kind::purityOfFieldWorseThanRecord}, purityOfFieldWorseThanRecord{d} {}
 	explicit inline Diag(const PurityOfMemberWorseThanUnion d)
 		: kind{Kind::purityOfMemberWorseThanUnion}, purityOfMemberWorseThanUnion{d} {}
+	explicit inline Diag(const RelativeImportReachesPastRoot d)
+		: kind{Kind::relativeImportReachesPastRoot}, relativeImportReachesPastRoot{d} {}
 	explicit inline Diag(const SendFunDoesNotReturnFut d)
 		: kind{Kind::sendFunDoesNotReturnFut}, sendFunDoesNotReturnFut{d} {}
 	explicit inline Diag(const SpecBuiltinNotSatisfied d)
@@ -331,6 +353,11 @@ public:
 		return enumEq(kind, Kind::fileDoesNotExist);
 	}
 
+	inline const FileDoesNotExist asFileDoesNotExist() const {
+		assert(isFileDoesNotExist());
+		return fileDoesNotExist;
+	}
+
 	template <
 		typename CbCallMultipleMatches,
 		typename CbCallNoMatch,
@@ -346,8 +373,9 @@ public:
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
 		typename CbFunAsLambdaCantOverload,
-		typename CbFunAsLambdaNoTemplate,
+		typename CbFunAsLambdaWrongNumberTypeArgs,
 		typename CbFunAsLambdaWrongReturnType,
+		typename CbLambdaCantInferParamTypes,
 		typename CbLambdaClosesOverMut,
 		typename CbLambdaForFunPtrHasClosure,
 		typename CbLocalShadowsPrevious,
@@ -359,6 +387,7 @@ public:
 		typename CbParseDiag,
 		typename CbPurityOfFieldWorseThanRecord,
 		typename CbPurityOfMemberWorseThanUnion,
+		typename CbRelativeImportReachesPastRoot,
 		typename CbSendFunDoesNotReturnFut,
 		typename CbSpecBuiltinNotSatisfied,
 		typename CbSpecImplHasSpecs,
@@ -385,8 +414,9 @@ public:
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
 		CbFunAsLambdaCantOverload cbFunAsLambdaCantOverload,
-		CbFunAsLambdaNoTemplate cbFunAsLambdaNoTemplate,
+		CbFunAsLambdaWrongNumberTypeArgs cbFunAsLambdaWrongNumberTypeArgs,
 		CbFunAsLambdaWrongReturnType cbFunAsLambdaWrongReturnType,
+		CbLambdaCantInferParamTypes cbLambdaCantInferParamTypes,
 		CbLambdaClosesOverMut cbLambdaClosesOverMut,
 		CbLambdaForFunPtrHasClosure cbLambdaForFunPtrHasClosure,
 		CbLocalShadowsPrevious cbLocalShadowsPrevious,
@@ -398,6 +428,7 @@ public:
 		CbParseDiag cbParseDiag,
 		CbPurityOfFieldWorseThanRecord cbPurityOfFieldWorseThanRecord,
 		CbPurityOfMemberWorseThanUnion cbPurityOfMemberWorseThanUnion,
+		CbRelativeImportReachesPastRoot cbRelativeImportReachesPastRoot,
 		CbSendFunDoesNotReturnFut cbSendFunDoesNotReturnFut,
 		CbSpecBuiltinNotSatisfied cbSpecBuiltinNotSatisfied,
 		CbSpecImplHasSpecs cbSpecImplHasSpecs,
@@ -439,10 +470,12 @@ public:
 				return cbFileDoesNotExist(fileDoesNotExist);
 			case Kind::funAsLambdaCantOverload:
 				return cbFunAsLambdaCantOverload(funAsLambdaCantOverload);
-			case Kind::funAsLambdaNoTemplate:
-				return cbFunAsLambdaNoTemplate(funAsLambdaNoTemplate);
+			case Kind::funAsLambdaWrongNumberTypeArgs:
+				return cbFunAsLambdaWrongNumberTypeArgs(funAsLambdaWrongNumberTypeArgs);
 			case Kind::funAsLambdaWrongReturnType:
 				return cbFunAsLambdaWrongReturnType(funAsLambdaWrongReturnType);
+			case Kind::lambdaCantInferParamTypes:
+				return cbLambdaCantInferParamTypes(lambdaCantInferParamTypes);
 			case Kind::lambdaClosesOverMut:
 				return cbLambdaClosesOverMut(lambdaClosesOverMut);
 			case Kind::lambdaForFunPtrHasClosure:
@@ -465,6 +498,8 @@ public:
 				return cbPurityOfFieldWorseThanRecord(purityOfFieldWorseThanRecord);
 			case Kind::purityOfMemberWorseThanUnion:
 				return cbPurityOfMemberWorseThanUnion(purityOfMemberWorseThanUnion);
+			case Kind::relativeImportReachesPastRoot:
+				return cbRelativeImportReachesPastRoot(relativeImportReachesPastRoot);
 			case Kind::sendFunDoesNotReturnFut:
 				return cbSendFunDoesNotReturnFut(sendFunDoesNotReturnFut);
 			case Kind::specBuiltinNotSatisfied:
@@ -493,9 +528,13 @@ public:
 	}
 };
 
-struct Diagnostic {
-	const PathAndStorageKind where;
+struct PathAndStorageKindAndRange {
+	const PathAndStorageKind pathAndStorageKind;
 	const SourceRange range;
+};
+
+struct Diagnostic {
+	const PathAndStorageKindAndRange where;
 	const Diag diag;
 };
 
@@ -504,11 +543,13 @@ struct FilesInfo {
 	const LineAndColumnGetters lineAndColumnGetters;
 };
 
+using Diags = const Arr<const Diagnostic>;
+
 struct Diagnostics {
-	const Arr<const Diagnostic> diagnostics;
+	const Diags diagnostics;
 	const FilesInfo filesInfo;
 
-	inline Diagnostics(const Arr<const Diagnostic> _diagnostics, const FilesInfo _filesInfo)
+	inline Diagnostics(Diags _diagnostics, const FilesInfo _filesInfo)
 		: diagnostics{_diagnostics}, filesInfo{_filesInfo} {
 		assert(!isEmpty(diagnostics));
 	}

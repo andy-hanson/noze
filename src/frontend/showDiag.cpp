@@ -12,6 +12,13 @@ namespace {
 		writeStr(writer, p->baseName);
 	}
 
+	void writeRelPath(Writer* writer, const RelPath p) {
+		repeat(p.nParents, [&]() {
+			writeStatic(writer, "../");
+		});
+		writePath(writer, p.path);
+	}
+
 	void writePathAndStorageKind(Writer* writer, const PathAndStorageKind p) {
 		writePath(writer, p.path);
 	}
@@ -33,21 +40,21 @@ namespace {
 		writePos(writer, lc, range.end);
 	}
 
-	void writeWhere(Writer* writer, const FilesInfo fi, const PathAndStorageKind where, const SourceRange range) {
+	void writeWhere(Writer* writer, const FilesInfo fi, const PathAndStorageKindAndRange where) {
 		writeBold(writer);
 		Arena temp {};
 		writeHyperlink(
 			writer,
-			pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where)),
-			pathToStr(&temp, where.path));
+			pathToStr(&temp, fi.absolutePathsGetter.getAbsolutePath(&temp, where.pathAndStorageKind)),
+			pathToStr(&temp, where.pathAndStorageKind.path));
 		writeChar(writer, ' ');
 		writeRed(writer);
 		const LineAndColumnGetter lcg = mustGetAt<
 			const PathAndStorageKind,
 			const LineAndColumnGetter,
 			comparePathAndStorageKind
-		>(fi.lineAndColumnGetters, where);
-		writeRange(writer, lcg, range);
+		>(fi.lineAndColumnGetters, where.pathAndStorageKind);
+		writeRange(writer, lcg, where.range);
 		writeReset(writer);
 	}
 
@@ -360,21 +367,41 @@ namespace {
 				} else
 					writeStatic(writer, "there is no expected type at this location; lambdas need an expected type");
 			},
-			[](const Diag::FileDoesNotExist) {
-				// We handle this specially
-				unreachable<void>();
+			[&](const Diag::FileDoesNotExist d) {
+				switch (d.kind) {
+					case Diag::FileDoesNotExist::Kind::root:
+						writeStatic(writer, "root path ");
+						writePathAndStorageKind(writer, d.path);
+						writeStatic(writer, " does not exist");
+						break;
+					case Diag::FileDoesNotExist::Kind::import:
+						writeStatic(writer, "import resolves to ");
+						writePathAndStorageKind(writer, d.path);
+						writeStatic(writer, ", but file does not exist\n");
+						break;
+					default:
+						assert(0);
+				}
 			},
 			[&](const Diag::FunAsLambdaCantOverload) {
 				writeStatic(writer, "fun has multiple overloads, can't convert to lambda");
 			},
-			[&](const Diag::FunAsLambdaNoTemplate) {
-				writeStatic(writer, "templates not allowed in fun-as-lambda expression");
+			[&](const Diag::FunAsLambdaWrongNumberTypeArgs d) {
+				writeName(writer, d.fun->name());
+				writeStatic(writer, " takes ");
+				writeNat(writer, typeArity(d.fun));
+				writeStatic(writer, " type arguments, but ");
+				writeNat(writer, d.nProvidedTypeArgs);
+				writeStatic(writer, " were provided");
 			},
 			[&](const Diag::FunAsLambdaWrongReturnType d) {
 				writeStatic(writer, "fun as lambda has wrong return type\nactual: ");
 				writeType(writer, d.actual);
 				writeStatic(writer, "\nexpected: ");
 				writeType(writer, d.expected);
+			},
+			[&](const Diag::LambdaCantInferParamTypes) {
+				writeStatic(writer, "can't infer parameter types for lambda.\nconsider prefixing with 'as<...>:'");
 			},
 			[&](const Diag::LambdaClosesOverMut d) {
 				writeStatic(writer, "lambda is a plain 'fun' but closes over ");
@@ -458,6 +485,12 @@ namespace {
 				writeStatic(writer, " has purity ");
 				writePurity(writer, d.member->bestCasePurity);
 			},
+			[&](const Diag::RelativeImportReachesPastRoot d) {
+				writeStatic(writer, "importing ");
+				writeRelPath(writer, d.imported);
+				writeStatic(writer, " reaches above the source directory");
+				//TODO: recommend a compiler option to fix this
+			},
 			[&](const Diag::SendFunDoesNotReturnFut d) {
 				writeStatic(writer, "a fun-ref should return a fut, but returns ");
 				writeType(writer, d.actualReturnType);
@@ -531,7 +564,7 @@ namespace {
 	}
 
 	void showDiagnostic(Writer* writer, const FilesInfo fi, const Diagnostic d) {
-		writeWhere(writer, fi, d.where, d.range);
+		writeWhere(writer, fi, d.where);
 		writeChar(writer, ' ');
 		writeDiag(writer, fi, d.diag);
 		writeChar(writer, '\n');
@@ -542,22 +575,16 @@ void printDiagnostics(const Diagnostics diagnostics) {
 	Arena tempArena {};
 	Writer writer { &tempArena };
 	//TODO: sort diagnostics by file / range
-	const Arr<const Arr<const Diagnostic>> groups = sortAndGroup(
+	const Arr<const Diags> groups = sortAndGroup(
 		&tempArena,
 		diagnostics.diagnostics,
 		[&](const Diagnostic a, const Diagnostic b) {
-			return comparePathAndStorageKind(a.where, b.where);
+			return comparePathAndStorageKind(a.where.pathAndStorageKind, b.where.pathAndStorageKind);
 		});
 
-	for (const Arr<const Diagnostic> group : groups) {
-		if (first(group).diag.isFileDoesNotExist()) {
-			assert(size(group) == 1);
-			writePathAndStorageKind(&writer, only(group).where);
-			writeStatic(&writer, ": file does not exist\n");
-		} else
-			for (const Diagnostic d : group)
-				showDiagnostic(&writer, diagnostics.filesInfo, d);
-	}
+	for (const Diags group : groups)
+		for (const Diagnostic d : group)
+			showDiagnostic(&writer, diagnostics.filesInfo, d);
 
 	printf("%s\n", finishWriterToCStr(&writer));
 }

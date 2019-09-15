@@ -11,42 +11,33 @@ namespace {
 		return (a + b) / 2;
 	}
 
-	const LineAndColumn lineAndColumnAtPosSlow(const Str text, const Pos pos) {
-		uint line = 0;
-		uint column = 0;
-		for (const char c : slice(text, 0, pos))
-			switch (c) {
-				case '\n':
-					line++;
-					column = 0;
-					break;
-				case '\t':
-					column += TAB_SIZE;
-					break;
-				default:
-					column++;
-					break;
-			}
-		return LineAndColumn{line, column};
-	}
-
-	const Bool lineAndColumnEq(const LineAndColumn a, const LineAndColumn b) {
-		return _and(a.line == b.line, a.column == b.column);
+	uint8_t getNTabs(const Str text) {
+		uint8_t i = 0;
+		while (i < MAX_UINT8
+			&& i < size(text)
+			&& at(text, i) == '\t') {
+			i++;
+		}
+		return i;
 	}
 }
 
 const LineAndColumnGetter lineAndColumnGetterForText(Arena* arena, const Str text) {
-	ArrBuilder<const Pos> res {};
-	add<const Pos>(arena, &res, 0);
+	ArrBuilder<const Pos> lineToPos {};
+	ArrBuilder<const uint8_t> lineToNTabs {};
+
+	add<const Pos>(arena, &lineToPos, 0);
+	add<const uint8_t>(arena, &lineToNTabs, getNTabs(text));
+
 	for (const size_t i : indices(text))
-		if (at(text, i) == '\n')
-			add<const Pos>(arena, &res, safeSizeTToUint(i + 1));
-	return LineAndColumnGetter{copyStr(arena, text), finishArr(&res)};
+		if (at(text, i) == '\n') {
+			add<const Pos>(arena, &lineToPos, safeSizeTToUint(i + 1));
+			add<const uint8_t>(arena, &lineToNTabs, getNTabs(slice(text, i + 1)));
+		}
+	return LineAndColumnGetter{finishArr(&lineToPos), finishArr(&lineToNTabs)};
 }
 
 const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos pos) {
-	assert(pos <= size(lc.text));
-
 	uint lowLine = 0; // inclusive
 	uint highLine = safeSizeTToUint(size(lc.lineToPos)); // exclusive
 
@@ -66,23 +57,11 @@ const LineAndColumn lineAndColumnAtPos(const LineAndColumnGetter lc, const Pos p
 	const uint line = lowLine;
 	const Pos lineStart = at(lc.lineToPos, line);
 	assert(pos >= lineStart && (line == size(lc.lineToPos) - 1 || pos <= at(lc.lineToPos, line + 1)));
-	// Need to walk the line looking for tabs, which count as more
-	// (TODO: precalculate the # tabs on each line)
-	uint column= 0;
-	for (const char c : sliceFromTo(lc.text, lineStart, pos))
-		switch (c) {
-			case '\n':
-				unreachable<void>();
-				break;
-			case '\t':
-				column += TAB_SIZE;
-				break;
-			default:
-				column += 1;
-				break;
-		}
 
-	const LineAndColumn res = LineAndColumn{line, column};
-	assert(lineAndColumnEq(res, lineAndColumnAtPosSlow(lc.text, pos)));
-	return res;
+	const uint nCharsIntoLine = pos - lineStart;
+	const uint8_t nTabs = at(lc.lineToNTabs, line);
+	const uint column = nCharsIntoLine <= nTabs
+		? nCharsIntoLine * TAB_SIZE
+		: nTabs * (TAB_SIZE - 1) + nCharsIntoLine;
+	return LineAndColumn{line, column};
 }

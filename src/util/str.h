@@ -49,3 +49,6 @@ inline const NulTerminatedStr copyNulTerminatedStr(Arena* arena, const NulTermin
 }
 
 const Str stripNulTerminator(const NulTerminatedStr n);
+
+const Str emptyStr = strLiteral("");
+const NulTerminatedStr emptyNulTerminatedStr = nulTerminatedStrLiteral("");

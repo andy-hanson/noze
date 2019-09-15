@@ -69,7 +69,7 @@ const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath p
 		return todo<Ret>("size suspiciously large");
 
 	if (fileSize == 0)
-		return some<const NulTerminatedStr>(nulTerminatedStrLiteral(""));
+		return some<const NulTerminatedStr>(emptyNulTerminatedStr);
 
 	// Go back to the beginning so we can read
 	const off_t off = lseek(fd, 0, SEEK_SET);

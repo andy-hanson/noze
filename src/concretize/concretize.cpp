@@ -79,10 +79,10 @@ namespace {
 	const FunDecl* getUserMainFun(const Program program) {
 		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(
 			program.mainModule->funsMap,
-			shortSymAlphaLiteral("user-main"));
+			shortSymAlphaLiteral("main"));
 		if (size(mainFuns) != 1) {
 			printf("%lu\n", size(mainFuns));
-			todo<void>("wrong number user-main funs");
+			todo<void>("wrong number main funs");
 		}
 		const FunDecl* mainFun = only(mainFuns);
 		checkUserMainSignature(&program.commonTypes, mainFun);

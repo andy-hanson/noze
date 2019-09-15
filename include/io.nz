@@ -1,8 +1,9 @@
 | number-utils for errno.to-str
-import .arr-utils .bootstrap .cell .number-utils .str-utils
+import .arr-utils .bootstrap .cell .number-utils .os .str-utils
 
 | Currently only used to implement print-sync, so don't worry about varargs
 | TODO: 'summon'
+| TODO: Use something lower-level
 printf void(format c-str, sz nat, data ptr char) unsafe extern
 
 print-sync void(s str) summon trusted noctx
@@ -11,97 +12,13 @@ print-sync void(s str) summon trusted noctx
 debug-print void(s str) trusted noctx
 	printf: "%.*s\n\0".data, s.size, s.data
 
+debug-print-nat void(n nat) trusted noctx
+	| Last argument doesn't matter
+	printf: "%lu\n\0".data, n, null
 
-u-long alias
-	nat
-u-long-long alias
-	nat
-u-int alias
-	nat32
-s-long alias
-	int
-s-long-long alias
-	int
-dev-t alias
-	u-long-long
-ino-t alias
-	u-long
-mode-t alias
-	u-int
-nlink-t alias
-	u-int
-uid-t alias
-	u-long
-gid-t alias
-	u-long
-off-t alias
-	s-long-long
-blksize-t alias
-	u-long
-blkcnt-t alias
-	u-long
-time-t alias
-	u-long
 
-| based on my /usr/include/x86_64-linux-gnu/asm/stat.h `struct stat64`
-stat-t record mut
-	st-dev mut dev-t
-	pad0 mut nat32
-	st-ino-unused mut ino-t
-	st-mode mut mode-t
-	st-nlink mut nlink-t
-	st-uid mut uid-t
-	st-gid mut gid-t
-	st-rdev mut dev-t
-	pad1 mut nat32
-	st-size mut off-t
-	st-blksize mut blksize-t
-	st-blocks mut blkcnt-t
-	st-atime mut time-t
-	st-atime-nsec mut u-long
-	st-mtime mut time-t
-	st-mtime-nsec mut u-long
-	st-ctime mut time-t
-	st-ctime-msec mut u-long
-	st-ino mut u-long-long
-	unused mut u-long-long
-
-err-t alias
-	int32
-
-enoent err-t()
-	two
-
-get-errno err-t() summon builtin
-
-stat int32(path c-str, buf stat-t) extern
-
-get-stat opt stat-t(path c-str) summon trusted
-	z3 = zero as<nat32>
-	z = zero as<u-long>
-	s = new<stat-t> z, z3, z, z3, z3, z, z, z, z3, zero, z, z, z, z, z, z, z, z, z, z
-	err = path stat s
-	when
-		err == zero
-			s some
-		else
-			assert: err == neg-one
-			errno = get-errno
-			when
-				errno == enoent
-					none
-				else
-					print-sync: "stat failed: "
-					print-sync: errno.to-str
-					todo
-
-s-ifmt nat32()
-	| TODO: "octal170000"
-	61440
-
-s-ifdir nat32()
-	| TODO: "octal40000"
-	16384
+is-dir? bool(path str) summon
+	path.to-c-str is-dir?
 
 is-dir? bool(path c-str) summon
 	match path get-stat
@@ -109,11 +26,18 @@ is-dir? bool(path c-str) summon
 			| raise exception
 			todo
 		some s
-			mode = s.value.st-mode
-			mode bits-and s-ifmt == s-ifdir
+			s.value.st-mode bits-and s-ifmt == s-ifdir
 
-is-dir? bool(path str) summon
-	path.to-c-str is-dir?
+is-file? bool(path str) summon
+	path.to-c-str is-file?
+
+is-file? bool(path c-str) summon
+	match path get-stat
+		none
+			| raise exception
+			todo
+		some s
+			s.value.st-mode bits-and s-ifmt == s-ifreg
 
 | TODO: move to io.nz
 path-exists? bool(path c-str) summon
@@ -212,7 +136,7 @@ read-dir-recur void(dirp dirp, res mut-arr str) unsafe summon
 	result = entry new-cell<dirent>
 	err = dirp readdir-r entry, result
 	| TODO: handle error
-	assert: err == zero
+	assert: err zero?
 	when
 		result.get.as-any-ptr == null
 			| finished
@@ -229,6 +153,9 @@ read-dir-recur void(dirp dirp, res mut-arr str) unsafe summon
 
 
 read-file str(path str) summon
+	| TODO:KILL (handle this in try-read-file -- test that that works)
+	assert: path is-file?
+
 	match path try-read-file
 		none
 			| exception: file does not exist
@@ -254,9 +181,10 @@ try-read-file opt str(path c-str) summon trusted
 			file-size = fd lseek zero, seek-end
 			| TODO: handle errors
 			forbid: file-size == neg-one
-			assert: file-size < million
+			| TODO: this is just a sanity check
+			assert: file-size < billion
 			| TODO: handle empty files
-			forbid: file-size == zero
+			forbid: file-size zero?
 
 			| Go back to beginning
 			off = fd lseek zero, seek-set

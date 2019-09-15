@@ -87,6 +87,7 @@ enum class BuiltinFunKind {
 	wrapAddNat32,
 	wrapAddNat64,
 	wrapMulInt64,
+	wrapMulNat32,
 	wrapMulNat64,
 	wrapSubInt16,
 	wrapSubInt32,
@@ -1008,6 +1009,10 @@ struct ConcreteFun {
 
 	inline size_t arityIncludingCtxAndClosure() const {
 		return (needsCtx ? 1 : 0)  + arityExcludingCtxIncludingClosure();
+	}
+
+	inline const Bool isExtern() const {
+		return body().isExtern();
 	}
 };
 

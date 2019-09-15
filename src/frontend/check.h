@@ -16,12 +16,12 @@ struct BootstrapCheck {
 	const CommonTypes commonTypes;
 };
 
-const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkBootstrapNz(
+const Result<const BootstrapCheck, const Diags> checkBootstrapNz(
 	Arena* arena,
 	ProgramState* programState,
 	const PathAndAst pathAndAst);
 
-const Result<const Module*, const Arr<const Diagnostic>> check(
+const Result<const Module*, const Diags> check(
 	Arena* arena,
 	ProgramState* programState,
 	const Arr<const Module*> imports,

@@ -572,6 +572,9 @@ struct FunDecl {
 inline size_t arity(const FunDecl* f) {
 	return arity(f->sig);
 }
+inline size_t typeArity(const FunDecl* f) {
+	return size(f->typeParams);
+}
 
 struct Called;
 
@@ -594,7 +597,19 @@ struct FunInst {
 	}
 
 	inline const Sym name() const {
-		return decl->name();
+		return sig.name;
+	}
+
+	inline const Type returnType() const {
+		return sig.returnType;
+	}
+
+	inline const Arr<const Param> params() const {
+		return sig.params;
+	}
+
+	inline const Bool noCtx() const {
+		return decl->noCtx();
 	}
 };
 
@@ -934,17 +949,10 @@ struct Expr {
 		const Arr<const Expr> args;
 	};
 
-	// Currently this only works on a non-template fun.
 	struct FunAsLambda {
-		const FunDecl* fun; // Guaranteed to not be a template
+		const FunInst* fun;
 		const StructInst* type;
 		const FunKind kind;
-
-		inline FunAsLambda(
-			const FunDecl* _fun, const StructInst* _type, const FunKind _kind)
-			: fun{_fun}, type{_type}, kind{_kind} {
-			assert(!fun->isTemplate());
-		}
 	};
 
 	struct ImplicitConvertToUnion {

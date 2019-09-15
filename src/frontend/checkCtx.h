@@ -24,6 +24,6 @@ inline const Bool hasDiags(const CheckCtx* ctx) {
 	return _not(arrBuilderIsEmpty(&ctx->diagsBuilder));
 }
 
-inline const Arr<const Diagnostic> diags(CheckCtx* ctx) {
+inline const Diags diags(CheckCtx* ctx) {
 	return finishArr(&ctx->diagsBuilder);
 }

@@ -344,7 +344,7 @@ namespace {
 				writeStatic(writer, "ull");
 			},
 			[&](const ConstantKind::Null) {
-				writeStatic(writer, "0");
+				writeStatic(writer, "NULL");
 			},
 			[&](const ConstantKind::Ptr p) {
 				writeStatic(writer, "(_constantArrBacking");
@@ -803,10 +803,9 @@ namespace {
 			writeArgsNoCtx(writer, args);
 	}
 
-	const Bool isParameterlessExternFun(const ConcreteFun* fun) {
-		return _and(
-			fun->body().isExtern(),
-			fun->arityExcludingCtxAndClosure() == 0);
+	const Bool returnsVoid(const ConcreteFun* fun) {
+		// TODO: better way to detect this than looking at the name
+		return strEq(fun->returnType().strukt->mangledName, strLiteral("_void"));
 	}
 
 	void writeCall(WriterWithIndent* writer, const ConcreteExpr ce, const ConcreteExpr::Call e) {
@@ -832,11 +831,12 @@ namespace {
 				default:
 					assert(0);
 			}
-		} else if (isParameterlessExternFun(e.called))
-			// Extern 0-argument function is a global
-			// (TODO: maybe not always?)
-			writeStr(writer, e.called->mangledName());
-		else
+		} else if (e.called->isExtern() && returnsVoid(e.called)) {
+			// Extern functions really return 'void', we need it to be an expression.
+			writeChar(writer, '(');
+			call();
+			writeStatic(writer, ", 0)");
+		} else
 			call();
 	}
 
@@ -1018,11 +1018,13 @@ namespace {
 	}
 
 	void writeFunReturnTypeNameAndParams(Writer* writer, const ConcreteFun* fun) {
-		writeType(writer, fun->returnType());
+		if (fun->isExtern() && returnsVoid(fun))
+			writeStatic(writer, "void");
+		else
+			writeType(writer, fun->returnType());
 		writeChar(writer, ' ');
 		writeStr(writer, fun->mangledName());
-		if (!isParameterlessExternFun(fun))
-			writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
+		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
 	}
 
 	void writeConcreteFunDeclaration(Writer* writer, const ConcreteFun* fun) {
@@ -1193,6 +1195,7 @@ const Str writeToC(Arena* arena, const ConcreteProgram program) {
 	writeStatic(&writer, "#include <assert.h>\n");
 	writeStatic(&writer, "#include <errno.h>\n");
 	writeStatic(&writer, "#include <stdatomic.h>\n");
+	writeStatic(&writer, "#include <stddef.h>\n"); // for NULL
 	writeStatic(&writer, "#include <stdint.h>\n");
 
 	writeStructs(&writer, program.allStructs);

@@ -183,6 +183,7 @@ struct ConcretizeCtx {
 	const ConcreteType ctxType();
 };
 
+const ConcreteFun* getOrAddNonSpecializedConcreteFunAndFillBody(ConcretizeCtx* ctx, const ConcreteFunInst funInst);
 const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx* ctx, const FunDecl* decl);
 
 const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx* ctx, const ConcreteFunKey key);

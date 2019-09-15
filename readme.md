@@ -23,13 +23,6 @@ this is not recommended as it removes assertions, making it less safe.
 But libfirm support is planned and you can't build without it.)
 
 
-#### Linting
-
-```sh
-sudo luarocks install lfs lfs moonscript
-./lint.moon
-```
-
 
 ### Running
 
@@ -47,9 +40,11 @@ you can't import from any parent directory of that.
 
 ### Editing
 
-To install the Sublime Text syntax:
+It's recommended to install the Sublime Text syntax.
+This will help you get used to the language.
+It also supports go-to-definition, which includes all builtin functions (including things like `+`),
+so you can go to their definitions to read documentation.
 
 ```sh
 bash -llc 'ln -s `pwd`/noze.sublime-syntax ~/.config/sublime-text-3/Packages/User/noze.sublime-syntax'
-bash -llc 'ln -s `pwd`/syntax_test_noze.nz ~/.config/sublime-text-3/Packages/User/syntax_test_noze.nz'
 ```

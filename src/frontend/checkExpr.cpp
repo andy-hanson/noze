@@ -221,20 +221,22 @@ namespace {
 			const FunKind kind = force(opKind);
 			const Type nonInstantiatedNonFutReturnType = first(expectedStructInst->typeArgs);
 			const Arr<const Type> nonInstantiatedParamTypes = tail(expectedStructInst->typeArgs);
-			const Arr<const Type> paramTypes = map<const Type>{}(
+			const Opt<const Arr<const Type>> paramTypes = mapOrNone<const Type>{}(
 				ctx->arena(),
 				nonInstantiatedParamTypes,
 				[&](const Type it) {
-					const Opt<const Type> op = tryGetDeeplyInstantiatedTypeFor(ctx->arena(), expected, it);
-					if (!has(op))
-						todo<void>("getExpectedLambdaType");
-					return force(op);
+					return tryGetDeeplyInstantiatedTypeFor(ctx->arena(), expected, it);
 				});
-			const Type nonInstantiatedReturnType = kind == FunKind::ref
-				? ctx->makeFutType(nonInstantiatedNonFutReturnType)
-				: nonInstantiatedNonFutReturnType;
-			return some<const ExpectedLambdaType>(
-				ExpectedLambdaType{funStruct, kind, paramTypes, nonInstantiatedReturnType});
+			if (has(paramTypes)) {
+				const Type nonInstantiatedReturnType = kind == FunKind::ref
+					? ctx->makeFutType(nonInstantiatedNonFutReturnType)
+					: nonInstantiatedNonFutReturnType;
+				return some<const ExpectedLambdaType>(
+					ExpectedLambdaType{funStruct, kind, force(paramTypes), nonInstantiatedReturnType});
+			} else {
+				ctx->addDiag(range, Diag{Diag::LambdaCantInferParamTypes{}});
+				return none<const ExpectedLambdaType>();
+			}
 		}
 	}
 
@@ -272,17 +274,27 @@ namespace {
 			return bogus(expected, range);
 		const ExpectedLambdaType et = force(opEt);
 
-		const Opt<const FunDecl*> opFun = getOnlyFunInScope(ctx, range, ast.funName);
-		if (!has(opFun))
+		const Opt<const FunDecl*> opFunDecl = getOnlyFunInScope(ctx, range, ast.funName);
+		if (!has(opFunDecl))
 			return bogus(expected, range);
-		const FunDecl* fun = force(opFun);
+		const FunDecl* funDecl = force(opFunDecl);
 
-		if (fun->isTemplate()) {
-			ctx->addDiag(range, Diag{Diag::FunAsLambdaNoTemplate{}});
+		if (size(ast.typeArgs) != typeArity(funDecl)) {
+			ctx->addDiag(range, Diag{
+				Diag::FunAsLambdaWrongNumberTypeArgs{funDecl, size(ast.typeArgs)}});
 			return bogus(expected, range);
 		}
 
-		const Type returnType = fun->returnType();
+		if (!isEmpty(funDecl->specs))
+			todo<void>("Provide specs for fun-as-lambda");
+
+		const FunInst* funInst = instantiateFun(
+			ctx->arena(),
+			funDecl,
+			typeArgsFromAsts(ctx, ast.typeArgs),
+			emptyArr<const Called>());
+
+		const Type returnType = funInst->returnType();
 		const StructInst* type = instantiateStructNeverDelay(
 			ctx->arena(),
 			et.funStruct,
@@ -295,18 +307,18 @@ namespace {
 			return bogus(expected, range);
 		}
 
-		if (et.kind == FunKind::ptr && !fun->noCtx())
+		if (et.kind == FunKind::ptr && !funInst->noCtx())
 			todo<void>("fun-as-lambda for fun-ptr must take a noctx fun");
 
-		if (size(et.paramTypes) != arity(fun))
+		if (size(et.paramTypes) != arity(funInst))
 			todo<void>("checkFunAsLambda -- arity doesn't match");
 
-		zip(et.paramTypes, fun->params(), [&](const Type paramType, const Param param) {
+		zip(et.paramTypes, funInst->params(), [&](const Type paramType, const Param param) {
 			if (!typeEquals(paramType, param.type))
 				todo<void>("checkFunAsLambda -- param types don't match");
 		});
 
-		return check(ctx, expected, Type{type}, Expr{range, Expr::FunAsLambda{fun, type, et.kind}});
+		return check(ctx, expected, Type{type}, Expr{range, Expr::FunAsLambda{funInst, type, et.kind}});
 	}
 
 	const Opt<const Expr> getIdentifierInLambda(

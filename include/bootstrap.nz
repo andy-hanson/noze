@@ -322,6 +322,8 @@ unsafe-to-nat32 nat32(n nat) noctx builtin
 | UB for positive numbers >= 2 ** 63
 unsafe-to-int int(n nat) noctx builtin
 
+unsafe-to-int32 int32(i int) noctx builtin
+
 to-nat nat(n nat16) noctx builtin
 to-nat nat(n nat32) noctx builtin
 
@@ -331,7 +333,9 @@ to-int int(i int32) noctx builtin
 wrap-add nat(a nat, b nat) noctx builtin
 wrap-add nat32(a nat32, b nat32) noctx builtin
 wrap-sub nat(a nat, b nat) noctx builtin
+wrap-sub nat32(a nat32, b nat32) noctx builtin
 wrap-mul nat(a nat, b nat) noctx builtin
+wrap-mul nat32(a nat32, b nat32) noctx builtin
 unsafe-div nat(a nat, b nat) noctx unsafe builtin
 unsafe-mod nat(a nat, b nat) noctx unsafe builtin
 zero nat() noctx builtin
@@ -370,7 +374,11 @@ bits-and nat(a nat, b nat) noctx builtin
 | TODO: generic
 zero? bool(n nat) noctx
 	n == zero
+zero? bool(n nat32) noctx
+	n == zero
 zero? bool(i int) noctx
+	i == zero
+zero? bool(i int32) noctx
 	i == zero
 
 wrap-add int(a int, b int) noctx builtin
@@ -418,11 +426,52 @@ neg-one int32() noctx
 	zero wrap-sub one
 two int32() noctx
 	one wrap-add one
+three int32() noctx
+	two wrap-add one
+four int32() noctx
+	three wrap-add one
+eight int32() noctx
+	four wrap-add four
+ten int32() noctx
+	four wrap-add two
 
+
+
+wrap-incr nat32(n nat32) noctx
+	n wrap-add one
+wrap-decr nat32(n nat32) noctx
+	n wrap-sub one
 zero nat32() noctx builtin
 one nat32() noctx builtin
 two nat32() noctx
-	one wrap-add one
+	one wrap-incr
+three nat32() noctx
+	two wrap-incr
+four nat32() noctx
+	three wrap-incr
+five nat32() noctx
+	four wrap-incr
+six nat32() noctx
+	five wrap-incr
+seven nat32() noctx
+	six wrap-incr
+eight nat32() noctx
+	seven wrap-incr
+twelve nat32() noctx
+	eight wrap-add four
+fourteen nat32() noctx
+	twelve wrap-add two
+fifteen nat32() noctx
+	fourteen wrap-incr
+two-pow nat32(pow nat32) noctx
+	| TODO: use bitshift
+	when
+		pow zero?
+			one
+		else
+			| TODO: safety
+			pow.wrap-decr.two-pow wrap-mul two
+
 zero nat16() noctx builtin
 
 wrap-incr nat(n nat) noctx

@@ -83,6 +83,7 @@ literal nat(s str)
 			higher-digits * ten + (char-to-nat: s last)
 
 literal nat32(s str)
+	| TODO: make safe
 	s.literal.as<nat> unsafe-to-nat32
 
 literal int(s str)
@@ -95,6 +96,10 @@ literal int(s str)
 			s.tail.literal.as<nat> to-int
 		else
 			s.literal.as<nat> to-int
+
+literal int32(s str)
+	| TODO: make safe
+	s.literal.as<int> unsafe-to-int32
 
 | TODO: GENERIC
 sum nat(t ?t) iter<?t, nat>

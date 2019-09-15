@@ -1,4 +1,4 @@
-import arr-utils cell dict fut-utils gc io number-utils runtime str-utils
+import arr-utils cell dict fut-utils gc io number-utils os runtime str-utils
 
 my-spec<?t> spec
 	zero ?t()
@@ -11,7 +11,16 @@ my-sum ?t(a arr ?t) my-spec<?t>
 		else
 			a.first + a.tail.my-sum
 
+
+my-record record
+	x int
+
+fff my-record(x int)
+	new<my-record> x + 1
+
 test void() trusted summon
+	thr = 2 fff
+
 	m = empty-mut-dict<nat, nat>
 	m add 1, 1
 	m add 2, 2
@@ -147,7 +156,7 @@ lint void() summon
 
 
 | Main function normally seen by users
-user-main fut int32(args arr str) trusted summon
+main fut int32(args arr str) trusted summon
 	fut-two = async<nat>: \
 		resolved: two
 

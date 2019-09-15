@@ -227,7 +227,7 @@ struct fillArrOrFail {
 template <typename Out>
 struct map {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
+	const Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size(in)));
 		for (const size_t i : Range{size(in)})
 			initMemory(&out[i], cb(at(in, i)));
@@ -238,7 +238,7 @@ struct map {
 template <typename Out>
 struct mapPtrs {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
+	const Arr<Out> operator()(Arena* arena, Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size(in)));
 		for (const size_t i : Range{size(in)})
 			initMemory(&out[i], cb(ptrAt(in, i)));
@@ -249,7 +249,7 @@ struct mapPtrs {
 template <typename Out>
 struct mapWithIndex {
 	template <typename In, typename Cb>
-	Arr<Out> operator()(Arena* arena, const Arr<In> in, Cb cb) {
+	const Arr<Out> operator()(Arena* arena, const Arr<In> in, Cb cb) {
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * size(in)));
 		for (const size_t i : Range{size(in)})
 			initMemory(&out[i], cb(at(in, i), i));

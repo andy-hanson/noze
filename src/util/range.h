@@ -39,6 +39,14 @@ struct Range {
 	}
 };
 
+template <typename Cb>
+void repeat(size_t n, Cb cb) {
+	while (n != 0) {
+		cb();
+		n--;
+	}
+}
+
 struct RangeDownIter {
 	int64_t cur;
 

@@ -4,12 +4,6 @@
 #include "./checkExpr.h"
 
 namespace {
-	const Arr<const Type> typeArgsFromAsts(ExprCtx* ctx, const Arr<const TypeAst> typeAsts) {
-		return map<const Type>{}(ctx->arena(), typeAsts, [&](const TypeAst it) {
-			return typeFromAst(ctx, it);
-		});
-	}
-
 	// If we call `foo \x ...` where `foo` is a function that doesn't exist,
 	// don't continue checking the lambda it in the hopes that it might have a property.
 	const Bool exprMightHaveProperties(const ExprAst ast) {

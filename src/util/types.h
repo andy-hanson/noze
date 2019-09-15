@@ -53,13 +53,35 @@ inline const Int64 int64FromInt32(const Int32 i) {
 	return Int64{i.value};
 }
 
-inline constexpr Nat64 operator+(const Nat64 a, const Nat64 b) {
+inline const Nat64 toNat64(const Nat32 a) {
+	return Nat64{a.value};
+}
+
+inline const Nat16 operator+(const Nat16 a, const Nat16 b) {
+	//TODO: safety
+	return Nat16{static_cast<uint16_t>(a.value + b.value)};
+}
+inline const Nat32 operator+(const Nat32 a, const Nat32 b) {
+	//TODO: safety
+	return Nat32{a.value + b.value};
+}
+inline const Nat64 operator+(const Nat64 a, const Nat64 b) {
 	//TODO: safety
 	return Nat64{a.value + b.value};
 }
-inline constexpr Nat64 operator-(const Nat64 a, const Nat64 b) {
+
+inline const Nat32 operator-(const Nat32 a, const Nat32 b) {
+	//TODO: safety
+	return Nat32{a.value - b.value};
+}
+inline const Nat64 operator-(const Nat64 a, const Nat64 b) {
 	//TODO: safety
 	return Nat64{a.value - b.value};
+}
+
+inline const Nat32 operator*(const Nat32 a, const Nat32 b) {
+	//TODO: safety
+	return Nat32{a.value * b.value};
 }
 inline constexpr Nat64 operator*(const Nat64 a, const Nat64 b) {
 	//TODO: safety
@@ -74,14 +96,6 @@ inline constexpr Nat64 operator%(const Nat64 a, const Nat64 b) {
 	return Nat64{a.value % b.value};
 }
 
-inline const Nat32 operator+(const Nat32 a, const Nat32 b) {
-	//TODO: safety
-	return Nat32{a.value + b.value};
-}
-inline const Nat16 operator+(const Nat16 a, const Nat16 b) {
-	//TODO: safety
-	return Nat16{static_cast<uint16_t>(a.value + b.value)};
-}
 
 inline const Int64 operator+(const Int64 a, const Int64 b) {
 	//TODO: safety
@@ -167,6 +181,8 @@ static_assert(sizeof(Nat64) * CHAR_BIT == 64, "nat64");
 static_assert(sizeof(Nat32) * CHAR_BIT == 32, "nat32");
 static_assert(sizeof(Nat16) * CHAR_BIT == 16, "nat16");
 static_assert(sizeof(Float64) * CHAR_BIT == 64, "float64");
+
+const uint8_t MAX_UINT8 = 255;
 
 inline size_t safeIntToSizeT(const int i) {
 	assert(i >= 0);

@@ -21,22 +21,29 @@ namespace {
 		return finishWriter(&writer);
 	}
 
-	void writeSpecializeOnArgsForMangle(Writer* writer, const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs) {
-		for (const size_t i : indices(specializeOnArgs))
+	template <typename EatParam>
+	void writeSpecializeOnArgsForMangle(
+		Writer* writer,
+		const Arr<const ConstantOrLambdaOrVariable> specializeOnArgs,
+		const EatParam eatParam
+	) {
+		for (size_t i = 0; i < size(specializeOnArgs); i++) {
 			at(specializeOnArgs, i).match(
-				[](const ConstantOrLambdaOrVariable::Variable) {},
+				[&](const ConstantOrLambdaOrVariable::Variable) {
+					eatParam();
+				},
 				[&](const Constant* c) {
-					writeStatic(writer, "_arg");
-					writeNat(writer, i);
-					writeStatic(writer, "_is_");
+					writeConcreteTypeForMangle(writer, c->type());
+					writeStatic(writer, "__id");
 					writeNat(writer, c->id);
 				},
 				[&](const KnownLambdaBody* klb) {
-					writeStatic(writer, "_klb");
-					writeNat(writer, i);
-					writeStatic(writer, "_is_");
+					eatParam();
+					writeStatic(writer, "__klb");
 					writeStr(writer, klb->mangledName);
 				});
+			writeChar(writer, '_');
+		}
 	}
 
 	// Don't need to take typeArgs here, since we have the concrete return type and param types anyway.
@@ -51,14 +58,21 @@ namespace {
 		Writer writer { arena };
 		writeMangledName(&writer, declName);
 		writeConcreteTypeForMangle(&writer, returnType);
-		for (const ConcreteParam param : params)
-			writeConcreteTypeForMangle(&writer, param.type);
+
+		// Write info about each parameter
+		// so we won't produce the same name twice for different overloads / specializations
+		size_t paramI = 0;
+		writeSpecializeOnArgsForMangle(&writer, specializeOnArgs, [&]() {
+			writeConcreteTypeForMangle(&writer, at(params, paramI).type);
+			paramI++;
+		});
+		assert(paramI == size(params));
+
 		for (const ConcreteFunInst si : specImpls) {
 			//TODO: include *its* type args!
 			writeStatic(&writer, "__");
 			writeMangledName(&writer, si.decl->name());
 		}
-		writeSpecializeOnArgsForMangle(&writer, specializeOnArgs);
 		return finishWriter(&writer);
 	}
 
@@ -308,7 +322,7 @@ namespace {
 	) {
 		Writer writer { arena };
 		writeStr(&writer, knownLambdaBodyMangledName);
-		writeSpecializeOnArgsForMangle(&writer, specializeOnArgs);
+		writeSpecializeOnArgsForMangle(&writer, specializeOnArgs, []() {});
 		if (isForDynamic)
 			writeStatic(&writer, "__dynamic");
 		return finishWriter(&writer);
@@ -439,14 +453,16 @@ const ConcreteType ConcretizeCtx::ctxType() {
 	});
 }
 
-const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx* ctx, const FunDecl* decl) {
-	const ConcreteFunKey key = ConcreteFunKey{
-		ConcreteFunInst{
-			decl,
-			emptyArr<const ConcreteType>(),
-			emptyArr<const ConcreteFunInst>()},
-		allVariable(ctx->arena, arity(decl))};
+const ConcreteFun* getOrAddNonSpecializedConcreteFunAndFillBody(ConcretizeCtx* ctx, const ConcreteFunInst funInst) {
+	const ConcreteFunKey key = ConcreteFunKey{funInst, allVariable(ctx->arena, arity(funInst.decl))};
 	return getOrAddConcreteFunAndFillBody(ctx, key);
+}
+
+const ConcreteFun* getOrAddNonTemplateConcreteFunAndFillBody(ConcretizeCtx* ctx, const FunDecl* decl) {
+	return getOrAddNonSpecializedConcreteFunAndFillBody(ctx, ConcreteFunInst{
+		decl,
+		emptyArr<const ConcreteType>(),
+		emptyArr<const ConcreteFunInst>()});
 }
 
 const ConcreteFun* getOrAddConcreteFunAndFillBody(ConcretizeCtx* ctx, const ConcreteFunKey key) {

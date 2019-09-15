@@ -62,6 +62,7 @@ gc-alloc any-ptr(gc gc, size nat)
 			s.value
 
 malloc any-ptr(size nat) unsafe extern
+free void(p any-ptr) unsafe extern
 
 alloc any-ptr(size nat) unsafe
 	get-gc gc-alloc size
@@ -75,3 +76,7 @@ unmanaged-alloc-elements ptr ?t(size-elements nat) noctx unsafe
 	| TODO: wrap-mul is unsafe!
 	bytes = size-elements wrap-mul size-of<?t> unmanaged-alloc-bytes
 	bytes ptr-cast
+
+unmanaged-free void(p ptr ?t) noctx unsafe
+	p.ptr-cast free
+

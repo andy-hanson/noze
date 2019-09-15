@@ -56,6 +56,12 @@ inline const Type typeFromAst(ExprCtx* ctx, const TypeAst typeAst) {
 		none<MutArr<StructInst*>*>());
 }
 
+inline const Arr<const Type> typeArgsFromAsts(ExprCtx* ctx, const Arr<const TypeAst> typeAsts) {
+	return map<const Type>{}(ctx->arena(), typeAsts, [&](const TypeAst it) {
+		return typeFromAst(ctx, it);
+	});
+}
+
 struct SingleInferringType {
 	Cell<const Opt<const Type>> type;
 
@@ -131,6 +137,9 @@ const Opt<const Type> shallowInstantiateType(const Expected* expected);
 
 const Opt<const Type> tryGetDeeplyInstantiatedTypeFor(Arena* arena, const Expected* expected, const Type t);
 
+// If we're in a call, we might not know all the type arguments.
+// In that case, we return none instead of returning a type that would contain type arguments of the called function.
+// The result may still contain type arguments of the current function.
 inline const Opt<const Type> tryGetDeeplyInstantiatedType(Arena* arena, const Expected* expected) {
 	const Opt<const Type> t = tryGetInferred(expected);
 	return has(t)

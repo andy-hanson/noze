@@ -40,6 +40,7 @@ namespace {
 			strLiteral("-Wno-unused-but-set-variable"),
 			strLiteral("-Wno-unused-variable"),
 			strLiteral("-Wno-unused-value"),
+			strLiteral("-pthread"),
 			// TODO: configurable whether we want debug or release
 			strLiteral("-g"),
 			pathToStr(&arena, cPath),

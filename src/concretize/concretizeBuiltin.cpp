@@ -260,15 +260,14 @@ namespace {
 			case BuiltinFunKind::setPtr:
 				return no;
 
-			case BuiltinFunKind::sizeOf: {
-				const ConcreteType t = typeArg(0);
-				if (t.isPointer != t.strukt->defaultIsPointer())
-					todo<void>("is this doing `sizeof<byval<?t>>` ?");
-				return constNat64(Nat64{t.strukt->sizeBytes()});
-			}
+			case BuiltinFunKind::sizeOf:
+				return constNat64(Nat64{sizeOrPointerSizeBytes(typeArg(0))});
 
 			case BuiltinFunKind::subFloat64:
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin subfloats");
+
+			case BuiltinFunKind::toNatFromNat32:
+				return constNat64(toNat64(nat32Arg(0)));
 
 			case BuiltinFunKind::_true:
 				return constBool(True);
@@ -333,6 +332,9 @@ namespace {
 			case BuiltinFunKind::wrapSubInt64:
 				return constInt64(wrapSub(int64Arg(0), int64Arg(1)));
 
+			case BuiltinFunKind::wrapSubNat32:
+				return constNat32(nat32Arg(0) - nat32Arg(1));
+
 			case BuiltinFunKind::wrapSubNat64:
 				return constNat64(nat64Arg(0) - nat64Arg(1));
 
@@ -344,6 +346,8 @@ namespace {
 				return constInt64(i0 * i1);
 			}
 
+			case BuiltinFunKind::wrapMulNat32:
+				return constNat32(nat32Arg(0) * nat32Arg(1));
 			case BuiltinFunKind::wrapMulNat64:
 				return constNat64(nat64Arg(0) * nat64Arg(1));
 

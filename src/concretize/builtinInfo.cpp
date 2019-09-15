@@ -194,6 +194,7 @@ namespace {
 					: no;
 			case shortSymAlphaLiteralValue("wrap-mul"):
 				return isInt64(rt) ? _operator(BuiltinFunKind::wrapMulInt64)
+					: isNat32(rt) ? _operator(BuiltinFunKind::wrapMulNat32)
 					: isNat64(rt) ? _operator(BuiltinFunKind::wrapMulNat64)
 					: no;
 			case shortSymAlphaLiteralValue("zero"):

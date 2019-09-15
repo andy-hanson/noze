@@ -53,7 +53,7 @@ namespace {
 		}
 	}
 
-	const Result<const CommonTypes, const Arr<const Diagnostic>> getCommonTypes(
+	const Result<const CommonTypes, Diags> getCommonTypes(
 		CheckCtx* ctx,
 		const StructsAndAliasesMap structsAndAliasesMap,
 		MutArr<StructInst*>* delayedStructInsts
@@ -112,7 +112,7 @@ namespace {
 			has(fun0) && has(fun1) && has(fun2) && has(fun3) &&
 			has(funMut0) && has(funMut1) && has(funMut2) && has(funMut3) &&
 			has(funRef0) && has(funRef1) && has(funRef2) && has(funRef3))
-			return success<const CommonTypes, const Arr<const Diagnostic>>(
+			return success<const CommonTypes, const Diags>(
 				CommonTypes{
 					force(_bool),
 					force(_char),
@@ -158,10 +158,7 @@ namespace {
 						})});
 		else {
 			const Diagnostic diag = Diagnostic{ctx->path, SourceRange::empty(), Diag{Diag::CommonTypesMissing{}}};
-			return failure<
-				const CommonTypes,
-				const Arr<const Diagnostic>
-			>(arrLiteral<const Diagnostic>(arena, { diag }));
+			return failure<const CommonTypes, const Diags>(arrLiteral<const Diagnostic>(arena, { diag }));
 		}
 	}
 
@@ -684,7 +681,7 @@ namespace {
 	}
 
 	template <typename GetCommonTypes>
-	const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkWorker(
+	const Result<const BootstrapCheck, const Diags> checkWorker(
 		Arena* arena,
 		ProgramState* programState,
 		const Arr<const Module*> imports,
@@ -714,24 +711,24 @@ namespace {
 		checkStructAliasTargets(&ctx, structsAndAliasesMap, structAliases, ast.structAliases, &delayStructInsts);
 
 		if (hasDiags(&ctx))
-			return failure<const BootstrapCheck, const Arr<const Diagnostic>>(diags(&ctx));
+			return failure<const BootstrapCheck, const Diags>(diags(&ctx));
 		else {
-		const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypesResult =
+		const Result<const CommonTypes, const Diags> commonTypesResult =
 				getCommonTypes(&ctx, structsAndAliasesMap, &delayStructInsts);
-			return flatMapSuccess<const BootstrapCheck, const Arr<const Diagnostic>>{}(
+			return flatMapSuccess<const BootstrapCheck, const Diags>{}(
 				commonTypesResult,
 				[&](const CommonTypes commonTypes) {
 					const Module* mod = checkWorkerAfterCommonTypes(
 						&ctx, &commonTypes, structsAndAliasesMap, structs, &delayStructInsts, imports, exports, ast);
 					return hasDiags(&ctx)
-						? failure<const BootstrapCheck, const Arr<const Diagnostic>>(diags(&ctx))
-						: success<const BootstrapCheck, const Arr<const Diagnostic>>(BootstrapCheck{mod, commonTypes});
+						? failure<const BootstrapCheck, const Diags>(diags(&ctx))
+						: success<const BootstrapCheck, const Diags>(BootstrapCheck{mod, commonTypes});
 				});
 		}
 	}
 }
 
-const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkBootstrapNz(
+const Result<const BootstrapCheck, const Diags> checkBootstrapNz(
 	Arena* arena,
 	ProgramState* programState,
 	const PathAndAst pathAndAst
@@ -748,7 +745,7 @@ const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkBootstrapNz
 		});
 }
 
-const Result<const Module*, const Arr<const Diagnostic>> check(
+const Result<const Module*, const Diags> check(
 	Arena* arena,
 	ProgramState* programState,
 	const Arr<const Module*> imports,
@@ -756,14 +753,14 @@ const Result<const Module*, const Arr<const Diagnostic>> check(
 	const PathAndAst pathAndAst,
 	const CommonTypes commonTypes
 ) {
-	const Result<const BootstrapCheck, const Arr<const Diagnostic>> res = checkWorker(
+	const Result<const BootstrapCheck, const Diags> res = checkWorker(
 		arena,
 		programState,
 		imports,
 		exports,
 		pathAndAst,
 		[&](CheckCtx*, const StructsAndAliasesMap, const MutArr<StructInst*>*) {
-			return success<const CommonTypes, const Arr<const Diagnostic>>(commonTypes);
+			return success<const CommonTypes, const Diags>(commonTypes);
 		});
 	return mapSuccess<const Module*>{}(res, [](const BootstrapCheck ic) {
 		return ic.module;

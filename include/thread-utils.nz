@@ -1,4 +1,4 @@
-import .bootstrap
+import .bootstrap .os
 
 region atomic
 
@@ -37,7 +37,12 @@ acquire-lock-recur void(l lock, n-tries nat) noctx unsafe
 		n-tries == thousand
 			hard-fail: "Couldn't acquire lock after 1000 tries"
 		else
+			yield-thread
 			l acquire-lock-recur n-tries.noctx-incr
+
+yield-thread void() noctx unsafe
+	err = pthread-yield
+	hard-assert: err zero?
 
 release-lock void(l lock) noctx unsafe
 	l.is-locked.ref-of-val must-unset
@@ -73,13 +78,15 @@ sleep-ms-sync void(ms nat) noctx
 	| TODO: wrap-mul is unsafe
 	ms wrap-mul thousand usleep
 
-wait-on void(c condition, last-checked last-checked) noctx
+wait-on void(c condition, last-checked last-checked) noctx unsafe
+	| last-checked should have been called before a change, we wait until c.value is different
 	when
 		c.value == last-checked
-			pass
+			yield-thread
+			c wait-on last-checked
 		else
-			hundred sleep-ms-sync
-
+			| condition changed
+			pass
 
 | TODO: use atomic operations for this
 thread-safe-counter record mut
@@ -115,4 +122,3 @@ get-and-decrement nat(t thread-safe-counter) noctx trusted
 	t.value := t.value noctx-decr
 	l release-lock
 	res
-
