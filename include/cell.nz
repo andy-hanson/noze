@@ -1,0 +1,31 @@
+region cell
+
+cell<?t> record mut
+	value mut ?t
+
+new-cell cell ?t(value ?t)
+	new value
+
+get ?t(c cell ?t)
+	c.value
+
+set void(c cell ?t, v ?t)
+	c.value := v
+
+swap ?t(c cell ?t, v ?t)
+	res = c get
+	c set v
+	res
+
+| TODO: GENERIC
+get-and-incr nat(c cell nat)
+	res = c get
+	c set: res incr
+	res
+
+cell-incr void(c cell nat)
+	c.get-and-incr drop
+
+cell-add void(c cell nat, n nat)
+	c set: c.get + n
+

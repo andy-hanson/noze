@@ -1,6 +1,6 @@
 | arr-utils for '+'
 | str-utils for literal char
-import .arr-utils .str-utils
+import .arr-utils .iter .str-utils
 
 to-str str(b bool)
 	b if "true", "false"
@@ -95,3 +95,19 @@ literal int(s str)
 			s.tail.literal.as<nat> to-int
 		else
 			s.literal.as<nat> to-int
+
+| TODO: GENERIC
+sum nat(t ?t) iter<?t, nat>
+	t.iter sum-helper
+
+sum-helper nat(i iterator nat)
+	match i.next
+		none
+			zero
+		some s
+			s.value + i.sum-helper
+
+
+is-multiple? bool(a nat, b nat)
+	a mod b == 0
+

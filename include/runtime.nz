@@ -1,5 +1,5 @@
 | .str-utils for c-str.to-str
-import .arr-utils .gc .str-utils
+import .arr-utils .gc .mut-bag .str-utils .thread-utils
 
 
 | Treated specially by the compiler

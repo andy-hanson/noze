@@ -1,10 +1,12 @@
+import .thread-utils
+
 gc record mut
 	lk by-val lock
 	context-head mut opt gc-ctx
 	needs-gc mut bool
 	is-doing-gc mut bool
 	begin ptr byte
-	next ptr byte
+	next-byte ptr byte
 
 | GC info specific to a ctx.
 | Currently they all share the common GC and must take a lock every time they allocate.

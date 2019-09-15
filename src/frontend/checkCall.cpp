@@ -420,7 +420,9 @@ const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst
 			// Already certainly failed.
 			return none<const Expr>();
 
-		CommonOverloadExpected common = getCommonOverloadParamExpected(ctx->arena(), tempAsArr(&candidates), argIdx);
+		CommonOverloadExpected common = mightBePropertyAccess
+			? CommonOverloadExpected{Expected::infer(), False}
+			: getCommonOverloadParamExpected(ctx->arena(), tempAsArr(&candidates), argIdx);
 		Expr arg = checkExpr(ctx, at(ast.args, argIdx), &common.expected);
 
 		// If it failed to check, don't continue, just stop there.

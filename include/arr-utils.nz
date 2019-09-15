@@ -46,20 +46,25 @@ at ?t(a arr ?t, index nat) trusted
 	a noctx-at index
 
 + arr ?t(a arr ?t, b arr ?t) trusted
-	m = uninitialized-mut-arr<?t>: a.size + b.size
-	zero to a.size each \i
-		m set-at: i, a at i
-	zero to b.size each \i
-		m set-at: (i + a.size), (b at i)
-	m freeze
+	a.size + b.size make-arr \i
+		when
+			i < a.size
+				a at i
+			else
+				b at: i - a.size
 
 mut-slice<?t> record mut
+	backing mut-arr ?t
 	size nat
-	data ptr ?t
+	begin nat
+
+to-mut-slice mut-slice ?t(a mut-arr ?t)
+	forbid: a.frozen
+	new a, a.size, zero
 
 slice mut-slice ?t(a mut-slice ?t, lo nat, size nat) trusted
 	assert: lo + size <= a.size
-	new size, a.data + lo
+	new a.backing, size, a.begin + lo
 
 slice mut-slice ?t(a mut-slice ?t, lo nat)
 	assert: lo <= a.size
@@ -67,31 +72,26 @@ slice mut-slice ?t(a mut-slice ?t, lo nat)
 
 at ?t(a mut-slice ?t, index nat) trusted
 	assert: index < a.size
-	a.data + index deref
+	a.backing at: a.begin + index
 
-set void(a mut-slice ?t, index nat, value ?t) trusted
+set-at void(a mut-slice ?t, index nat, value ?t) trusted
 	assert: index < a.size
-	a.data + index set value
+	a.backing set-at (a.begin + index), value
 
-| UNSAFE since it can't track whether the underlying mut-arr was frozen (or reallocated)
-to-mut-slice mut-slice ?t(a mut-arr ?t) unsafe
-	forbid: a.frozen
-	new a.size, a.data
-
-sort arr ?t(a arr ?t)
+sort arr ?t(a arr ?t) data<?t>
 	m = a to-mut-arr
 	m sort
 	m freeze
 
 swap void(a mut-slice ?t, lo nat, hi nat)
 	old-lo = a at lo
-	a set: lo, a at hi
-	a set hi, old-lo
+	a set-at: lo, a at hi
+	a set-at hi, old-lo
 
-sort void(a mut-arr ?t) trusted
+sort void(a mut-arr ?t) trusted data<?t>
 	a.to-mut-slice sort
 
-sort void(a mut-slice ?t)
+sort void(a mut-slice ?t) data<?t>
 	when
 		a.size <= one
 			pass
@@ -108,7 +108,7 @@ sort void(a mut-slice ?t)
 
 
 | Returns index of first value > pivot
-partition-recur nat(a mut-slice ?t, pivot ?t, l nat, r nat)
+partition-recur nat(a mut-slice ?t, pivot ?t, l nat, r nat) data<?t>
 	assert: l <= a.size
 	assert: r < a.size
 	when
@@ -172,13 +172,13 @@ noctx-remove-unordered-at-index ?t(a mut-arr ?t, index nat) noctx unsafe
 
 
 
-contains bool(a arr ?t, value ?t) noctx
+contains bool(a arr ?t, value ?t) noctx data<?t>
 	a contains-recur value, zero
 
-contains bool(a mut-arr ?t, value ?t) noctx trusted
+contains bool(a mut-arr ?t, value ?t) noctx trusted data<?t>
 	a.temp-as-arr contains-recur value, zero
 
-contains-recur bool(a arr ?t, value ?t, i nat) noctx trusted
+contains-recur bool(a arr ?t, value ?t, i nat) noctx trusted data<?t>
 	when
 		i == a.size
 			false
@@ -191,7 +191,7 @@ push-capacity-must-be-sufficient void(a mut-arr ?t, value ?t) noctx unsafe
 	a.size := old-size.noctx-incr
 	a noctx-set-at old-size, value
 
-noctx-must-remove-unordered-recur void(a mut-arr ?t, index nat, value ?t) noctx unsafe
+noctx-must-remove-unordered-recur void(a mut-arr ?t, index nat, value ?t) noctx unsafe data<?t>
 	when
 		index == a.size
 			hard-fail: "Did not find the element in the mut-arr"
@@ -200,7 +200,7 @@ noctx-must-remove-unordered-recur void(a mut-arr ?t, index nat, value ?t) noctx 
 		else
 			a noctx-must-remove-unordered-recur index.noctx-incr, value
 
-noctx-must-remove-unordered void(a mut-arr ?t, value ?t) noctx unsafe
+noctx-must-remove-unordered void(a mut-arr ?t, value ?t) noctx unsafe data<?t>
 	a noctx-must-remove-unordered-recur zero, value
 
 | Unsafe as this does *not* freeze it!
@@ -247,9 +247,16 @@ make-arr arr ?t(size nat, f fun-mut1 ?t nat)
 
 make-mut-arr mut-arr ?t(size nat, f fun-mut1 ?t nat) trusted
 	res = uninitialized-mut-arr<?t>: size
-	zero to size each \i
-		res set-at: i, f call i
+	res make-mut-arr-worker zero, f
 	res
+
+make-mut-arr-worker void(m mut-arr ?t, i nat, f fun-mut1 ?t nat)
+	when
+		i == m.size
+			pass
+		else
+			m set-at: i, f call i
+			m make-mut-arr-worker i.incr, f
 
 to-mut-arr mut-arr ?t(a arr ?t)
 	a.size make-mut-arr<?t> \i
@@ -282,7 +289,5 @@ each-with-index-recur void(a arr ?t, f fun-mut2 void ?t nat, n nat)
 			a each-with-index-recur f, n.incr
 
 map arr ?out(a arr ?in, mapper fun-mut1 ?out ?in) trusted
-	out = uninitialized-mut-arr<?out>: a.size
-	zero to a.size each \i
-		out set-at: i, mapper call: a at i
-	out freeze
+	a.size make-arr \i
+		mapper call: a at i

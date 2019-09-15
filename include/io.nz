@@ -1,5 +1,5 @@
 | number-utils for errno.to-str
-import .arr-utils .number-utils .str-utils
+import .arr-utils .cell .number-utils .str-utils
 
 u-long alias
 	nat

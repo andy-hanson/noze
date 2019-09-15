@@ -1,8 +1,4 @@
-import arr-utils dict io number-utils runtime str-utils
-
-my-record record mut
-	x mut int
-	y int
+import arr-utils cell dict gc io number-utils runtime str-utils
 
 my-spec<?t> spec
 	zero ?t()
@@ -35,12 +31,6 @@ test void() trusted summon
 	print-sync: d3 at 2 to-str
 	print-sync: d4 at 2 to-str
 
-
-is-multiple? bool(a nat, b nat)
-	a mod b == 0
-
-f nat(s stream nat)
-	s sum
 
 lines arr str(s str)
 	res = new-mut-arr<str>
