@@ -1,5 +1,16 @@
 | number-utils for errno.to-str
-import .arr-utils .cell .number-utils .str-utils
+import .arr-utils .bootstrap .cell .number-utils .str-utils
+
+| Currently only used to implement print-sync, so don't worry about varargs
+| TODO: 'summon'
+printf void(format c-str, sz nat, data ptr char) unsafe extern
+
+print-sync void(s str) summon trusted noctx
+	printf: "%.*s\n\0".data, s.size, s.data
+
+debug-print void(s str) trusted noctx
+	printf: "%.*s\n\0".data, s.size, s.data
+
 
 u-long alias
 	nat

@@ -626,6 +626,7 @@ namespace {
 		const Arr<StructDecl> structs,
 		MutArr<StructInst*>* delayStructInsts,
 		const Arr<const Module*> imports,
+		const Arr<const Module*> exports,
 		const FileAst ast
 	) {
 		checkStructBodies(ctx, structsAndAliasesMap, structs, ast.structs, delayStructInsts);
@@ -649,6 +650,7 @@ namespace {
 			ctx->arena,
 			ctx->path,
 			imports,
+			exports,
 			asConstArr<StructDecl>(structs),
 			specs,
 			asConstArr<FunDecl>(funsAndMap.funs),
@@ -662,16 +664,35 @@ namespace {
 		return mod;
 	}
 
+	void recurAddImport(
+		Arena* arena,
+		ArrBuilder<const Module*>* res,
+		const Module* module
+	) {
+		if (!contains<const Module*, ptrEquals<const Module>>(arrBuilderTempAsArr(res), module)) {
+			add(arena, res, module);
+			for (const Module* e : module->exports)
+				recurAddImport(arena, res, e);
+		}
+	}
+
+	const Arr<const Module*> getFlattenedImports(Arena* arena, const Arr<const Module*> imports) {
+		ArrBuilder<const Module*> res {};
+		for (const Module* m : imports)
+			recurAddImport(arena, &res, m);
+		return finishArr(&res);
+	}
+
 	template <typename GetCommonTypes>
-	const Result<const IncludeCheck, const Arr<const Diagnostic>> checkWorker(
+	const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkWorker(
 		Arena* arena,
 		ProgramState* programState,
-		const Opt<const Module*> include,
 		const Arr<const Module*> imports,
+		const Arr<const Module*> exports,
 		const PathAndAst pathAndAst,
 		GetCommonTypes getCommonTypes
 	) {
-		CheckCtx ctx {arena, programState, pathAndAst.pathAndStorageKind, include, imports};
+		CheckCtx ctx {arena, programState, pathAndAst.pathAndStorageKind, getFlattenedImports(arena, imports)};
 
 		const FileAst ast = pathAndAst.ast;
 
@@ -693,32 +714,33 @@ namespace {
 		checkStructAliasTargets(&ctx, structsAndAliasesMap, structAliases, ast.structAliases, &delayStructInsts);
 
 		if (hasDiags(&ctx))
-			return failure<const IncludeCheck, const Arr<const Diagnostic>>(diags(&ctx));
+			return failure<const BootstrapCheck, const Arr<const Diagnostic>>(diags(&ctx));
 		else {
-			const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypesResult =
+		const Result<const CommonTypes, const Arr<const Diagnostic>> commonTypesResult =
 				getCommonTypes(&ctx, structsAndAliasesMap, &delayStructInsts);
-			return flatMapSuccess<const IncludeCheck, const Arr<const Diagnostic>>{}(
+			return flatMapSuccess<const BootstrapCheck, const Arr<const Diagnostic>>{}(
 				commonTypesResult,
 				[&](const CommonTypes commonTypes) {
 					const Module* mod = checkWorkerAfterCommonTypes(
-						&ctx, &commonTypes, structsAndAliasesMap, structs, &delayStructInsts, imports, ast);
+						&ctx, &commonTypes, structsAndAliasesMap, structs, &delayStructInsts, imports, exports, ast);
 					return hasDiags(&ctx)
-						? failure<const IncludeCheck, const Arr<const Diagnostic>>(diags(&ctx))
-						: success<const IncludeCheck, const Arr<const Diagnostic>>(IncludeCheck{mod, commonTypes});
+						? failure<const BootstrapCheck, const Arr<const Diagnostic>>(diags(&ctx))
+						: success<const BootstrapCheck, const Arr<const Diagnostic>>(BootstrapCheck{mod, commonTypes});
 				});
 		}
 	}
 }
 
-const Result<const IncludeCheck, const Arr<const Diagnostic>> checkIncludeNz(
+const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkBootstrapNz(
 	Arena* arena,
 	ProgramState* programState,
 	const PathAndAst pathAndAst
 ) {
+	assert(isEmpty(pathAndAst.ast.imports) && isEmpty(pathAndAst.ast.exports));
 	return checkWorker(
 		arena,
 		programState,
-		none<const Module*>(),
+		emptyArr<const Module*>(),
 		emptyArr<const Module*>(),
 		pathAndAst,
 		[&](CheckCtx* ctx, const StructsAndAliasesMap structsAndAliasesMap, MutArr<StructInst*>* delayedStructInsts) {
@@ -730,18 +752,21 @@ const Result<const Module*, const Arr<const Diagnostic>> check(
 	Arena* arena,
 	ProgramState* programState,
 	const Arr<const Module*> imports,
+	const Arr<const Module*> exports,
 	const PathAndAst pathAndAst,
-	const IncludeCheck includeCheck
+	const CommonTypes commonTypes
 ) {
-	const Result<const IncludeCheck, const Arr<const Diagnostic>> res = checkWorker(
+	const Result<const BootstrapCheck, const Arr<const Diagnostic>> res = checkWorker(
 		arena,
 		programState,
-		some<const Module*>(includeCheck.module),
 		imports,
+		exports,
 		pathAndAst,
 		[&](CheckCtx*, const StructsAndAliasesMap, const MutArr<StructInst*>*) {
-			return success<const CommonTypes, const Arr<const Diagnostic>>(includeCheck.commonTypes);
+			return success<const CommonTypes, const Arr<const Diagnostic>>(commonTypes);
 		});
-	return mapSuccess<const Module*>{}(res, [](const IncludeCheck ic) { return ic.module; });
+	return mapSuccess<const Module*>{}(res, [](const BootstrapCheck ic) {
+		return ic.module;
+	});
 }
 

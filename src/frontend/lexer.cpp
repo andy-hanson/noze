@@ -148,7 +148,9 @@ namespace {
 			const uint nSpacesPerIndent = lexer->indentKind == IndentKind::spaces2 ? 2 : 4;
 			const uint res = nSpaces / nSpacesPerIndent;
 			if (res * nSpacesPerIndent != nSpaces)
-				throwDiag<void>(range(lexer, start), ParseDiag{ParseDiag::IndentNotDivisible{nSpaces, nSpacesPerIndent}});
+				throwDiag<void>(
+					range(lexer, start),
+					ParseDiag{ParseDiag::IndentNotDivisible{nSpaces, nSpacesPerIndent}});
 			return res;
 		}
 	}
@@ -237,6 +239,7 @@ namespace {
 			case shortSymAlphaLiteralValue("alias"):
 			case shortSymAlphaLiteralValue("builtin"):
 			case shortSymAlphaLiteralValue("else"):
+			case shortSymAlphaLiteralValue("export"):
 			case shortSymAlphaLiteralValue("extern"):
 			case shortSymAlphaLiteralValue("import"):
 			case shortSymAlphaLiteralValue("match"):

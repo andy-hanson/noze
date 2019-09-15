@@ -15,8 +15,8 @@ public:
 	using SuccessType = Success;
 	using FailureType = Failure;
 
-	inline Result(const Success s) : _isSuccess{True}, success{s} {}
-	inline Result(const Failure f) : _isSuccess{False}, failure{f} {}
+	explicit inline Result(const Success s) : _isSuccess{True}, success{s} {}
+	explicit inline Result(const Failure f) : _isSuccess{False}, failure{f} {}
 
 	inline const Bool isSuccess() const {
 		return _isSuccess;

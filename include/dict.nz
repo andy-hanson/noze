@@ -1,4 +1,4 @@
-import .arr-utils
+import .arr-utils .bootstrap
 
 key-value-pair<?k, ?v> record
 	key ?k

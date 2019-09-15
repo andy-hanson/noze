@@ -830,6 +830,7 @@ using FunsMap = MultiDict<const Sym, const FunDecl*, compareSym>;
 struct Module {
 	const PathAndStorageKind pathAndStorageKind;
 	const Arr<const Module*> imports;
+	const Arr<const Module*> exports;
 	const Arr<const StructDecl> structs;
 	const Arr<const SpecDecl> specs;
 	const Arr<const FunDecl> funs;
@@ -873,7 +874,7 @@ struct CommonTypes {
 };
 
 struct Program {
-	const Module* includeModule;
+	const Module* bootstrapModule;
 	const Module* gcModule;
 	const Module* runtimeModule;
 	const Module* mainModule;

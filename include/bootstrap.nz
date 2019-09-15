@@ -282,9 +282,9 @@ call-with-ctx ?r(c ctx, f fun-mut2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) noctx
 	f.fun-ptr call c, f.closure, p0, p1
 
 call ?r(f fun3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) trusted
-	get-ctx call-with-ctx3 f, p0, p1, p2
+	get-ctx call-with-ctx f, p0, p1, p2
 
-call-with-ctx3 ?r(c ctx, f fun3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) noctx
+call-with-ctx ?r(c ctx, f fun3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) noctx
 	f.fun-ptr call c, f.closure, p0, p1, p2
 
 call ?r(f fun-mut3 ?r ?p0 ?p1 ?p2, p0 ?p0, p1 ?p1, p2 ?p2) trusted
@@ -632,24 +632,27 @@ as-non-const ?t(value ?t) noctx builtin
 
 region fut
 
-fut-callback-node<?t> record mut
-	| WARN: the cb will be called with whatever ctx resolves the fut
-	cb fun-mut1 void ?t
-	next-node opt fut-callback-node<?t>
-
-fut-state-callbacks<?t> record mut
-	head opt fut-callback-node<?t>
-
-fut-state-resolved<?t> record
-	value ?t
+fut<?t> record force-sendable
+	lk by-val lock
+	state mut fut-state ?t
 
 fut-state<?t> union mut
 	fut-state-callbacks<?t>
 	fut-state-resolved<?t>
 
-fut<?t> record force-sendable
-	lk by-val lock
-	state mut fut-state ?t
+fut-state-callbacks<?t> record mut
+	head opt fut-callback-node<?t>
+
+fut-callback-node<?t> record mut
+	| WARN: the cb will be called with whatever ctx resolves the fut
+	cb fun-mut1 void ?t
+	next-node opt fut-callback-node<?t>
+
+fut-state-resolved<?t> record
+	value ?t
+
+
+region lock
 
 atomic-bool record force-sendable
 	value mut bool
@@ -660,16 +663,4 @@ lock record sendable
 	| User should prefer to store the lock by-val too, and only pass by-ref
 	is-locked by-val atomic-bool
 
-| Currently only used to implement print-sync, so don't worry about varargs
-| TODO: 'summon'
-printf void(format c-str, sz nat, data ptr char) unsafe extern
 
-print-sync void(s str) summon trusted noctx
-	printf: "%.*s\n\0".data, s.size, s.data
-
-debug-print void(s str) trusted noctx
-	printf: "%.*s\n\0".data, s.size, s.data
-
-| Used to make code run after the actor's next step. Equivalent to `sleep 0`.
-delay fut void() noctx
-	pass

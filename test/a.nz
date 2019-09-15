@@ -1,4 +1,4 @@
-import arr-utils cell dict gc io number-utils runtime str-utils
+import arr-utils cell dict fut-utils gc io number-utils runtime str-utils
 
 my-spec<?t> spec
 	zero ?t()
@@ -132,7 +132,6 @@ base-name str(path str)
 
 
 lint void() summon
-
 	n-files = 0 new-cell<nat>
 	n-errors = 0 new-cell<nat>
 
@@ -155,7 +154,10 @@ user-main fut int32(args arr str) trusted summon
 	printer <- make-printer
 	tw <- fut-two
 	thr = tw.incr
-	ignore <- printer call thr.to-str
+	| ignore <- printer call thr.to-str
+
+	lint
+
 	resolved: zero
 
 printer alias

@@ -1,4 +1,4 @@
-import .thread-utils
+import .bootstrap .thread-utils
 
 gc record mut
 	lk by-val lock

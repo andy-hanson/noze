@@ -1,5 +1,5 @@
 | .str-utils for c-str.to-str
-import .arr-utils .gc .mut-bag .str-utils .thread-utils
+import .arr-utils .bootstrap .gc .mut-bag .str-utils .thread-utils
 
 
 | Treated specially by the compiler
@@ -22,8 +22,7 @@ rt-main int32(argc int32, argv ptr c-str, user-main-ptr fun-ptr2 fut<int32> ctx 
 	| TODO: just 'as'
 	add = &add-first-task as-non-const<fun3<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>>>
 	args = new<arr<c-str>> argc.to-int.unsafe-to-nat, argv
-	| TODO: shouldn't need user-main-ptr.as-non-const
-	ctx call-with-ctx3<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>> add, vat, args, user-main-ptr.as-non-const
+	ctx call-with-ctx<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>> add, vat, args, user-main-ptr
 
 	| TODO: more than one thread
 	tls = new<by-val<thread-local-stuff>> zero
@@ -45,37 +44,6 @@ get-cur-vat vat() unsafe
 cur-actor vat-and-actor-id() unsafe
 	c = get-ctx
 	new c.vat-id, c.actor-id
-
-| Runs 'f' asynchronously.
-| Since 'f' is 'fun' and not 'fun-mut' it is guaranteed to not close over 'mut' data.
-| So we can run it in parallel.
-async fut ?t(f fun0 fut<?t>) trusted
-	res = new-unresolved-fut<?t>
-	vat = get-cur-vat
-	vat add-task new<task> vat.new-actor-id, \
-		f.call forward-to res
-	res
-
-call fut ?r(f fun-ref0 ?r) trusted send<?r>
-	vat = f.vat-and-actor.vat get-vat
-	res = new-unresolved-fut<?r>
-	vat add-task new<task> f.vat-and-actor.actor, \
-		f.fun.call forward-to res
-	res
-
-call fut ?r(f fun-ref1 ?r ?p0, p0 ?p0) trusted send<?r> send<?p0>
-	vat = f.vat-and-actor.vat get-vat
-	res = new-unresolved-fut<?r>
-	vat add-task new<task> f.vat-and-actor.actor, \
-		f.fun call p0 forward-to res
-	res
-
-call fut ?r(f fun-ref2 ?r ?p0 ?p1, p0 ?p0, p1 ?p1) trusted send<?r> send<?p0> send<?p1>
-	vat = f.vat-and-actor.vat get-vat
-	res = new-unresolved-fut<?r>
-	vat add-task new<task> f.vat-and-actor.actor, \
-		f.fun call p0, p1 forward-to res
-	res
 
 global-ctx record mut
 	lk by-val lock
@@ -113,81 +81,6 @@ task record mut
 	actor-id actor-id
 	fun fun-mut0 void
 
-
-| Considered unsafe because normally it should not be possible to never resolve a fut
-new-unresolved-fut fut ?t() unsafe
-	new new-lock, new<fut-state-callbacks<?t>> none
-
-resolved fut ?t(value ?t)
-	new new-lock, new<fut-state-resolved<?t>> value
-
-resolve void(f fut ?t, value ?t) unsafe
-	f.lk.ref-of-val acquire-lock
-	match f.state
-		fut-state-callbacks cbs
-			cbs.head resolve-recur value
-		fut-state-resolved
-			hard-fail: "resolving an already-resolved fut"
-	f.state := new<fut-state-resolved<?t>> value
-	f.lk.ref-of-val release-lock
-
-resolve-recur void(node opt fut-callback-node<?t>, value ?t)
-	match node
-		none
-			pass
-		some s
-			| the fun-ref will return a fut<void>, just ignore it
-			drop: s.value.cb call value
-			s.value.next-node resolve-recur value
-
-joiner<?out, ?in0, ?in1> record force-sendable
-	res fut ?out
-	fun fun-ref2 ?out ?in0 ?in1
-	arg0 mut opt ?in0
-	arg1 mut opt ?in1
-	| NOTE: we can't just check that both arg0 and arg1 are done -- we might try calling 'fun' twice.
-	| We need to atomically decrement the counter so we only call 'fun' once
-	n-remaining-args by-val thread-safe-counter
-
-decr-joiner void(j joiner ?out ?in0 ?in1) unsafe send<?out> send<?in0> send<?in1>
-	when
-		j.n-remaining-args.ref-of-val decrement
-			j.fun call j.arg0.force, j.arg1.force forward-to j.res
-		else
-			pass
-
-join fut ?out(a fut ?in0, b fut ?in1, fun fun-ref2 ?out ?in0 ?in1) trusted send<?out> send<?in0> send<?in1>
-	res = new-unresolved-fut<?out>
-	joiner = new<joiner<?out, ?in0, ?in1>> res, fun, none, none, new-thread-safe-counter: two
-	a then-void \value
-		joiner.arg0 := value some
-		joiner decr-joiner
-	b then-void \value
-		joiner.arg1 := value some
-		joiner decr-joiner
-	res
-
-| NOTE: The function will be called with whatever ctx the fut terminates with!!!
-then-void void(f fut ?t, cb fun-mut1 void ?t) unsafe
-	f.lk.ref-of-val acquire-lock
-	res = match f.state
-		fut-state-callbacks cbs
-			| create a new callback
-			f.state := new<fut-state-callbacks<?t>> some: new cb, cbs.head
-		fut-state-resolved r
-			cb call r.value
-	f.lk.ref-of-val release-lock
-	res
-
-forward-to void(from fut ?t, to fut ?t) unsafe
-	from then-void \value
-		to resolve value
-
-then fut ?out(f fut ?in, cb fun-ref1 ?out ?in) trusted send<?out> send<?in>
-	res = new-unresolved-fut<?out>
-	f then-void \value
-		cb call value forward-to res
-	res
 
 new-actor-id actor-id(v vat) noctx trusted
 	v.next-actor-id.ref-of-val get-and-increment

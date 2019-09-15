@@ -424,6 +424,9 @@ namespace {
 		const Arr<const ImportAst> imports = tryTake(lexer, "import ")
 			? parseImports(lexer)
 			: emptyArr<const ImportAst>();
+		const Arr<const ImportAst> exports = tryTake(lexer, "export ")
+			? parseImports(lexer)
+			: emptyArr<const ImportAst>();
 
 		ArrBuilder<const SpecDeclAst> specs {};
 		ArrBuilder<const StructAliasAst> structAliases {};
@@ -444,7 +447,14 @@ namespace {
 			parseSpecOrStructOrFun(lexer, isPublic, &specs, &structAliases, &structs, &funs);
 		}
 
-		return FileAst{imports, finishArr(&specs), finishArr(&structAliases), finishArr(&structs), finishArr(&funs)};
+		return FileAst{
+			imports,
+			exports,
+			finishArr(&specs),
+			finishArr(&structAliases),
+			finishArr(&structs),
+			finishArr(&funs)
+		};
 	}
 }
 

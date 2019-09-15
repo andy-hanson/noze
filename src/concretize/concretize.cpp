@@ -118,7 +118,7 @@ namespace {
 			const Sym,
 			const FunDecl*,
 			compareSym
-		>(program.includeModule->funsMap, shortSymAlphaLiteral("if"));
+		>(program.bootstrapModule->funsMap, shortSymAlphaLiteral("if"));
 		if (size(ifFuns) != 2)
 			todo<void>("wrong number 'if' funs");
 		return ifFuns;
@@ -132,7 +132,7 @@ namespace {
 			const Sym,
 			const FunDecl*,
 			compareSym
-		>(program.includeModule->funsMap, shortSymAlphaLiteral("call"));
+		>(program.bootstrapModule->funsMap, shortSymAlphaLiteral("call"));
 		const Arr<const FunDecl*> res = filter(arena, allCallFuns, [&](const FunDecl* f) {
 			const StructDecl* decl = first(f->params()).type.asStructInst()->decl;
 			const Opt<const FunKind> kind = program.commonTypes.getFunStructInfo(decl);

@@ -1,6 +1,6 @@
 | arr-utils for '+'
 | str-utils for literal char
-import .arr-utils .iter .str-utils
+import .arr-utils .bootstrap .iter .str-utils
 
 to-str str(b bool)
 	b if "true", "false"

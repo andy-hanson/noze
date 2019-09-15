@@ -6,44 +6,11 @@
 
 #include "./programState.h"
 
-struct IncludeAndImportsIter {
-	const Opt<const Module*> include;
-	const Arr<const Module*> imports;
-	// -1 is for 'include'
-	ssize_t index;
-
-	inline const Module* operator*() const {
-		return index == -1 ? force(include) : at(imports, index);
-	}
-
-	inline void operator++() {
-		index++;
-	}
-
-	inline const Bool operator!=(const IncludeAndImportsIter other) const {
-		return neq(index, other.index);
-	}
-};
-
-struct IncludeAndImportsRange {
-	const Opt<const Module*> include;
-	const Arr<const Module*> imports;
-
-	inline IncludeAndImportsIter begin() const {
-		return IncludeAndImportsIter{include, imports, has(include) ? -1 : 0};
-	}
-
-	inline IncludeAndImportsIter end() {
-		return IncludeAndImportsIter{include, imports, static_cast<ssize_t>(size(imports))};
-	}
-};
-
 struct CheckCtx {
 	Arena* arena;
 	ProgramState* programState;
 	const PathAndStorageKind path;
-	const Opt<const Module*> include;
-	const Arr<const Module*> imports;
+	const Arr<const Module*> allFlattenedImports;
 	ArrBuilder<const Diagnostic> diagsBuilder {};
 
 	CheckCtx(const CheckCtx&) = delete;
@@ -59,8 +26,4 @@ inline const Bool hasDiags(const CheckCtx* ctx) {
 
 inline const Arr<const Diagnostic> diags(CheckCtx* ctx) {
 	return finishArr(&ctx->diagsBuilder);
-}
-
-inline IncludeAndImportsRange includeAndImportsRange(const CheckCtx* ctx) {
-	return IncludeAndImportsRange{ctx->include, ctx->imports};
 }

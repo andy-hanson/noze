@@ -479,6 +479,7 @@ struct ImportAst {
 
 struct FileAst {
 	const Arr<const ImportAst> imports;
+	const Arr<const ImportAst> exports;
 	const Arr<const SpecDeclAst> specs;
 	const Arr<const StructAliasAst> structAliases;
 	const Arr<const StructDeclAst> structs;

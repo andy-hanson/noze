@@ -1,4 +1,4 @@
-import .arr-utils
+import .arr-utils .bootstrap
 
 literal char(s str) noctx
 	s noctx-at zero

@@ -1,4 +1,4 @@
-region cell
+import .bootstrap
 
 cell<?t> record mut
 	value mut ?t

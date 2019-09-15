@@ -11,16 +11,24 @@
 #include "./parse.h"
 
 namespace {
-	const PathAndStorageKind includePath(Arena* arena) {
-		return PathAndStorageKind{rootPath(arena, strLiteral("include.nz")), StorageKind::global};
+	const PathAndStorageKind pathInInclude(Arena* arena, const Str name) {
+		return PathAndStorageKind{rootPath(arena, name), StorageKind::global};
+	}
+
+	const PathAndStorageKind bootstrapPath(Arena* arena) {
+		return pathInInclude(arena, strLiteral("bootstrap.nz"));
+	}
+
+	const PathAndStorageKind stdPath(Arena* arena) {
+		return pathInInclude(arena, strLiteral("std.nz"));
 	}
 
 	const PathAndStorageKind gcPath(Arena* arena) {
-		return PathAndStorageKind{rootPath(arena, strLiteral("gc.nz")), StorageKind::global};
+		return pathInInclude(arena, strLiteral("gc.nz"));
 	}
 
 	const PathAndStorageKind runtimePath(Arena* arena) {
-		return PathAndStorageKind{rootPath(arena, strLiteral("runtime.nz")), StorageKind::global};
+		return pathInInclude(arena, strLiteral("runtime.nz"));
 	}
 
 	const Opt<const NulTerminatedStr> getFile(
@@ -102,32 +110,60 @@ namespace {
 		const SourceRange range;
 	};
 
-	const Result<const Arr<const PathAndStorageKindAndRange>, const Arr<const Diagnostic>> resolveImports(
+	struct ImportAndExportPaths {
+		const Arr<const PathAndStorageKindAndRange> imports;
+		const Arr<const PathAndStorageKindAndRange> exports;
+	};
+
+	const Arr<const PathAndStorageKindAndRange> resolveImportsOrExports(
 		Arena* modelArena,
 		Arena* astsArena,
 		const PathAndStorageKind path,
-		const Arr<const ImportAst> imports
+		const Arr<const ImportAst> importsOrExports
 	) {
-		return success<const Arr<const PathAndStorageKindAndRange>, const Arr<const Diagnostic>>(
-			map<const PathAndStorageKindAndRange>{}(astsArena, imports, [&](const ImportAst i) {
-				const Opt<const PathAndStorageKind> opDependencyPath = resolveImport(modelArena, path, i);
-				if (!has(opDependencyPath))
-					todo<void>("diagnostic: import resolution failed");
-				return PathAndStorageKindAndRange{force(opDependencyPath), i.range};
-			}));
+		return map<const PathAndStorageKindAndRange>{}(astsArena, importsOrExports, [&](const ImportAst i) {
+			const Opt<const PathAndStorageKind> opDependencyPath = resolveImport(modelArena, path, i);
+			if (!has(opDependencyPath))
+				todo<void>("diagnostic: import resolution failed");
+			return PathAndStorageKindAndRange{force(opDependencyPath), i.range};
+		});
+	}
+
+	const Result<const ImportAndExportPaths, const Arr<const Diagnostic>> resolveImportsAndExports(
+		Arena* modelArena,
+		Arena* astsArena,
+		const PathAndStorageKind path,
+		const Arr<const ImportAst> imports,
+		const Arr<const ImportAst> exports
+	) {
+		// TODO: resolveImport should potentially fail, so dont' always just return success
+		return success<const ImportAndExportPaths, const Arr<const Diagnostic>>(
+			ImportAndExportPaths{
+				resolveImportsOrExports(modelArena, astsArena, path, imports),
+				resolveImportsOrExports(modelArena, astsArena, path, exports)});
 	}
 
 	struct PathAndAstAndResolvedImports {
 		const PathAndStorageKind pathAndStorageKind;
 		const FileAst ast;
 		const Arr<const PathAndStorageKind> resolvedImports;
+		const Arr<const PathAndStorageKind> resolvedExports;
 
 		inline PathAndAst pathAndAst() const {
 			return PathAndAst{pathAndStorageKind, ast};
 		}
 	};
 
-	const Opt<const Arr<const Diagnostic>> recur(
+	const Arr<const PathAndStorageKind> stripRange(Arena* arena, const Arr<const PathAndStorageKindAndRange> a) {
+		return map<const PathAndStorageKind>{}(
+			arena,
+			a,
+			[](const PathAndStorageKindAndRange p) {
+				return p.path;
+			});
+	}
+
+	const Opt<const Arr<const Diagnostic>> parseRecur(
 		Arena* modelArena,
 		Arena* astsArena,
 		AllSymbols* allSymbols,
@@ -137,21 +173,25 @@ namespace {
 		MutDict<const PathAndStorageKind, const Status, comparePathAndStorageKind>* statuses,
 		const PathAndStorageKind path
 	) {
-		setInDict<const PathAndStorageKind, const Status, comparePathAndStorageKind>(astsArena, statuses, path, Status::started);
+		setInDict<const PathAndStorageKind, const Status, comparePathAndStorageKind>(
+			astsArena, statuses, path, Status::started);
 
 		// Parse it now
 		const Result<const FileAst, const Arr<const Diagnostic>> parseResult =
 			parseSingle(modelArena, astsArena, allSymbols, path, storages, lineAndColumnGetters);
 		return parseResult.match(
 			[&](const FileAst ast) {
-				const Result<const Arr<const PathAndStorageKindAndRange>, const Arr<const Diagnostic>> importsResult =
-					resolveImports(modelArena, astsArena, path, ast.imports);
+				const Result<const ImportAndExportPaths, const Arr<const Diagnostic>> importsResult =
+					resolveImportsAndExports(modelArena, astsArena, path, ast.imports, ast.exports);
 				return importsResult.match(
-					[&](const Arr<const PathAndStorageKindAndRange> imports) {
+					[&](const ImportAndExportPaths importsAndExports) {
 						// Ensure all imports are added before adding this
-						for (const PathAndStorageKindAndRange import : imports) {
+						const Arr<const PathAndStorageKindAndRange> importsAndExportsArr =
+							cat(astsArena, importsAndExports.imports, importsAndExports.exports);
+						for (const PathAndStorageKindAndRange import : importsAndExportsArr) {
 							const Opt<const Status> status =
-								getAt_mut<const PathAndStorageKind, const Status, comparePathAndStorageKind>(statuses, import.path);
+								getAt_mut<const PathAndStorageKind, const Status, comparePathAndStorageKind>(
+									statuses, import.path);
 							if (has(status)) {
 								switch (force(status)) {
 									case Status::started: {
@@ -168,8 +208,15 @@ namespace {
 										assert(0);
 								}
 							} else {
-								const Opt<const Arr<const Diagnostic>> err = recur(
-									modelArena, astsArena, allSymbols, storages, lineAndColumnGetters, res, statuses, import.path);
+								const Opt<const Arr<const Diagnostic>> err = parseRecur(
+									modelArena,
+									astsArena,
+									allSymbols,
+									storages,
+									lineAndColumnGetters,
+									res,
+									statuses,
+									import.path);
 								if (has(err))
 									return err;
 							}
@@ -177,14 +224,14 @@ namespace {
 						const PathAndAstAndResolvedImports pa = PathAndAstAndResolvedImports{
 							path,
 							ast,
-							map<const PathAndStorageKind>{}(
-								astsArena,
-								imports,
-								[](const PathAndStorageKindAndRange p) {
-									return p.path;
-								})};
+							stripRange(astsArena, importsAndExports.imports),
+							stripRange(astsArena, importsAndExports.exports)};
 						add<const PathAndAstAndResolvedImports>(astsArena, res, pa);
-						setInDict<const PathAndStorageKind, const Status, comparePathAndStorageKind>(astsArena, statuses, path, Status::finished);
+						setInDict<const PathAndStorageKind, const Status, comparePathAndStorageKind>(
+							astsArena,
+							statuses,
+							path,
+							Status::finished);
 						return none<const Arr<const Diagnostic>>();
 					},
 					[](const Arr<const Diagnostic> d) {
@@ -196,11 +243,12 @@ namespace {
 			});
 	};
 
+	using AllAsts = const Arr<const PathAndAstAndResolvedImports>;
+
 	// Starts at 'main' and recursively parses all imports too.
 	// Result will be in import order -- asts at lower indices are imported by asts at higher indices.
 	// So, don't have to worry about circularity when checking.
-	// NOTE: this function does not return the 'include' module which is not imported directly.
-	const Result<const Arr<const PathAndAstAndResolvedImports>, const Arr<const Diagnostic>> parseFromMain(
+	const Result<const AllAsts, const Arr<const Diagnostic>> parseEverythingWorker(
 		Arena* modelArena,
 		Arena* astsArena,
 		AllSymbols* allSymbols,
@@ -212,67 +260,33 @@ namespace {
 		MutDict<const PathAndStorageKind, const Status, comparePathAndStorageKind> statuses {};
 		const Arr<const PathAndStorageKind> rootPaths =  arrLiteral<const PathAndStorageKind>(
 			astsArena,
-			{ mainPath, gcPath(modelArena), runtimePath(modelArena) });
+			{
+				// Ensure bootstrap.nz is parsed first
+				bootstrapPath(modelArena),
+				// Ensure std.nz is available
+				stdPath(modelArena),
+				// gc/runtime are needed by concretize so make sure they're available
+				gcPath(modelArena),
+				runtimePath(modelArena),
+				mainPath,
+			});
 		for (const PathAndStorageKind path : rootPaths) {
 			if (!hasKey_mut<const PathAndStorageKind, const Status, comparePathAndStorageKind>(&statuses, path)) {
-				const Opt<const Arr<const Diagnostic>> err = recur(modelArena, astsArena, allSymbols, storages, lineAndColumnGetters, &res, &statuses, path);
+				const Opt<const Arr<const Diagnostic>> err = parseRecur(
+					modelArena,
+					astsArena,
+					allSymbols,
+					storages,
+					lineAndColumnGetters,
+					&res,
+					&statuses,
+					path);
 				if (has(err))
-					return failure<const Arr<const PathAndAstAndResolvedImports>, const Arr<const Diagnostic>>(force(err));
+					return failure<const AllAsts, const Arr<const Diagnostic>>(force(err));
 			}
 		}
 		return success<const Arr<const PathAndAstAndResolvedImports>, const Arr<const Diagnostic>>(finishArr(&res));
 	}
-
-	//TODO:INLINE
-	const Arr<const Module*> getImports(
-		Arena* modelArena,
-		const Arr<const PathAndStorageKind> imports,
-		const MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>* compiled
-	) {
-		return map<const Module*>{}(modelArena, imports, [&](const PathAndStorageKind importPath) {
-			return mustGetAt_mut<
-				const PathAndStorageKind,
-				const Module*,
-				comparePathAndStorageKind
-			>(compiled, importPath);
-		});
-	}
-
-	// Result does not include the 'include' module.
-	const Result<const Arr<const Module*>, const Arr<const Diagnostic>> getModules(
-		Arena* modelArena,
-		ProgramState* programState,
-		const IncludeCheck includeCheck,
-		const Arr<const PathAndAstAndResolvedImports> fileAsts
-	) {
-		Arena compiledArena {};
-		MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind> compiled {};
-		return mapOrFail<const Module*, const Arr<const Diagnostic>>{}(
-				modelArena,
-				fileAsts,
-				[&](const PathAndAstAndResolvedImports ast) {
-					const Result<const Arr<const Module*>, const Arr<const Diagnostic>> resultImports =
-						getImports(modelArena, ast.resolvedImports, &compiled);
-					return flatMapSuccess<const Module*, const Arr<const Diagnostic>>{}(
-						resultImports,
-						[&](const Arr<const Module*> imports) {
-							const Result<const Module*, const Arr<const Diagnostic>> res =
-								check(modelArena, programState, imports, ast.pathAndAst(), includeCheck);
-							if (res.isSuccess())
-								addToDict<
-									const PathAndStorageKind,
-									const Module*,
-									comparePathAndStorageKind
-								>(&compiledArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
-							return res;
-						});
-				});
-	}
-
-	struct AllAsts {
-		const PathAndAst includeAst;
-		const Arr<const PathAndAstAndResolvedImports> otherAsts;
-	};
 
 	struct LcgsAndAllAsts {
 		const LineAndColumnGetters lineAndColumnGetters;
@@ -288,28 +302,96 @@ namespace {
 		Arena* astsArena
 	) {
 		LineAndColumnGettersBuilder lineAndColumnGetters {};
-		const PathAndStorageKind inclPath = includePath(modelArena);
-		const Result<const FileAst, const Arr<const Diagnostic>> includeAst =
-			parseSingle(modelArena, astsArena, allSymbols, inclPath, storages, &lineAndColumnGetters);
-		const Result<const AllAsts, const Arr<const Diagnostic>> res = flatMapSuccess<
-			const AllAsts,
-			const Arr<const Diagnostic>
-		>{}(
-			includeAst,
-			[&](const FileAst incl) {
-				const Result<const Arr<const PathAndAstAndResolvedImports>, const Arr<const Diagnostic>> otherAsts =
-					parseFromMain(modelArena, astsArena, allSymbols, mainPath, storages, &lineAndColumnGetters);
-				return mapSuccess<const AllAsts>{}(otherAsts, [&](const Arr<const PathAndAstAndResolvedImports> oth) {
-					return AllAsts{PathAndAst{inclPath, incl}, oth};
-				});
-			});
-
+		const Result<const Arr<const PathAndAstAndResolvedImports>, const Arr<const Diagnostic>> asts =
+			parseEverythingWorker(modelArena, astsArena, allSymbols, mainPath, storages, &lineAndColumnGetters);
 		const LineAndColumnGetters lc = finishDictShouldBeNoConflict<
 			const PathAndStorageKind,
 			const LineAndColumnGetter,
 			comparePathAndStorageKind
 		>(&lineAndColumnGetters);
-		return LcgsAndAllAsts{lc, res};
+		return LcgsAndAllAsts{lc, asts};
+	}
+
+	struct ImportsAndExports {
+		// This includes implicit import of 'std.nz' if this file is not itself in 'include'
+		const Arr<const Module*> allImports;
+		const Arr<const Module*> exports;
+	};
+
+	const Arr<const Module*> mapImportsOrExports(
+		Arena* modelArena,
+		const Arr<const PathAndStorageKind> paths,
+		const MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind>* compiled
+	) {
+		return map<const Module*>{}(modelArena, paths, [&](const PathAndStorageKind importPath) {
+			return mustGetAt_mut<
+				const PathAndStorageKind,
+				const Module*,
+				comparePathAndStorageKind
+			>(compiled, importPath);
+		});
+	}
+
+	struct ModulesAndCommonTypes {
+		const Arr<const Module*> modules;
+		const CommonTypes commonTypes;
+	};
+
+	// Result does not include the 'bootstrap' module.
+	const Result<const ModulesAndCommonTypes, const Arr<const Diagnostic>> getModules(
+		Arena* modelArena,
+		ProgramState* programState,
+		const Arr<const PathAndAstAndResolvedImports> fileAsts
+	) {
+		Late<const CommonTypes> commonTypes {};
+
+		Arena compiledArena {};
+		MutDict<const PathAndStorageKind, const Module*, comparePathAndStorageKind> compiled {};
+		const Result<const Arr<const Module*>, const Arr<const Diagnostic>> res =
+			mapOrFail<const Module*, const Arr<const Diagnostic>>{}(
+				modelArena,
+				fileAsts,
+				[&](const PathAndAstAndResolvedImports ast) {
+					const Result<const Module*, const Arr<const Diagnostic>> res = [&]() {
+						if (lateIsSet(&commonTypes)) {
+							const Bool isInInclude = enumEq(ast.pathAndStorageKind.storageKind, StorageKind::global);
+							const Arr<const PathAndStorageKind> allImports = isInInclude
+								? ast.resolvedImports
+								: prepend<const PathAndStorageKind>(
+									modelArena,
+									stdPath(modelArena),
+									ast.resolvedImports);
+							return check(
+								modelArena,
+								programState,
+								mapImportsOrExports(modelArena, allImports, &compiled),
+								mapImportsOrExports(modelArena, ast.resolvedExports, &compiled),
+								ast.pathAndAst(),
+								lateGet(&commonTypes));
+						} else {
+							// The first module to checkis always 'bootstrap.nz'
+							assert(pathAndStorageKindEq(ast.pathAndStorageKind, bootstrapPath(modelArena)));
+							assert(isEmpty(ast.resolvedImports));
+							const Result<const BootstrapCheck, const Arr<const Diagnostic>> res =
+								checkBootstrapNz(modelArena, programState, ast.pathAndAst());
+							if (res.isSuccess())
+								lateSet<const CommonTypes>(&commonTypes, res.asSuccess().commonTypes);
+							return mapSuccess<const Module*>{}(res, [](const BootstrapCheck c) {
+								return c.module;
+							});
+						}
+					}();
+					if (res.isSuccess())
+						addToDict<
+							const PathAndStorageKind,
+							const Module*,
+							comparePathAndStorageKind
+						>(&compiledArena, &compiled, ast.pathAndStorageKind, res.asSuccess());
+					return res;
+				});
+		return mapSuccess<const ModulesAndCommonTypes>{}(res, [&](const Arr<const Module*> modules) {
+			return ModulesAndCommonTypes{modules, lateGet(&commonTypes)};
+		});
 	}
 
 	const Module* findModule(const PathAndStorageKind pk, const Arr<const Module*> modules) {
@@ -325,33 +407,28 @@ namespace {
 		const LineAndColumnGetters lineAndColumnGetters
 	) {
 		ProgramState programState {};
-		const Result<const IncludeCheck, const Arr<const Diagnostic>> include =
-			checkIncludeNz(modelArena, &programState, allAsts.includeAst);
-		return flatMapSuccess<
-			const Program,
-			const Arr<const Diagnostic>
-		>{}(include, [&](const IncludeCheck includeCheck) {
-			return mapSuccess<const Program>{}(
-				getModules(modelArena, &programState, includeCheck, allAsts.otherAsts),
-				[&](const Arr<const Module*> modules) {
-					const StructDecl* ctxStructDecl = mustGetAt<const Sym, const StructOrAlias, compareSym>(
-						includeCheck.module->structsAndAliasesMap,
-						shortSymAlphaLiteral("ctx")
-					).asStructDecl();
-					const StructInst* ctxStructInst = instantiateNonTemplateStruct(modelArena, ctxStructDecl);
+		return mapSuccess<const Program>{}(
+			getModules(modelArena, &programState, allAsts),
+			[&](const ModulesAndCommonTypes modulesAndCommonTypes) {
+				const Arr<const Module*> modules = modulesAndCommonTypes.modules;
+				const Module* bootstrapModule = findModule(bootstrapPath(modelArena), modules);
+				const StructDecl* ctxStructDecl = mustGetAt<const Sym, const StructOrAlias, compareSym>(
+					bootstrapModule->structsAndAliasesMap,
+					shortSymAlphaLiteral("ctx")
+				).asStructDecl();
+				const StructInst* ctxStructInst = instantiateNonTemplateStruct(modelArena, ctxStructDecl);
 
-					return Program{
-						.includeModule = includeCheck.module,
-						.gcModule = findModule(gcPath(modelArena), modules),
-						.runtimeModule = findModule(runtimePath(modelArena), modules),
-						.mainModule = findModule(mainPath, modules),
-						.allModules = prepend<const Module*>(modelArena, includeCheck.module, modules),
-						.commonTypes = includeCheck.commonTypes,
-						.ctxStructInst = ctxStructInst,
-						.lineAndColumnGetters = lineAndColumnGetters
-					};
-				});
-		});
+				return Program{
+					.bootstrapModule = bootstrapModule,
+					.gcModule = findModule(gcPath(modelArena), modules),
+					.runtimeModule = findModule(runtimePath(modelArena), modules),
+					.mainModule = findModule(mainPath, modules),
+					.allModules = modules,
+					.commonTypes = modulesAndCommonTypes.commonTypes,
+					.ctxStructInst = ctxStructInst,
+					.lineAndColumnGetters = lineAndColumnGetters
+				};
+			});
 	}
 }
 

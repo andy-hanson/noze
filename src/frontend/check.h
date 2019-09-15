@@ -11,12 +11,12 @@ struct PathAndAst {
 	const FileAst ast;
 };
 
-struct IncludeCheck {
+struct BootstrapCheck {
 	const Module* module;
 	const CommonTypes commonTypes;
 };
 
-const Result<const IncludeCheck, const Arr<const Diagnostic>> checkIncludeNz(
+const Result<const BootstrapCheck, const Arr<const Diagnostic>> checkBootstrapNz(
 	Arena* arena,
 	ProgramState* programState,
 	const PathAndAst pathAndAst);
@@ -25,5 +25,6 @@ const Result<const Module*, const Arr<const Diagnostic>> check(
 	Arena* arena,
 	ProgramState* programState,
 	const Arr<const Module*> imports,
+	const Arr<const Module*> exports,
 	const PathAndAst pathAndAst,
-	const IncludeCheck includeCheck);
+	const CommonTypes commonTypes);

@@ -19,7 +19,7 @@ void eachFunInScope(ExprCtx* ctx, const Sym funName, Cb cb) {
 	for (const FunDecl* f : multiDictGetAt<const Sym, const FunDecl*, compareSym>(ctx->funsMap, funName))
 		cb(CalledDecl{f});
 
-	for (const Module* m : includeAndImportsRange(ctx->checkCtx))
+	for (const Module* m : ctx->checkCtx->allFlattenedImports)
 		for (const FunDecl* f : multiDictGetAt<const Sym, const FunDecl*, compareSym>(m->funsMap, funName))
 			if (f->isPublic)
 				cb(CalledDecl{f});

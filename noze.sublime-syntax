@@ -46,7 +46,7 @@ contexts:
       scope: storage.type
 
   main:
-    - match: import
+    - match: export|import
       scope: keyword
       push: import
     - match: '{{name}}'

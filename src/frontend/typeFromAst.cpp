@@ -37,7 +37,7 @@ namespace {
 		Cell<const Opt<const DAndM>> res = Cell<const Opt<const DAndM>>{
 			has(here) ? some<const DAndM>(DAndM{force(here), none<const Module*>()}) : none<const DAndM>()};
 
-		for (const Module* m : includeAndImportsRange(ctx)) {
+		for (const Module* m : ctx->allFlattenedImports) {
 			const Opt<TDecl> fromModule = getAt<const Sym, TDecl, compareSym>(getTMap(m), name);
 			if (has(fromModule)) {
 				if (has(cellGet(&res))) {
