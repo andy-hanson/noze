@@ -104,16 +104,18 @@ namespace {
 		const Bool isBuiltinByVal;
 	};
 
-	const CheckedExpr checkCreateRecord(
+	template <typename CbCheckFields>
+	const CheckedExpr checkCreateRecordCommon(
 		ExprCtx* ctx,
 		const SourceRange range,
-		const CreateRecordAst ast,
-		Expected* expected
+		const Opt<const TypeAst> type,
+		Expected* expected,
+		CbCheckFields cbCheckFields
 	) {
 		Cell<const Bool> cellTypeIsFromExpected { False };
 		const Opt<const Type> opT = [&]() {
-			if (has(ast.type))
-				return some<const Type>(typeFromAst(ctx, force(ast.type)));
+			if (has(type))
+				return some<const Type>(typeFromAst(ctx, force(type)));
 			else {
 				cellSet<const Bool>(&cellTypeIsFromExpected, True);
 				const Opt<const Type> opT = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
@@ -123,19 +125,19 @@ namespace {
 			}
 		}();
 		if (!has(opT))
-			return bogus(expected, range);
+			return bogusWithoutChangingExpected(expected, range);
 		const Type t = force(opT);
 		if (!t.isStructInst()) {
 			if (!t.isBogus())
 				ctx->addDiag(range, Diag{Diag::CantCreateNonRecordType{t}});
-			return bogus(expected, range);
+			return bogusWithoutChangingExpected(expected, range);
 		}
 
 		const Bool typeIsFromExpected = cellGet(&cellTypeIsFromExpected);
 		const StructInst* si = t.asStructInst();
 		const StructDecl* decl = si->decl;
 
-		const Opt<const RecordAndIsBuiltinByVal> opRecord = decl->body().match(
+		const Opt<const RecordAndIsBuiltinByVal> opRecord = si->body().match(
 			[](const StructBody::Bogus) {
 				return none<const RecordAndIsBuiltinByVal>();
 			},
@@ -151,29 +153,22 @@ namespace {
 				}
 				return none<const RecordAndIsBuiltinByVal>();
 			},
-			[](const StructBody::Record r) {
+			[&](const StructBody::Record r) {
 				return some<const RecordAndIsBuiltinByVal>(RecordAndIsBuiltinByVal{r, False});
 			},
 			[](const StructBody::Union) {
 				return none<const RecordAndIsBuiltinByVal>();
 			});
 
+		if (!has(opRecord) && !decl->body().isBogus())
+			ctx->addDiag(range, Diag{Diag::CantCreateNonRecordType{t}});
+
 		if (has(opRecord)) {
 			const RecordAndIsBuiltinByVal record = force(opRecord);
 			const Arr<const RecordField> fields = record.record.fields;
-			if (!sizeEq(ast.args, fields)) {
-				ctx->addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, size(fields), size(ast.args)}});
-				return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : bogus(expected, range);
-			} else {
-				const Arr<const Expr> args = mapZip<const Expr>{}(
-					ctx->arena(),
-					fields,
-					ast.args,
-					[&](const RecordField field, const ExprAst arg) {
-						const Type expectedType = instantiateType(ctx->arena(), field.type, si);
-						return checkAndExpect(ctx, arg, expectedType);
-					});
-				const Expr expr = Expr{range, Expr::CreateRecord{si, args}};
+			const Opt<const Arr<const Expr>> args = cbCheckFields(decl, fields);
+			if (has(args)) {
+				const Expr expr = Expr{range, Expr::CreateRecord{si, force(args)}};
 
 				if (ctx->outermostFun->noCtx() && !record.isBuiltinByVal) {
 					const Opt<const ForcedByValOrRef> forcedByValOrRef = record.record.forcedByValOrRef;
@@ -183,14 +178,74 @@ namespace {
 					if (!isAlwaysByVal)
 						ctx->addDiag(range, Diag{Diag::CreateRecordByRefNoCtx{decl}});
 				}
-
 				return typeIsFromExpected ? CheckedExpr{expr} : check(ctx, expected, Type(si), expr);
-			}
-		} else {
-			if (!decl->body().isBogus())
-				ctx->addDiag(range, Diag{Diag::CantCreateNonRecordType{t}});
-			return typeIsFromExpected ? bogusWithoutAffectingExpected(range) : bogus(expected, range);
-		}
+			} else
+				return bogusWithoutChangingExpected(expected, range);
+		} else
+			return bogusWithoutChangingExpected(expected, range);
+	}
+
+	const CheckedExpr checkCreateRecord(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const CreateRecordAst ast,
+		Expected* expected
+	) {
+		return checkCreateRecordCommon(
+			ctx,
+			range,
+			ast.type,
+			expected,
+			[&](const StructDecl* decl, const Arr<const RecordField> fields) {
+				if (!sizeEq(ast.args, fields)) {
+					ctx->addDiag(range, Diag{Diag::WrongNumberNewStructArgs{decl, size(fields), size(ast.args)}});
+					return none<const Arr<const Expr>>();
+				} else {
+					return some<const Arr<const Expr>>(mapZip<const Expr>{}(
+						ctx->arena(),
+						fields,
+						ast.args,
+						[&](const RecordField field, const ExprAst arg) {
+							return checkAndExpect(ctx, arg, field.type);
+						}));
+				}
+			});
+	}
+
+	const CheckedExpr checkCreateRecordMultiLine(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const CreateRecordMultiLineAst ast,
+		Expected* expected
+	) {
+		return checkCreateRecordCommon(
+			ctx,
+			range,
+			ast.type,
+			expected,
+			[&](const StructDecl* decl, const Arr<const RecordField> fields) {
+				const Opt<const Arr<const Expr>> res = sizeEq(ast.lines, fields)
+					? mapZipOrNone<const Expr>{}(
+						ctx->arena(),
+						fields,
+						ast.lines,
+						[&](const RecordField field, const CreateRecordMultiLineAst::Line line) {
+							return symEq(line.name.name, field.name)
+								? some<const Expr>(checkAndExpect(ctx, line.value, field.type))
+								: none<const Expr>();
+						})
+					: none<const Arr<const Expr>>();
+				if (!has(res)) {
+					const Arr<const Sym> names = map<const Sym>{}(
+						ctx->arena(),
+						ast.lines,
+						[](const CreateRecordMultiLineAst::Line line) {
+							return line.name.name;
+						});
+					ctx->addDiag(range, Diag{Diag::CreateRecordMultiLineWrongFields{decl, fields, names}});
+				}
+				return res;
+			});
 	}
 
 	struct ExpectedLambdaType {
@@ -702,6 +757,9 @@ namespace {
 			},
 			[&](const CreateRecordAst a) {
 				return checkCreateRecord(ctx, range, a, expected);
+			},
+			[&](const CreateRecordMultiLineAst a) {
+				return checkCreateRecordMultiLine(ctx, range, a, expected);
 			},
 			[&](const FunAsLambdaAst a) {
 				return checkFunAsLambda(ctx, range, a, expected);

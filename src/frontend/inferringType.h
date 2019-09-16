@@ -86,10 +86,6 @@ struct CheckedExpr {
 	Expr expr;
 };
 
-inline const CheckedExpr bogusWithoutAffectingExpected(const SourceRange range) {
-	return CheckedExpr{Expr{range, Expr::Bogus{}}};
-}
-
 // Inferring type args are in 'a', not 'b'
 const Bool matchTypesNoDiagnostic(
 	Arena* arena,
@@ -151,6 +147,10 @@ inline const Bool hasExpected(const Expected* expected) {
 	return has(tryGetInferred(expected));
 }
 
+inline const CheckedExpr bogusWithoutAffectingExpected(const SourceRange range) {
+	return CheckedExpr{Expr{range, Expr::Bogus{}}};
+}
+
 inline const CheckedExpr bogusWithType(Expected* expected, const SourceRange range, const Type setType) {
 	cellSet<const Opt<const Type>>(&expected->type, some<const Type>(setType));
 	return bogusWithoutAffectingExpected(range);
@@ -158,6 +158,13 @@ inline const CheckedExpr bogusWithType(Expected* expected, const SourceRange ran
 
 inline const CheckedExpr bogus(Expected* expected, const SourceRange range) {
 	return bogusWithType(expected, range, Type{Type::Bogus{}});
+}
+
+inline const CheckedExpr bogusWithoutChangingExpected(Expected* expected, const SourceRange range) {
+	if (!hasExpected(expected))
+		return bogus(expected, range);
+	else
+		return bogusWithoutAffectingExpected(range);
 }
 
 inline const Type inferred(const Expected* expected) {

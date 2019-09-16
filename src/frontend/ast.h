@@ -76,6 +76,13 @@ struct CreateRecordAst {
 	const Arr<const ExprAst> args;
 };
 
+struct CreateRecordMultiLineAst {
+	struct Line;
+
+	const Opt<const TypeAst> type;
+	const Arr<const Line> lines;
+};
+
 struct FunAsLambdaAst {
 	const Sym funName;
 	const Arr<const TypeAst> typeArgs;
@@ -147,6 +154,7 @@ private:
 		cond,
 		createArr,
 		createRecord,
+		createRecordMultiLine,
 		funAsLambda,
 		identifier,
 		lambda,
@@ -164,6 +172,7 @@ private:
 		const CondAst cond;
 		const CreateArrAst createArr;
 		const CreateRecordAst createRecord;
+		const CreateRecordMultiLineAst createRecordMultiLine;
 		const FunAsLambdaAst funAsLambda;
 		const IdentifierAst identifier;
 		const LambdaAst lambda;
@@ -180,6 +189,8 @@ public:
 	explicit inline ExprAstKind(const CondAst a) : kind{Kind::cond}, cond{a} {}
 	explicit inline ExprAstKind(const CreateArrAst a) : kind{Kind::createArr}, createArr{a} {}
 	explicit inline ExprAstKind(const CreateRecordAst a) : kind{Kind::createRecord}, createRecord{a} {}
+	explicit inline ExprAstKind(const CreateRecordMultiLineAst a)
+		: kind{Kind::createRecordMultiLine}, createRecordMultiLine{a} {}
 	explicit inline ExprAstKind(const FunAsLambdaAst a) : kind{Kind::funAsLambda}, funAsLambda{a} {}
 	explicit inline ExprAstKind(const IdentifierAst a) : kind{Kind::identifier}, identifier{a} {}
 	explicit inline ExprAstKind(const LambdaAst a) : kind{Kind::lambda}, lambda{a} {}
@@ -213,6 +224,7 @@ public:
 		typename CbCond,
 		typename CbCreateArr,
 		typename CbCreateRecord,
+		typename CbCreateRecordMultiLine,
 		typename CbFunAsLambda,
 		typename CbIdentifier,
 		typename CbLambda,
@@ -228,6 +240,7 @@ public:
 		CbCond cbCond,
 		CbCreateArr cbCreateArr,
 		CbCreateRecord cbCreateRecord,
+		CbCreateRecordMultiLine cbCreateRecordMultiLine,
 		CbFunAsLambda cbFunAsLambda,
 		CbIdentifier cbIdentifier,
 		CbLambda cbLambda,
@@ -247,6 +260,8 @@ public:
 				return cbCreateArr(createArr);
 			case Kind::createRecord:
 				return cbCreateRecord(createRecord);
+			case Kind::createRecordMultiLine:
+				return cbCreateRecordMultiLine(createRecordMultiLine);
 			case Kind::funAsLambda:
 				return cbFunAsLambda(funAsLambda);
 			case Kind::identifier:
@@ -275,6 +290,11 @@ public:
 struct ExprAst {
 	const SourceRange range;
 	const ExprAstKind kind;
+};
+
+struct CreateRecordMultiLineAst::Line {
+	const NameAndRange name;
+	const ExprAst value;
 };
 
 // Unlike TypeAst.TypeParam, this is the *declaration*

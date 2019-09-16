@@ -73,12 +73,12 @@ const Constant* ConstantKind::Ptr::deref() const {
 	return at(array->kind.asArray().elements(), index.value);
 }
 
-void writeConstant(Writer* writer, const Constant* c) {
+void debugWriteConstant(Writer* writer, const Constant* c) {
 	c->kind.match(
 		[&](const ConstantKind::Array a) {
 			writeChar(writer, '[');
 			writeWithCommas(writer, a.elements(), [&](const Constant* element) {
-				writeConstant(writer, element);
+				debugWriteConstant(writer, element);
 			});
 			writeChar(writer, ']');
 		},
@@ -133,13 +133,13 @@ void writeConstant(Writer* writer, const Constant* c) {
 		});
 }
 
-void writeConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv) {
+void debugWriteConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv) {
 	clv.match(
 		[&](const ConstantOrLambdaOrVariable::Variable) {
 			writeStatic(writer, "variable");
 		},
 		[&](const Constant* c) {
-			writeConstant(writer, c);
+			debugWriteConstant(writer, c);
 		},
 		[&](const KnownLambdaBody*) {
 			writeStatic(writer, "some_lambda");

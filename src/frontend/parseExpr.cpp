@@ -84,7 +84,7 @@ namespace {
 			const Sym funName = takeName(lexer);
 			const Bool colon = tryTake(lexer, ':');
 			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-			const ArgsAndMaybeDedent args = parseArgs(lexer, ArgCtx{allowBlock, /*allowcall*/ colon});
+			const ArgsAndMaybeDedent args = parseArgs(lexer, ArgCtx{.allowBlock = allowBlock, .allowCall = colon});
 			const ExprAstKind exprKind = ExprAstKind{
 				CallAst{funName, typeArgs, prepend<const ExprAst>(lexer->arena, target, args.args)}};
 			return ExprAndMaybeDedent{ExprAst{range(lexer, start), exprKind}, args.dedent};
@@ -109,7 +109,7 @@ namespace {
 			if (size(call.args) != 1)
 				todo<void>("RecordFieldSet should have exactly 1 arg");
 			const ExprAst* target = alloc(lexer, only(call.args));
-			const ExprAndMaybeDedent value = parseExprArg(lexer, ArgCtx{allowBlock, /*allowCall*/ True});
+			const ExprAndMaybeDedent value = parseExprArg(lexer, ArgCtx{.allowBlock = allowBlock, .allowCall = True});
 			const RecordFieldSetAst sfs = RecordFieldSetAst{target, call.funName, alloc(lexer, value.expr)};
 			return ExprAndMaybeDedent{ExprAst{range(lexer, start), ExprAstKind{sfs}}, value.dedents};
 		} else if (tryTake(lexer, ' '))
@@ -143,6 +143,9 @@ namespace {
 			},
 			[&](const CreateRecordAst e) {
 				return exists(e.args, recur);
+			},
+			[](const CreateRecordMultiLineAst) {
+				return unreachable<const Bool>();
 			},
 			[](const FunAsLambdaAst) {
 				return False;
@@ -225,6 +228,70 @@ namespace {
 		return ExprAndMaybeDedent{
 			ExprAst{range(lexer, start), ExprAstKind{match}},
 			some<const size_t>(matchDedents)};
+	}
+
+	const ExprAndMaybeDedent parseMultiLineNew(Lexer* lexer, const Pos start, const Opt<const TypeAst> type) {
+		ArrBuilder<const CreateRecordMultiLineAst::Line> lines;
+		for (;;) {
+			const NameAndRange name = takeNameAndRange(lexer);
+			take(lexer, ". ");
+			const ExprAndDedent ed = parseExprNoLet(lexer);
+			add<const CreateRecordMultiLineAst::Line>(
+				lexer->arena,
+				&lines,
+				CreateRecordMultiLineAst::Line{name, ed.expr});
+			if (ed.dedents != 0)
+				return ExprAndMaybeDedent{
+					ExprAst{range(lexer, start), ExprAstKind{CreateRecordMultiLineAst{type, finishArr(&lines)}}},
+					some<const size_t>(ed.dedents - 1)};
+		}
+	}
+
+	const ExprAndMaybeDedent parseMultiLineNewArr(Lexer* lexer, const Pos start, const Opt<const TypeAst> type) {
+		ArrBuilder<const ExprAst> args {};
+		for (;;) {
+			// Each line must begin with ". "
+			take(lexer, ". ");
+			const ExprAndDedent ed = parseExprNoLet(lexer);
+			add<const ExprAst>(lexer->arena, &args, ed.expr);
+			if (ed.dedents != 0)
+				return ExprAndMaybeDedent{
+					ExprAst{range(lexer, start), ExprAstKind{CreateArrAst{type, finishArr(&args)}}},
+					// dedent of 1 brings us back to before the indent after new-arr
+					some<const size_t>(ed.dedents - 1)};
+		}
+	}
+
+	const ExprAndMaybeDedent parseNewOrNewArrAfterArgs(
+		Lexer* lexer,
+		const Pos start,
+		const Bool isNewArr,
+		const Opt<const TypeAst> type,
+		const ArgsAndMaybeDedent ad
+	) {
+		const ExprAstKind ast = isNewArr
+			? ExprAstKind{CreateArrAst{type, ad.args}}
+			: ExprAstKind{CreateRecordAst{type, ad.args}};
+		return ExprAndMaybeDedent{ExprAst{range(lexer, start), ast}, ad.dedent};
+	}
+
+	const ExprAndMaybeDedent parseNewOrNewArr(Lexer* lexer, const Pos start, const Bool isNewArr, const ArgCtx ctx) {
+		const Opt<const TypeAst> type = tryParseTypeArg(lexer);
+		const Opt<const int> opIndentOrDedent = ctx.allowCall ? tryTakeIndentOrDedent(lexer) : none<const int>();
+		if (has(opIndentOrDedent)) {
+			const int indent = force(opIndentOrDedent);
+			if (indent == 1)
+				return isNewArr
+					? parseMultiLineNewArr(lexer, start, type)
+					: parseMultiLineNew(lexer, start, type);
+			else {
+				assert(indent <= 0);
+				const ArgsAndMaybeDedent ad =
+					ArgsAndMaybeDedent{emptyArr<const ExprAst>(), some<const size_t>(-indent)};
+				return parseNewOrNewArrAfterArgs(lexer, start, isNewArr, type, ad);
+			}
+		} else
+			return parseNewOrNewArrAfterArgs(lexer, start, isNewArr, type, parseArgs(lexer, ctx));
 	}
 
 	const ExprAndMaybeDedent parseWhenLoop(Lexer* lexer, const Pos start) {
@@ -338,14 +405,8 @@ namespace {
 				}
 			}
 			case Kind::_new:
-			case Kind::newArr:{
-				const Opt<const TypeAst> type = tryParseTypeArg(lexer);
-				const ArgsAndMaybeDedent ad = parseArgs(lexer, ctx);
-				const ExprAstKind ast = et.kind == Kind::_new
-					? ExprAstKind{CreateRecordAst{type, ad.args}}
-					: ExprAstKind{CreateArrAst{type, ad.args}};
-				return ExprAndMaybeDedent{ExprAst{getRange(), ast}, ad.dedent};
-			}
+			case Kind::newArr:
+				return parseNewOrNewArr(lexer, start, enumEq(et.kind, Kind::newArr), ctx);
 			case Kind::when:
 				checkBlockAllowed();
 				return parseWhen(lexer, start);
@@ -373,7 +434,7 @@ namespace {
 			lexer,
 			start,
 			et,
-			ArgCtx{/*allowBlock*/ False, /*allowCall*/ True});
+			ArgCtx{.allowBlock = False, .allowCall = True});
 		// We set allowBlock to false, so not allowed to take newlines, so can't have dedents.
 		assert(!has(ed.dedents));
 		return ed.expr;
@@ -386,7 +447,7 @@ namespace {
 	}
 
 	const ExprAndDedent parseExprNoLet(Lexer* lexer, const Pos start, const ExpressionToken et) {
-		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{/*allowBlock*/ True, /*allowCall*/ True});
+		const ExprAndMaybeDedent e = parseExprWorker(lexer, start, et, ArgCtx{.allowBlock = True, .allowCall = True});
 		const size_t dedents = has(e.dedents)
 			? force(e.dedents)
 			: takeNewlineOrDedentAmount(lexer);

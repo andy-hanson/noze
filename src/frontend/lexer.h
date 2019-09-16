@@ -53,10 +53,15 @@ void take(Lexer* lexer, const CStr c) ;
 void skipBlankLines(Lexer* lexer);
 
 enum class NewlineOrIndent { newline, indent };
+const Opt<const NewlineOrIndent> tryTakeNewlineOrIndent(Lexer* lexer);
 NewlineOrIndent takeNewlineOrIndent(Lexer* lexer);
 
 void takeIndent(Lexer* lexer);
 void takeDedent(Lexer* lexer);
+// Returns a number in -inf..1, if a newline was taken.
+// Else, takes nothing and returns none.
+const Opt<const int> tryTakeIndentOrDedent(Lexer* lexer);
+// NOTE: If there's a newline, it *must* be an indent.
 const Bool tryTakeIndent(Lexer* lexer);
 NewlineOrIndent tryTakeIndentAfterNewline(Lexer* lexer);
 

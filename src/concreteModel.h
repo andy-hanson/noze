@@ -691,7 +691,7 @@ struct Constant {
 	}
 };
 
-void writeConstant(Writer* writer, const Constant* c);
+void debugWriteConstant(Writer* writer, const Constant* c);
 
 // NOTE: a Constant can still have a KnownLambdaBody of course!
 struct ConstantOrLambdaOrVariable {
@@ -759,7 +759,7 @@ public:
 	}
 };
 
-void writeConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv);
+void debugWriteConstantOrLambdaOrVariable(Writer* writer, const ConstantOrLambdaOrVariable clv);
 
 inline Comparison compareConstantOrLambdaOrVariable(
 	const ConstantOrLambdaOrVariable a,

@@ -278,6 +278,42 @@ namespace {
 		}
 	}
 
+	void writeRecordNames(Writer* writer, const Arr<const Sym> expected, const Arr<const Sym> actual) {
+		const auto writeExtra = [&](const Sym actualName) -> void {
+			writeStatic(writer, "✘ extra provided: ");
+			writeName(writer, actualName);
+		};
+
+		size_t expectedI = 0;
+		size_t actualI = 0;
+
+		while (expectedI < size(expected) && actualI < size(actual)) {
+			writeChar(writer, '\n');
+			const Sym expectedName = at(expected, expectedI);
+			const Sym actualName = at(actual, actualI);
+			if (symEq(actualName, expectedName)) {
+				writeStatic(writer, "✔ ");
+				writeName(writer, expectedName);
+				expectedI++;
+				actualI++;
+			} else {
+				// Just assume that 'actual' is extra
+				// (TODO: proper diffing algorithm)
+				writeExtra(actualName);
+				actualI++;
+			}
+		}
+		for (const Sym expectedName : slice(expected, expectedI)) {
+			writeChar(writer, '\n');
+			writeStatic(writer, "✘ missing: ");
+			writeName(writer, expectedName);
+		}
+		for (const Sym actualName : slice(actual, actualI)) {
+			writeChar(writer, '\n');
+			writeExtra(actualName);
+		}
+	}
+
 	void writeDiag(Writer* writer, const FilesInfo fi, const Diag d) {
 		d.match(
 			[&](const Diag::CallMultipleMatches d) {
@@ -332,6 +368,16 @@ namespace {
 				writeStatic(writer, "the current function is 'noctx' and record ");
 				writeName(writer, d.strukt->name);
 				writeStatic(writer, " is not marked 'by-val'; can't allocate");
+			},
+			[&](const Diag::CreateRecordMultiLineWrongFields d) {
+				writeStatic(writer, "didn't get expected fields of");
+				writeName(writer, d.decl->name);
+				writeStatic(writer, ":\n");
+				Arena temp {};
+				const Arr<const Sym> expected = map<const Sym>{}(&temp, d.fields, [](const RecordField f) {
+					return f.name;
+				});
+				writeRecordNames(writer, expected, d.providedFieldNames);
 			},
 			[&](const Diag::DuplicateDeclaration d) {
 				writeStatic(writer, "duplicate ");

@@ -41,7 +41,14 @@ pthread-t alias
 
 | writes to `thread`
 | attr -- not typing this as currently I only pass null
-pthread-create err-t(thread cell pthread-t, attr any-ptr, start-routine fun-ptr1 any-ptr any-ptr, arg any-ptr) unsafe extern
+pthread-create err-t
+	thread cell pthread-t
+	attr any-ptr
+	start-routine fun-ptr1 any-ptr any-ptr
+	arg any-ptr
+spec
+	unsafe
+	extern
 
 | writes to `thread-return`
 pthread-join err-t(thread pthread-t, thread-return cell any-ptr) unsafe extern
@@ -67,7 +74,7 @@ stat-t record mut
 	st-mtime mut time-t
 	st-mtime-nsec mut u-long
 	st-ctime mut time-t
-	st-ctime-msec mut u-long
+	st-ctime-nsec mut u-long
 	st-ino mut u-long-long
 	unused mut u-long-long
 
@@ -87,10 +94,32 @@ get-errno err-t() summon builtin
 
 stat int32(path c-str, buf stat-t) extern
 
+empty-stat stat-t()
+	new
+		st-dev. zero
+		pad0. zero
+		st-ino-unused. zero
+		st-mode. zero
+		st-nlink. zero
+		st-uid. zero
+		st-gid. zero
+		st-rdev. zero
+		pad1. zero
+		st-size. zero
+		st-blksize. zero
+		st-blocks. zero
+		st-atime. zero
+		st-atime-nsec. zero
+		st-mtime. zero
+		st-mtime-nsec. zero
+		st-ctime. zero
+		st-ctime-nsec. zero
+		st-ino. zero
+		unused. zero
+
 get-stat opt stat-t(path c-str) summon trusted
-	z3 = zero as<nat32>
-	z = zero as<u-long>
-	s = new<stat-t> z, z3, z, z3, z3, z, z, z, z3, zero, z, z, z, z, z, z, z, z, z, z
+	| Initial value doesn't really matter
+	s = empty-stat
 	err = path stat s
 	when
 		err == zero

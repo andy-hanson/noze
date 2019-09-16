@@ -6,7 +6,12 @@ import .arr-utils .bootstrap .cell .gc .io .mut-bag .number-utils .os .str-utils
 rt-main int32(argc int32, argv ptr c-str, user-main-ptr fun-ptr2 fut<int32> ctx arr<str>) trusted noctx summon
 	| TODO: detect # hardware processors to use for n-threads
 	n-threads = two as<nat>
-	gctx-by-val = new<by-val<global-ctx>> new-lock, empty-arr<vat>, n-threads, new-condition, false
+	gctx-by-val = new<by-val<global-ctx>>
+		lk. new-lock
+		vats. empty-arr<vat>
+		n-live-threads. n-threads
+		may-be-work-to-do. new-condition
+		is-shut-down. false
 	gctx = gctx-by-val ref-of-val
 	vat-by-val = new-vat: gctx, zero, n-threads
 	vat = vat-by-val ref-of-val
@@ -47,7 +52,17 @@ run-threads void(n-threads nat, arg ?t, fun fun-ptr2 void nat ?t) noctx unsafe
 	threads unmanaged-free
 	thread-args unmanaged-free
 
-run-threads-recur void(i nat, n-threads nat, threads ptr pthread-t, thread-args ptr by-val<thread-args<?t>>, arg ?t, fun fun-ptr2 void nat ?t) noctx unsafe
+run-threads-recur void
+	i nat
+	n-threads nat
+	threads ptr pthread-t
+	thread-args ptr by-val<thread-args<?t>>
+	arg ?t
+	fun fun-ptr2 void nat ?t
+spec
+	noctx
+	unsafe
+body
 	when
 		i == n-threads
 			pass
@@ -148,11 +163,23 @@ new-actor-id actor-id(v vat) noctx trusted
 	v.next-actor-id.ref-of-val get-and-increment
 
 new-mut-arr-by-val-with-capacity-from-unmanaged-memory by-val mut-arr<?t>(capacity nat) noctx unsafe
-	new false, zero, capacity, capacity unmanaged-alloc-elements<?t>
+	new
+		frozen. false
+		size. zero
+		capacity. capacity
+		data. capacity unmanaged-alloc-elements<?t>
 
 new-vat by-val vat(gctx global-ctx, id vat-id, max-threads nat) noctx unsafe
 	actors = max-threads new-mut-arr-by-val-with-capacity-from-unmanaged-memory<actor-id>
-	new gctx, id, new-gc, new-lock, new-mut-bag, actors, zero, new-thread-safe-counter
+	new
+		gctx. gctx
+		id. id
+		gc. new-gc
+		tasks-lock. new-lock
+		tasks. new-mut-bag
+		currently-running-actors. actors
+		n-threads-running. zero
+		next-actor-id. new-thread-safe-counter
 
 | Unsafe because you must ensure 'task' is safe to run in parallel.
 add-task void(v vat, t task) unsafe
@@ -217,7 +244,11 @@ thread-function-recur void(thread-id nat, gctx global-ctx, tls thread-local-stuf
 			thread-function-recur: thread-id, gctx, tls
 
 new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id actor-id) noctx unsafe
-	new gctx.as-any-ptr, vat.id, actor-id, vat.gc.ref-of-val.get-gc-ctx.as-any-ptr
+	new
+		gctx-ptr. gctx.as-any-ptr
+		vat-id. vat.id
+		actor-id. actor-id
+		gc-ctx-ptr. vat.gc.ref-of-val.get-gc-ctx.as-any-ptr
 
 return-ctx void(c ctx) noctx unsafe
 	c.gc-ctx-ptr.as-ref return-gc-ctx

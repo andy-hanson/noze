@@ -229,7 +229,7 @@ namespace {
 			for (const ConstantOrLambdaOrVariable clv : key.specializeOnArgs) {
 				//TODO: print type args too
 				writeChar(&writer, ' ');
-				writeConstantOrLambdaOrVariable(&writer, clv);
+				debugWriteConstantOrLambdaOrVariable(&writer, clv);
 			}
 			printf("%s\n", finishWriterToCStr(&writer));
 		}

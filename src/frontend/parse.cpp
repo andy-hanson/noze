@@ -44,18 +44,28 @@ namespace {
 		return ImportAst{range(lexer, start), nDots, path};
 	}
 
-	const Arr<const ParamAst> parseParams(Lexer* lexer) {
+	struct ParamsAndMaybeDedent {
+		const Arr<const ParamAst> params;
+		// 0 if we took a newline but it didn't change the indent level from before parsing params.
+		const Opt<const size_t> dedents;
+	};
+
+	const ParamAst parseSingleParam(Lexer* lexer) {
+		const Pos start = curPos(lexer);
+		const Sym name = takeName(lexer);
+		take(lexer, ' ');
+		const TypeAst type = parseType(lexer);
+		return ParamAst{range(lexer, start), name, type};
+	}
+
+	const Arr<const ParamAst> parseParenthesizedParams(Lexer* lexer) {
 		take(lexer, '(');
 		if (tryTake(lexer, ')'))
 			return emptyArr<const ParamAst>();
 		else {
 			ArrBuilder<const ParamAst> res {};
 			for (;;) {
-				const Pos start = curPos(lexer);
-				const Sym name = takeName(lexer);
-				take(lexer, ' ');
-				const TypeAst type = parseType(lexer);
-				add<const ParamAst>(lexer->arena, &res, ParamAst{range(lexer, start), name, type});
+				add<const ParamAst>(lexer->arena, &res, parseSingleParam(lexer));
 				if (tryTake(lexer, ')'))
 					break;
 				take(lexer, ", ");
@@ -64,17 +74,55 @@ namespace {
 		}
 	}
 
-	const SigAst parseSigAfterNameAndSpace(Lexer* lexer, const Pos start, const Sym name) {
-		const TypeAst returnType = parseType(lexer);
-		const Arr<const ParamAst> params = parseParams(lexer);
-		return SigAst{range(lexer, start), name, returnType, params};
+	const ParamsAndMaybeDedent parseIndentedParams(Lexer* lexer) {
+		ArrBuilder<const ParamAst> res {};
+		for (;;) {
+			add<const ParamAst>(lexer->arena, &res, parseSingleParam(lexer));
+			const size_t dedents = takeNewlineOrDedentAmount(lexer);
+			if (dedents != 0)
+				return ParamsAndMaybeDedent{finishArr(&res), some<const size_t>(dedents - 1)};
+		}
 	}
 
-	const SigAst parseSig(Lexer* lexer) {
+	const ParamsAndMaybeDedent parseParams(Lexer* lexer) {
+		const Opt<const NewlineOrIndent> opNi = tryTakeNewlineOrIndent(lexer);
+		if (has(opNi))
+			switch (force(opNi)) {
+				case NewlineOrIndent::newline:
+					return ParamsAndMaybeDedent{emptyArr<const ParamAst>(), some<const size_t>(0)};
+				case NewlineOrIndent::indent:
+					return parseIndentedParams(lexer);
+				default:
+					assert(0);
+			}
+		else
+			return ParamsAndMaybeDedent{parseParenthesizedParams(lexer), none<const size_t>()};
+	}
+
+	struct SigAstAndMaybeDedent {
+		const SigAst sig;
+		const Opt<const size_t> dedents;
+	};
+
+	struct SigAstAndDedent {
+		const SigAst sig;
+		const size_t dedents;
+	};
+
+	const SigAstAndMaybeDedent parseSigAfterNameAndSpace(Lexer* lexer, const Pos start, const Sym name) {
+		const TypeAst returnType = parseType(lexer);
+		const ParamsAndMaybeDedent params = parseParams(lexer);
+		const SigAst sigAst = SigAst{range(lexer, start), name, returnType, params.params};
+		return SigAstAndMaybeDedent{sigAst, params.dedents};
+	}
+
+	const SigAstAndDedent parseSig(Lexer* lexer) {
 		const Pos start = curPos(lexer);
 		const Sym sigName = takeName(lexer);
 		take(lexer, ' ');
-		return parseSigAfterNameAndSpace(lexer, start, sigName);
+		const SigAstAndMaybeDedent s = parseSigAfterNameAndSpace(lexer, start, sigName);
+		const size_t dedents = has(s.dedents) ? force(s.dedents) : takeNewlineOrDedentAmount(lexer);
+		return SigAstAndDedent{s.sig, dedents};
 	}
 
 	const Arr<const ImportAst> parseImports(Lexer* lexer) {
@@ -88,10 +136,15 @@ namespace {
 
 	const Arr<const SigAst> parseIndentedSigs(Lexer* lexer) {
 		ArrBuilder<const SigAst> res {};
-		do {
-			add<const SigAst>(lexer->arena, &res, parseSig(lexer));
-		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
-		return finishArr(&res);
+		for (;;) {
+			const SigAstAndDedent sd = parseSig(lexer);
+			add<const SigAst>(lexer->arena, &res, sd.sig);
+			if (sd.dedents != 0) {
+				// We started at in indent level of only 1, so can't go down more than 1.
+				assert(sd.dedents == 1);
+				return finishArr(&res);
+			}
+		}
 	}
 
 	enum class SpaceOrNewlineOrIndent {
@@ -222,7 +275,17 @@ namespace {
 		const Opt<const FunBodyAst> body; // 'builtin' or 'extern'
 	};
 
-	const SpecUsesAndSigFlagsAndKwBody parseSpecUsesAndSigFlagsAndKwBody(Lexer* lexer) {
+	const SpecUsesAndSigFlagsAndKwBody emptySpecUsesAndSigFlagsAndKwBody() {
+		return SpecUsesAndSigFlagsAndKwBody{
+			emptyArr<const SpecUseAst>(),
+			False,
+			False,
+			False,
+			False,
+			none<const FunBodyAst>()};
+	}
+
+	struct SpecUsesAndSigFlagsAndKwBodyBuilder {
 		ArrBuilder<const SpecUseAst> specUses {};
 		Cell<const Bool> noCtx { False };
 		Cell<const Bool> summon { False };
@@ -230,69 +293,98 @@ namespace {
 		Cell<const Bool> trusted { False };
 		Cell<const Bool> builtin { False };
 		Cell<const Bool> _extern { False };
+	};
 
-		auto setIt = [](Cell<const Bool>* b) -> void {
-			if (cellGet(b))
-				todo<void>("duplicate");
-			cellSet<const Bool>(b, True);
-		};
+	void addSpecOrName(Lexer* lexer, SpecUsesAndSigFlagsAndKwBodyBuilder* builder) {
+		const Pos start = curPos(lexer);
+		const SymAndIsReserved name = takeNameAllowReserved(lexer);
+		if (name.isReserved) {
+			const auto setIt = [](Cell<const Bool>* b) -> void {
+				if (cellGet(b))
+					todo<void>("duplicate");
+				cellSet<const Bool>(b, True);
+			};
 
-		while (tryTake(lexer, ' ')) {
-			const Pos start = curPos(lexer);
-			const SymAndIsReserved name = takeNameAllowReserved(lexer);
-			if (name.isReserved)
-				switch (name.sym.value) {
-					case shortSymAlphaLiteralValue("noctx"):
-						setIt(&noCtx);
-						break;
-					case shortSymAlphaLiteralValue("summon"):
-						setIt(&summon);
-						break;
-					case shortSymAlphaLiteralValue("unsafe"):
-						setIt(&unsafe);
-						break;
-					case shortSymAlphaLiteralValue("trusted"):
-						setIt(&trusted);
-						break;
-					case shortSymAlphaLiteralValue("builtin"):
-						cellSet<const Bool>(&builtin, True);
-						goto end_loop;
-					case shortSymAlphaLiteralValue("extern"):
-						cellSet<const Bool>(&_extern, True);
-						goto end_loop;
-					default:
-						return throwOnReservedName<const SpecUsesAndSigFlagsAndKwBody>(name.range, name.sym);
-				}
-			else {
-				const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
-				add<const SpecUseAst>(lexer->arena, &specUses, SpecUseAst{range(lexer, start), name.sym, typeArgs});
+			switch (name.sym.value) {
+				case shortSymAlphaLiteralValue("noctx"):
+					setIt(&builder->noCtx);
+					break;
+				case shortSymAlphaLiteralValue("summon"):
+					setIt(&builder->summon);
+					break;
+				case shortSymAlphaLiteralValue("unsafe"):
+					setIt(&builder->unsafe);
+					break;
+				case shortSymAlphaLiteralValue("trusted"):
+					setIt(&builder->trusted);
+					break;
+				case shortSymAlphaLiteralValue("builtin"):
+					setIt(&builder->builtin);
+					break;
+				case shortSymAlphaLiteralValue("extern"):
+					setIt(&builder->_extern);
+					break;
+				default:
+					return throwOnReservedName<void>(name.range, name.sym);
 			}
+		} else {
+			const Arr<const TypeAst> typeArgs = tryParseTypeArgs(lexer);
+			add<const SpecUseAst>(
+				lexer->arena,
+				&builder->specUses,
+				SpecUseAst{range(lexer, start), name.sym, typeArgs});
 		}
-		end_loop:
+	}
 
-		if (cellGet(&unsafe) && cellGet(&trusted))
+	const SpecUsesAndSigFlagsAndKwBody finishSpecs(SpecUsesAndSigFlagsAndKwBodyBuilder* builder) {
+		if (cellGet(&builder->unsafe) && cellGet(&builder->trusted))
 			todo<void>("'unsafe trusted' is redundant");
-		if (cellGet(&builtin) && cellGet(&trusted))
+		if (cellGet(&builder->builtin) && cellGet(&builder->trusted))
 			todo<void>("'builtin trusted' is silly as builtin fun has no body");
-		if (cellGet(&_extern) && cellGet(&trusted))
+		if (cellGet(&builder->_extern) && cellGet(&builder->trusted))
 			todo<void>("'extern trusted' is silly as extern fun has no body");
-		if (cellGet(&_extern)) {
-			if (cellGet(&noCtx))
+		if (cellGet(&builder->_extern)) {
+			if (cellGet(&builder->noCtx))
 				todo<void>("'noctx extern' is redundant");
-			cellSet<const Bool>(&noCtx, True);
+			cellSet<const Bool>(&builder->noCtx, True);
 		}
 
-		Opt<const FunBodyAst> body = cellGet(&builtin) ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
-			: cellGet(&_extern) ? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
+		Opt<const FunBodyAst> body = cellGet(&builder->builtin)
+			? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
+			: cellGet(&builder->_extern)
+			? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
 			: none<const FunBodyAst>();
 		return SpecUsesAndSigFlagsAndKwBody{
-			finishArr(&specUses),
-			cellGet(&noCtx),
-			cellGet(&summon),
-			cellGet(&unsafe),
-			cellGet(&trusted),
+			finishArr(&builder->specUses),
+			cellGet(&builder->noCtx),
+			cellGet(&builder->summon),
+			cellGet(&builder->unsafe),
+			cellGet(&builder->trusted),
 			body};
 	}
+
+	// TODO: handle 'noctx' and friends too! (share code with parseSpecUsesAndSigFlagsAndKwBody)
+	const SpecUsesAndSigFlagsAndKwBody parseIndentedSpecUses(Lexer* lexer) {
+		takeIndent(lexer);
+		SpecUsesAndSigFlagsAndKwBodyBuilder builder {};
+		do {
+			addSpecOrName(lexer, &builder);
+		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
+		return finishSpecs(&builder);
+	}
+
+	const SpecUsesAndSigFlagsAndKwBody parseSpecUsesAndSigFlagsAndKwBody(Lexer* lexer) {
+		SpecUsesAndSigFlagsAndKwBodyBuilder builder {};
+		while (tryTake(lexer, ' '))
+			addSpecOrName(lexer, &builder);
+		return finishSpecs(&builder);
+	}
+
+	// TODO:RENAME
+	struct FunDeclStuff {
+		const SpecUsesAndSigFlagsAndKwBody extra;
+		const FunBodyAst body;
+	};
 
 	const FunDeclAst parseFun(
 		Lexer* lexer,
@@ -301,19 +393,36 @@ namespace {
 		const Sym name,
 		const Arr<const TypeParamAst> typeParams
 	) {
-		const SigAst sig = parseSigAfterNameAndSpace(lexer, start, name);
-		const SpecUsesAndSigFlagsAndKwBody extra = parseSpecUsesAndSigFlagsAndKwBody(lexer);
-		const FunBodyAst body = has(extra.body) ? force(extra.body) : FunBodyAst(parseFunExprBody(lexer));
+		const SigAstAndMaybeDedent sig = parseSigAfterNameAndSpace(lexer, start, name);
+		const FunDeclStuff stuff = [&]() {
+			if (has(sig.dedents)) {
+				// Started at indent of 0
+				assert(force(sig.dedents) == 0);
+				const SpecUsesAndSigFlagsAndKwBody extra = tryTake(lexer, "spec")
+					? parseIndentedSpecUses(lexer)
+					: emptySpecUsesAndSigFlagsAndKwBody();
+				const FunBodyAst body = optOr(extra.body, [&]() {
+					take(lexer, "body");
+					return FunBodyAst{parseFunExprBody(lexer)};
+				});
+				return FunDeclStuff{extra, body};
+			} else {
+				const SpecUsesAndSigFlagsAndKwBody extra = parseSpecUsesAndSigFlagsAndKwBody(lexer);
+				const FunBodyAst body = optOr(extra.body, [&]() { return FunBodyAst{parseFunExprBody(lexer)}; });
+				return FunDeclStuff{extra, body};
+			}
+		}();
+		const SpecUsesAndSigFlagsAndKwBody extra = stuff.extra;
 		return FunDeclAst{
 			isPublic,
 			typeParams,
-			sig,
+			sig.sig,
 			extra.specUses,
 			extra.noCtx,
 			extra.summon,
 			extra.unsafe,
 			extra.trusted,
-			body};
+			stuff.body};
 	}
 
 	void parseSpecOrStructOrFun(

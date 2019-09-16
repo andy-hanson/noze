@@ -4,7 +4,7 @@
 #include "./checkExpr.h"
 
 namespace {
-	// If we call `foo \x ...` where `foo` is a function that doesn't exist,
+	// If we call `foo: \x ...` where `foo` is a function that doesn't exist,
 	// don't continue checking the lambda it in the hopes that it might have a property.
 	const Bool exprMightHaveProperties(const ExprAst ast) {
 		return ast.kind.match(
@@ -14,6 +14,7 @@ namespace {
 			},
 			[](const CreateArrAst) { return True; },
 			[](const CreateRecordAst) { return True; },
+			[](const CreateRecordMultiLineAst) { return True; },
 			[](const FunAsLambdaAst) { return False; },
 			[](const IdentifierAst) { return True; },
 			[](const LambdaAst) { return False; },

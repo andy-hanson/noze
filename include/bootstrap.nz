@@ -637,12 +637,11 @@ opt<?t> union
 	none
 	some<?t>
 
-some some ?t(t ?t) noctx
+some some ?x(t ?x) noctx
 	new t
 
 none none() noctx
 	new<none>
-
 
 empty? bool(a opt ?t) noctx
 	match a

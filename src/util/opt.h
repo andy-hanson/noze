@@ -62,3 +62,8 @@ Comparison compareOpt(const Opt<T> a, const Opt<T> b) {
 			// none == none
 			: Comparison::equal;
 }
+
+template <typename T, typename Cb>
+inline T optOr(const Opt<T> a, const Cb cb) {
+	return has(a) ? force(a) : cb();
+}

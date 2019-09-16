@@ -387,13 +387,31 @@ const Arr<T> filter(Arena* arena, const Arr<T> a, Cb cb) {
 template <typename Out>
 struct mapZip {
 	template <typename In0, typename In1, typename Cb>
-	Arr<Out> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, Cb cb) {
+	const Arr<Out> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, const Cb cb) {
 		const size_t sz = size(in0);
 		assert(size(in1) == sz);
 		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * sz));
 		for (const size_t i : Range{sz})
 			initMemory(&out[i], cb(at(in0, i), at(in1, i)));
 		return Arr<Out>{out, sz};
+	}
+};
+
+template <typename Out>
+struct mapZipOrNone {
+	template <typename In0, typename In1, typename Cb>
+	const Opt<const Arr<Out>> operator()(Arena* arena, const Arr<In0> in0, const Arr<In1> in1, const Cb cb) {
+		const size_t sz = size(in0);
+		assert(size(in1) == sz);
+		Out* out = static_cast<Out*>(alloc(arena, sizeof(Out) * sz));
+		for (const size_t i : Range{sz}) {
+			const Opt<Out> x = cb(at(in0, i), at(in1, i));
+			if (has(x))
+				initMemory(&out[i], force(x));
+			else
+				return none<const Arr<Out>>();
+		}
+		return some<const Arr<Out>>(Arr<Out>{out, sz});
 	}
 };
 

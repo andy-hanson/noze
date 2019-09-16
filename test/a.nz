@@ -1,22 +1,30 @@
 import arr-utils cell dict fut-utils gc io number-utils os runtime str-utils
 
 my-spec<?t> spec
-	zero ?t()
-	+ ?t(a ?t, b ?t)
+	zero ?t
+	+ ?t
+		a ?t
+		b ?t
 
-my-sum ?t(a arr ?t) my-spec<?t>
+my-sum ?t
+	a arr ?t
+spec
+	my-spec<?t>
+body
 	when
 		a empty?
 			zero
 		else
 			a.first + a.tail.my-sum
 
-
 my-record record
 	x int
 
-fff my-record(x int)
-	new<my-record> x + 1
+fff my-record
+	x int
+body
+	new<my-record>
+		x. x + 1
 
 test void() trusted summon
 	thr = 2 fff
@@ -118,9 +126,16 @@ get-ext opt str(name str)
 		some s
 			name slice s.value some
 
-| IGNORE_EXTS = Set({ ".c", ".data", ".o", ".tmLanguage" })
+ignored-exts arr str()
+	new-arr
+		. ".c"
+		. ".data"
+		. ".o"
+		. ".out"
+		. ".tmLanguage"
+
 ignore-ext bool(ext str)
-	(new-arr<str> ".c", ".data", ".o", ".out", ".tmLanguage") contains ext
+	ignored-exts contains ext
 
 ignore-ext-of-name bool(name str)
 	match name get-ext
@@ -184,7 +199,6 @@ n-times void(n nat, f fun1 void nat)
 
 count-down void() summon
 	10 n-times {it.to-str print-sync}
-
 
 test void() trusted summon
 	a = new-arr<nat> one, one, one

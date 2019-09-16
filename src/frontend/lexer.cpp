@@ -157,6 +157,7 @@ namespace {
 
 	// Returns the change in indent (and updates the indent)
 	// Note: does nothing if not looking at a newline!
+	// NOTE: never returns a value > 1 as double-indent is always illegal.
 	int skipLinesAndGetIndentDelta(Lexer* lexer) {
 		// comment / region counts as a blank line no matter its indent level.
 		const uint newIndent = takeIndentAmount(lexer);
@@ -172,6 +173,8 @@ namespace {
 		} else {
 			// If we got here, we're looking at a non-empty line (or EOF)
 			int res = static_cast<int>(newIndent) - static_cast<int>(lexer->indent);
+			if (res > 1)
+				todo<void>("too much indent");
 			lexer->indent = newIndent;
 			return res;
 		}
@@ -346,20 +349,27 @@ void skipBlankLines(Lexer* lexer)  {
 		throwUnexpected<void>(lexer);
 }
 
-NewlineOrIndent takeNewlineOrIndent(Lexer* lexer) {
+const Opt<const NewlineOrIndent> tryTakeNewlineOrIndent(Lexer* lexer) {
 	const Pos start = curPos(lexer);
-	take(lexer, '\n');
-	const int delta = skipLinesAndGetIndentDelta(lexer);
-	switch (delta) {
-		case 0:
-			return NewlineOrIndent::newline;
-		case 1:
-			return NewlineOrIndent::indent;
-		default:
-			return throwDiag<const NewlineOrIndent>(
-				range(lexer, start),
-				delta < 0 ? ParseDiag{ParseDiag::UnexpectedDedent{}} : ParseDiag{ParseDiag::UnexpectedIndent{}});
-	}
+	if (tryTake(lexer, '\n')) {
+		const int delta = skipLinesAndGetIndentDelta(lexer);
+		switch (delta) {
+			case 0:
+				return some<const NewlineOrIndent>(NewlineOrIndent::newline);
+			case 1:
+				return some<const NewlineOrIndent>(NewlineOrIndent::indent);
+			default:
+				return throwDiag<const Opt<const NewlineOrIndent>>(
+					range(lexer, start),
+					ParseDiag{ParseDiag::UnexpectedDedent{}});
+		}
+	} else
+		return none<const NewlineOrIndent>();
+}
+
+NewlineOrIndent takeNewlineOrIndent(Lexer* lexer) {
+	const Opt<const NewlineOrIndent> op = tryTakeNewlineOrIndent(lexer);
+	return has(op) ? force(op) : throwUnexpected<const NewlineOrIndent>(lexer);
 }
 
 void takeIndent(Lexer* lexer) {
@@ -371,6 +381,12 @@ void takeDedent(Lexer* lexer)  {
 	const int delta = skipLinesAndGetIndentDelta(lexer);
 	if (delta != -1)
 		throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedDedent{}});
+}
+
+const Opt<const int> tryTakeIndentOrDedent(Lexer* lexer) {
+	return eq<const char>(curChar(lexer), '\n')
+		? some<const int>(skipLinesAndGetIndentDelta(lexer))
+		: none<const int>();
 }
 
 const Bool tryTakeIndent(Lexer* lexer)  {

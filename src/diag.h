@@ -46,6 +46,11 @@ struct Diag {
 	struct CreateRecordByRefNoCtx {
 		const StructDecl* strukt;
 	};
+	struct CreateRecordMultiLineWrongFields {
+		const StructDecl* decl;
+		const Arr<const RecordField> fields;
+		const Arr<const Sym> providedFieldNames;
+	};
 	struct DuplicateDeclaration {
 		enum class Kind {
 			structOrAlias,
@@ -191,6 +196,7 @@ private:
 		circularImport,
 		commonTypesMissing,
 		createRecordByRefNoCtx,
+		createRecordMultiLineWrongFields,
 		duplicateDeclaration,
 		duplicateImports,
 		expectedTypeIsNotALambda,
@@ -234,6 +240,7 @@ private:
 		const CircularImport circularImport;
 		const CommonTypesMissing commonTypesMissing;
 		const CreateRecordByRefNoCtx createRecordByRefNoCtx;
+		const CreateRecordMultiLineWrongFields createRecordMultiLineWrongFields;
 		const DuplicateDeclaration duplicateDeclaration;
 		const DuplicateImports duplicateImports;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
@@ -286,6 +293,8 @@ public:
 		: kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
 	explicit inline Diag(const CreateRecordByRefNoCtx d)
 		: kind{Kind::createRecordByRefNoCtx}, createRecordByRefNoCtx{d} {}
+	explicit inline Diag(const CreateRecordMultiLineWrongFields d)
+		: kind{Kind::createRecordMultiLineWrongFields}, createRecordMultiLineWrongFields{d} {}
 	explicit inline Diag(const DuplicateDeclaration d)
 		: kind{Kind::duplicateDeclaration}, duplicateDeclaration{d} {}
 	explicit inline Diag(const DuplicateImports d)
@@ -368,6 +377,7 @@ public:
 		typename CbCircularImport,
 		typename CbCommonTypesMissing,
 		typename CbCreateRecordByRefNoCtx,
+		typename CbCreateRecordMultiLineWrongFields,
 		typename CbDuplicateDeclaration,
 		typename CbDuplicateImports,
 		typename CbExpectedTypeIsNotALambda,
@@ -409,6 +419,7 @@ public:
 		CbCircularImport cbCircularImport,
 		CbCommonTypesMissing cbCommonTypesMissing,
 		CbCreateRecordByRefNoCtx cbCreateRecordByRefNoCtx,
+		CbCreateRecordMultiLineWrongFields cbCreateRecordMultiLineWrongFields,
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbDuplicateImports cbDuplicateImports,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
@@ -460,6 +471,8 @@ public:
 				return cbCommonTypesMissing(commonTypesMissing);
 			case Kind::createRecordByRefNoCtx:
 				return cbCreateRecordByRefNoCtx(createRecordByRefNoCtx);
+			case Kind::createRecordMultiLineWrongFields:
+				return cbCreateRecordMultiLineWrongFields(createRecordMultiLineWrongFields);
 			case Kind::duplicateDeclaration:
 				return cbDuplicateDeclaration(duplicateDeclaration);
 			case Kind::duplicateImports:
