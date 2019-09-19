@@ -9,17 +9,6 @@
 #include "./util/sym.h"
 #include "./util/writer.h"
 
-// A module came from the global imports directory or locally
-enum class StorageKind {
-	global,
-	local,
-};
-
-struct PathAndStorageKind {
-	const Path* path;
-	const StorageKind storageKind;
-};
-
 inline Comparison comparePathAndStorageKind(const PathAndStorageKind a, const PathAndStorageKind b) {
 	const Comparison res = comparePrimitive(a.storageKind, b.storageKind);
 	return res != Comparison::equal ? res : comparePath(a.path, b.path);

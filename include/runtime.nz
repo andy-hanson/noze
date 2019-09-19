@@ -164,7 +164,7 @@ new-actor-id actor-id(v vat) noctx trusted
 
 new-mut-arr-by-val-with-capacity-from-unmanaged-memory by-val mut-arr<?t>(capacity nat) noctx unsafe
 	new
-		frozen. false
+		frozen?. false
 		size. zero
 		capacity. capacity
 		data. capacity unmanaged-alloc-elements<?t>

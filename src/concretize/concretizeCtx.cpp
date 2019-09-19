@@ -94,15 +94,16 @@ namespace {
 		size_t maxFieldAlign = 1;
 		for (const ConcreteField field : fields) {
 			const size_t itsSize = sizeOrPointerSizeBytes(field.type);
-			const size_t itsAlign = min<const size_t>(itsSize, 8); //TODO: this is wrong!
-			maxFieldAlign = max<const size_t>(maxFieldAlign, itsAlign);
+			//TODO: this is wrong!
+			const size_t itsAlign = min<const size_t, comparePrimitive<const size_t>>(itsSize, 8);
+			maxFieldAlign = max<const size_t, comparePrimitive<const size_t>>(maxFieldAlign, itsAlign);
 			while (s % itsAlign != 0)
 				s++;
 			s += itsSize;
 		}
 		while (s % maxFieldAlign != 0)
 			s++;
-		return max<const size_t>(s, 1);
+		return max<const size_t, comparePrimitive<const size_t>>(s, 1);
 	}
 
 	const Bool getDefaultIsPointerForFields(
@@ -191,9 +192,8 @@ namespace {
 						return getConcreteType_forStructInst(ctx, si, typeArgsScope);
 					});
 
-				size_t maxMember = 0;
-				for (const ConcreteType ct : members)
-					maxMember = max<const size_t>(maxMember, sizeOrPointerSizeBytes(ct));
+				const size_t maxMember = arrMax<const size_t, comparePrimitive<const size_t>>{}(
+					members, sizeOrPointerSizeBytes);
 				// Must factor in the 'kind' size. It seems that enums are int-sized.
 				const size_t sizeBytes = roundUp(sizeof(int) + maxMember, sizeof(void*));
 

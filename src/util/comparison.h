@@ -34,14 +34,12 @@ inline Comparison comparePtr(const T* a, const T* b) {
 	return a < b ? Comparison::less : a >  b ? Comparison::greater : Comparison::equal;
 }
 
-template <typename T>
+template <typename T, Cmp<T> cmp>
 inline const T max(const T a, const T b) {
-	static_assert(std::is_fundamental<T>::value, "must be primitive");
-	return a > b ? a : b;
+	return cmp(a, b) == Comparison::greater ? a : b;
 }
 
-template <typename T>
+template <typename T, Cmp<T> cmp>
 inline const T min(const T a, const T b) {
-	static_assert(std::is_fundamental<T>::value, "must be primitive");
-	return a < b ? a : b;
+	return cmp(a, b) == Comparison::less ? a : b;
 }

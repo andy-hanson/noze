@@ -19,16 +19,18 @@ body
 
 my-record record
 	x int
+	y int
+	z int
+	w int
 
-fff my-record
-	x int
-body
-	new<my-record>
-		x. x + 1
+make-my-record my-record()
+	new
+		x. 1
+		y. 2
+		z. 3
+		w. 4
 
 test void() trusted summon
-	thr = 2 fff
-
 	m = empty-mut-dict<nat, nat>
 	m add 1, 1
 	m add 2, 2

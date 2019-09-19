@@ -14,6 +14,7 @@ variables:
   # We don't want to consume any characters at that line,
   # so use lookahead to match the beginning of a line, then any non-whitespace character.
   unindented_line: '(?=^\S)'
+  spec_use_keyword: 'builtin|extern|noctx|summon|trusted|unsafe'
 
 name: noze
 file_extensions:
@@ -105,7 +106,7 @@ contexts:
       pop: true
     - match: 'by-ref|by-val'
       scope: keyword
-    - match: '[a-z0-9\-]+'
+    - match: '{{name}}'
       scope: identifier
       push: type_ending_in_nl
 
@@ -144,21 +145,47 @@ contexts:
       scope: storage.type
     - match: '(?=\()'
       push: fun_signature_starting_at_l_paren
+    # If we didn't see '(', this is a multiline function
     - match: $
+      push: multiline_params
+    - match: '{{unindented_line}}'
+      pop: true
+
+  multiline_params:
+    - match: '^spec'
+      scope: comment
+      push: multiline_spec_uses
+    - match: '^body'
+      scope: comment
       push: expression
     - match: '{{unindented_line}}'
       pop: true
+    - match: '{{name}}'
+      scope: identifier
+      push: type_ending_in_nl
+
+  spec_common:
+    - match: '{{unindented_line}}'
+      pop: true
+    - match: '{{spec_use_keyword}}'
+      scope: keyword
+    - match: '{{spec_name}}'
+      scope: entity.name
+
+  multiline_spec_uses:
+    - match: '^body'
+      scope: comment
+      push: expression
+    - include: spec_common
 
   fun_signature_starting_at_l_paren:
     - match: '\('
       scope: comment # punctuation.section.group.begin
       push: parameters
-    - match: 'builtin|extern|noctx|summon|trusted|unsafe'
-      scope: keyword
-    - match: '{{spec_name}}'
-      scope: entity.name
+    # The signature ends at the end of the line, then the body follows.
     - match: (?=$)
-      pop: true
+      push: expression
+    - include: spec_common
 
   parameters:
     - match: '[a-z0-9\-]+'
@@ -185,14 +212,19 @@ contexts:
     - match: ^\s+
     # `foo:`
     - match: '{{name}}(\:)\s+'
-      scope: meta.function-call.noze
+      scope: variable.function.noze
       captures:
         3: comment
     # `.foo`
     - match: (\.){{name}}
-      scope: meta.function-call.noze
+      scope: variable.function.noze
       captures:
         1: comment # punctuation.accessor
+
+    # `foo. ` in a multiline new record
+    - match: '{{name}}(\.)\s+'
+      scope: comment
+
     # numbers
     - match: '\b-?((0((b[01]+)|(o[0-8]+)|(x[\da-f]+)))|(\d+(\.\d+)?))'
       scope: constant.numeric
@@ -208,7 +240,7 @@ contexts:
       scope: identifier
     # FunAsLambda (&foo)
     - match: '\&{{name}}'
-      scope: meta.function-call.noze
+      scope: variable.function.noze
     # Lambda `\x y`
     - match: '(\\).*$'
       # parameters are identifiers
@@ -228,7 +260,7 @@ contexts:
       scope: comment # punctuation.separator
     # Method call ` foo ` or ` foo: `
     - match: '\s+{{name}}(\:)?\s+'
-      scope: meta.function-call.noze
+      scope: variable.function.noze
       captures:
         3: comment
 

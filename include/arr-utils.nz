@@ -59,7 +59,7 @@ mut-slice<?t> record mut
 	begin nat
 
 to-mut-slice mut-slice ?t(a mut-arr ?t)
-	forbid: a.frozen
+	forbid: a.frozen?
 	new a, a.size, zero
 
 slice mut-slice ?t(a mut-slice ?t, lo nat, size nat) trusted
@@ -126,7 +126,7 @@ partition-recur nat(a mut-slice ?t, pivot ?t, l nat, r nat) data<?t>
 
 | NOTE: this is not a normal record, compiler treats it specially
 mut-arr<?t> record mut
-	frozen mut bool
+	frozen? mut bool
 	| Number of *initialized* elements.
 	| But 'uninitialized-mut-arr' sets 'size' and doesn't initialize!
 	size mut nat
@@ -208,7 +208,7 @@ unsafe-as-arr arr ?t(a mut-arr ?t) noctx unsafe
 	new a.size, a.data
 
 freeze arr ?t(a mut-arr ?t) noctx trusted
-	a.frozen := true
+	a.frozen? := true
 	a unsafe-as-arr
 
 noctx-at ?t(a mut-arr ?t, index nat) trusted noctx
@@ -272,10 +272,10 @@ each void(a arr ?t, f fun-mut1 void ?t)
 			a.tail each f
 
 each void(a mut-arr ?t, f fun-mut1 void ?t) trusted
-	was-frozen = a.frozen
-	a.frozen := true
+	was-frozen? = a.frozen?
+	a.frozen? := true
 	a.temp-as-arr each f
-	a.frozen := was-frozen
+	a.frozen? := was-frozen?
 
 each-with-index void(a arr ?t, f fun-mut2 void ?t nat)
 	a each-with-index-recur f, zero

@@ -220,7 +220,11 @@ const Bool symEqLongAlphaLiteral(const Sym a, const char* lit);
 const Bool symEqLongOperatorLiteral(const Sym a, const char* lit);
 
 const Str strOfSym(Arena* arena, const Sym a);
-void writeSym(Writer* writer, const Sym s);
+size_t writeSymAndGetSize(Writer* writer, const Sym s);
+inline void writeSym(Writer* writer, const Sym s) {
+	writeSymAndGetSize(writer, s);
+}
+size_t symSize(const Sym s);
 
 inline CStr symToCStr(Arena* arena, const Sym a) {
 	return strToCStr(arena, strOfSym(arena, a));

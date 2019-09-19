@@ -1,45 +1,10 @@
 #include "./showDiag.h"
 
 #include "../util/arrUtil.h"
+#include "../util/diff.h"
+#include "../util/writerUtils.h"
 
 namespace {
-	//TODO:MOVE
-	void writePath(Writer* writer, const Path* p) {
-		if (has(p->parent)) {
-			writePath(writer, force(p->parent));
-			writeChar(writer, '/');
-		}
-		writeStr(writer, p->baseName);
-	}
-
-	void writeRelPath(Writer* writer, const RelPath p) {
-		repeat(p.nParents, [&]() {
-			writeStatic(writer, "../");
-		});
-		writePath(writer, p.path);
-	}
-
-	void writePathAndStorageKind(Writer* writer, const PathAndStorageKind p) {
-		writePath(writer, p.path);
-	}
-
-	//TODO:MOVE
-	void writeLineAndColumn(Writer* writer, const LineAndColumn lc) {
-		writeNat(writer, lc.line + 1);
-		writeChar(writer, ':');
-		writeNat(writer, lc.column + 1);
-	}
-
-	void writePos(Writer* writer, const LineAndColumnGetter lc, const Pos pos) {
-		writeLineAndColumn(writer, lineAndColumnAtPos(lc, pos));
-	}
-
-	void writeRange(Writer* writer, const LineAndColumnGetter lc, const SourceRange range) {
-		writePos(writer, lc, range.start);
-		writeChar(writer, '-');
-		writePos(writer, lc, range.end);
-	}
-
 	void writeWhere(Writer* writer, const FilesInfo fi, const PathAndStorageKindAndRange where) {
 		writeBold(writer);
 		Arena temp {};
@@ -59,7 +24,6 @@ namespace {
 	}
 
 	void writeLineNumber(Writer* writer, const FilesInfo fi, const Module* module, const SourceRange range) {
-		// TODO
 		const PathAndStorageKind where = module->pathAndStorageKind;
 		writeBold(writer);
 		writePathAndStorageKind(writer, where);
@@ -72,29 +36,6 @@ namespace {
 		>(fi.lineAndColumnGetters, where);
 		const size_t line = lineAndColumnAtPos(lcg, range.start).line;
 		writeNat(writer, line + 1);
-	}
-
-	void showChar(Writer* writer, char c) {
-		switch (c) {
-			case '\0':
-				writeStatic(writer, "\\0");
-				break;
-			case '\n':
-				writeStatic(writer, "\\n");
-				break;
-			case '\t':
-				writeStatic(writer, "\\t");
-				break;
-			default:
-				writeChar(writer, c);
-				break;
-		}
-	}
-
-	void writeName(Writer* writer, const Sym name) {
-		writeChar(writer, '\'');
-		writeSym(writer, name);
-		writeChar(writer, '\'');
 	}
 
 	void writeParseDiag(Writer* writer, const ParseDiag d) {
@@ -208,7 +149,7 @@ namespace {
 	void writeCalledDecls(Writer* writer, const FilesInfo fi, const Arr<const CalledDecl> cs, Filter flt) {
 		for (const CalledDecl c : cs)
 			if (flt(c)) {
-				writeChar(writer, '\n');
+				writeNl(writer);
 				writeCalledDecl(writer, fi, c);
 			}
 	}
@@ -278,42 +219,6 @@ namespace {
 		}
 	}
 
-	void writeRecordNames(Writer* writer, const Arr<const Sym> expected, const Arr<const Sym> actual) {
-		const auto writeExtra = [&](const Sym actualName) -> void {
-			writeStatic(writer, "✘ extra provided: ");
-			writeName(writer, actualName);
-		};
-
-		size_t expectedI = 0;
-		size_t actualI = 0;
-
-		while (expectedI < size(expected) && actualI < size(actual)) {
-			writeChar(writer, '\n');
-			const Sym expectedName = at(expected, expectedI);
-			const Sym actualName = at(actual, actualI);
-			if (symEq(actualName, expectedName)) {
-				writeStatic(writer, "✔ ");
-				writeName(writer, expectedName);
-				expectedI++;
-				actualI++;
-			} else {
-				// Just assume that 'actual' is extra
-				// (TODO: proper diffing algorithm)
-				writeExtra(actualName);
-				actualI++;
-			}
-		}
-		for (const Sym expectedName : slice(expected, expectedI)) {
-			writeChar(writer, '\n');
-			writeStatic(writer, "✘ missing: ");
-			writeName(writer, expectedName);
-		}
-		for (const Sym actualName : slice(actual, actualI)) {
-			writeChar(writer, '\n');
-			writeExtra(actualName);
-		}
-	}
-
 	void writeDiag(Writer* writer, const FilesInfo fi, const Diag d) {
 		d.match(
 			[&](const Diag::CallMultipleMatches d) {
@@ -372,12 +277,12 @@ namespace {
 			[&](const Diag::CreateRecordMultiLineWrongFields d) {
 				writeStatic(writer, "didn't get expected fields of");
 				writeName(writer, d.decl->name);
-				writeStatic(writer, ":\n");
+				writeChar(writer, ':');
 				Arena temp {};
 				const Arr<const Sym> expected = map<const Sym>{}(&temp, d.fields, [](const RecordField f) {
 					return f.name;
 				});
-				writeRecordNames(writer, expected, d.providedFieldNames);
+				diffSymbols(writer, expected, d.providedFieldNames);
 			},
 			[&](const Diag::DuplicateDeclaration d) {
 				writeStatic(writer, "duplicate ");
@@ -613,7 +518,7 @@ namespace {
 		writeWhere(writer, fi, d.where);
 		writeChar(writer, ' ');
 		writeDiag(writer, fi, d.diag);
-		writeChar(writer, '\n');
+		writeNl(writer);
 	}
 }
 

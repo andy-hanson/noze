@@ -46,6 +46,41 @@ inline size_t sum(const Arr<T> a, Cb cb) {
 	});
 }
 
+template <typename T, Cmp<T> cmp>
+struct arrMax {
+	template <typename U, typename Cb>
+	T recur(const T acc, const Arr<U> a, const Cb cb) {
+		return isEmpty(a)
+			? acc
+			: recur<U, Cb>(max<T, cmp>(acc, cb(first(a))), tail(a), cb);
+	}
+
+	template <typename U, typename Cb>
+	T operator()(const Arr<U> a, const Cb cb) {
+		return recur(cb(first(a)), tail(a), cb);
+	}
+};
+
+template <typename T, Cmp<T> cmp>
+struct arrMaxIndex {
+	template <typename U, typename Cb>
+	size_t recur(const size_t indexOfMax, const T maxValue, const Arr<U> a, size_t index, const Cb cb) {
+		if (index == size(a))
+			return indexOfMax;
+		else {
+			const T valueHere = cb(at(a, index), index);
+			return cmp(valueHere, maxValue) == Comparison::greater
+				? recur<U, Cb>(index, valueHere, a, index + 1, cb)
+				: recur<U, Cb>(indexOfMax, maxValue, a, index + 1, cb);
+		}
+	}
+
+	template <typename U, typename Cb>
+	size_t operator()(const Arr<U> a, const Cb cb) {
+		return recur(0, cb(first(a), 0), a, 1, cb);
+	}
+};
+
 template <typename T>
 struct PtrsIter {
 	T* ptr;

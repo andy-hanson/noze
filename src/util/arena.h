@@ -16,7 +16,6 @@ struct Arena {
 	inline Arena() : begin{nullptr}, cur{nullptr}, end{nullptr} {}
 	Arena(const Arena* other) = delete;
 	~Arena();
-
 };
 
 void* alloc(Arena* arena, const size_t n_bytes);

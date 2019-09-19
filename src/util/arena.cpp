@@ -2,10 +2,15 @@
 
 #include <cstdlib> // malloc
 
+namespace {
+	// TODO: don't hardcode
+	// 4MB
+	const size_t ARENA_SIZE = 4 * 1024 * 1024;
+}
+
 void* alloc(Arena* arena, const size_t n_bytes) {
 	if (arena->begin == nullptr) {
-		// 2MB
-		size_t size = 2 * 1024 * 1024;
+		size_t size = ARENA_SIZE;
 		arena->begin = static_cast<byte*>(malloc(size));
 		assert(arena->begin != nullptr);
 		arena->cur = arena->begin;

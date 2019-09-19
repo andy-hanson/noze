@@ -67,8 +67,19 @@ const Str strOfSym(Arena* arena, const Sym a) {
 	return finishWriter(&writer);
 }
 
-void writeSym(Writer* writer, const Sym a) {
+size_t writeSymAndGetSize(Writer* writer, const Sym a) {
+	size_t size = 0;
 	eachCharInSym(a, [&](const char c) {
 		writeChar(writer, c);
+		size++;
 	});
+	return size;
+}
+
+size_t symSize(const Sym a) {
+	size_t size = 0;
+	eachCharInSym(a, [&](const char) {
+		size++;
+	});
+	return size;
 }

@@ -165,3 +165,14 @@ inline Comparison comparePath(const Path* a, const Path* b) {
 }
 
 const Path* copyPath(Arena* arena, const Path* path);
+
+// A module came from the global imports directory or locally
+enum class StorageKind {
+	global,
+	local,
+};
+
+struct PathAndStorageKind {
+	const Path* path;
+	const StorageKind storageKind;
+};
