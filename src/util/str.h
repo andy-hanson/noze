@@ -52,3 +52,5 @@ const Str stripNulTerminator(const NulTerminatedStr n);
 
 const Str emptyStr = strLiteral("");
 const NulTerminatedStr emptyNulTerminatedStr = nulTerminatedStrLiteral("");
+
+const Bool endsWith(const Str a, const Str b);

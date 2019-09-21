@@ -29,3 +29,9 @@ const Str copyStr(Arena* arena, const Str s) {
 const Str stripNulTerminator(const NulTerminatedStr n)  {
 	return rtail(n.str);
 }
+
+const Bool endsWith(const Str a, const Str b) {
+	return _and(
+		size(a) >= size(b),
+		strEq(slice(a, size(a) - size(b), size(b)), b));
+}

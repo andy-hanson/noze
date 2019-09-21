@@ -79,6 +79,12 @@ Comparison compareArr(const Arr<T> a, const Arr<T> b) {
 	}
 }
 
+template <typename T, Cmp<T> cmp>
+Comparison zipCompare(const Arr<T> a, const Arr<T> b) {
+	assert(size(a) == size(b));
+	return compareArr<T, cmp>(a, b);
+}
+
 template <typename T, typename Cb>
 inline const Bool exists(const Arr<T> arr, Cb cb) {
 	for (T x : arr) {

@@ -170,12 +170,14 @@ namespace {
 				return TypeParam{ast.range, ast.name, i};
 			});
 		for (const size_t i : Range{size(typeParams)})
-			for (const size_t prev_i : Range{i})
-				if (symEq(at(typeParams, prev_i).name, at(typeParams, i).name))
+			for (const size_t prev_i : Range{i}) {
+				const TypeParam tp = at(typeParams, i);
+				if (symEq(tp.name, at(typeParams, prev_i).name))
 					addDiag(
 						ctx,
-						at(typeParams, i).range,
-						Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam}});
+						tp.range,
+						Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::typeParam, tp.name}});
+			}
 		return typeParams;
 	}
 
@@ -214,12 +216,14 @@ namespace {
 				return Param{ast.range, ast.name, type, index};
 			});
 		for (const size_t i : Range{size(params)})
-			for (const size_t prev_i : Range{i})
-				if (symEq(at(params, prev_i).name, at(params, i).name))
+			for (const size_t prev_i : Range{i}) {
+				const Param param = at(params, i);
+				if (symEq(param.name, at(params, prev_i).name))
 					addDiag(
 						ctx,
 						at(params, i).range,
-						Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param}});
+						Diag{Diag::ParamShadowsPrevious{Diag::ParamShadowsPrevious::Kind::param, param.name}});
+			}
 		return params;
 	}
 
@@ -544,7 +548,7 @@ namespace {
 				} else
 					return some<const SpecInst*>(instantiateSpec(ctx->arena, spec, typeArgs));
 			} else {
-				addDiag(ctx, ast.range, Diag{Diag::NameNotFound{ast.spec, Diag::NameNotFound::Kind::spec}});
+				addDiag(ctx, ast.range, Diag{Diag::NameNotFound{Diag::NameNotFound::Kind::spec, ast.spec}});
 				return none<const SpecInst*>();
 			}
 		});
@@ -592,8 +596,15 @@ namespace {
 				[](const FunBodyAst::Builtin) {
 					return FunBody{FunBody::Builtin{}};
 				},
-				[](const FunBodyAst::Extern) {
-					return FunBody{FunBody::Extern{}};
+				[&](const FunBodyAst::Extern e) {
+					if (!fun->noCtx())
+						todo<void>("'extern' fun must be 'noctx'");
+					if (e.isGlobal && arity(fun) != 0)
+						todo<void>("extern fun has parameters");
+					const Opt<const Str> mangledName = mapOption<const Str>{}(e.mangledName, [&](const Str s) {
+						return copyStr(ctx->arena, s);
+					});
+					return FunBody{FunBody::Extern{e.isGlobal, mangledName}};
 				},
 				[&](const ExprAst e) {
 					return FunBody{checkFunctionBody(ctx, e, structsAndAliasesMap, funsMap, fun, commonTypes)};

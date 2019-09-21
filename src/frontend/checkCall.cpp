@@ -20,6 +20,7 @@ namespace {
 			[](const LambdaAst) { return False; },
 			[](const LetAst e) { return exprMightHaveProperties(*e.then); },
 			[](const LiteralAst) { return True; },
+			[](const LiteralInnerAst) { return True; },
 			// TODO: check all branches
 			[](const MatchAst) { return True; },
 			// Always returns fut
@@ -457,6 +458,7 @@ const CheckedExpr checkCall(ExprCtx* ctx, const SourceRange range, const CallAst
 				Diag{Diag::CallNoMatch{
 					funName,
 					expectedReturnType,
+					size(explicitTypeArgs),
 					arity,
 					finishArr(&actualArgTypes), allCandidates}});
 		} else {

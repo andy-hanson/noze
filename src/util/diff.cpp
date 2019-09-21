@@ -169,7 +169,7 @@ namespace {
 
 		writeNlIndent(writer);
 		writeSymPadded(writer, expected, columnSize);
-		writeStatic(writer, "you wrote");
+		writeStatic(writer, "you wrote\n");
 
 		// This gave us the list of symbols that they have in common.
 		// Now we just walk them together.

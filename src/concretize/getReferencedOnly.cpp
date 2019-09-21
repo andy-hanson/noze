@@ -14,6 +14,7 @@ namespace {
 		MutArr<const ConcreteStruct*> allReferencedStructs {};
 		MutArr<const Constant*> allReferencedConstants {};
 		MutArr<const ConcreteFun*> allReferencedFuns {};
+		MutArr<const ConstantArrayBacking*> allArrayBackings {};
 		SetReferencedCtx(const SetReferencedCtx*) = delete;
 	};
 
@@ -27,6 +28,10 @@ namespace {
 
 	void addFun(SetReferencedCtx* ctx, const ConcreteFun* f) {
 		pushIfNotContained(ctx->arena, &ctx->allReferencedFuns, f);
+	}
+
+	void addArrayBacking(SetReferencedCtx* ctx, const ConstantArrayBacking* a) {
+		pushIfNotContained(ctx->arena, &ctx->allArrayBackings, a);
 	}
 
 	void setReferencedInType(SetReferencedCtx* ctx, const ConcreteType t) {
@@ -164,11 +169,6 @@ namespace {
 
 	void setReferencedInConstant(SetReferencedCtx* ctx, const Constant* c) {
 		c->kind.match(
-			[&](const ConstantKind::Array a) {
-				setReferencedInType(ctx, c->type());
-				for (const Constant* element : a.elements())
-					addConstant(ctx, element);
-			},
 			[](const Bool) {},
 			[](const char) {},
 			[&](const ConstantKind::FunPtr f) {
@@ -184,7 +184,7 @@ namespace {
 			[](const Nat64) {},
 			[](const ConstantKind::Null) {},
 			[&](const ConstantKind::Ptr p) {
-				addConstant(ctx, p.array);
+				addArrayBacking(ctx, p.array);
 			},
 			[&](const ConstantKind::Record r) {
 				for (const Constant* arg : r.args)
@@ -194,6 +194,11 @@ namespace {
 				addConstant(ctx, u.member);
 			},
 			[](const ConstantKind::Void) {});
+	}
+
+	void setReferencedInConstantArrayBacking(SetReferencedCtx* ctx, const ConstantArrayBacking* a) {
+		for (const Constant* c : a->elements)
+			addConstant(ctx, c);
 	}
 }
 
@@ -212,6 +217,7 @@ const ConcreteProgram getReferencedOnly(
 	size_t nextStructIndexToScan = 0;
 	size_t nextConstantIndexToScan = 0;
 	size_t nextFunIndexToScan = 0;
+	size_t nextArrayBackingToScan = 0;
 
 	for (;;) {
 		if (nextStructIndexToScan < mutArrSize(&ctx.allReferencedStructs))
@@ -220,6 +226,8 @@ const ConcreteProgram getReferencedOnly(
 			setReferencedInConstant(&ctx, mutArrAt(&ctx.allReferencedConstants, nextConstantIndexToScan++));
 		else if (nextFunIndexToScan < mutArrSize(&ctx.allReferencedFuns))
 			setReferencedInFun(&ctx, mutArrAt(&ctx.allReferencedFuns, nextFunIndexToScan++));
+		else if (nextArrayBackingToScan < mutArrSize(&ctx.allArrayBackings))
+			setReferencedInConstantArrayBacking(&ctx, mutArrAt(&ctx.allArrayBackings, nextArrayBackingToScan++));
 		else
 			break;
 	}
@@ -228,6 +236,7 @@ const ConcreteProgram getReferencedOnly(
 		freeze(&ctx.allReferencedStructs),
 		freeze(&ctx.allReferencedConstants),
 		freeze(&ctx.allReferencedFuns),
+		freeze(&ctx.allArrayBackings),
 		rtMain,
 		userMain,
 		ctxStruct};

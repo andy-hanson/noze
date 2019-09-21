@@ -7,14 +7,14 @@
 # In a '.nz' file, use ctrl-alt-shift-p to see the scope at the cursor.
 
 variables:
-  name: '(([a-z0-9\-]+\??)|[\+\-\*\/\<\>\=\?]+)'
+  name: '(([a-z0-9\-]+\??)|[\+\-\*\/\<\>\=\?\!]+)'
   type_name: '\??[a-z0-9\-]+'
   spec_name: '\??[a-z0-9\-]+'
   # Declarations end at the next unindented line.
   # We don't want to consume any characters at that line,
   # so use lookahead to match the beginning of a line, then any non-whitespace character.
   unindented_line: '(?=^\S)'
-  spec_use_keyword: 'builtin|extern|noctx|summon|trusted|unsafe'
+  spec_use_keyword: 'builtin|extern|global|noctx|summon|trusted|unsafe'
 
 name: noze
 file_extensions:
@@ -23,13 +23,17 @@ scope: source.noze
 contexts:
   prototype:
     # This is a part of every context
+    # type argument
     - match: '(?<=[a-z0-9\-\?])<'
       scope: comment # punctuation.definition.generic.begin
       push: type_args
+    # capital letters
     - match: "[A-Z]"
       scope: invalid
-    - match: \|\|?\s.*
+    # comment
+    - match: \|\s.*
       scope: comment
+    # 'region' comment
     - match: '^\s*region[^\n]*\n'
       scope: comment
 
@@ -41,13 +45,24 @@ contexts:
     - match: '>'
       scope: comment # punctuation.definition.generic.end
       pop: true
+    # string in type arg: this happens with extern<"mangledName">
+    - match: '"'
+      push: string
     - match: '{{type_name}}'
       scope: storage.type
 
   main:
+    - match: '\#\!.*$'
+      scope: comment
+    - match: (?=.)
+      push: top_level
+
+  top_level:
     - match: export|import
       scope: keyword
-      push: import
+      push: after_export_or_import_keyword
+    - match: private$
+      scope: keyword
     - match: '{{name}}'
       # NOTE: Of course these won't all be functions.
       # But we don't know what kind of declaration it is yet unfortunately.
@@ -79,18 +94,32 @@ contexts:
       scope: storage.type
       push: function
 
-  import:
+  after_export_or_import_keyword:
     - meta_scope: entity.name.namespace
+    - match: ' '
+      push: one_line_exports_or_imports
+    - match: $
+      push: multi_line_exports_or_imports
+    - match: '{{unindented_line}}'
+      pop: true
+
+  one_line_exports_or_imports:
     - match: \.
       scope: punctuation
     - match: $
       pop: true
 
+  multi_line_exports_or_imports:
+    - match: \.
+      scope: punctuation
+    - match: '{{unindented_line}}'
+      pop: true
+
   alias:
     - match: '{{unindented_line}}'
       pop: true
-    - match: '[a-z0-9\-]+'
-      scope: identifier
+    - match: '{{name}}'
+      scope: storage.type
       push: type_ending_in_nl
 
   record:
@@ -230,11 +259,13 @@ contexts:
       scope: constant.numeric
 
     # Keywords that may be followed by type arguments
-    - match: (new|new-arr)(?=$|<|\,|\s|\}|\.)
+    - match: (new|new-arr)(?=$|<|\s)
       scope: keyword
       push: new
     # Other keywords
-    - match: '(else|it|match|when)(?=$|<|\,|\s|\}|\.)'
+    - match: 'match\s+'
+      scope: keyword
+    - match: '(else|it|when)(?=$|<|\,|\s|\}|\.)'
       scope: keyword
     - match: '{{name}}'
       scope: identifier
@@ -247,8 +278,8 @@ contexts:
       scope: identifier
       captures:
         1: comment
-    # `x = y` or `x := y`
-    - match: '\s+\:?\=\s+'
+    # `x = y` or `x := y` or `x <- y`
+    - match: '\s+(\:=|\=|<-)\s+'
       scope: keyword
     # `"foo"`
     - match: '"'

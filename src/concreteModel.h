@@ -36,6 +36,11 @@ enum class BuiltinFunKind {
 	asAnyPtr,
 	asNonConst,
 	asRef,
+	bitShiftLeftInt32,
+	bitShiftRightInt32,
+	bitwiseAndInt16,
+	bitwiseAndInt32,
+	bitwiseAndInt64,
 	bitwiseAndNat16,
 	bitwiseAndNat32,
 	bitwiseAndNat64,
@@ -76,17 +81,23 @@ enum class BuiltinFunKind {
 	unsafeDivFloat64,
 	unsafeDivInt64,
 	unsafeDivNat64,
-	unsafeModNat64,
-	unsafeNat64ToNat32,
-	unsafeNat64ToInt64,
 	unsafeInt64ToNat64,
+	unsafeInt64ToInt16,
+	unsafeInt64ToInt32,
+	unsafeModNat64,
+	unsafeNat64ToInt64,
+	unsafeNat64ToNat32,
+	unsafeNat64ToNat16,
 	wrapAddInt16,
 	wrapAddInt32,
 	wrapAddInt64,
 	wrapAddNat16,
 	wrapAddNat32,
 	wrapAddNat64,
+	wrapMulInt16,
+	wrapMulInt32,
 	wrapMulInt64,
+	wrapMulNat16,
 	wrapMulNat32,
 	wrapMulNat64,
 	wrapSubInt16,
@@ -227,6 +238,10 @@ struct ConcreteType {
 	}
 };
 
+inline bool concreteTypeEqual(const ConcreteType a, const ConcreteType b) {
+	return a.isPointer == b.isPointer && a.strukt == b.strukt;
+}
+
 struct SpecialStructInfo {
 	enum class Kind {
 		arr,
@@ -281,6 +296,20 @@ struct ConcreteStruct {
 		return body().isUnion();
 	}
 };
+
+inline const Opt<const ConcreteType> getConcreteTypeAsArrElementType(const ConcreteType t) {
+	if (!t.isPointer && has(t.strukt->special)) {
+		const SpecialStructInfo s = force(t.strukt->special);
+		return s.kind == SpecialStructInfo::Kind::arr
+			? some<const ConcreteType>(s.elementType)
+			: none<const ConcreteType>();
+	} else
+		return none<const ConcreteType>();
+}
+
+inline const Bool concreteTypeIsArr(const ConcreteType t) {
+	return has(getConcreteTypeAsArrElementType(t));
+}
 
 inline size_t sizeOrPointerSizeBytes(const ConcreteType t) {
 	return t.isPointer ? sizeof(void*) : t.strukt->sizeBytes();
@@ -367,36 +396,37 @@ struct ConcreteSig {
 
 struct Constant;
 
-struct ConstantArrKey {
+struct ConstantArrayBackingKey {
 	const ConcreteType elementType;
 	const Arr<const Constant*> elements;
 };
 
-inline Comparison compareConstantArrKey(const ConstantArrKey a, const ConstantArrKey b) {
+inline Comparison compareConstantArrayBackingKey(const ConstantArrayBackingKey a, const ConstantArrayBackingKey b) {
 	const Comparison res = compareConcreteType(a.elementType, b.elementType);
 	return res != Comparison::equal
 		? res
 		: compareArr<const Constant*, comparePtr<const Constant>>(a.elements, b.elements);
 }
 
+// Note: There is no ConstantKind::Array.
+// Instead, that's just a Record of tha size and data.
+// The data is a ConstantKind::Ptr, which references this backing.
+// This ensures we can slice arrays at compile time using normal constant-record code.
+// Different ConstantKind::Ptr_s can share the same ConstantArrayBacking.
+struct ConstantArrayBacking {
+	const Arr<const Constant*> elements;
+	const ConcreteType elementType;
+	const Nat64 id;
+
+	inline size_t size() const {
+		return ::size(elements);
+	}
+};
+
 struct ConcreteFun;
 struct KnownLambdaBody;
 
 struct ConstantKind {
-	struct Array {
-		const ConstantArrKey key;
-
-		inline const ConcreteType elementType() const {
-			return key.elementType;
-		}
-		inline size_t size() const {
-			return ::size(elements());
-		}
-		inline const Arr<const Constant*> elements() const {
-			return key.elements;
-		}
-	};
-
 	// Unlike a Lambda this has no closure.
 	// We get these by accessing the '.fun' property on a constant Lambda.
 	struct FunPtr {
@@ -414,13 +444,19 @@ struct ConstantKind {
 	struct Null {};
 
 	struct Ptr {
-		const Constant* array;
-		const Nat64 index;
+		const ConstantArrayBacking* array;
+		const size_t index;
+
+		inline Ptr(const ConstantArrayBacking* _array, const size_t _index)
+			: array{_array}, index{_index} {
+			assert(index < array->size());
+		}
 
 		const Constant* deref() const;
 	};
 
 	struct Record {
+		// TODO: isn't this redundant to constant->type()?
 		const ConcreteType type;
 		const Arr<const Constant*> args;
 	};
@@ -433,9 +469,8 @@ struct ConstantKind {
 
 	struct Void {};
 
-private:
+//TODO: private:
 	enum class Kind {
-		array,
 		_bool,
 		_char,
 		funPtr,
@@ -454,7 +489,6 @@ private:
 	};
 	const Kind kind;
 	union {
-		const Array array;
 		const Bool _bool;
 		const char _char;
 		const FunPtr funPtr;
@@ -473,7 +507,6 @@ private:
 	};
 
 public:
-	explicit inline ConstantKind(const Array a) : kind{Kind::array}, array{a} {}
 	explicit inline ConstantKind(const Bool a) : kind{Kind::_bool}, _bool{a} {}
 	explicit inline ConstantKind(const char a) : kind{Kind::_char}, _char{a} {}
 	explicit inline ConstantKind(const FunPtr a) : kind{Kind::funPtr}, funPtr{a} {}
@@ -490,9 +523,6 @@ public:
 	explicit inline ConstantKind(const Union a) : kind{Kind::_union}, _union{a} {}
 	explicit inline ConstantKind(const Void a) : kind{Kind::_void}, _void{a} {}
 
-	inline const Bool isArray() const {
-		return enumEq(kind, Kind::array);
-	}
 	inline const Bool isBool() const {
 		return enumEq(kind, Kind::_bool);
 	}
@@ -539,10 +569,6 @@ public:
 		return enumEq(kind, Kind::_void);
 	}
 
-	inline Array asArray() const {
-		assert(isArray());
-		return array;
-	}
 	inline const Bool asBool() const {
 		assert(isBool());
 		return _bool;
@@ -605,7 +631,6 @@ public:
 	}
 
 	template <
-		typename CbArray,
 		typename CbBool,
 		typename CbChar,
 		typename CbFunPtr,
@@ -623,7 +648,6 @@ public:
 		typename CbVoid
 	>
 	inline auto match(
-		CbArray cbArray,
 		CbBool cbBool,
 		CbChar cbChar,
 		CbFunPtr cbFunPtr,
@@ -641,8 +665,6 @@ public:
 		CbVoid cbVoid
 	) const {
 		switch (kind) {
-			case Kind::array:
-				return cbArray(array);
 			case Kind::_bool:
 				return cbBool(_bool);
 			case Kind::_char:
@@ -862,7 +884,9 @@ struct ConcreteFunBody {
 		const BuiltinFunInfo builtinInfo;
 		const Arr<const ConcreteType> typeArgs;
 	};
-	struct Extern {};
+	struct Extern {
+		const Bool isGlobal;
+	};
 private:
 	enum class Kind {
 		bogus,
@@ -910,6 +934,10 @@ public:
 		assert(isBuiltin());
 		return builtin;
 	}
+	inline const Extern asExtern() const {
+		assert(isExtern());
+		return _extern;
+	}
 	inline const Constant* asConstant() const {
 		assert(isConstant());
 		return constant;
@@ -918,7 +946,6 @@ public:
 		assert(isConcreteFunExprBody());
 		return concreteFunExprBody;
 	}
-
 
 	template <
 		typename CbBogus,
@@ -949,12 +976,16 @@ public:
 				assert(0);
 		}
 	}
+
+	inline const Bool isGlobal() const {
+		return _and(isExtern(), asExtern().isGlobal);
+	}
 };
 
 // We generate a ConcreteFun for:
 // Each instantiation of a FunDecl
 // Each *instance* of a KnownLambdaBody inside a ConcreteFun
-//   (since these may be specialized at each callsite)
+// (since these may be specialized at each callsite)
 struct ConcreteFun {
 	const Bool needsCtx;
 	const Opt<const ConcreteParam> closureParam;
@@ -962,7 +993,8 @@ struct ConcreteFun {
 	const ConcreteSig sig;
 	const Bool isCallFun; // `call` is not a builtin, but we treat it specially
 
-	Late<const ConcreteFunBody> _body = {};
+	mutable Late<const Constant*> _asLambda {};
+	Late<const ConcreteFunBody> _body {};
 	size_t nextLambdaIndex = 0;
 
 	inline ConcreteFun(
@@ -1013,6 +1045,10 @@ struct ConcreteFun {
 
 	inline const Bool isExtern() const {
 		return body().isExtern();
+	}
+
+	inline const Bool isGlobal() const {
+		return body().isGlobal();
 	}
 };
 
@@ -1114,8 +1150,14 @@ struct ConcreteExpr {
 		const ConcreteStruct* arrType;
 		const ConcreteType elementType;
 		const ConcreteFun* alloc;
+		// Needed because we must first allocate the array, then write to each field. That requires a local.
+		const ConcreteLocal* local;
 		// Note: if all args were constant, this would be a Constant.ConstantArr instead
 		const Arr<const ConstantOrExpr> args;
+
+		inline size_t sizeBytes() const {
+			return size(args) * sizeOrPointerSizeBytes(elementType);
+		}
 	};
 
 	// Note: CreateRecord always creates a record by-value. This may be wrapped in Alloc.
@@ -1521,6 +1563,7 @@ struct ConcreteProgram {
 	const Arr<const ConcreteStruct*> allStructs;
 	const Arr<const Constant*> allConstants;
 	const Arr<const ConcreteFun*> allFuns;
+	const Arr<const ConstantArrayBacking*> allArrayBackings;
 	const ConcreteFun* rtMain;
 	const ConcreteFun* userMain;
 	const ConcreteStruct* ctxType;

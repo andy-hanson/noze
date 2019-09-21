@@ -60,6 +60,9 @@ void writeMangledName(Writer* writer, const Sym name) {
 				case '=':
 					writeStatic(writer, "_equal");
 					break;
+				case '!':
+					writeStatic(writer, "_bang");
+					break;
 				default:
 					unreachable<void>();
 			}

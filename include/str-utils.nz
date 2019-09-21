@@ -1,21 +1,33 @@
-import .arr-utils .bootstrap
+import .arr-utils .bootstrap .opt-utils
 
-literal char(s str) noctx
-	s noctx-at zero
+literal char(a str) noctx
+	a noctx-at zero
 
-literal c-str(s str) noctx
-	s data
+literal c-str(a str) noctx
+	a data
 
-to-c-str c-str(s str)
-	s + "\0" data
+to-c-str c-str(a str)
+	a + "\0" data
 
-to-str str(c c-str) unsafe noctx
-	end = c find-cstr-end
-	c arr-from-begin-end end
+to-str str(a c-str) unsafe noctx
+	a arr-from-begin-end a.find-cstr-end
 
-find-cstr-end c-str(c c-str) unsafe noctx
+find-char-in-cstr c-str(a c-str, c char) unsafe noctx
 	when
-		c.deref == "\0"
-			c
+		a.deref == c
+			a
+		a.deref == "\0"
+			| Did not find the char
+			todo
 		else
-			c.incr find-cstr-end
+			a.incr find-char-in-cstr c
+
+find-cstr-end c-str(a c-str) unsafe noctx
+	a find-char-in-cstr "\0"
+
+lstrip str(a str)
+	when
+		a.has? and: a.first == " "
+			a.tail lstrip
+		else
+			a

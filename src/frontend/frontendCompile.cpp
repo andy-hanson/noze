@@ -31,6 +31,10 @@ namespace {
 		return pathInInclude(arena, strLiteral("runtime.nz"));
 	}
 
+	const PathAndStorageKind runtimeMainPath(Arena* arena) {
+		return pathInInclude(arena, strLiteral("runtime-main.nz"));
+	}
+
 	const Opt<const NulTerminatedStr> getFile(
 		Arena* fileArena,
 		const PathAndStorageKind pk,
@@ -49,6 +53,23 @@ namespace {
 
 	using LineAndColumnGettersBuilder =
 		DictBuilder<const PathAndStorageKind, const LineAndColumnGetter, comparePathAndStorageKind>;
+
+	void addEmptyLineAndColumnGetter(
+		Arena* arena,
+		LineAndColumnGettersBuilder* lineAndColumnGetters,
+		const PathAndStorageKind where
+	) {
+		// Even a non-existent path needs LineAndColumnGetter since that's where the diagnostic is
+		addToDict<
+			const PathAndStorageKind,
+			const LineAndColumnGetter,
+			comparePathAndStorageKind
+		>(
+			arena,
+			lineAndColumnGetters,
+			where,
+			lineAndColumnGetterForEmptyFile(arena));
+	}
 
 	const Result<const FileAst, const Diags> parseSingle(
 		Arena* modelArena,
@@ -81,16 +102,7 @@ namespace {
 				? force(importedFrom)
 				: PathAndStorageKindAndRange{where, SourceRange::empty()};
 			if (!isImport)
-				// Even a non-existent path needs LineAndColumnGetter since that's where the diagnostic is
-				addToDict<
-					const PathAndStorageKind,
-					const LineAndColumnGetter,
-					comparePathAndStorageKind
-				>(
-					modelArena,
-					lineAndColumnGetters,
-					where,
-					lineAndColumnGetterForEmptyFile(modelArena));
+				addEmptyLineAndColumnGetter(modelArena, lineAndColumnGetters, where);
 			const Diag::FileDoesNotExist::Kind kind = isImport
 				? Diag::FileDoesNotExist::Kind::import
 				: Diag::FileDoesNotExist::Kind::root;
@@ -286,36 +298,49 @@ namespace {
 		ReadOnlyStorages storages,
 		LineAndColumnGettersBuilder* lineAndColumnGetters
 	) {
-		ArrBuilder<const PathAndAstAndResolvedImports> res {};
-		MutDict<const PathAndStorageKind, const ParseStatus, comparePathAndStorageKind> statuses {};
-		const Arr<const PathAndStorageKind> rootPaths =  arrLiteral<const PathAndStorageKind>(
-			astsArena,
-			{
-				// Ensure bootstrap.nz is parsed first
-				bootstrapPath(modelArena),
-				// Ensure std.nz is available
-				stdPath(modelArena),
-				// gc/runtime are needed by concretize so make sure they're available
-				gcPath(modelArena),
-				runtimePath(modelArena),
-				mainPath,
-			});
-		for (const PathAndStorageKind path : rootPaths)
-			if (!hasKey_mut<const PathAndStorageKind, const ParseStatus, comparePathAndStorageKind>(&statuses, path)) {
-				const Opt<const Diags> err = parseRecur(
-					modelArena,
-					astsArena,
-					allSymbols,
-					storages,
-					lineAndColumnGetters,
-					&res,
-					&statuses,
-					none<const PathAndStorageKindAndRange>(),
-					path);
-				if (has(err))
-					return failure<const AllAsts, const Diags>(force(err));
-			}
-		return success<const Arr<const PathAndAstAndResolvedImports>, const Diags>(finishArr(&res));
+		if (endsWith(mainPath.path->baseName, strLiteral(".nz"))) {
+			ArrBuilder<const PathAndAstAndResolvedImports> res {};
+			MutDict<const PathAndStorageKind, const ParseStatus, comparePathAndStorageKind> statuses {};
+			const Arr<const PathAndStorageKind> rootPaths =  arrLiteral<const PathAndStorageKind>(
+				astsArena,
+				{
+					// Ensure bootstrap.nz is parsed first
+					bootstrapPath(modelArena),
+					// Ensure std.nz is available
+					stdPath(modelArena),
+					// gc/runtime are needed by concretize so make sure they're available
+					gcPath(modelArena),
+					runtimePath(modelArena),
+					runtimeMainPath(modelArena),
+					mainPath,
+				});
+			for (const PathAndStorageKind path : rootPaths)
+				if (!hasKey_mut<const PathAndStorageKind, const ParseStatus, comparePathAndStorageKind>(
+					&statuses, path)) {
+					const Opt<const Diags> err = parseRecur(
+						modelArena,
+						astsArena,
+						allSymbols,
+						storages,
+						lineAndColumnGetters,
+						&res,
+						&statuses,
+						none<const PathAndStorageKindAndRange>(),
+						path);
+					if (has(err))
+						return failure<const AllAsts, const Diags>(force(err));
+				}
+			return success<const AllAsts, const Diags>(finishArr(&res));
+		} else {
+			addEmptyLineAndColumnGetter(modelArena, lineAndColumnGetters, mainPath);
+			return failure<const AllAsts, const Diags>(arrLiteral<const Diagnostic>(
+				modelArena,
+				{
+					Diagnostic{
+						PathAndStorageKindAndRange{mainPath, SourceRange::empty()},
+						Diag{Diag::FileShouldEndInNz{}}},
+				}));
+		}
 	}
 
 	struct LcgsAndAllAsts {
@@ -452,6 +477,7 @@ namespace {
 					.bootstrapModule = bootstrapModule,
 					.gcModule = findModule(gcPath(modelArena), modules),
 					.runtimeModule = findModule(runtimePath(modelArena), modules),
+					.runtimeMainModule = findModule(runtimeMainPath(modelArena), modules),
 					.mainModule = findModule(mainPath, modules),
 					.allModules = modules,
 					.commonTypes = modulesAndCommonTypes.commonTypes,
@@ -469,6 +495,7 @@ const Result<const Program, const Diagnostics> frontendCompile(
 	const Path* mainPath
 ) {
 	Arena astsArena {};
+
 	const PathAndStorageKind main = PathAndStorageKind{mainPath, StorageKind::local};
 	const LcgsAndAllAsts parsed = parseEverything(modelArena, allSymbols, storages, main, &astsArena);
 	const Result<const Program, const Diags> res =

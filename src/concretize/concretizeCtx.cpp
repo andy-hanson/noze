@@ -216,6 +216,29 @@ namespace {
 			printf("\t");
 	}
 
+	const Str getMangledName(
+		ConcretizeCtx* ctx,
+		const ConcreteFunKey key,
+		const ConcreteType returnType,
+		const Arr<const ConcreteParam> params
+	) {
+		const FunDecl* decl = key.decl();
+		const Sym name = decl->name();
+		if (decl->isExtern()) {
+			const FunBody::Extern e = decl->body().asExtern();
+			return has(e.mangledName)
+				? copyStr(ctx->arena, force(e.mangledName))
+				: mangleExternFunName(ctx->arena, name);
+		} else
+			return getConcreteFunMangledName(
+				ctx->arena,
+				name,
+				returnType,
+				params,
+				key.specImpls(),
+				key.specializeOnArgs);
+	}
+
 	// This is for concretefun from FunDecl, from lambda is below
 	ConcreteFun* getConcreteFunFromKey(ConcretizeCtx* ctx, const ConcreteFunKey key) {
 		const FunDecl* decl = key.decl();
@@ -241,15 +264,7 @@ namespace {
 			decl->params(),
 			key.specializeOnArgs,
 			typeScope);
-		const Str mangledName = decl->isExtern()
-			? mangleExternFunName(ctx->arena, decl->name())
-			: getConcreteFunMangledName(
-				ctx->arena,
-				decl->name(),
-				returnType,
-				params,
-				key.specImpls(),
-				key.specializeOnArgs);
+		const Str mangledName = getMangledName(ctx, key, returnType, params);
 		const ConcreteSig sig = ConcreteSig{mangledName, returnType, params};
 		// no closure for fun from decl
 		ConcreteFun* res = nu<ConcreteFun>{}(
@@ -296,8 +311,8 @@ namespace {
 				[&](const FunBody::Builtin) {
 					return getBuiltinFunBody(ctx, source, cf);
 				},
-				[&](const FunBody::Extern) {
-					return ConcreteFunBody{ConcreteFunBody::Extern{}};
+				[&](const FunBody::Extern e) {
+					return ConcreteFunBody{ConcreteFunBody::Extern{e.isGlobal}};
 				},
 				[&](const Expr* e) {
 					return concretizeExpr(ctx, source, cf, *e);

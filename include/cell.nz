@@ -19,16 +19,3 @@ swap ?t(c cell ?t, v ?t) noctx
 	res = c get
 	c set v
 	res
-
-| TODO: GENERIC
-get-and-incr nat(c cell nat)
-	res = c get
-	c set: res incr
-	res
-
-cell-incr void(c cell nat)
-	c.get-and-incr drop
-
-cell-add void(c cell nat, n nat)
-	c set: c.get + n
-

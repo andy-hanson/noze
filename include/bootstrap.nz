@@ -1,8 +1,8 @@
 | Unrecoverable assertion failure
 hard-fail ?t(reason str) noctx unsafe builtin
 
-fail ?t(reason str)
-	todo
+hard-unreachable ?t() noctx unsafe
+	hard-fail: "unreachable"
 
 todo ?t() trusted noctx
 	| TODO: soft-fail, remove 'trusted' above
@@ -22,6 +22,9 @@ as-any-ptr any-ptr(some-ref ?t) noctx unsafe builtin
 | TODO: this function only works for by-ref types -- currently that is not checked by the type checker
 as-ref ?t(p any-ptr) noctx unsafe builtin
 
+ref-of-ptr ?t(p ptr by-val<?t>) noctx unsafe
+	p.deref ref-of-val
+
 ptr-eq bool(a ?t, b ?t) noctx unsafe
 	a.as-any-ptr == b.as-any-ptr
 
@@ -29,6 +32,7 @@ ptr-eq bool(a ?t, b ?t) noctx unsafe
 get-ctx ctx() unsafe builtin
 
 void builtin
+| TODO: nat8 should be the builtin and this should alias it
 byte builtin
 
 | NOTE: if ?t is a reference type, ptr<?t> is a pointer to a pointer to ?t
@@ -37,6 +41,12 @@ deref ?t(p ptr ?t) noctx unsafe builtin
 set void(p ptr ?t, value ?t) noctx unsafe builtin
 
 null ptr ?t() noctx builtin
+
+| TODO: this should be generic (problem: currently only pointers to data are equatable)
+null? bool(a any-ptr) noctx
+	a == null
+null? bool(a ptr char) noctx
+	a == null
 
 any-ptr alias
 	ptr byte
@@ -93,8 +103,8 @@ to-str str(c comparison)
 		greater
 			false
 
-| != bool(a ?t, b ?t)
-|	a == b not
+!= bool(a ?t, b ?t) noctx data<?t>
+	a == b not
 
 < bool(a ?t, b ?t) noctx data<?t>
 	match a <=> b
@@ -132,6 +142,7 @@ str alias
 c-str alias
 	ptr char
 
+
 region bool
 
 bool builtin
@@ -146,6 +157,12 @@ nor bool(a bool, b bool) noctx builtin
 | Only one of 'if-true' and 'if-false' arguments will be evaluated
 if ?t(cond bool, if-true ?t, if-false ?t) noctx builtin
 if void(cond bool, if-true void) noctx builtin
+
+
+always-true bool(a ?t)
+	true
+always-false bool(a ?t)
+	false
 
 region Fun
 
@@ -164,6 +181,7 @@ ctx record mut
 	vat-id vat-id
 	actor-id actor-id
 	gc-ctx-ptr any-ptr
+	exception-ctx-ptr any-ptr
 
 vat-id alias
 	nat
@@ -306,7 +324,11 @@ region Arithmetic
 
 | All are 64-bits, even on 32-bit systems
 nat builtin
+nat64 alias
+	nat
 int builtin
+int64 alias
+	int
 float builtin
 | Not currently used for anything other than posix headers, so limited arithmetic is avialable
 int16 builtin
@@ -315,14 +337,14 @@ nat16 builtin
 nat32 builtin
 
 | UB for negative numbers
-unsafe-to-nat nat(i int) noctx builtin
-
-unsafe-to-nat32 nat32(n nat) noctx builtin
+unsafe-to-nat nat(a int) noctx builtin
+unsafe-to-nat16 nat16(a nat) noctx builtin
+unsafe-to-nat32 nat32(a nat) noctx builtin
 
 | UB for positive numbers >= 2 ** 63
-unsafe-to-int int(n nat) noctx builtin
-
-unsafe-to-int32 int32(i int) noctx builtin
+unsafe-to-int int(a nat) noctx builtin
+unsafe-to-int16 int16(a int) noctx builtin
+unsafe-to-int32 int32(a int) noctx builtin
 
 to-nat nat(n nat16) noctx builtin
 to-nat nat(n nat32) noctx builtin
@@ -330,46 +352,192 @@ to-nat nat(n nat32) noctx builtin
 to-int int(i int16) noctx builtin
 to-int int(i int32) noctx builtin
 
+
+wrap-add int(a int, b int) noctx builtin
 wrap-add nat(a nat, b nat) noctx builtin
 wrap-add nat32(a nat32, b nat32) noctx builtin
+
+wrap-sub int(a int, b int) noctx builtin
+wrap-sub int16(a int16, b int16) noctx builtin
 wrap-sub nat(a nat, b nat) noctx builtin
 wrap-sub nat32(a nat32, b nat32) noctx builtin
+
+wrap-mul int(a int, b int) noctx builtin
+wrap-mul int16(a int16, b int16) noctx builtin
+wrap-mul int32(a int32, b int32) noctx builtin
 wrap-mul nat(a nat, b nat) noctx builtin
 wrap-mul nat32(a nat32, b nat32) noctx builtin
+
+unsafe-div int(a int, b int) noctx unsafe builtin
 unsafe-div nat(a nat, b nat) noctx unsafe builtin
+
 unsafe-mod nat(a nat, b nat) noctx unsafe builtin
+
+
+zero int() noctx builtin
+zero int16() noctx builtin
+zero int32() noctx builtin
 zero nat() noctx builtin
+zero nat16() noctx builtin
+zero nat32() noctx builtin
+
+one int() noctx builtin
+one int16() noctx builtin
+one int32() noctx builtin
 one nat() noctx builtin
+one nat16() noctx builtin
+one nat32() noctx builtin
+
+neg-one int() noctx
+	zero wrap-sub one
+neg-one int32() noctx
+	zero wrap-sub one
+
+two int() noctx
+	one wrap-incr
+two int16() noctx
+	one wrap-incr
+two int32() noctx
+	one wrap-incr
 two nat() noctx
 	one wrap-incr
+two nat32() noctx
+	one wrap-incr
+
+three int() noctx
+	two wrap-incr
+three int16() noctx
+	two wrap-incr
+three int32() noctx
+	two wrap-incr
 three nat() noctx
 	two wrap-incr
+three nat32() noctx
+	two wrap-incr
+
+four int() noctx
+	three wrap-incr
+four int16() noctx
+	three wrap-incr
+four int32() noctx
+	three wrap-incr
 four nat() noctx
 	three wrap-incr
+four nat32() noctx
+	three wrap-incr
+
+five int() noctx
+	four wrap-incr
+five int16() noctx
+	four wrap-incr
+five int32() noctx
+	four wrap-incr
 five nat() noctx
 	four wrap-incr
+five nat32() noctx
+	four wrap-incr
+
+six int() noctx
+	five wrap-incr
+six int32() noctx
+	five wrap-incr
 six nat() noctx
 	five wrap-incr
+six nat32() noctx
+	five wrap-incr
+
+seven int() noctx
+	six wrap-incr
+seven int32() noctx
+	six wrap-incr
 seven nat() noctx
 	six wrap-incr
+seven nat32() noctx
+	six wrap-incr
+
+eight int() noctx
+	seven wrap-incr
+eight int32() noctx
+	four wrap-add four
 eight nat() noctx
 	seven wrap-incr
+eight nat32() noctx
+	seven wrap-incr
+
+nine int() noctx
+	eight wrap-incr
+nine int32() noctx
+	eight wrap-incr
 nine nat() noctx
 	eight wrap-incr
+
+ten int() noctx
+	nine wrap-incr
+ten int32() noctx
+	nine wrap-incr
 ten nat() noctx
 	nine wrap-incr
+
+twelve nat32() noctx
+	eight wrap-add four
+
+thirteen int32() noctx
+	eight wrap-add five
+
+fourteen nat32() noctx
+	twelve wrap-add two
+
+fifteen nat32() noctx
+	fourteen wrap-incr
+
+sixteen int32() noctx
+	ten wrap-add six
+
+hundred int() noctx
+	ten wrap-mul ten
+hundred int32() noctx
+	ten wrap-mul ten
 hundred nat() noctx
 	ten wrap-mul ten
+
+thousand int() noctx
+	hundred wrap-mul ten
+thousand int32() noctx
+	hundred wrap-mul ten
 thousand nat() noctx
 	hundred wrap-mul ten
+
+million int() noctx
+	thousand wrap-mul thousand
+million int32() noctx
+	thousand wrap-mul thousand
 million nat() noctx
 	thousand wrap-mul thousand
+
+neg-million int() noctx
+	million wrap-mul neg-one
+neg-million int32() noctx
+	million wrap-mul neg-one
+
+billion int() noctx
+	million wrap-mul thousand
 billion nat() noctx
 	million wrap-mul thousand
 
 bits-and nat16(a nat16, b nat16) noctx builtin
 bits-and nat32(a nat32, b nat32) noctx builtin
 bits-and nat(a nat, b nat) noctx builtin
+bits-and int16(a int16, b int16) noctx builtin
+bits-and int32(a int32, b int32) noctx builtin
+bits-and int(a int, b int) noctx builtin
+
+bits-intersect? bool(a int16, b int16) noctx
+	not: a bits-and b zero?
+bits-intersect? bool(a int32, b int32) noctx
+	not: a bits-and b zero?
+
+bit-lshift int32(a int32, b int32) noctx builtin
+bit-rshift int32(a int32, b int32) noctx builtin
 
 | TODO: generic
 zero? bool(n nat) noctx
@@ -378,91 +546,47 @@ zero? bool(n nat32) noctx
 	n == zero
 zero? bool(i int) noctx
 	i == zero
+zero? bool(a int16) noctx
+	a == zero
 zero? bool(i int32) noctx
 	i == zero
 
-wrap-add int(a int, b int) noctx builtin
-wrap-sub int(a int, b int) noctx builtin
-wrap-mul int(a int, b int) noctx builtin
-unsafe-div int(a int, b int) noctx unsafe builtin
-zero int() noctx builtin
-one int() noctx builtin
-neg-one int() noctx
-	zero wrap-sub one
-two int() noctx
-	one wrap-incr
-three int() noctx
-	two wrap-incr
-four int() noctx
-	three wrap-incr
-five int() noctx
-	four wrap-incr
-six int() noctx
-	five wrap-incr
-seven int() noctx
-	six wrap-incr
-eight int() noctx
-	seven wrap-incr
-nine int() noctx
-	eight wrap-incr
-ten int() noctx
-	nine wrap-incr
-hundred int() noctx
-	ten wrap-mul ten
-thousand int() noctx
-	hundred wrap-mul ten
-million int() noctx
-	thousand wrap-mul thousand
-neg-million int() noctx
-	million wrap-mul neg-one
-billion int() noctx
-	million wrap-mul thousand
 
+wrap-add int16(a int16, b int16) noctx builtin
 wrap-add int32(a int32, b int32) noctx builtin
+
 wrap-sub int32(a int32, b int32) noctx builtin
-zero int32() noctx builtin
-one int32() noctx builtin
-neg-one int32() noctx
-	zero wrap-sub one
-two int32() noctx
-	one wrap-add one
-three int32() noctx
-	two wrap-add one
-four int32() noctx
-	three wrap-add one
-eight int32() noctx
-	four wrap-add four
-ten int32() noctx
-	four wrap-add two
+
+wrap-incr int(a int) noctx
+	a wrap-add one
+wrap-incr int16(a int16) noctx
+	a wrap-add one
+wrap-incr int32(a int32) noctx
+	a wrap-add one
+wrap-incr nat(a nat) noctx
+	a wrap-add one
+wrap-incr nat32(a nat32) noctx
+	a wrap-add one
 
 
+wrap-decr int(a int) noctx
+	a wrap-sub one
+wrap-decr int16(a int16) noctx
+	a wrap-sub one
+wrap-decr int32(a int32) noctx
+	a wrap-sub one
+wrap-decr nat(a nat) noctx
+	a wrap-sub one
+wrap-decr nat32(a nat32) noctx
+	a wrap-sub one
 
-wrap-incr nat32(n nat32) noctx
-	n wrap-add one
-wrap-decr nat32(n nat32) noctx
-	n wrap-sub one
-zero nat32() noctx builtin
-one nat32() noctx builtin
-two nat32() noctx
-	one wrap-incr
-three nat32() noctx
-	two wrap-incr
-four nat32() noctx
-	three wrap-incr
-five nat32() noctx
-	four wrap-incr
-six nat32() noctx
-	five wrap-incr
-seven nat32() noctx
-	six wrap-incr
-eight nat32() noctx
-	seven wrap-incr
-twelve nat32() noctx
-	eight wrap-add four
-fourteen nat32() noctx
-	twelve wrap-add two
-fifteen nat32() noctx
-	fourteen wrap-incr
+two-pow nat(pow nat) noctx
+	when
+		pow zero?
+			one
+		else
+			| TODO: safety
+			pow.wrap-decr.two-pow wrap-mul two
 two-pow nat32(pow nat32) noctx
 	| TODO: use bitshift
 	when
@@ -471,138 +595,37 @@ two-pow nat32(pow nat32) noctx
 		else
 			| TODO: safety
 			pow.wrap-decr.two-pow wrap-mul two
+two-pow int16(pow int16) noctx
+	when
+		pow zero?
+			one
+		else
+			pow.wrap-decr.two-pow wrap-mul two
+two-pow int32(pow int32) noctx
+	when
+		pow zero?
+			one
+		else
+			pow.wrap-decr.two-pow wrap-mul two
 
-zero nat16() noctx builtin
-
-wrap-incr nat(n nat) noctx
-	n wrap-add one
 
 noctx-incr nat(n nat) noctx unsafe
 	| TODO: billion should be max-value
 	hard-assert: n < billion
 	n wrap-incr
 
-incr nat(n nat)
-	| TODO: billion should be max-value
-	assert: n < billion
-	n wrap-add one
-
-wrap-incr int(i int) noctx
-	i wrap-add one
-
-incr int(i int)
-	| TODO: billion should be max-value
-	assert: i < billion
-	i wrap-add one
-
 incr ptr ?t(p ptr ?t) noctx unsafe
 	p + one
-
-noctx-decr nat(n nat) noctx unsafe
-	hard-forbid: n zero?
-	n wrap-sub one
-
-decr nat(n nat)
-	forbid: n zero?
-	n wrap-sub one
-
-| decr int(i int)
-|	i - 1
 
 decr ptr ?t(p ptr ?t) noctx unsafe
 	p - one
 
-+ nat(a nat, b nat)
-	res = a wrap-add b
-	assert: res >= a and: res >= b
-	res
-- nat(a nat, b nat)
-	assert: a >= b
-	a wrap-sub b
-* nat(a nat, b nat)
-	| TODO: better safety check
-	when
-		a.zero? or: b.zero?
-			zero
-		else
-			res = a wrap-mul b
-			assert: res / b == a
-			assert: res / a == b
-			res
-/ nat(a nat, b nat) trusted
-	forbid: b zero?
-	a unsafe-div b
-
-mod nat(a nat, b nat) trusted
-	forbid: b zero?
-	a unsafe-mod b
-
-+ int(a int, b int)
-	| TODO: better safety check
-	assert: a > neg-million
-	assert: a < million
-	assert: b > neg-million
-	assert: b < million
-	a wrap-add b
-
-- int(a int, b int)
-	| TODO: better safety check
-	assert: a > neg-million
-	assert: a < million
-	assert: b > neg-million
-	assert: b < million
-	a wrap-sub b
-* int(a int, b int)
-	assert: a > neg-million
-	assert: a < million
-	assert: b > neg-million
-	assert: b < million
-	a wrap-mul b
-/ int(a int, b int) trusted
-	forbid: b zero?
-	| If a is the smallest int and b is -1, result is UB
-	| TODO: better safety check
-	assert: a > neg-million
-	a unsafe-div b
-
-to-int int(n nat)
-	| assert: n < (32 pow2)
-	assert: n < million
-	n unsafe-to-int
-
-to-nat nat(i int)
-	forbid: i.negative?
-	i unsafe-to-nat
-
-negative? bool(i int)
-	i < zero
-
-neg int(i int)
-	i * neg-one
-
-neg int(n nat)
-	n.to-int neg
-
-abs nat(i int)
-	i-abs = i.negative? if i.neg, i
-	i-abs to-nat
-
-mod nat(a int, b nat)
-	forbid: b zero?
-	when
-		a negative?
-			x = a.abs mod b
-			x == b if: zero, b - x
-		else
-			a.to-nat mod b
-
-+ float(a float, b float) noctx builtin
-- float(a float, b float) noctx builtin
-* float(a float, b float) noctx builtin
-unsafe-div float(a float, b float) noctx unsafe builtin
-zero float() noctx builtin
-one float() noctx builtin
-
+noctx-decr int32(a int32) noctx unsafe
+	hard-forbid: a zero?
+	a wrap-sub one
+noctx-decr nat(n nat) noctx unsafe
+	hard-forbid: n zero?
+	n wrap-sub one
 
 region Util
 
@@ -614,20 +637,11 @@ drop void(t ?t) noctx
 hard-assert void(condition bool) noctx unsafe
 	condition if pass, "Assertion failed!".hard-fail
 
-assert void(condition bool)
-	condition if pass, "Assertion failed!".fail
-
 hard-forbid void(condition bool) noctx unsafe
 	condition.not hard-assert
 
-forbid void(condition bool)
-	condition.not assert
-
 hard-assert-unreachable ?t() noctx unsafe
 	"should be unreachable" hard-fail
-
-assert-unreachable ?t()
-	"should be unreachable" fail
 
 some<?t> record
 	by-val
@@ -653,13 +667,7 @@ empty? bool(a opt ?t) noctx
 has? bool(a opt ?t) noctx
 	a.empty? not
 
-force ?t(a opt ?t)
-	match a
-		none n
-			fail: "tried to force empty option"
-		some s
-			s.value
-
+| TODO: 'result' module
 ok<?t> record
 	by-val
 	value ?t
@@ -675,10 +683,22 @@ ok ok ?t(t ?t) noctx
 err err ?t(t ?t) noctx
 	new t
 
+then result ?ok-out ?err(a result ?ok-in ?err, f fun-mut1 result<?ok-out, ?err> ?ok-in)
+	match a
+		ok o
+			f call o.value
+		err e
+			e
+
 as ?t(value ?t) noctx builtin
 as-non-const ?t(value ?t) noctx builtin
 
 region fut
+
+exception record
+	by-val
+	| TODO: stack trace here too
+	message str
 
 fut<?t> record force-sendable
 	lk by-val lock
@@ -687,13 +707,14 @@ fut<?t> record force-sendable
 fut-state<?t> union mut
 	fut-state-callbacks<?t>
 	fut-state-resolved<?t>
+	exception
 
 fut-state-callbacks<?t> record mut
 	head opt fut-callback-node<?t>
 
 fut-callback-node<?t> record mut
-	| WARN: the cb will be called with whatever ctx resolves the fut
-	cb fun-mut1 void ?t
+	| WARN: the cb will be called with whatever ctx resolves the fut, not the ctx that created it
+	cb fun-mut1 void result<?t, exception>
 	next-node opt fut-callback-node<?t>
 
 fut-state-resolved<?t> record

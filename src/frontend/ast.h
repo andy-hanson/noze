@@ -118,6 +118,13 @@ struct LiteralAst {
 	const Str literal;
 };
 
+// This is never parsed directly.
+// This is used by 'checkLiteral' to ensure we don't recurse.
+struct LiteralInnerAst {
+	const LiteralAst::Kind kind;
+	const Str literal;
+};
+
 struct MatchAst {
 	struct CaseAst {
 		const SourceRange range;
@@ -160,6 +167,7 @@ private:
 		lambda,
 		let,
 		literal,
+		literalInner,
 		match,
 		seq,
 		// no RecordFieldAccess, that's just 'call'
@@ -178,6 +186,7 @@ private:
 		const LambdaAst lambda;
 		const LetAst let;
 		const LiteralAst literal;
+		const LiteralInnerAst literalInner;
 		const MatchAst _match;
 		const SeqAst seq;
 		const RecordFieldSetAst recordFieldSet;
@@ -185,21 +194,36 @@ private:
 	};
 
 public:
-	explicit inline ExprAstKind(const CallAst a) : kind{Kind::call}, call{a} {}
-	explicit inline ExprAstKind(const CondAst a) : kind{Kind::cond}, cond{a} {}
-	explicit inline ExprAstKind(const CreateArrAst a) : kind{Kind::createArr}, createArr{a} {}
-	explicit inline ExprAstKind(const CreateRecordAst a) : kind{Kind::createRecord}, createRecord{a} {}
+	explicit inline ExprAstKind(const CallAst a)
+		: kind{Kind::call}, call{a} {}
+	explicit inline ExprAstKind(const CondAst a)
+		: kind{Kind::cond}, cond{a} {}
+	explicit inline ExprAstKind(const CreateArrAst a)
+		: kind{Kind::createArr}, createArr{a} {}
+	explicit inline ExprAstKind(const CreateRecordAst a)
+		: kind{Kind::createRecord}, createRecord{a} {}
 	explicit inline ExprAstKind(const CreateRecordMultiLineAst a)
 		: kind{Kind::createRecordMultiLine}, createRecordMultiLine{a} {}
-	explicit inline ExprAstKind(const FunAsLambdaAst a) : kind{Kind::funAsLambda}, funAsLambda{a} {}
-	explicit inline ExprAstKind(const IdentifierAst a) : kind{Kind::identifier}, identifier{a} {}
-	explicit inline ExprAstKind(const LambdaAst a) : kind{Kind::lambda}, lambda{a} {}
-	explicit inline ExprAstKind(const LetAst a) : kind{Kind::let}, let{a} {}
-	explicit inline ExprAstKind(const LiteralAst a) : kind{Kind::literal}, literal{a} {}
-	explicit inline ExprAstKind(const MatchAst a) : kind{Kind::match}, _match{a} {}
-	explicit inline ExprAstKind(const SeqAst a) : kind{Kind::seq}, seq{a} {}
-	explicit inline ExprAstKind(const RecordFieldSetAst a) : kind{Kind::recordFieldSet}, recordFieldSet{a} {}
-	explicit inline ExprAstKind(const ThenAst a) : kind{Kind::then}, then{a} {}
+	explicit inline ExprAstKind(const FunAsLambdaAst a)
+		: kind{Kind::funAsLambda}, funAsLambda{a} {}
+	explicit inline ExprAstKind(const IdentifierAst a)
+		: kind{Kind::identifier}, identifier{a} {}
+	explicit inline ExprAstKind(const LambdaAst a)
+		: kind{Kind::lambda}, lambda{a} {}
+	explicit inline ExprAstKind(const LetAst a)
+		: kind{Kind::let}, let{a} {}
+	explicit inline ExprAstKind(const LiteralAst a)
+		: kind{Kind::literal}, literal{a} {}
+	explicit inline ExprAstKind(const LiteralInnerAst a)
+		: kind{Kind::literalInner}, literalInner{a} {}
+	explicit inline ExprAstKind(const MatchAst a)
+		: kind{Kind::match}, _match{a} {}
+	explicit inline ExprAstKind(const SeqAst a)
+		: kind{Kind::seq}, seq{a} {}
+	explicit inline ExprAstKind(const RecordFieldSetAst a)
+		: kind{Kind::recordFieldSet}, recordFieldSet{a} {}
+	explicit inline ExprAstKind(const ThenAst a)
+		: kind{Kind::then}, then{a} {}
 
 	inline const Bool isIdentifier() const {
 		return enumEq(kind, Kind::identifier);
@@ -230,6 +254,7 @@ public:
 		typename CbLambda,
 		typename CbLet,
 		typename CbLiteral,
+		typename CbLiteralInner,
 		typename CbMatch,
 		typename CbSeq,
 		typename CbRecordFieldSet,
@@ -246,6 +271,7 @@ public:
 		CbLambda cbLambda,
 		CbLet cbLet,
 		CbLiteral cbLiteral,
+		CbLiteralInner cbLiteralInner,
 		CbMatch cbMatch,
 		CbSeq cbSeq,
 		CbRecordFieldSet cbRecordFieldSet,
@@ -272,6 +298,8 @@ public:
 				return cbLet(let);
 			case Kind::literal:
 				return cbLiteral(literal);
+			case Kind::literalInner:
+				return cbLiteralInner(literalInner);
 			case Kind::match:
 				return cbMatch(_match);
 			case Kind::seq:
@@ -445,7 +473,10 @@ struct SpecDeclAst {
 
 struct FunBodyAst {
 	struct Builtin {};
-	struct Extern {};
+	struct Extern {
+		const Bool isGlobal;
+		const Opt<const Str> mangledName;
+	};
 	enum class Kind {
 		builtin,
 		_extern,

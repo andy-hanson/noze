@@ -432,7 +432,10 @@ struct Expr;
 
 struct FunBody {
 	struct Builtin {};
-	struct Extern {};
+	struct Extern {
+		const Bool isGlobal;
+		const Opt<const Str> mangledName;
+	};
 private:
 	enum class Kind {
 		builtin,
@@ -458,6 +461,11 @@ public:
 	}
 	inline const Bool isExpr() const {
 		return enumEq(kind, Kind::expr);
+	}
+
+	inline const Extern asExtern() const {
+		assert(isExtern());
+		return _extern;
 	}
 
 	template <typename CbBuiltin, typename CbExtern, typename CbExpr>
@@ -683,6 +691,10 @@ inline size_t arity(const CalledDecl c) {
 	return arity(c.sig());
 }
 
+inline size_t nTypeParams(const CalledDecl c) {
+	return size(c.typeParams());
+}
+
 struct Called {
 private:
 	enum class Kind {
@@ -881,6 +893,7 @@ struct Program {
 	const Module* bootstrapModule;
 	const Module* gcModule;
 	const Module* runtimeModule;
+	const Module* runtimeMainModule;
 	const Module* mainModule;
 	// Includes 'include.nz"'
 	const Arr<const Module*> allModules;

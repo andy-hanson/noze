@@ -1,16 +1,25 @@
-# To build: `scons`
-# To clean: `scons -c`
+# See doc/developing.md
 
 from os import environ
+from os.path import dirname, join, pardir, realpath
 
 env = Environment()
-# This ensures we get color output
+# This ensures we get color output for compile errors
 env["ENV"]["TERM"] = environ["TERM"]
 
+# NOTE: These options should be exacly the same as in `build.sh`.
 env.Program(
-	"noze",
+	"bin/noze",
 	Glob("src/*.cpp") + Glob("src/**/*.cpp"),
-	LIBS=[File("libfirm/build/debug/libfirm.so")],
+	LIBPATH="libfirm/build/debug",
+	LIBS="firm",
 	CPPPATH=["libfirm/include", "libfirm/build/gen/include/libfirm"],
-	# Not -pedantic because I want to use c99 designated initializers
-	CPPFLAGS=Split("-Werror -Wextra -Wall -ansi -std=c++17 -g"))
+	CPPFLAGS=[
+		"-Werror",
+		"-Wextra",
+		"-Wall",
+		"-ansi",
+		"-std=c++17",
+		"-g",
+	],
+	RPATH=env.Literal(join("\\$$ORIGIN", pardir, "libfirm", "build", "debug")))

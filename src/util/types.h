@@ -13,6 +13,7 @@ inline T todo(const char* message) {
 	throw message;
 }
 
+using MutCStr = char*;
 using CStr = const char*;
 struct Byte {
 	const uint8_t value;
@@ -51,6 +52,10 @@ inline const Int64 int64FromInt16(const Int16 i) {
 }
 inline const Int64 int64FromInt32(const Int32 i) {
 	return Int64{i.value};
+}
+
+inline const Nat64 toNat64(const Nat16 a) {
+	return Nat64{a.value};
 }
 
 inline const Nat64 toNat64(const Nat32 a) {
@@ -101,39 +106,56 @@ inline const Int64 operator+(const Int64 a, const Int64 b) {
 	//TODO: safety
 	return Int64{a.value + b.value};
 }
-inline const Int64 operator*(const Int64 a, const Int64 b) {
-	//TODO: safety
+inline const Int16 wrapMul(const Int16 a, const Int16 b) {
+	int64_t full = static_cast<int32_t>(a.value) * static_cast<int32_t>(b.value);
+	// TODO: wrapping signed integers isn't as simple as unsigned, be sure to test
+	if (full < -(static_cast<int32_t>(1) << 15) || full >= (static_cast<int32_t>(1) << 15))
+		todo<void>("wrap");
+	return Int16{static_cast<int16_t>(full)};
+}
+inline const Int32 wrapMul(const Int32 a, const Int32 b) {
+	// Convert to int64. An int32 * int32 never exceeds int64.
+	int64_t full = static_cast<int64_t>(a.value) * static_cast<int64_t>(b.value);
+	// TODO: wrapping signed integers isn't as simple as unsigned, be sure to test
+	if (full < -(static_cast<int64_t>(1) << 31) || full >= (static_cast<int64_t>(1) << 31))
+		todo<void>("wrap");
+	return Int32{static_cast<int32_t>(full)};
+}
+inline const Int64 wrapMul(const Int64 a, const Int64 b) {
+	// TODO: figure out how to do wrapping multiplication in c++
+	if (a.value < -9999999 || a.value > 9999999 || b.value < -9999999 || b.value > 9999999)
+		todo<void>("wrapmul int64: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int64{a.value * b.value};
 }
 
 inline const Int16 wrapAdd(const Int16 a, const Int16 b) {
 	if (a.value < -999 || a.value > 999 || b.value < -999 || b.value > 999)
-		todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
+		todo<void>("wrapadd int16: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int16{static_cast<int16_t>(a.value + b.value)};
 }
 inline const Int32 wrapAdd(const Int32 a, const Int32 b) {
 	if (a.value < -999 || a.value > 999 || b.value < -999 || b.value > 999)
-		todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
+		todo<void>("wrapAdd int32: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int32{a.value + b.value};
 }
 inline const Int64 wrapAdd(const Int64 a, const Int64 b) {
 	if (a.value < -9999999 || a.value > 9999999 || b.value < -9999999 || b.value > 9999999)
-		todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
+		todo<void>("wrapAdd int64: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int64{a.value + b.value};
 }
 inline const Int16 wrapSub(const Int16 a, const Int16 b) {
 	if (a.value < -999 || a.value > 999 || b.value < -999 || b.value > 999)
-		todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
+		todo<void>("wrapSub int16: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int16{static_cast<int16_t>(a.value - b.value)};
 }
 inline const Int32 wrapSub(const Int32 a, const Int32 b) {
-	if (a.value < -999 || a.value > 999 || b.value < -999 || b.value > 999)
-		todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
+	if (a.value < -9999999 || a.value > 9999999 || b.value < -9999999 || b.value > 9999999)
+		todo<void>("wrapSub int32: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int32{a.value - b.value};
 }
 inline const Int64 wrapSub(const Int64 a, const Int64 b) {
 	if (a.value < -9999999 || a.value > 9999999 || b.value < -9999999 || b.value > 9999999)
-		todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
+		todo<void>("wrapSub int64: c++ doesn't use wrapping addition for signed ints, must emulate");
 	return Int64{a.value - b.value};
 }
 
@@ -156,10 +178,34 @@ inline Comparison compareInt64(const Int64 a, const Int64 b) {
 	return comparePrimitive(a.value, b.value);
 }
 
+inline const Int16 int16FromInt64(const Int64 a) {
+	if (a.value < -9999 || a.value > 9999)
+		todo<void>("proper range of int32");
+	return Int16{static_cast<int16_t>(a.value)};
+}
+
+inline const Int32 int32FromInt64(const Int64 a) {
+	//TODO: proper boundaries
+	if (a.value < -999999 || a.value > 999999)
+		todo<void>("proper range of int32");
+	return Int32{static_cast<int32_t>(a.value)};
+}
+
+inline const Nat64 nat64FromInt64(const Int64 i) {
+	assert(i.value >= 0);
+	return Nat64{static_cast<uint64_t>(i.value)};
+}
+
 inline const Int64 int64FromNat64(const Nat64 n) {
 	const uint64_t highestBit = (static_cast<uint64_t>(1) << 63);
 	assert(!(n.value & highestBit));
 	return Int64{static_cast<int64_t>(n.value)};
+}
+
+inline const Nat16 nat16FromNat64(const Nat64 n) {
+	const uint64_t highestNat16 = (static_cast<uint64_t>(1) << 16) - 1;
+	assert(n.value <= highestNat16);
+	return Nat16{static_cast<uint16_t>(n.value)};
 }
 
 inline const Nat32 nat32FromNat64(const Nat64 n) {

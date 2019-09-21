@@ -5,11 +5,16 @@
 #include "./concretizeUtil.h" // tryGetAllConstant
 
 namespace {
+	const Arr<const Constant*> getArray(const ConstantKind::Record r) {
+		const size_t size = at(r.args, 0)->kind.asNat64().value;
+		const ConstantKind::Ptr data = at(r.args, 1)->kind.asPtr();
+		assert(data.index + size <= data.array->size());
+		return slice(data.array->elements, data.index, size);
+	}
+
 	Comparison constantCompare(const Constant* a, const Constant* b) {
+		assert(concreteTypeEqual(a->type(), b->type()));
 		return a->kind.match(
-			[&](const ConstantKind::Array) {
-				return todo<const Comparison>("compare arr");
-			},
 			[&](const Bool) {
 				return todo<const Comparison>("compare bool");
 			},
@@ -47,11 +52,16 @@ namespace {
 				return Comparison::equal;
 			},
 			[&](const ConstantKind::Ptr) {
-				// Should be a compile error
+				// Should be a compile error to compare two ptrs at compile time.
+				// Can compare arrays but handler for Record does that.
 				return unreachable<const Comparison>();
 			},
-			[&](const ConstantKind::Record) {
-				return todo<const Comparison>("compare records");
+			[&](const ConstantKind::Record ra) {
+				const ConstantKind::Record rb = b->kind.asRecord();
+				if (concreteTypeIsArr(a->type()))
+					return compareArr<const Constant*, constantCompare>(getArray(ra), getArray(rb));
+				else
+					return zipCompare<const Constant*, constantCompare>(ra.args, rb.args);
 			},
 			[&](const ConstantKind::Union) {
 				return todo<const Comparison>("compare union");
@@ -150,7 +160,7 @@ namespace {
 		auto constNull = [&](const ConcreteType pointerType) -> const Opt<const Constant*> {
 			return yes(constantNull(arena, allConstants, pointerType));
 		};
-		auto constPtr = [&](const Constant* array, const Nat64 index) {
+		auto constPtr = [&](const ConstantArrayBacking* array, const size_t index) {
 			return yes(constantPtr(arena, allConstants, returnType, array, index));
 		};
 		auto constVoid = [&]() {
@@ -163,7 +173,8 @@ namespace {
 
 			case BuiltinFunKind::addPtr: {
 				const ConstantKind::Ptr ptr = ptrArg(0);
-				return constPtr(ptr.array, ptr.index + nat64Arg(1));
+				//TODO: safety (don't let it go past the end of the array)
+				return constPtr(ptr.array, ptr.index + nat64Arg(1).value);
 			}
 
 			case BuiltinFunKind::_and:
@@ -173,10 +184,16 @@ namespace {
 				return yes(constantArg(0));
 
 			// Was marked as non-specializable
+			case BuiltinFunKind::asAnyPtr:
 			case BuiltinFunKind::asNonConst:
 			// 'concretizeCall' handles this specially when the lambda is known.
 			case BuiltinFunKind::callFunPtr:
 				return unreachable<const Opt<const Constant*>>();
+
+			case BuiltinFunKind::asRef:
+				// 'null.as-ref' appears in some unsafe code.
+				assert(constantArg(0)->kind.isNull());
+				return no;
 
 			case BuiltinFunKind::compare: {
 				const Comparison cmp = constantCompare(constantArg(0), constantArg(1));
@@ -266,6 +283,12 @@ namespace {
 			case BuiltinFunKind::subFloat64:
 				return todo<const Opt<const Constant*>>("concretefunbodyforbuiltin subfloats");
 
+			case BuiltinFunKind::toIntFromInt32:
+				return constInt64(int64FromInt32(int32Arg(0)));
+
+			case BuiltinFunKind::toNatFromNat16:
+				return constNat64(toNat64(nat16Arg(0)));
+
 			case BuiltinFunKind::toNatFromNat32:
 				return constNat64(toNat64(nat32Arg(0)));
 
@@ -288,6 +311,9 @@ namespace {
 					return constNat64(n0 / n1);
 			}
 
+			case BuiltinFunKind::unsafeInt64ToInt32:
+				return constInt32(int32FromInt64(int64Arg(0)));
+
 			case BuiltinFunKind::unsafeModNat64: {
 				const Nat64 n0 = nat64Arg(0);
 				const Nat64 n1 = nat64Arg(1);
@@ -299,11 +325,14 @@ namespace {
 			case BuiltinFunKind::unsafeNat64ToInt64:
 				return constInt64(int64FromNat64(nat64Arg(0)));
 
+			case BuiltinFunKind::unsafeNat64ToNat16:
+				return constNat16(nat16FromNat64(nat64Arg(0)));
+
 			case BuiltinFunKind::unsafeNat64ToNat32:
 				return constNat32(nat32FromNat64(nat64Arg(0)));
 
 			case BuiltinFunKind::unsafeInt64ToNat64:
-				return todo<const Opt<const Constant*>>("unsafeInt64ToNat64");
+				return constNat64(nat64FromInt64(int64Arg(0)));
 
 			case BuiltinFunKind::wrapAddInt16:
 				return constInt16(wrapAdd(int16Arg(0), int16Arg(1)));
@@ -338,14 +367,12 @@ namespace {
 			case BuiltinFunKind::wrapSubNat64:
 				return constNat64(nat64Arg(0) - nat64Arg(1));
 
-			case BuiltinFunKind::wrapMulInt64: {
-				const Int64 i0 = int64Arg(0);
-				const Int64 i1 = int64Arg(1);
-				if (i0.value < -9999999 || i0.value > 9999999 || i1.value < -9999999 || i1.value > 9999999)
-					todo<void>("c++ doesn't use wrapping addition for signed ints, must emulate");
-				return constInt64(i0 * i1);
-			}
-
+			case BuiltinFunKind::wrapMulInt16:
+				return constInt16(wrapMul(int16Arg(0), int16Arg(1)));
+			case BuiltinFunKind::wrapMulInt32:
+				return constInt32(wrapMul(int32Arg(0), int32Arg(1)));
+			case BuiltinFunKind::wrapMulInt64:
+				return constInt64(wrapMul(int64Arg(0), int64Arg(1)));
 			case BuiltinFunKind::wrapMulNat32:
 				return constNat32(nat32Arg(0) * nat32Arg(1));
 			case BuiltinFunKind::wrapMulNat64:
@@ -409,6 +436,7 @@ namespace {
 
 	const LocalsAndExpr combineCompares(
 		Arena* arena,
+		const Str name,
 		const ConcreteExpr* cmpFirst,
 		const ConcreteExpr* cmpSecond,
 		const ConcreteType comparisonType
@@ -427,7 +455,7 @@ namespace {
 		*/
 		const ConcreteLocal* cmpFirstLocal = nu<const ConcreteLocal>{}(
 			arena,
-			strLiteral("cmp"),
+			cat(arena, strLiteral("_cmp"), name),
 			comparisonType,
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 		const ConcreteExpr* getCmpFirst = genExpr(arena, comparisonType, ConcreteExpr::LocalRef{cmpFirstLocal});
@@ -444,7 +472,7 @@ namespace {
 			});
 		const ConcreteLocal* matchedLocal = nu<const ConcreteLocal>{}(
 			arena,
-			strLiteral("matched"),
+			cat(arena, strLiteral("_matched"), name),
 			comparisonType,
 			ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
 		const ConcreteExpr* then = genExpr(arena, comparisonType, ConcreteExpr::Match{matchedLocal, cmpFirst, cases});
@@ -547,6 +575,7 @@ namespace {
 				? [&]() {
 					const LocalsAndExpr le = combineCompares(
 						arena,
+						field->mangledName,
 						force(cellGet(&accum)),
 						compareThisField,
 						types.comparison);
@@ -693,7 +722,12 @@ namespace {
 			genFirst(a),
 			genFirst(b));
 		const ConcreteExpr* recurOnTail = genCall(arena, compareFun, genTail(a), genTail(b));
-		const LocalsAndExpr firstThenRecur = combineCompares(arena, compareFirst, recurOnTail, types.comparison);
+		const LocalsAndExpr firstThenRecur = combineCompares(
+			arena,
+			strLiteral("el"),
+			compareFirst,
+			recurOnTail,
+			types.comparison);
 
 		auto genSizeEqZero = [&](const ConcreteExpr* arr) -> const ConcreteExpr* {
 			return genNatEqZero(ctx, boolType, natType, genGetSize(arr));

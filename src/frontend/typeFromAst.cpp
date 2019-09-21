@@ -56,7 +56,7 @@ namespace {
 		if (has(r)) {
 			return some<TDecl>(force(r).decl);
 		} else {
-			addDiag(ctx, range, Diag{Diag::NameNotFound{name, nameNotFoundKind}});
+			addDiag(ctx, range, Diag{Diag::NameNotFound{nameNotFoundKind, name}});
 			return none<TDecl>();
 		}
 	}
@@ -119,7 +119,7 @@ const Type typeFromAst(
 			if (has(found))
 				return Type{force(found)};
 			else {
-				addDiag(ctx, p.range, Diag{Diag::NameNotFound{p.name, Diag::NameNotFound::Kind::typeParam}});
+				addDiag(ctx, p.range, Diag{Diag::NameNotFound{Diag::NameNotFound::Kind::typeParam, p.name}});
 				return Type{Type::Bogus{}};
 			}
 		},

@@ -125,12 +125,21 @@ namespace {
 		return SigAstAndDedent{s.sig, dedents};
 	}
 
-	const Arr<const ImportAst> parseImports(Lexer* lexer) {
+	const Arr<const ImportAst> parseImportsNonIndented(Lexer* lexer) {
 		ArrBuilder<const ImportAst> res {};
 		do {
 			add<const ImportAst>(lexer->arena, &res, parseSingleImport(lexer));
 		} while (tryTake(lexer, ' '));
 		take(lexer, '\n');
+		return finishArr(&res);
+	}
+
+	const Arr<const ImportAst> parseImportsIndented(Lexer* lexer) {
+		ArrBuilder<const ImportAst> res {};
+		takeIndentAfterNewline(lexer);
+		do {
+			add<const ImportAst>(lexer->arena, &res, parseSingleImport(lexer));
+		} while (takeNewlineOrSingleDedent(lexer) == NewlineOrDedent::newline);
 		return finishArr(&res);
 	}
 
@@ -292,8 +301,18 @@ namespace {
 		Cell<const Bool> unsafe { False };
 		Cell<const Bool> trusted { False };
 		Cell<const Bool> builtin { False };
-		Cell<const Bool> _extern { False };
+		Cell<const Opt<const FunBodyAst::Extern>> _extern { none<const FunBodyAst::Extern>() };
+		Cell<const Opt<const Str>> mangle { none<const Str>() };
 	};
+
+	const Opt<const Str> tryTakeMangledName(Lexer* lexer) {
+		if (tryTake(lexer, "<")) {
+			const Str mangledName = takeQuotedStr(lexer);
+			take(lexer, '>');
+			return some<const Str>(mangledName);
+		} else
+			return none<const Str>();
+	}
 
 	void addSpecOrName(Lexer* lexer, SpecUsesAndSigFlagsAndKwBodyBuilder* builder) {
 		const Pos start = curPos(lexer);
@@ -303,6 +322,15 @@ namespace {
 				if (cellGet(b))
 					todo<void>("duplicate");
 				cellSet<const Bool>(b, True);
+			};
+
+			const auto setExtern = [&](const Bool isGlobal) -> void {
+				if (has(cellGet(&builder->_extern)))
+					todo<void>("duplicate");
+				const Opt<const Str> mangledName = tryTakeMangledName(lexer);
+				cellSet<const Opt<const FunBodyAst::Extern>>(
+					&builder->_extern,
+					some<const FunBodyAst::Extern>(FunBodyAst::Extern{isGlobal, mangledName}));
 			};
 
 			switch (name.sym.value) {
@@ -322,7 +350,10 @@ namespace {
 					setIt(&builder->builtin);
 					break;
 				case shortSymAlphaLiteralValue("extern"):
-					setIt(&builder->_extern);
+					setExtern(False);
+					break;
+				case shortSymAlphaLiteralValue("global"):
+					setExtern(True);
 					break;
 				default:
 					return throwOnReservedName<void>(name.range, name.sym);
@@ -337,30 +368,29 @@ namespace {
 	}
 
 	const SpecUsesAndSigFlagsAndKwBody finishSpecs(SpecUsesAndSigFlagsAndKwBodyBuilder* builder) {
-		if (cellGet(&builder->unsafe) && cellGet(&builder->trusted))
-			todo<void>("'unsafe trusted' is redundant");
-		if (cellGet(&builder->builtin) && cellGet(&builder->trusted))
-			todo<void>("'builtin trusted' is silly as builtin fun has no body");
-		if (cellGet(&builder->_extern) && cellGet(&builder->trusted))
-			todo<void>("'extern trusted' is silly as extern fun has no body");
-		if (cellGet(&builder->_extern)) {
-			if (cellGet(&builder->noCtx))
-				todo<void>("'noctx extern' is redundant");
-			cellSet<const Bool>(&builder->noCtx, True);
-		}
+		const Arr<const SpecUseAst> specUses = finishArr(&builder->specUses);
+		const Bool noCtx = cellGet(&builder->noCtx);
+		const Bool summon = cellGet(&builder->summon);
+		const Bool unsafe = cellGet(&builder->unsafe);
+		const Bool trusted = cellGet(&builder->trusted);
+		const Bool builtin = cellGet(&builder->builtin);
+		const Opt<const FunBodyAst::Extern> _extern = cellGet(&builder->_extern);
 
-		Opt<const FunBodyAst> body = cellGet(&builder->builtin)
+		if (unsafe && trusted)
+			todo<void>("'unsafe trusted' is redundant");
+		if (builtin && trusted)
+			todo<void>("'builtin trusted' is silly as builtin fun has no body");
+		if (has(_extern) && trusted)
+			todo<void>("'extern trusted' is silly as extern fun has no body");
+
+		//TODO: assert 'builtin' and 'extern' and 'extern-global' can't be set together.
+		//Also, 'extern-global' should always be 'unsafe noctx'
+		const Opt<const FunBodyAst> body = cellGet(&builder->builtin)
 			? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Builtin{}})
-			: cellGet(&builder->_extern)
-			? some<const FunBodyAst>(FunBodyAst{FunBodyAst::Extern{}})
+			: has(_extern)
+			? some<const FunBodyAst>(FunBodyAst{force(_extern)})
 			: none<const FunBodyAst>();
-		return SpecUsesAndSigFlagsAndKwBody{
-			finishArr(&builder->specUses),
-			cellGet(&builder->noCtx),
-			cellGet(&builder->summon),
-			cellGet(&builder->unsafe),
-			cellGet(&builder->trusted),
-			body};
+		return SpecUsesAndSigFlagsAndKwBody{specUses, noCtx, summon, unsafe, trusted, body};
 	}
 
 	// TODO: handle 'noctx' and friends too! (share code with parseSpecUsesAndSigFlagsAndKwBody)
@@ -529,12 +559,17 @@ namespace {
 	}
 
 	const FileAst parseFileMayThrow(Lexer* lexer) {
+		skipShebang(lexer);
 		skipBlankLines(lexer);
 		const Arr<const ImportAst> imports = tryTake(lexer, "import ")
-			? parseImports(lexer)
+			? parseImportsNonIndented(lexer)
+			: tryTake(lexer, "import\n")
+			? parseImportsIndented(lexer)
 			: emptyArr<const ImportAst>();
 		const Arr<const ImportAst> exports = tryTake(lexer, "export ")
-			? parseImports(lexer)
+			? parseImportsNonIndented(lexer)
+			: tryTake(lexer, "export\n")
+			? parseImportsIndented(lexer)
 			: emptyArr<const ImportAst>();
 
 		ArrBuilder<const SpecDeclAst> specs {};

@@ -162,6 +162,9 @@ namespace {
 			[](const LiteralAst) {
 				return False;
 			},
+			[](const LiteralInnerAst) {
+				return False;
+			},
 			[](const MatchAst) {
 				return unreachable<const Bool>();
 			},

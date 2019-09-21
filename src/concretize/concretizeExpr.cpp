@@ -257,6 +257,7 @@ namespace {
 		}
 	}
 
+
 	const ConstantOrExpr concretizeFunAsLambda(
 		ConcretizeExprCtx* ctx,
 		const SourceRange range,
@@ -282,27 +283,30 @@ namespace {
 		} else {
 			if (!cf->needsCtx)
 				todo<void>("I think there might be a bug if we use a noctx fun as lambda");
-			const KnownLambdaBody* klb = nu<KnownLambdaBody>{}(
-				arena,
-				dynamicType,
-				cf->sig,
-				mangledName,
-				none<const ConcreteParam>(),
-				emptyArr<const ClosureSingleSpecialize>());
-			const Arr<const Expr> args = mapPtrs<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
-				return Expr{range, Expr::ParamRef{p}};
+			const Constant* lambda = lazilySet<const Constant*>(&cf->_asLambda, [&]() {
+				const KnownLambdaBody* klb = nu<const KnownLambdaBody>{}(
+					arena,
+					dynamicType,
+					cf->sig,
+					mangledName,
+					none<const ConcreteParam>(),
+					emptyArr<const ClosureSingleSpecialize>());
+				const Arr<const Expr> args = mapPtrs<const Expr>{}(arena, e.fun->params(), [&](const Param* p) {
+					return Expr{range, Expr::ParamRef{p}};
+				});
+				const Expr* body = nu<const Expr>{}(
+					arena,
+					range,
+					Expr::Call{Called{e.fun}, args});
+				const LambdaInfo info = LambdaInfo{ctx->concreteFunSource.containingFunInst, body};
+				addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(
+					arena,
+					&ctx->concretizeCtx->knownLambdaBodyToInfo,
+					klb,
+					info);
+				return constantLambda(arena, ctx->allConstants(), klb);
 			});
-			const Expr* body = nu<const Expr>{}(
-				arena,
-				range,
-				Expr::Call{Called{e.fun}, args});
-			const LambdaInfo info = LambdaInfo{ctx->concreteFunSource.containingFunInst, body};
-			addToDict<const KnownLambdaBody*, const LambdaInfo, comparePtr<const KnownLambdaBody>>(
-				arena,
-				&ctx->concretizeCtx->knownLambdaBodyToInfo,
-				klb,
-				info);
-			return ConstantOrExpr{constantLambda(arena, ctx->allConstants(), klb)};
+			return ConstantOrExpr{lambda};
 		}
 	}
 
@@ -644,19 +648,6 @@ namespace {
 					const ConstantKind::Record r = kind.asRecord();
 					assert(compareConcreteType(targetType, r.type) == Comparison::equal);
 					return ConstantOrExpr{at(r.args, fieldIndex)};
-				} else if (kind.isArray()) {
-					const ConstantKind::Array a = kind.asArray();
-					// Fields are "size", "data"
-					switch (fieldIndex) {
-						case 0:
-							assert(symEq(fieldName, shortSymAlphaLiteral("size")));
-							return ConstantOrExpr{constantNat64(arena, allConstants, type, Nat64{a.size()})};
-						case 1:
-							assert(symEq(fieldName, shortSymAlphaLiteral("data")));
-							return ConstantOrExpr{constantPtr(arena, allConstants, type, c, Nat64{0})};
-						default:
-							assert(0);
-					}
 				} else if (kind.isLambda()) {
 					// fun0, fun1, fun2... all have the same field names
 					const KnownLambdaBody* klb = kind.asLambda().knownLambdaBody;
@@ -705,8 +696,32 @@ namespace {
 			ConcreteExpr::RecordFieldSet{targetType.isPointer, target, field, value});
 	}
 
+	const Constant* makeConstantArray(
+		ConcretizeExprCtx* ctx,
+		const ConcreteType arrayType,
+		const ConcreteType elementType,
+		const Arr<const Constant*> constantArgs
+	) {
+		Arena* arena = getArena(ctx);
+		AllConstants* allConstants = ctx->allConstants();
+		const ConstantArrayBacking* backing =
+			constantArrayBacking(arena, allConstants, elementType, constantArgs);
+		const Arr<const ConcreteField> fields = arrayType.mustBeNonPointer()->body().asRecord().fields;
+		const ConcreteType nat64Type = at(fields, 0).type;
+		const ConcreteType ptrType = at(fields, 1).type;
+		const Arr<const Constant*> args = arrLiteral<const Constant*>(arena,
+			{
+				constantNat64(arena, allConstants, nat64Type, Nat64{backing->size()}),
+				backing->size() == 0
+					? constantNull(arena, allConstants, ptrType)
+					: constantPtr(arena, allConstants, ptrType, backing, 0),
+			});
+		return constantRecord(arena, allConstants, arrayType, args);
+	}
+
 	const ConstantOrExpr concretizeExpr(ConcretizeExprCtx* ctx, const Expr expr) {
 		Arena* arena = getArena(ctx);
+		AllConstants* allConstants = ctx->allConstants();
 		const SourceRange range = expr.range();
 
 		return expr.match(
@@ -735,20 +750,26 @@ namespace {
 			},
 			[&](const Expr::CreateArr e) {
 				const Result<const Arr<const Constant*>, const Arr<const ConstantOrExpr>> args = getArgs(ctx, e.args);
-				const ConcreteStruct* arrayType = ctx->getConcreteType_forStructInst(e.arrType).mustBeNonPointer();
+				const ConcreteType arrayType = ctx->getConcreteType_forStructInst(e.arrType);
+				const ConcreteStruct* arrayStruct = arrayType.mustBeNonPointer();
 				const ConcreteType elementType = ctx->getConcreteType(e.elementType());
 				return args.match(
 					[&](const Arr<const Constant*> constantArgs) {
-						return ConstantOrExpr{
-							constantArr(arena, ctx->allConstants(), arrayType, elementType, constantArgs)};
+						return ConstantOrExpr{makeConstantArray(ctx, arrayType, elementType, constantArgs)};
 					},
 					[&](const Arr<const ConstantOrExpr> nonConstantArgs) {
-						const ConcreteExpr::CreateArr ca = ConcreteExpr::CreateArr{
+						const ConcreteLocal* local = makeLocalWorker(
+							ctx,
+							shortSymAlphaLiteral("arr"),
 							arrayType,
+							ConstantOrLambdaOrVariable{ConstantOrLambdaOrVariable::Variable{}});
+						const ConcreteExpr::CreateArr ca = ConcreteExpr::CreateArr{
+							arrayStruct,
 							elementType,
 							getAllocFun(ctx->concretizeCtx),
+							local,
 							makeLambdasDynamic_arr(ctx->concretizeCtx, range, nonConstantArgs)};
-						return nuExpr(arena, concreteType_fromStruct(arrayType), range, ca);
+						return nuExpr(arena, arrayType, range, ca);
 					});
 			},
 			[&](const Expr::CreateRecord e) {
@@ -763,7 +784,7 @@ namespace {
 				if (inner.isConstant())
 					return ConstantOrExpr{constantUnion(
 						getArena(ctx),
-						ctx->allConstants(),
+						allConstants,
 						unionType,
 						e.memberIndex,
 						inner.asConstant())};
@@ -823,15 +844,12 @@ namespace {
 			[&](const Expr::StringLiteral e) {
 				const ConcreteType charType = ctx->concretizeCtx->charType();
 				const Arr<const Constant*> chars = map<const Constant*>{}(arena, e.literal, [&](const char c) {
-					return constantChar(arena, ctx->allConstants(), charType, c);
+					return constantChar(arena, allConstants, charType, c);
 				});
 				const CommonTypes* commonTypes = ctx->concretizeCtx->commonTypes;
-				return ConstantOrExpr{constantArr(
-					arena,
-					ctx->allConstants(),
-					ctx->getConcreteType_forStructInst(commonTypes->str).mustBeNonPointer(),
-					ctx->getConcreteType_forStructInst(commonTypes->_char),
-					chars)};
+				//TODO: Use ctx->concretizeCtx->strType() like we do for char
+				const ConcreteType strType = ctx->getConcreteType_forStructInst(commonTypes->str);
+				return ConstantOrExpr{makeConstantArray(ctx, strType, charType, chars)};
 			});
 	}
 }

@@ -14,6 +14,8 @@ struct Diag {
 	struct CallNoMatch {
 		const Sym funName;
 		const Opt<const Type> expectedReturnType;
+		// 0 for inferred type args
+		const size_t actualNTypeArgs;
 		const size_t actualArity;
 		// NOTE: we may have given up early and this may not be as much as actualArity
 		const Arr<const Type> actualArgTypes;
@@ -43,6 +45,7 @@ struct Diag {
 		const PathAndStorageKind to;
 	};
 	struct CommonTypesMissing {};
+	struct CreateArrNoExpectedType {};
 	struct CreateRecordByRefNoCtx {
 		const StructDecl* strukt;
 	};
@@ -80,7 +83,10 @@ struct Diag {
 		const Kind kind;
 		const PathAndStorageKind path;
 	};
-	struct FunAsLambdaCantOverload {};
+	struct FileShouldEndInNz {};
+	struct FunAsLambdaCantOverload {
+		const Sym funName;
+	};
 	struct FunAsLambdaWrongNumberTypeArgs {
 		const FunDecl* fun;
 		const size_t nProvidedTypeArgs;
@@ -119,9 +125,8 @@ struct Diag {
 			spec,
 			typeParam,
 		};
-
-		const Sym name;
 		const Kind kind;
+		const Sym name;
 	};
 	struct ParamShadowsPrevious {
 		enum class Kind {
@@ -129,6 +134,7 @@ struct Diag {
 			typeParam,
 		};
 		const Kind kind;
+		const Sym name;
 	};
 	struct PurityOfFieldWorseThanRecord {
 		const StructDecl* strukt;
@@ -195,12 +201,14 @@ private:
 		cantInferTypeArguments,
 		circularImport,
 		commonTypesMissing,
+		createArrNoExpectedType,
 		createRecordByRefNoCtx,
 		createRecordMultiLineWrongFields,
 		duplicateDeclaration,
 		duplicateImports,
 		expectedTypeIsNotALambda,
 		fileDoesNotExist,
+		fileShouldEndInNz,
 		funAsLambdaCantOverload,
 		funAsLambdaWrongNumberTypeArgs,
 		funAsLambdaWrongReturnType,
@@ -239,12 +247,14 @@ private:
 		const CantInferTypeArguments cantInferTypeArguments;
 		const CircularImport circularImport;
 		const CommonTypesMissing commonTypesMissing;
+		const CreateArrNoExpectedType createArrNoExpectedType;
 		const CreateRecordByRefNoCtx createRecordByRefNoCtx;
 		const CreateRecordMultiLineWrongFields createRecordMultiLineWrongFields;
 		const DuplicateDeclaration duplicateDeclaration;
 		const DuplicateImports duplicateImports;
 		const ExpectedTypeIsNotALambda expectedTypeIsNotALambda;
 		const FileDoesNotExist fileDoesNotExist;
+		const FileShouldEndInNz fileShouldEndInNz;
 		const FunAsLambdaCantOverload funAsLambdaCantOverload;
 		const FunAsLambdaWrongNumberTypeArgs funAsLambdaWrongNumberTypeArgs;
 		const FunAsLambdaWrongReturnType funAsLambdaWrongReturnType;
@@ -291,6 +301,8 @@ public:
 		: kind{Kind::circularImport}, circularImport{d} {}
 	explicit inline Diag(const CommonTypesMissing d)
 		: kind{Kind::commonTypesMissing}, commonTypesMissing{d} {}
+	explicit inline Diag(const CreateArrNoExpectedType d)
+		: kind{Kind::createArrNoExpectedType}, createArrNoExpectedType{d} {}
 	explicit inline Diag(const CreateRecordByRefNoCtx d)
 		: kind{Kind::createRecordByRefNoCtx}, createRecordByRefNoCtx{d} {}
 	explicit inline Diag(const CreateRecordMultiLineWrongFields d)
@@ -303,6 +315,8 @@ public:
 		: kind{Kind::expectedTypeIsNotALambda}, expectedTypeIsNotALambda{d} {}
 	explicit inline Diag(const FileDoesNotExist d)
 		: kind{Kind::fileDoesNotExist}, fileDoesNotExist{d} {}
+	explicit inline Diag(const FileShouldEndInNz d)
+		: kind{Kind::fileShouldEndInNz}, fileShouldEndInNz{d} {}
 	explicit inline Diag(const FunAsLambdaCantOverload d)
 		: kind{Kind::funAsLambdaCantOverload}, funAsLambdaCantOverload{d} {}
 	explicit inline Diag(const FunAsLambdaWrongNumberTypeArgs d)
@@ -358,15 +372,6 @@ public:
 	explicit inline Diag(const WrongNumberTypeArgsForStruct d)
 		: kind{Kind::wrongNumberTypeArgsForStruct}, wrongNumberTypeArgsForStruct{d} {}
 
-	inline const Bool isFileDoesNotExist() const {
-		return enumEq(kind, Kind::fileDoesNotExist);
-	}
-
-	inline const FileDoesNotExist asFileDoesNotExist() const {
-		assert(isFileDoesNotExist());
-		return fileDoesNotExist;
-	}
-
 	template <
 		typename CbCallMultipleMatches,
 		typename CbCallNoMatch,
@@ -376,12 +381,14 @@ public:
 		typename CbCantInferTypeArguments,
 		typename CbCircularImport,
 		typename CbCommonTypesMissing,
+		typename CbCreateArrNoExpectedType,
 		typename CbCreateRecordByRefNoCtx,
 		typename CbCreateRecordMultiLineWrongFields,
 		typename CbDuplicateDeclaration,
 		typename CbDuplicateImports,
 		typename CbExpectedTypeIsNotALambda,
 		typename CbFileDoesNotExist,
+		typename CbFileShouldEndInNz,
 		typename CbFunAsLambdaCantOverload,
 		typename CbFunAsLambdaWrongNumberTypeArgs,
 		typename CbFunAsLambdaWrongReturnType,
@@ -418,12 +425,14 @@ public:
 		CbCantInferTypeArguments cbCantInferTypeArguments,
 		CbCircularImport cbCircularImport,
 		CbCommonTypesMissing cbCommonTypesMissing,
+		CbCreateArrNoExpectedType cbCreateArrNoExpectedType,
 		CbCreateRecordByRefNoCtx cbCreateRecordByRefNoCtx,
 		CbCreateRecordMultiLineWrongFields cbCreateRecordMultiLineWrongFields,
 		CbDuplicateDeclaration cbDuplicateDeclaration,
 		CbDuplicateImports cbDuplicateImports,
 		CbExpectedTypeIsNotALambda cbExpectedTypeIsNotALambda,
 		CbFileDoesNotExist cbFileDoesNotExist,
+		CbFileShouldEndInNz cbFileShouldEndInNz,
 		CbFunAsLambdaCantOverload cbFunAsLambdaCantOverload,
 		CbFunAsLambdaWrongNumberTypeArgs cbFunAsLambdaWrongNumberTypeArgs,
 		CbFunAsLambdaWrongReturnType cbFunAsLambdaWrongReturnType,
@@ -469,6 +478,8 @@ public:
 				return cbCircularImport(circularImport);
 			case Kind::commonTypesMissing:
 				return cbCommonTypesMissing(commonTypesMissing);
+			case Kind::createArrNoExpectedType:
+				return cbCreateArrNoExpectedType(createArrNoExpectedType);
 			case Kind::createRecordByRefNoCtx:
 				return cbCreateRecordByRefNoCtx(createRecordByRefNoCtx);
 			case Kind::createRecordMultiLineWrongFields:
@@ -481,6 +492,8 @@ public:
 				return cbExpectedTypeIsNotALambda(expectedTypeIsNotALambda);
 			case Kind::fileDoesNotExist:
 				return cbFileDoesNotExist(fileDoesNotExist);
+			case Kind::fileShouldEndInNz:
+				return cbFileShouldEndInNz(fileShouldEndInNz);
 			case Kind::funAsLambdaCantOverload:
 				return cbFunAsLambdaCantOverload(funAsLambdaCantOverload);
 			case Kind::funAsLambdaWrongNumberTypeArgs:

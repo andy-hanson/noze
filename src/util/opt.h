@@ -67,3 +67,13 @@ template <typename T, typename Cb>
 inline T optOr(const Opt<T> a, const Cb cb) {
 	return has(a) ? force(a) : cb();
 }
+
+template <typename Out>
+struct mapOption {
+	template <typename In, typename Cb>
+	const Opt<Out> operator()(const Opt<In> a, const Cb cb) {
+		return has(a)
+			? some<Out>(cb(force(a)))
+			: none<Out>();
+	}
+};

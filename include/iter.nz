@@ -1,4 +1,18 @@
-import .bootstrap .cell
+import .bootstrap .cell .exceptions .number-utils
+
+
+| TODO: Depend on a spec, then move to cell.nz
+get-and-incr nat(c cell nat)
+	res = c get
+	c set: res incr
+	res
+
+cell-incr void(c cell nat)
+	c.get-and-incr drop
+
+cell-add void(c cell nat, n nat)
+	c set: c.get + n
+
 
 | TODO: ALIAS
 iterator<?t> record mut

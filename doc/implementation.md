@@ -1,4 +1,5 @@
 See [style](./style.md) for code style guidelines.
+See [developing](./developing.md) for information about building.
 
 # compiler design
 

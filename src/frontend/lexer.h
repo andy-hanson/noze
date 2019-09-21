@@ -50,6 +50,7 @@ const Bool tryTake(Lexer* lexer, const CStr c);
 void take(Lexer* lexer, const char c);
 void take(Lexer* lexer, const CStr c) ;
 
+void skipShebang(Lexer* lexer);
 void skipBlankLines(Lexer* lexer);
 
 enum class NewlineOrIndent { newline, indent };
@@ -64,6 +65,7 @@ const Opt<const int> tryTakeIndentOrDedent(Lexer* lexer);
 // NOTE: If there's a newline, it *must* be an indent.
 const Bool tryTakeIndent(Lexer* lexer);
 NewlineOrIndent tryTakeIndentAfterNewline(Lexer* lexer);
+void takeIndentAfterNewline(Lexer* lexer);
 
 // Returns # of dedents. (TODO:RENAME)
 size_t takeNewlineOrDedentAmount(Lexer* lexer);
@@ -91,6 +93,8 @@ const SymAndIsReserved takeNameAllowReserved(Lexer* lexer);
 const Sym takeName(Lexer* lexer);
 const Str takeNameAsStr(Lexer* lexer);
 const NameAndRange takeNameAndRange(Lexer* lexer);
+
+const Str takeQuotedStr(Lexer* lexer);
 
 struct ExpressionToken {
 	enum class Kind {

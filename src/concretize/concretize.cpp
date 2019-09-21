@@ -60,12 +60,12 @@ namespace {
 		if (!isArrStr(commonTypes, p0))
 			todo<void>("checkUserMainSignature doesn't take arr str");
 		if (!isFutInt32(commonTypes, ret))
-			todo<void>("checkUserMainSignature doesn't return fut int");
+			todo<void>("checkUserMainSignature doesn't return fut int32");
 	}
 
 	const FunDecl* getRtMainFun(const Program program) {
 		const Arr<const FunDecl*> mainFuns = multiDictGetAt<const Sym, const FunDecl*, compareSym>(
-			program.runtimeModule->funsMap,
+			program.runtimeMainModule->funsMap,
 			shortSymAlphaLiteral("rt-main"));
 		if (size(mainFuns) != 1) {
 			printf("%lu\n", size(mainFuns));

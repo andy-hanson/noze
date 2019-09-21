@@ -24,10 +24,13 @@ struct AllSymbols {
 
 // Ideally this would go in the implementation file, but need this for templates and constexpr functions
 namespace symImpl {
+	const u64 bitsPerAlphaChar = 6;
+	const u64 bitsPerOperatorChar = 4;
+
 	// Never returns 0
 	// (the first '0' tells us that the string is over. Note there may be no '0' if we use all space.)
 	// TODO: huffman compression could make this even better
-	inline constexpr u64 packAlphaChar(const char c) {
+	inline constexpr u64 packAlphaCharWorker(const char c) {
 		if ('a' <= c && c <= 'z')
 			return 1 + c - 'a';
 		else if ('0' <= c && c <= '9')
@@ -38,6 +41,12 @@ namespace symImpl {
 			return 1 + 26 + 10 + 1;
 		else
 			return unreachable<const u64>();
+	}
+
+	inline constexpr u64 packAlphaChar(const char c) {
+		const u64 res = packAlphaCharWorker(c);
+		assert(res < (1 << bitsPerAlphaChar));
+		return res;
 	}
 
 	inline constexpr char unpackAlphaChar(const u64 n) {
@@ -54,7 +63,8 @@ namespace symImpl {
 			return unreachable<const char>();
 	}
 
-	inline constexpr u64 packOperatorChar(const char c) {
+	inline constexpr u64 packOperatorCharWorker(const char c) {
+		// We need 0 to tell us that the string is over, so never return that.
 		switch (c) {
 			case '+':
 				return 1;
@@ -70,9 +80,17 @@ namespace symImpl {
 				return 6;
 			case '=':
 				return 7;
+			case '!':
+				return 8;
 			default:
 				return unreachable<const u64>();
 		}
+	}
+
+	inline constexpr u64 packOperatorChar(const char c) {
+		const u64 res = packOperatorCharWorker(c);
+		assert(res < (1 << bitsPerOperatorChar));
+		return res;
 	}
 
 	inline constexpr char unpackOperatorChar(const u64 n) {
@@ -91,6 +109,8 @@ namespace symImpl {
 				return '>';
 			case 7:
 				return '=';
+			case 8:
+				return '!';
 			default:
 				return unreachable<const char>();
 		}
@@ -102,7 +122,6 @@ namespace symImpl {
 
 	// Short strings leave the top 3 bits untouched.
 	const u64 shortStringAvailableBits = 64 - 3;
-	const u64 bitsPerAlphaChar = 6;
 	const u64 maxShortAlphaIdentifierSize = shortStringAvailableBits / bitsPerAlphaChar;
 	// Bit to be set when the sym is short
 	const u64 shortAlphaOrOperatorMarker = 0x8000000000000000;
@@ -114,7 +133,6 @@ namespace symImpl {
 	// 8 = b1000
 	const u64 shortAlphaIdentifierMarker = shortAlphaOrOperatorMarker | shortOrLongAlphaMarker;
 
-	const u64 bitsPerOperatorChar = 3;
 	const u64 maxShortOperatorSize = shortStringAvailableBits / bitsPerOperatorChar;
 	const u64 shortOperatorMarker = shortAlphaOrOperatorMarker | shortOrLongOperatorMarker;
 

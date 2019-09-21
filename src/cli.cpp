@@ -21,7 +21,9 @@ namespace {
 		struct Build {
 			const ProgramDirAndMain programDirAndMain;
 		};
-		struct Help {};
+		struct Help {
+			const Bool isDueToCommandParseError;
+		};
 		struct HelpBuild {};
 		struct HelpRun {};
 		// Also builds first
@@ -29,7 +31,6 @@ namespace {
 			const ProgramDirAndMain programDirAndMain;
 			const Arr<const Str> programArgs;
 		};
-		struct Test {};
 		struct Version {};
 	private:
 		enum class Kind {
@@ -48,7 +49,6 @@ namespace {
 			const HelpBuild helpBuild;
 			const HelpRun helpRun;
 			const Run run;
-			const Test test;
 			const Version version;
 		};
 	public:
@@ -57,7 +57,6 @@ namespace {
 		explicit inline Command(const HelpBuild _helpBuild) : kind{Kind::helpBuild}, helpBuild{_helpBuild} {}
 		explicit inline Command(const HelpRun _helpRun) : kind{Kind::helpRun}, helpRun{_helpRun} {}
 		explicit inline Command(const Run _run) : kind{Kind::run}, run{_run} {}
-		explicit inline Command(const Test _test) : kind{Kind::test}, test{_test} {}
 		explicit inline Command(const Version _version) : kind{Kind::version}, version{_version} {}
 
 		template <
@@ -66,7 +65,6 @@ namespace {
 			typename CbHelpBuild,
 			typename CbHelpRun,
 			typename CbRun,
-			typename CbTest,
 			typename CbVersion
 		>
 		inline auto match(
@@ -75,7 +73,6 @@ namespace {
 			CbHelpBuild cbHelpBuild,
 			CbHelpRun cbHelpRun,
 			CbRun cbRun,
-			CbTest cbTest,
 			CbVersion cbVersion
 		) const {
 			switch (kind) {
@@ -89,8 +86,6 @@ namespace {
 					return cbHelpRun(helpRun);
 				case Kind::run:
 					return cbRun(run);
-				case Kind::test:
-					return cbTest(test);
 				case Kind::version:
 					return cbVersion(version);
 				default:
@@ -130,31 +125,32 @@ namespace {
 			const ProgramDirAndMain programDirAndMain = parseProgramDirAndMain(arena, cwd, first(args));
 			if (size(args) == 1)
 				return Command{Command::Run{programDirAndMain, emptyArr<const Str>()}};
-			else if (!strEqLiteral(at(args, 1), "--"))
-				return Command{Command::HelpRun{}};
-			else
+			else if (strEqLiteral(at(args, 1), "--"))
 				return Command{Command::Run{programDirAndMain, slice(args, 2)}};
+			else
+				return Command{Command::HelpRun{}};
 		}
 	}
 
 	const Command parseCommand(Arena* arena, const AbsolutePath cwd, const Arr<const Str> args) {
 		// Parse command name
 		if (size(args) == 0)
-			return Command{Command::Help{}};
+			return Command{Command::Help{True}};
 		else {
 			const Str arg0 = first(args);
 			if (strEqLiteral(arg0, "help") || strEqLiteral(arg0, "--help"))
-				return Command{Command::Help{}};
+				return Command{Command::Help{False}};
 			else if (strEqLiteral(arg0, "version") || strEqLiteral(arg0, "--version"))
 				return Command{Command::Version{}};
 			else if (strEqLiteral(arg0, "build"))
 				return parseBuildCommand(arena, cwd, tail(args));
 			else if (strEqLiteral(arg0, "run"))
 				return parseRunCommand(arena, cwd, tail(args));
-			else if (strEqLiteral(arg0, "test"))
-				return size(args) == 1 ? Command{Command::Test{}} : Command{Command::Help{}};
+			// Allow `noze foo.nz args` to translate to `noze run foo.nz -- args`
+			else if (endsWith(arg0, strLiteral(".nz")))
+				return Command{Command::Run{parseProgramDirAndMain(arena, cwd, arg0), tail(args)}};
 			else
-				return Command{Command::Help{}};
+				return Command{Command::Help{True}};
 		}
 	}
 
@@ -173,40 +169,40 @@ namespace {
 	}
 
 	int helpBuild() {
-		printf("Command: noze build [PATH]\n");
-		printf("\tCompiles the program at [PATH] and writes to a `.cpp` and `.exe` file next to it.\n");
-		printf("\tNo options.\n");
+		printf("Command: noze build [PATH]\n"
+			"\tCompiles the program at [PATH] to a '.cpp' and executable file with the same name.\n"
+			"\tNo options.\n");
 		return 0;
 	}
 
 	int helpRun() {
-		printf("Command: noze run [PATH]\n");
-		printf("Command: noze run [PATH] -- program args\n");
-		printf("\tDoes the same as 'noze build [PATH]', then runs the '.exe' it created.\n");
-		printf("\tNo options.\n");
+		printf("Command: noze run [PATH]\n"
+			"Command: noze run [PATH] -- args\n"
+			"\tDoes the same as 'noze build [PATH]', then runs the executable it created.\n"
+			"\tNo options.\n"
+			"\tArguments after `--` will be sent to the program.");
 		return 0;
 	}
 
-	int help() {
+	int help(const Bool isDueToCommandParseError) {
+		printf("Command: noze [PATH ENDING IN '.nz'] args\n"
+			"\tSame as `noze run [PATH] -- args\n");
 		helpBuild();
 		printf("\n");
 		helpRun();
-		printf("\n");
-		printf("Command: noze test\n");
-		printf("\tCompiles and runs the test program.\n");
-		return 0;
+		return isDueToCommandParseError ? 1 : 0;
 	}
 
 	int go(const CommandLineArgs args) {
 		Arena arena {};
 		const AbsolutePath nozeDir = getNozeDirectory(args.pathToThisExecutable);
-		const Command command = parseCommand(&arena, args.cwd, args.args);
+		const Command command = parseCommand(&arena, getCwd(&arena), args.args);
 		return command.match(
 			[&](const Command::Build b) {
 				return build(nozeDir, b.programDirAndMain.programDir, b.programDirAndMain.mainPath, args.environ);
 			},
-			[&](const Command::Help) {
-				return help();
+			[&](const Command::Help c) {
+				return help(c.isDueToCommandParseError);
 			},
 			[&](const Command::HelpBuild) {
 				return helpBuild();
@@ -222,14 +218,6 @@ namespace {
 					r.programArgs,
 					args.environ);
 			},
-			[&](const Command::Test) {
-				return buildAndRun(
-					nozeDir,
-					childPath(&arena, nozeDir, strLiteral("test")),
-					rootPath(&arena, strLiteral("a.nz")),
-					emptyArr<const Str>(),
-					args.environ);
-			},
 			[&](const Command::Version) {
 				printf("Approximately 0.000\n");
 				return 0;
@@ -239,5 +227,5 @@ namespace {
 
 int cli(const int argc, CStr const* const argv){
 	Arena arena {};
-	return go(parseArgs(&arena, argc, argv));
+	return go(parseCommandLineArgs(&arena, argc, argv));
 }

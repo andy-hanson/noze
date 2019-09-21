@@ -161,8 +161,15 @@ namespace {
 	}
 
 	void writeCallNoMatch(Writer* writer, const FilesInfo fi, const Diag::CallNoMatch d) {
+		const Bool someCandidateHasCorrectNTypeArgs = _or(
+			d.actualNTypeArgs == 0,
+			exists(d.allCandidates, [&](const CalledDecl c) {
+				return eq(nTypeParams(c), d.actualNTypeArgs);
+			}));
 		const Bool someCandidateHasCorrectArity = exists(d.allCandidates, [&](const CalledDecl c) {
-			return eq(arity(c), d.actualArity);
+			return _and(
+				_or(d.actualNTypeArgs == 0, eq(nTypeParams(c), d.actualNTypeArgs)),
+				eq(arity(c), d.actualArity));
 		});
 
 		if (isEmpty(d.allCandidates)) {
@@ -184,7 +191,12 @@ namespace {
 			writeStatic(writer, "there are functions named ");
 			writeName(writer, d.funName);
 			writeStatic(writer, ", but none takes ");
-			writeNat(writer, d.actualArity);
+			if (someCandidateHasCorrectNTypeArgs) {
+				writeNat(writer, d.actualArity);
+			} else {
+				writeNat(writer, d.actualNTypeArgs);
+				writeStatic(writer, " type");
+			}
 			writeStatic(writer, " arguments. candidates:");
 			writeCalledDecls(writer, fi, d.allCandidates);
 		} else {
@@ -269,13 +281,16 @@ namespace {
 			[&](const Diag::CommonTypesMissing) {
 				writeStatic(writer, "common types are missing from 'include.nz'");
 			},
+			[&](const Diag::CreateArrNoExpectedType) {
+				writeStatic(writer, "can't infer element type of array, please provide a type argument to 'new-arr'");
+			},
 			[&](const Diag::CreateRecordByRefNoCtx d) {
 				writeStatic(writer, "the current function is 'noctx' and record ");
 				writeName(writer, d.strukt->name);
 				writeStatic(writer, " is not marked 'by-val'; can't allocate");
 			},
 			[&](const Diag::CreateRecordMultiLineWrongFields d) {
-				writeStatic(writer, "didn't get expected fields of");
+				writeStatic(writer, "didn't get expected fields of ");
 				writeName(writer, d.decl->name);
 				writeChar(writer, ':');
 				Arena temp {};
@@ -334,8 +349,13 @@ namespace {
 						assert(0);
 				}
 			},
-			[&](const Diag::FunAsLambdaCantOverload) {
-				writeStatic(writer, "fun has multiple overloads, can't convert to lambda");
+			[&](const Diag::FileShouldEndInNz) {
+				writeStatic(writer, "file extension must be '.nz'");
+			},
+			[&](const Diag::FunAsLambdaCantOverload d) {
+				writeStatic(writer, "there are multiple functions in scope named ");
+				writeName(writer, d.funName);
+				writeStatic(writer, ", and overloading is not yet implemented for fun-as-lambda");
 			},
 			[&](const Diag::FunAsLambdaWrongNumberTypeArgs d) {
 				writeName(writer, d.fun->name());
@@ -377,8 +397,8 @@ namespace {
 				});
 			},
 			[&](const Diag::MatchOnNonUnion d) {
+				writeStatic(writer, "can't match on non-union type ");
 				writeType(writer, d.type);
-				writeStatic(writer, " is not a union type");
 			},
 			[&](const Diag::MutFieldNotAllowed d) {
 				const char* message = [&]() {
@@ -410,8 +430,19 @@ namespace {
 				writeStatic(writer, " name not found: ");
 				writeName(writer, d.name);
 			},
-			[&](const Diag::ParamShadowsPrevious) {
-				todo<void>("print paramshadowsprevious");
+			[&](const Diag::ParamShadowsPrevious d) {
+				const char* message = [&]() {
+					switch (d.kind) {
+						case Diag::ParamShadowsPrevious::Kind::param:
+							return "there is already a parameter named ";
+						case Diag::ParamShadowsPrevious::Kind::typeParam:
+							return "there is already a type parameter named ";
+						default:
+							assert(0);
+					}
+				}();
+				writeStatic(writer, message);
+				writeName(writer, d.name);
 			},
 			[&](const ParseDiag pd) {
 				writeParseDiag(writer, pd);
@@ -537,5 +568,5 @@ void printDiagnostics(const Diagnostics diagnostics) {
 		for (const Diagnostic d : group)
 			showDiagnostic(&writer, diagnostics.filesInfo, d);
 
-	printf("%s\n", finishWriterToCStr(&writer));
+	fprintf(stderr, "%s", finishWriterToCStr(&writer));
 }

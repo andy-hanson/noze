@@ -22,12 +22,10 @@ namespace {
 }
 
 struct AllConstants {
-	// element type * args -> id
-	// When we're done, we'll invert this dict so they can be emitted.
-	size_t nextArrId = 0;
-	MutDict<const ConstantArrKey, const Constant*, compareConstantArrKey> arrays {};
+	size_t nextArrayBackingId = 0;
+	MutDict<const ConstantArrayBackingKey, const ConstantArrayBacking*, compareConstantArrayBackingKey> arrays {};
 	// Dict from array to an array of each pointer inside it
-	MutDict<const Constant*, Arr<const Constant*>, comparePtr<const Constant>> arrayToPtrs {};
+	MutDict<const ConstantArrayBacking*, Arr<const Constant*>, comparePtr<const ConstantArrayBacking>> arrayToPtrs {};
 	size_t nextPtrId = 0;
 	Late<const Constant*> _false {};
 	Late<const Constant*> _true {};
@@ -74,25 +72,24 @@ namespace {
 	}
 }
 
-const Constant* constantArr(
+
+const ConstantArrayBacking* constantArrayBacking(
 	Arena* arena,
 	AllConstants* allConstants,
-	const ConcreteStruct* arrayType,
 	const ConcreteType elementType,
 	const Arr<const Constant*> elements
 ) {
-	const ConstantArrKey key = ConstantArrKey{elementType, elements};
-	return getOrAdd<const ConstantArrKey, const Constant*, compareConstantArrKey>{}(
+	const ConstantArrayBackingKey key = ConstantArrayBackingKey{elementType, elements};
+	return getOrAdd<const ConstantArrayBackingKey, const ConstantArrayBacking*, compareConstantArrayBackingKey>{}(
 		arena,
 		&allConstants->arrays,
 		key,
 		[&]() {
-			return newConstant(
+			return nu<ConstantArrayBacking>{}(
 				arena,
-				allConstants,
-				concreteType_fromStruct(arrayType),
-				ConstantKind{ConstantKind::Array{key}},
-				Nat64{allConstants->nextArrId++});
+				elements,
+				elementType,
+				Nat64{allConstants->nextArrayBackingId++});
 		});
 }
 
@@ -276,29 +273,27 @@ const Constant* constantPtr(
 	Arena* arena,
 	AllConstants* allConstants,
 	const ConcreteType pointerType,
-	const Constant* array,
-	const Nat64 index
+	const ConstantArrayBacking* array,
+	const size_t index
 ) {
 	assertIsPointer(pointerType);
-	const ConstantKind::Array a = array->kind.asArray();
-	// Pointer may point to the end of the array
-	const size_t nPtrs = a.size() + 1;
-	assert(index.value < nPtrs);
+	const size_t nPtrs = array->size();
+	assert(index < nPtrs);
 	const Arr<const Constant*> ptrs = getOrAdd<
-		const Constant*,
+		const ConstantArrayBacking*,
 		Arr<const Constant*>,
-		comparePtr<const Constant>
+		comparePtr<const ConstantArrayBacking>
 	>{}(arena, &allConstants->arrayToPtrs, array, [&]() {
 		return fillArr<const Constant*>{}(arena, nPtrs, [&](const size_t idx) {
 			return newConstant(
 				arena,
 				allConstants,
 				pointerType,
-				ConstantKind{ConstantKind::Ptr{array, Nat64{idx}}},
+				ConstantKind{ConstantKind::Ptr{array, idx}},
 				Nat64{allConstants->nextPtrId++});
 		});
 	});
-	return at(ptrs, index.value);
+	return at(ptrs, index);
 }
 
 const Constant* constantRecord(

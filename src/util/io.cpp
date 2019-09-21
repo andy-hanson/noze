@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h> // O_RDONLY
 #include <spawn.h> // posix_spawn
+#include <string.h> // strerror
 #include <sys/stat.h> // stat
 #include <sys/wait.h> // waitpid
 #include <unistd.h>
@@ -35,13 +36,16 @@ namespace {
 const Bool fileExists(const AbsolutePath path) {
 	Arena tempArena {};
 	struct stat s;
-	const int res = stat(pathToCStr(&tempArena, path), &s);
+	const char* pathCStr = pathToCStr(&tempArena, path);
+	const int res = stat(pathCStr, &s);
 	if (res == 0)
 		return True;
 	else if (res == ENOENT)
 		return False;
-	else
+	else {
+		fprintf(stderr, "fileExists of %s failed\n", pathCStr);
 		return todo<const Bool>("fileExists failed");
+	}
 }
 
 const Opt<const NulTerminatedStr> tryReadFile(Arena* arena, const AbsolutePath path) {
@@ -123,7 +127,7 @@ namespace {
 		}
 
 		pid_t pid;
-		int status = posix_spawn(
+		const int spawnStatus = posix_spawn(
 			&pid,
 			executablePath,
 			nullptr,
@@ -131,14 +135,18 @@ namespace {
 			// https://stackoverflow.com/questions/50596439/can-string-literals-be-passed-in-posix-spawns-argv
 			const_cast<char* const*>(args),
 			const_cast<char* const*>(environ));
-		if (status == 0) {
-			const int resPid = waitpid(pid, &status, 0);
+		if (spawnStatus == 0) {
+			int waitStatus;
+			const int resPid = waitpid(pid, &waitStatus, 0);
 			assert(resPid == pid);
-			if (!WIFEXITED(status))
-				todo<void>("process exited non-normally");
-
-			const int exitCode = WEXITSTATUS(status); // only valid if WIFEXITED
-			return exitCode;
+			if (WIFEXITED(waitStatus))
+				return WEXITSTATUS(waitStatus); // only valid if WIFEXITED
+			else {
+				if (WIFSIGNALED(waitStatus))
+					return todo<int>("process exited with signal");
+				else
+					return todo<int>("process exited non-normally");
+			}
 		} else
 			return todo<int>("posix_spawn failed");
 	}
@@ -156,66 +164,87 @@ namespace {
 		return KeyValuePair<const Str, const Str>{key, value};
 	}
 
-	const AbsolutePath getCwd(Arena* arena) {
-		const size_t maxSize = 256;
-		char buff[maxSize];
-		const CStr b = getcwd(buff, maxSize);
-		if (b == nullptr) {
-			return todo<const AbsolutePath>("getcwd failed");
-		} else {
-			assert(b == buff);
-			return parseAbsolutePath(arena, copyCStrToStr(arena, buff));
-		}
+	const size_t maxPathSize = 1024;
+
+	const AbsolutePath getPathToThisExecutable(Arena* arena) {
+		char buff[maxPathSize];
+		ssize_t size = readlink("/proc/self/exe", buff, maxPathSize);
+		if (size < 0)
+			todo<void>("posix error");
+		return parseAbsolutePath(arena, copyStr(arena, Str{buff, static_cast<const size_t>(size)}));
 	}
 
-	const AbsolutePath getPathToThisExecutable(Arena* arena, const AbsolutePath cwd, const Str relativePath) {
-		const AbsolutePath res = parseAbsoluteOrRelPath(arena, relativePath).match(
-			[&](const AbsolutePath p) {
-				return p;
-			},
-			[&](const RelPath r) {
-				return forceOrTodo(resolvePath(arena, cwd, r));
-			});
-		assert(fileExists(res));
-		return res;
+	// Return should be const, but some posix functions aren't marked that way
+	MutCStr const* convertArgs(Arena* arena, const char* executableCStr, const Arr<const Str> args) {
+		ArrBuilder<MutCStr> cArgs {};
+		// Make a mutable copy
+		MutCStr executableCopy = const_cast<char*>(map<char>{}(
+			arena,
+			nulTerminatedStrLiteral(executableCStr).str,
+			[](const char c) { return c; }).begin());
+		add<MutCStr>(arena, &cArgs, executableCopy);
+		for (const Str arg : args)
+			add<MutCStr>(arena, &cArgs, const_cast<char*>(strToCStr(arena, arg)));
+		add<MutCStr>(arena, &cArgs, nullptr);
+		return finishArr(&cArgs).begin();
+	}
+
+	MutCStr const* convertEnviron(Arena* arena, const Environ environ) {
+		ArrBuilder<MutCStr> cEnviron {};
+		for (const KeyValuePair<const Str, const Str> pair : environ)
+			add<MutCStr>(
+				arena,
+				&cEnviron,
+				const_cast<char*>(strToCStr(arena, cat(arena, pair.key, strLiteral("="), pair.value))));
+		add<MutCStr>(arena, &cEnviron, nullptr);
+		return finishArr(&cEnviron).begin();
 	}
 }
 
 int spawnAndWaitSync(const AbsolutePath executable, const Arr<const Str> args, const Environ environ) {
 	Arena tempArena {};
 	const CStr executableCStr = pathToCStr(&tempArena, executable);
-
-	CStr const* const cArgs = [&]() {
-		ArrBuilder<const CStr> cArgs {};
-		add<const CStr>(&tempArena, &cArgs, executableCStr);
-		for (const Str arg : args)
-			add<const CStr>(&tempArena, &cArgs, strToCStr(&tempArena, arg));
-		add<const CStr>(&tempArena, &cArgs, nullptr);
-		return finishArr(&cArgs).begin();
-	}();
-
-	CStr const* const cEnviron = [&]() {
-		ArrBuilder<const CStr> cEnviron {};
-		for (const KeyValuePair<const Str, const Str> pair : environ)
-			add<const CStr>(
-				&tempArena,
-				&cEnviron,
-				strToCStr(&tempArena, cat(&tempArena, pair.key, strLiteral("="), pair.value)));
-		add<const CStr>(&tempArena, &cEnviron, nullptr);
-		return finishArr(&cEnviron).begin();
-	}();
-
-	return spawnAndWaitSync(executableCStr, cArgs, cEnviron);
+	return spawnAndWaitSync(
+		executableCStr,
+		convertArgs(&tempArena, executableCStr, args),
+		convertEnviron(&tempArena, environ));
 }
 
-const CommandLineArgs parseArgs(Arena* arena, const int argc, CStr const* const argv) {
+void replaceCurrentProcess(
+	const AbsolutePath executable,
+	const Arr<const Str> args,
+	const Environ environ
+) {
+	Arena tempArena {};
+	const CStr executableCStr = pathToCStr(&tempArena, executable);
+	const int err = execvpe(
+		executableCStr,
+		convertArgs(&tempArena, executableCStr, args),
+		convertEnviron(&tempArena, environ));
+	// 'execvpe' only returns if we failed to create the process (maybe executable does not exist?)
+	assert(err == -1);
+	fprintf(stderr, "Failed to launch %s: error %s\n", executableCStr, strerror(errno));
+	assert(0);
+}
+
+const AbsolutePath getCwd(Arena* arena) {
+	char buff[maxPathSize];
+	const CStr b = getcwd(buff, maxPathSize);
+	if (b == nullptr)
+		return todo<const AbsolutePath>("getcwd failed");
+	else {
+		assert(b == buff);
+		return parseAbsolutePath(arena, copyCStrToStr(arena, buff));
+	}
+}
+
+const CommandLineArgs parseCommandLineArgs(Arena* arena, const int argc, CStr const* const argv) {
 	const Arr<const CStr> allArgs = Arr<const CStr>{argv, safeIntToSizeT(argc)};
 	const Arr<const Str> args = map<const Str>{}(arena, allArgs, [&](const CStr arg) {
 		return strLiteral(arg);
 	});
-	const AbsolutePath cwd = getCwd(arena);
-	// Take the tail because the first one is the executable
-	return CommandLineArgs{cwd, getPathToThisExecutable(arena, cwd, first(args)), tail(args), getEnviron(arena)};
+	// Take the tail because the first one is 'noze'
+	return CommandLineArgs{getPathToThisExecutable(arena), tail(args), getEnviron(arena)};
 }
 
 const Environ getEnviron(Arena* arena) {

@@ -109,14 +109,23 @@ namespace {
 			case shortSymAlphaLiteralValue("as"):
 				return _operator(BuiltinFunKind::as);
 			case shortSymAlphaLiteralValue("as-any-ptr"):
-				return _operator(BuiltinFunKind::asAnyPtr);
+				return _operator(BuiltinFunKind::asAnyPtr, True);
 			case shortSymAlphaLiteralValue("as-ref"):
-				return _operator(BuiltinFunKind::asRef);
+				// TODO: actually, this should be specializable in some cases.
+				// Constant arr<by-val<?t>>, get ptr, do as-ref, it should be constant
+				return _operator(BuiltinFunKind::asRef, True);
 			case shortSymAlphaLiteralValue("bits-and"):
 				return isNat16(rt) ? _operator(BuiltinFunKind::bitwiseAndNat16)
 					: isNat32(rt) ? _operator(BuiltinFunKind::bitwiseAndNat32)
 					: isNat64(rt) ? _operator(BuiltinFunKind::bitwiseAndNat64)
+					: isInt16(rt) ? _operator(BuiltinFunKind::bitwiseAndInt16)
+					: isInt32(rt) ? _operator(BuiltinFunKind::bitwiseAndInt32)
+					: isInt64(rt) ? _operator(BuiltinFunKind::bitwiseAndInt64)
 					: no;
+			case shortSymAlphaLiteralValue("bit-lshift"):
+				return isInt32(rt) ? _operator(BuiltinFunKind::bitShiftLeftInt32) : no;
+			case shortSymAlphaLiteralValue("bit-rshift"):
+				return isInt32(rt) ? _operator(BuiltinFunKind::bitShiftRightInt32) : no;
 			case shortSymAlphaLiteralValue("call"):
 				return isSomeFunPtr(p0) ? _operator(BuiltinFunKind::callFunPtr) : no;
 			case shortSymAlphaLiteralValue("deref"):
@@ -193,7 +202,10 @@ namespace {
 					: isNat64(rt) ? _operator(BuiltinFunKind::wrapSubNat64)
 					: no;
 			case shortSymAlphaLiteralValue("wrap-mul"):
-				return isInt64(rt) ? _operator(BuiltinFunKind::wrapMulInt64)
+				return isInt16(rt) ? _operator(BuiltinFunKind::wrapMulInt16)
+					: isInt32(rt) ? _operator(BuiltinFunKind::wrapMulInt32)
+					: isInt64(rt) ? _operator(BuiltinFunKind::wrapMulInt64)
+					: isInt16(rt) ? _operator(BuiltinFunKind::wrapMulNat16)
 					: isNat32(rt) ? _operator(BuiltinFunKind::wrapMulNat32)
 					: isNat64(rt) ? _operator(BuiltinFunKind::wrapMulNat64)
 					: no;
@@ -215,8 +227,14 @@ namespace {
 					return constant(BuiltinFunKind::isReferenceType);
 				else if (symEqLongAlphaLiteral(name, "unsafe-to-int"))
 					return isNat64(p0) ? _operator(BuiltinFunKind::unsafeNat64ToInt64) : no;
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-int16"))
+					return isInt64(p0) ? _operator(BuiltinFunKind::unsafeInt64ToInt16) : no;
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-int32"))
+					return isInt64(p0) ? _operator(BuiltinFunKind::unsafeInt64ToInt32) : no;
 				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat"))
 					return isInt64(p0) ? _operator(BuiltinFunKind::unsafeInt64ToNat64) : no;
+				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat16"))
+					return isNat64(p0) ? _operator(BuiltinFunKind::unsafeNat64ToNat16) : no;
 				else if (symEqLongAlphaLiteral(name, "unsafe-to-nat32"))
 					return isNat64(p0) ? _operator(BuiltinFunKind::unsafeNat64ToNat32) : no;
 				else

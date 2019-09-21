@@ -106,7 +106,9 @@ int buildAndRun(
 ) {
 	Arena exePathArena {};
 	const Opt<const AbsolutePath> exePath = buildWorker(&exePathArena, nozeDir, programDir, mainPath, environ);
-	return has(exePath)
-		? spawnAndWaitSync(force(exePath), programArgs, environ)
-		: 1;
+	if (has(exePath)) {
+		replaceCurrentProcess(force(exePath), programArgs, environ);
+		return unreachable<int>();
+	} else
+		return 1;
 }

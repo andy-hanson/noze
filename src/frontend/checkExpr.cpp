@@ -67,14 +67,14 @@ namespace {
 		const SourceRange range,
 		const CreateArrAst ast, Expected* expected
 	) {
-		const ArrExpectedType aet = [&]() {
+		const Opt<const ArrExpectedType> opAet = [&]() {
 			if (has(ast.elementType)) {
 				const Type ta = typeFromAst(ctx, force(ast.elementType));
 				const StructInst* arrType = instantiateStructNeverDelay(
 					ctx->arena(),
 					ctx->commonTypes->arr,
 					arrLiteral<const Type>(ctx->arena(), { ta }));
-				return ArrExpectedType{False, arrType, ta};
+				return some<const ArrExpectedType>(ArrExpectedType{False, arrType, ta});
 			} else {
 				const Opt<const Type> opT = tryGetDeeplyInstantiatedType(ctx->arena(), expected);
 				if (has(opT)) {
@@ -82,20 +82,26 @@ namespace {
 					if (t.isStructInst()) {
 						const StructInst* si = t.asStructInst();
 						if (ptrEquals(si->decl, ctx->commonTypes->arr))
-							return ArrExpectedType{True, si, only<const Type>(si->typeArgs)};
+							return some<const ArrExpectedType>(
+								ArrExpectedType{True, si, only<const Type>(si->typeArgs)});
 					}
 				}
-				return todo<const ArrExpectedType>("can't get expected element type for new-arr");
+				ctx->addDiag(range, Diag{Diag::CreateArrNoExpectedType{}});
+				return none<const ArrExpectedType>();
 			}
 		}();
 
-		const Arr<const Expr> args = map<const Expr>{}(ctx->arena(), ast.args, [&](const ExprAst it) {
-			return checkAndExpect(ctx, it, aet.elementType);
-		});
-		const Expr expr = Expr{range, Expr::CreateArr{aet.arrType, args}};
-		return aet.isFromExpected
-			? CheckedExpr{expr}
-			: check(ctx, expected, Type{aet.arrType}, expr);
+		if (has(opAet)) {
+			const ArrExpectedType aet = force(opAet);
+			const Arr<const Expr> args = map<const Expr>{}(ctx->arena(), ast.args, [&](const ExprAst it) {
+				return checkAndExpect(ctx, it, aet.elementType);
+			});
+			const Expr expr = Expr{range, Expr::CreateArr{aet.arrType, args}};
+			return aet.isFromExpected
+				? CheckedExpr{expr}
+				: check(ctx, expected, Type{aet.arrType}, expr);
+		} else
+			return bogusWithoutChangingExpected(expected, range);
 	}
 
 	struct RecordAndIsBuiltinByVal {
@@ -295,7 +301,28 @@ namespace {
 		}
 	}
 
-	const Opt<const FunDecl*> getOnlyFunInScope(ExprCtx* ctx, const SourceRange range, const Sym funName) {
+	const Diag callNoMatchFromExpectedLambdaType(
+		const Sym funName,
+		const ExpectedLambdaType et,
+		const size_t nTypeArgs,
+		const Arr<const CalledDecl> candidates
+	) {
+		return Diag{Diag::CallNoMatch{
+			funName,
+			some<const Type>(et.nonInstantiatedPossiblyFutReturnType),
+			nTypeArgs,
+			size(et.paramTypes),
+			et.paramTypes,
+			candidates}};
+	}
+
+	const Opt<const FunDecl*> getOnlyFunInScope(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const Sym funName,
+		const ExpectedLambdaType et,
+		const size_t nTypeArgs
+	) {
 		const Arr<const FunDecl*> funsInScope = [&]() {
 			ArrBuilder<const FunDecl*> funsInScopeBuilder {};
 			eachFunInScope(ctx, funName, [&](const CalledDecl called) {
@@ -312,7 +339,9 @@ namespace {
 
 		//TODO: overload resolution. For now, requires that only 1 fun exists.
 		if (size(funsInScope) != 1) {
-			ctx->addDiag(range, Diag{Diag::FunAsLambdaCantOverload{}});
+			ctx->addDiag(range, size(funsInScope) == 0
+				? callNoMatchFromExpectedLambdaType(funName, et, nTypeArgs, emptyArr<const CalledDecl>())
+				: Diag{Diag::FunAsLambdaCantOverload{funName}});
 			return none<const FunDecl*>();
 		} else
 			return some<const FunDecl*>(only(funsInScope));
@@ -329,7 +358,7 @@ namespace {
 			return bogus(expected, range);
 		const ExpectedLambdaType et = force(opEt);
 
-		const Opt<const FunDecl*> opFunDecl = getOnlyFunInScope(ctx, range, ast.funName);
+		const Opt<const FunDecl*> opFunDecl = getOnlyFunInScope(ctx, range, ast.funName, et, size(ast.typeArgs));
 		if (!has(opFunDecl))
 			return bogus(expected, range);
 		const FunDecl* funDecl = force(opFunDecl);
@@ -365,8 +394,14 @@ namespace {
 		if (et.kind == FunKind::ptr && !funInst->noCtx())
 			todo<void>("fun-as-lambda for fun-ptr must take a noctx fun");
 
-		if (size(et.paramTypes) != arity(funInst))
-			todo<void>("checkFunAsLambda -- arity doesn't match");
+		if (size(et.paramTypes) != arity(funInst)) {
+			ctx->addDiag(range, callNoMatchFromExpectedLambdaType(
+				ast.funName,
+				et,
+				size(ast.typeArgs),
+				arrLiteral<const CalledDecl>(ctx->arena(), { CalledDecl{funDecl} })));
+			return bogus(expected, range);
+		}
 
 		zip(et.paramTypes, funInst->params(), [&](const Type paramType, const Param param) {
 			if (!typeEquals(paramType, param.type))
@@ -487,23 +522,29 @@ namespace {
 			return checkIdentifierCall(ctx, range, name, expected);
 	}
 
-	const CheckedExpr checkNoCallLiteral(ExprCtx* ctx, const SourceRange range, const Str literal, Expected* expected) {
+	const CheckedExpr checkLiteralInner(
+		ExprCtx* ctx,
+		const SourceRange range,
+		const LiteralInnerAst ast,
+		Expected* expected
+	) {
 		return check(
 			ctx,
 			expected,
 			Type{ctx->commonTypes->str},
-			Expr{range, Expr::StringLiteral{copyStr(ctx->arena(), literal)}});
+			Expr{range, Expr::StringLiteral{copyStr(ctx->arena(), ast.literal)}});
 	}
 
 	const CheckedExpr checkLiteral(ExprCtx* ctx, const SourceRange range, const LiteralAst ast, Expected* expected) {
+		const LiteralInnerAst inner = LiteralInnerAst{ast.kind, ast.literal};
 		if (isExpectingString(expected, ctx->commonTypes->str) ||
 			(!hasExpected(expected) && ast.kind == LiteralAst::Kind::string))
-			return checkNoCallLiteral(ctx, range, ast.literal, expected);
+			return checkLiteralInner(ctx, range, inner, expected);
 		else {
 			const CallAst call = CallAst{
 				shortSymAlphaLiteral("literal"),
 				emptyArr<const TypeAst>(),
-				arrLiteral<const ExprAst>(ctx->arena(), { ExprAst{range, ExprAstKind{ast}} })};
+				arrLiteral<const ExprAst>(ctx->arena(), { ExprAst{range, ExprAstKind{inner}} })};
 			return checkCall(ctx, range, call, expected);
 		}
 	}
@@ -775,6 +816,9 @@ namespace {
 			},
 			[&](const LiteralAst a) {
 				return checkLiteral(ctx, range, a, expected);
+			},
+			[&](const LiteralInnerAst a) {
+				return checkLiteralInner(ctx, range, a, expected);
 			},
 			[&](const MatchAst a) {
 				return checkMatch(ctx, range, a, expected);

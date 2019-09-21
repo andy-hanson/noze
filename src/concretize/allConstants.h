@@ -6,10 +6,9 @@ struct AllConstants;
 
 AllConstants* newAllConstants(Arena* arena);
 
-const Constant* constantArr(
+const ConstantArrayBacking* constantArrayBacking(
 	Arena* arena,
 	AllConstants* allConstants,
-	const ConcreteStruct* arrayType,
 	const ConcreteType elementType,
 	const Arr<const Constant*> elements);
 const Constant* constantBool(Arena* arena, AllConstants* allConstants, const ConcreteType boolType, const Bool value);
@@ -55,8 +54,8 @@ const Constant* constantPtr(
 	Arena* arena,
 	AllConstants* allConstants,
 	const ConcreteType pointerType,
-	const Constant* array,
-	const Nat64 index);
+	const ConstantArrayBacking* array,
+	const size_t index);
 const Constant* constantRecord(
 	Arena* arena,
 	AllConstants* allConstants,

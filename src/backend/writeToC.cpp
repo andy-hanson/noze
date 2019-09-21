@@ -28,8 +28,14 @@ namespace {
 	}
 
 	void writeCastToType(Writer* writer, const ConcreteType type) {
-		writeStatic(writer, "(");
+		writeChar(writer, '(');
 		writeType(writer, type);
+		writeStatic(writer, ") ");
+	}
+
+	void writeCastToValueType(Writer* writer, const ConcreteStruct* strukt) {
+		writeChar(writer, '(');
+		writeValueType(writer, strukt);
 		writeStatic(writer, ") ");
 	}
 
@@ -283,12 +289,6 @@ namespace {
 	}
 
 	void writeConstantReference(Writer* writer, const Constant* c, const Bool isInsideConstant) {
-		auto writeRef = [&](const CStr s) {
-			writeStatic(writer, "_constant");
-			writeStatic(writer, s);
-			writeNat(writer, c->id);
-		};
-
 		auto maybeWriteCast = [&]() -> void {
 			if (!isInsideConstant) {
 				writeChar(writer, '(');
@@ -298,10 +298,6 @@ namespace {
 		};
 
 		c->kind.match(
-			[&](const ConstantKind::Array) {
-				maybeWriteCast();
-				writeRef("Arr");
-			},
 			[&](const Bool b) {
 				writeStatic(writer, b ? "1" : "0");
 			},
@@ -379,6 +375,7 @@ namespace {
 	struct WrittenConstants {
 		Arena arena {};
 		MutSet<const Constant*, comparePtr<const Constant>> written {};
+		MutSet<const ConstantArrayBacking*, comparePtr<const ConstantArrayBacking>> writtenArrayBackings {};
 	};
 
 	void ensureWrittenConstantDecl(Writer* writer, WrittenConstants* written, const Constant* c);
@@ -388,51 +385,50 @@ namespace {
 			ensureWrittenConstantDecl(writer, written, e);
 	}
 
+	const Bool isBuiltinStruct(const ConcreteStruct* s, const BuiltinStructKind kind) {
+		return _and(
+			s->body().isBuiltin(),
+			s->body().asBuiltin().info.kind == kind);
+	}
+
+	//TODO:MOVE
+	const Bool isChar(const ConcreteType t) {
+		return _and(
+			!t.isPointer,
+			isBuiltinStruct(t.strukt, BuiltinStructKind::_char));
+	}
+
+	void writeConstantArrayBacking(Writer* writer, WrittenConstants* written, const ConstantArrayBacking* a) {
+		// static nat64 _constantArrBacking123[3] = {1, 2, 3};
+		if (!isEmpty(a->elements)) {
+			ensureWrittenConstantDecls(writer, written, a->elements);
+			const Bool isStr = isChar(a->elementType);
+			writeStatic(writer, "static ");
+			writeType(writer, a->elementType);
+			writeStatic(writer, " _constantArrBacking");
+			writeNat(writer, a->id);
+			writeChar(writer, '[');
+			writeNat(writer, a->size());
+			writeStatic(writer, "] = ");
+			if (isStr)
+				writeQuotedString(writer, a->elements);
+			else {
+				writeChar(writer, '{');
+				writeConstantReferencesWithCommas(writer, a->elements);
+				writeChar(writer, '}');
+			}
+			writeStatic(writer, ";\n");
+		}
+	}
+
+	void ensureWrittenConstantArrayBacking(Writer* writer, WrittenConstants* written, const ConstantArrayBacking* a) {
+		if (tryAddToMutSet(&written->arena, &written->writtenArrayBackings, a))
+			writeConstantArrayBacking(writer, written, a);
+	}
+
 	void writeConstantDecl(Writer* writer, WrittenConstants* written, const Constant* c) {
 		const ConcreteType type = c->type();
 		c->kind.match(
-			[&](const ConstantKind::Array a) {
-				// static nat64 _constantArrBacking123[3] = {1, 2, 3};
-				// static arr_nat64 _constantArr123 = arr_nat64{3, _constantArrBacking123};
-
-				// Strings are special:
-				// static arr_char _constantArr123 = arr_char{5, const_cast<char*>("hello")};
-
-				ensureWrittenConstantDecls(writer, written, a.elements());
-
-				const size_t size = a.size();
-				const Bool isStr = first(a.elements())->kind.isChar();
-				const Nat64 id = c->id;
-				if (size != 0) {
-					writeStatic(writer, "static ");
-					writeType(writer, a.elementType());
-					writeStatic(writer, " _constantArrBacking");
-					writeNat(writer, id);
-					writeChar(writer, '[');
-					writeNat(writer, size);
-					writeStatic(writer, "] = ");
-					if (isStr)
-						writeQuotedString(writer, a.elements());
-					else {
-						writeChar(writer, '{');
-						writeConstantReferencesWithCommas(writer, a.elements());
-						writeChar(writer, '}');
-					}
-					writeStatic(writer, ";\n");
-				}
-
-				writeStatic(writer, "#define ");
-				writeStatic(writer, " _constantArr");
-				writeNat(writer, id);
-				// NOTE: we can't have a cast to the type here, because that causes it to be non-constant apparently.
-				//writeStatic(writer, " (");
-				//writeValueType(writer, type);
-				writeStatic(writer, " { ");
-				writeNat(writer, size);
-				writeStatic(writer, ", _constantArrBacking");
-				writeNat(writer, id);
-				writeStatic(writer, " }\n");
-			},
 			[](const Bool) {},
 			[](const char) {},
 			[](const ConstantKind::FunPtr) {},
@@ -446,7 +442,7 @@ namespace {
 			[](const Nat64) {},
 			[](const ConstantKind::Null) {},
 			[&](const ConstantKind::Ptr p) {
-				ensureWrittenConstantDecl(writer, written, p.array);
+				ensureWrittenConstantArrayBacking(writer, written, p.array);
 			},
 			[&](const ConstantKind::Record r) {
 				ensureWrittenConstantDecls(writer, written, r.args);
@@ -464,8 +460,9 @@ namespace {
 				// For a by-ref type: use 'static' variable.
 				// For a by-val type: use a define
 				if (type.isPointer) {
+					// Make a by-value global, and referencing the constant will use `&foo`
 					writeStatic(writer, "static ");
-					writeType(writer, r.type);
+					writeValueType(writer, r.type.strukt);
 					writeChar(writer, ' ');
 					writeConstantRecordName(writer, c, r.type);
 					writeStatic(writer, " = ");
@@ -611,11 +608,13 @@ namespace {
 
 		auto binaryOperatorWorker = [&](const Str _operator) -> void {
 			assert(size(e.args) == 2);
+			writeChar(writer, '(');
 			writeArg(0);
-			writeStatic(writer, " ");
+			writeChar(writer, ' ');
 			writeStr(writer, _operator);
-			writeStatic(writer, " ");
+			writeChar(writer, ' ');
 			writeArg(1);
+			writeChar(writer, ')');
 		};
 
 		auto binaryOperator = [&](const CStr s) -> void {
@@ -644,6 +643,19 @@ namespace {
 				writeArg(0);
 				break;
 
+			case BuiltinFunKind::bitShiftLeftInt32:
+				// TODO: does this wrap?
+				binaryOperator("<<");
+				break;
+
+			case BuiltinFunKind::bitShiftRightInt32:
+				// TODO: does this wrap?
+				binaryOperator(">>");
+				break;
+
+			case BuiltinFunKind::bitwiseAndInt16:
+			case BuiltinFunKind::bitwiseAndInt32:
+			case BuiltinFunKind::bitwiseAndInt64:
 			case BuiltinFunKind::bitwiseAndNat16:
 			case BuiltinFunKind::bitwiseAndNat32:
 			case BuiltinFunKind::bitwiseAndNat64:
@@ -686,6 +698,8 @@ namespace {
 				break;
 
 			// TODO: int operators don't wrap in c++!
+			case BuiltinFunKind::wrapAddInt16:
+			case BuiltinFunKind::wrapAddInt32:
 			case BuiltinFunKind::wrapAddInt64:
 				binaryOperator("+");
 				break;
@@ -723,7 +737,10 @@ namespace {
 			case BuiltinFunKind::toNatFromNat32:
 			case BuiltinFunKind::toNatFromPtr:
 			case BuiltinFunKind::unsafeNat64ToInt64:
+			case BuiltinFunKind::unsafeNat64ToNat16:
 			case BuiltinFunKind::unsafeNat64ToNat32:
+			case BuiltinFunKind::unsafeInt64ToInt16:
+			case BuiltinFunKind::unsafeInt64ToInt32:
 			case BuiltinFunKind::unsafeInt64ToNat64:
 				writeCastToType(writer->writer, e.returnType());
 				writeArg(0);
@@ -831,13 +848,59 @@ namespace {
 				default:
 					assert(0);
 			}
-		} else if (e.called->isExtern() && returnsVoid(e.called)) {
-			// Extern functions really return 'void', we need it to be an expression.
-			writeChar(writer, '(');
-			call();
-			writeStatic(writer, ", 0)");
+		} else if (e.called->isExtern()) {
+			if (returnsVoid(e.called)) {
+				//TODO: make `void foo() global` an error in the frontend
+				assert(!e.called->isGlobal());
+				// Extern functions really return 'void', we need it to be an expression.
+				writeChar(writer, '(');
+				call();
+				writeStatic(writer, ", 0)");
+			} else if (e.called->isGlobal())
+				writeStr(writer, e.called->mangledName());
+			else
+				call();
 		} else
 			call();
+	}
+
+	void writeAllocNBytes(Writer* writer, const ConcreteFun* alloc, const size_t nBytes) {
+		assert(alloc->needsCtx); // The allocator function uses the ctx to allocate
+		writeStr(writer, alloc->mangledName());
+		writeStatic(writer, "(_ctx, ");
+		writeNat(writer, nBytes);
+		writeChar(writer, ')');
+	}
+
+	void writeCreateArr(WriterWithIndent* writer, const ConcreteExpr::CreateArr e) {
+		// (arr = arr_foo{3, _alloc(ctx, 100)},
+		//  arr.data[0] = a,
+		//  arr.data[1] = b,
+		//  arr.data[2] = c,
+		//  arr)
+		writeChar(writer, '(');
+		const ConcreteLocal* local = e.local;
+		writeLocalAssignment(writer->writer, local);
+		writeCastToValueType(writer->writer, e.arrType);
+		writeStatic(writer, "{ ");
+		writeNat(writer->writer, size(e.args));
+		writeStatic(writer, ", (");
+		writeType(writer->writer, e.elementType);
+		writeStatic(writer, "*) ");
+		writeAllocNBytes(writer->writer, e.alloc, e.sizeBytes());
+		writeStatic(writer, " }");
+		//TODO: withIndex helper
+		for (const size_t i : Range{size(e.args)}) {
+			writeStatic(writer, ", ");
+			writeLocalRef(writer->writer, local);
+			writeStatic(writer, ".data[");
+			writeNat(writer->writer, i);
+			writeStatic(writer, "] = ");
+			writeConstantOrExpr(writer, at(e.args, i));
+		}
+		writeStatic(writer, ", ");
+		writeLocalRef(writer->writer, local);
+		writeChar(writer, ')');
 	}
 
 	//TODO:MOVE?
@@ -853,15 +916,11 @@ namespace {
 				unreachable<void>();
 			},
 			[&](const ConcreteExpr::Alloc e) {
-				const ConcreteFun* alloc = e.alloc;
-				assert(alloc->needsCtx); // The allocator function uses the ctx to allocate
 				writeStatic(writer, "_init");
 				writeStr(writer->writer, type.mustBePointer()->mangledName);
 				writeStatic(writer, "(");
-				writeStr(writer, alloc->mangledName());
-				writeStatic(writer, "(_ctx, ");
-				writeNat(writer->writer, type.mustBePointer()->sizeBytes());
-				writeStatic(writer, "), ");
+				writeAllocNBytes(writer->writer, e.alloc, type.mustBePointer()->sizeBytes());
+				writeStatic(writer, ", ");
 				writeConcreteExpr(writer, *e.inner);
 				writeStatic(writer, ")");
 			},
@@ -878,8 +937,8 @@ namespace {
 				writeConstantOrExpr(writer, e.elze);
 				decrIndent(writer);
 			},
-			[&](const ConcreteExpr::CreateArr) {
-				todo<void>("how to alloc array?");
+			[&](const ConcreteExpr::CreateArr e) {
+				writeCreateArr(writer, e);
 			},
 			[&](const ConcreteExpr::CreateRecord e) {
 				writeCastToType(writer->writer, type);
@@ -1024,7 +1083,8 @@ namespace {
 			writeType(writer, fun->returnType());
 		writeChar(writer, ' ');
 		writeStr(writer, fun->mangledName());
-		writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
+		if (!fun->isGlobal())
+			writeSigParams(writer, fun->needsCtx, fun->closureParam, fun->paramsExcludingCtxAndClosure());
 	}
 
 	void writeConcreteFunDeclaration(Writer* writer, const ConcreteFun* fun) {

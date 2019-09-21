@@ -1,4 +1,4 @@
-import .arr-utils .bootstrap
+import .arr-utils .bootstrap .exceptions .number-utils
 
 key-value-pair<?k, ?v> record
 	key ?k
@@ -8,6 +8,9 @@ dict<?k, ?v> record
 	keys arr ?k
 	values arr ?v
 
+empty? bool(d dict ?k ?v)
+	d.keys empty?
+
 empty-dict dict ?k ?v()
 	| TODO: should be able to infer type arguments
 	new empty-arr<?k>, empty-arr<?v>
@@ -16,7 +19,7 @@ mut-dict<?k, ?v> record mut
 	keys mut-arr ?k
 	values mut-arr ?v
 
-empty-mut-dict mut-dict ?k ?v()
+new-mut-dict mut-dict ?k ?v()
 	| TODO: should be able to infer type arguments -- worked when there was only one field...
 	new new-mut-arr<?k>, new-mut-arr<?v>
 
@@ -59,11 +62,24 @@ has? bool(d dict ?k ?v, key ?k) data<?k>
 has? bool(d mut-dict ?k ?v, key ?k) trusted data<?k>
 	d.unsafe-as-dict has? key
 
+add void(m mut-dict ?k ?v, pair key-value-pair ?k ?v) data<?k>
+	m add pair.key, pair.value
+
 add void(m mut-dict ?k ?v, key ?k, value ?v) data<?k>
 	forbid: m has? key
-	m.keys add key
-	m.values add value
+	m.keys push key
+	m.values push value
 
 map-values dict ?k ?v-out(d dict ?k ?v-in, mapper fun-mut1 ?v-out ?v-in)
 	new-values = d.values map mapper
 	new d.keys, new-values
+
+each void(d dict ?k ?v, f fun-mut2 void ?k ?v)
+	when
+		d empty?
+			pass
+		else
+			f call d.keys.first, d.values.first
+			| TODO: type argument to 'new' should be unnecessary
+			(new<dict<?k, ?v>> d.keys.tail, d.values.tail) each f
+

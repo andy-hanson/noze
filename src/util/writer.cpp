@@ -37,6 +37,10 @@ void writeEscapedChar(Writer* writer, const char c) {
 		case '\0':
 			writeStatic(writer, "\\0");
 			break;
+		// TODO: handle other special characters like this one
+		case '\x1b':
+			writeStatic(writer, "\\x1b");
+			break;
 		default:
 			writeChar(writer, c);
 			break;

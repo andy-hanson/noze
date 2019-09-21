@@ -1,4 +1,4 @@
-import .bootstrap .os
+import .bootstrap .posix
 
 region atomic
 
@@ -42,6 +42,8 @@ acquire-lock-recur void(l lock, n-tries nat) noctx unsafe
 
 yield-thread void() noctx unsafe
 	err = pthread-yield
+	| TODO: remove this. I'm using this to reduce the number of recurisve calls in run-tests.
+	thousand usleep
 	hard-assert: err zero?
 
 release-lock void(l lock) noctx unsafe
@@ -70,8 +72,6 @@ last-checked alias
 
 get-last-checked last-checked(c condition) noctx
 	c.value
-
-usleep void(micro-seconds nat) extern
 
 | TODO:MOVE
 sleep-ms-sync void(ms nat) noctx

@@ -31,6 +31,7 @@ namespace {
 			case '<':
 			case '>':
 			case '=':
+			case '!':
 				return True;
 			default:
 				return False;
@@ -66,20 +67,28 @@ namespace {
 		return ExpressionToken{NameAndRange{range(lexer, begin), getSymFromOperator(lexer->allSymbols, name)}};
 	}
 
+	size_t toHexDigit(const char c) {
+		if ('0' <= c && c <= '9')
+			return c - '0';
+		else if ('a' <= c && c <= 'f')
+			return 10 + c - 'a';
+		else
+			return todo<const size_t>("parse diagnostic -- bad hex digit");
+	}
+
 	const Str takeStringLiteralAfterQuote(Lexer* lexer) {
 		const CStr begin = lexer->ptr;
-		size_t nEscapes = 0;
+		size_t nEscapedCharacters = 0;
 		// First get the max size
 		while (*lexer->ptr != '"') {
 			if (*lexer->ptr == '\\') {
-				nEscapes++;
-				// Not ending at an escaped quote
 				lexer->ptr++;
+				nEscapedCharacters += (*lexer->ptr == 'x' ? 3 : 1);
 			}
 			lexer->ptr++;
 		}
 
-		const size_t size = (lexer->ptr - begin) - nEscapes;
+		const size_t size = (lexer->ptr - begin) - nEscapedCharacters;
 		MutStr res = newUninitializedMutArr<const char>(lexer->arena, size);
 
 		size_t outI = 0;
@@ -89,6 +98,16 @@ namespace {
 				lexer->ptr++;
 				const char c = [&]() {
 					switch (*lexer->ptr) {
+						case 'x': {
+							// Take two more
+							lexer->ptr++;
+							const char a = *lexer->ptr;
+							lexer->ptr++;
+							const char b = *lexer->ptr;
+							const size_t na = toHexDigit(a);
+							const size_t nb = toHexDigit(b);
+							return (char) (na * 16 + nb);
+						}
 						case '"':
 							return '"';
 						case 'n':
@@ -180,12 +199,6 @@ namespace {
 		}
 	}
 
-	void takeIndentAfterNewline(Lexer* lexer) {
-		const int delta = skipLinesAndGetIndentDelta(lexer);
-		if (delta != 1)
-			throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedIndent{}});
-	}
-
 	struct StrAndIsOperator {
 		const Str str;
 		const SourceRange range;
@@ -244,6 +257,7 @@ namespace {
 			case shortSymAlphaLiteralValue("else"):
 			case shortSymAlphaLiteralValue("export"):
 			case shortSymAlphaLiteralValue("extern"):
+			case shortSymAlphaLiteralValue("global"):
 			case shortSymAlphaLiteralValue("import"):
 			case shortSymAlphaLiteralValue("match"):
 			case shortSymAlphaLiteralValue("mut"):
@@ -295,6 +309,11 @@ const NameAndRange takeNameAndRange(Lexer* lexer)  {
 	return NameAndRange{range(lexer, begin), name};
 }
 
+const Str takeQuotedStr(Lexer* lexer) {
+	take(lexer, '"');
+	return takeStringLiteralAfterQuote(lexer);
+}
+
 const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 	const CStr begin = lexer->ptr;
 	const char c = next(lexer);
@@ -341,6 +360,11 @@ const ExpressionToken takeExpressionToken(Lexer* lexer)  {
 			else
 				return throwUnexpected<const ExpressionToken>(lexer);
 	}
+}
+
+void skipShebang(Lexer* lexer) {
+	if (tryTake(lexer, "#!"))
+		skipRestOfLine(lexer);
 }
 
 void skipBlankLines(Lexer* lexer)  {
@@ -406,6 +430,12 @@ NewlineOrIndent tryTakeIndentAfterNewline(Lexer* lexer) {
 		default:
 			return todo<const NewlineOrIndent>("diagnostic");
 	}
+}
+
+void takeIndentAfterNewline(Lexer* lexer) {
+	const int delta = skipLinesAndGetIndentDelta(lexer);
+	if (delta != 1)
+		throwAtChar<void>(lexer, ParseDiag{ParseDiag::ExpectedIndent{}});
 }
 
 size_t takeNewlineOrDedentAmount(Lexer* lexer) {

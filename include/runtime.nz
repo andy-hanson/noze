@@ -1,112 +1,18 @@
 | .str-utils for c-str.to-str
 | TODO: don't import .io or .number-utils
-import .arr-utils .bootstrap .cell .gc .io .mut-bag .number-utils .os .str-utils .thread-utils
-
-| Treated specially by the compiler
-rt-main int32(argc int32, argv ptr c-str, user-main-ptr fun-ptr2 fut<int32> ctx arr<str>) trusted noctx summon
-	| TODO: detect # hardware processors to use for n-threads
-	n-threads = two as<nat>
-	gctx-by-val = new<by-val<global-ctx>>
-		lk. new-lock
-		vats. empty-arr<vat>
-		n-live-threads. n-threads
-		may-be-work-to-do. new-condition
-		is-shut-down. false
-	gctx = gctx-by-val ref-of-val
-	vat-by-val = new-vat: gctx, zero, n-threads
-	vat = vat-by-val ref-of-val
-
-	vats = new<arr<vat>> one, vat.ptr-to
-
-	gctx.vats := vats
-
-	| Before we start the engine, add a task.
-	| Create a ctx manually so we can call functions that need it when creating the task
-	ctx-by-val = new-ctx: gctx, vat, zero
-	ctx = ctx-by-val ref-of-val
-	| TODO: just 'as'
-	add = &add-first-task as-non-const<fun3<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>>>
-	args = new<arr<c-str>> argc.to-int.unsafe-to-nat, argv
-	ctx call-with-ctx<void, vat, arr<c-str>, fun-ptr2<fut<int32>, ctx, arr<str>>> add, vat, args, user-main-ptr
-
-	n-threads run-threads gctx, &thread-function
-
-	| TODO: return number from main fn
-	zero
-
-thread-args<?t> record
-	by-ref
-	fun fun-ptr2 void nat ?t
-	thread-id nat
-	arg ?t
-
-| Each thread will get the thread ID, and the common arguments.
-| TODO: ?t must be a reference type
-run-threads void(n-threads nat, arg ?t, fun fun-ptr2 void nat ?t) noctx unsafe
-	threads = n-threads unmanaged-alloc-elements<pthread-t>
-	thread-args = n-threads unmanaged-alloc-elements<by-val<thread-args<?t>>>
-
-	zero run-threads-recur n-threads, threads, thread-args, arg, fun
-	zero join-threads-recur n-threads, threads
-
-	threads unmanaged-free
-	thread-args unmanaged-free
-
-run-threads-recur void
-	i nat
-	n-threads nat
-	threads ptr pthread-t
-	thread-args ptr by-val<thread-args<?t>>
-	arg ?t
-	fun fun-ptr2 void nat ?t
-spec
-	noctx
-	unsafe
-body
-	when
-		i == n-threads
-			pass
-		else
-			thread-arg-ptr = thread-args + i
-			thread-arg-ptr set new fun, i, arg
-			thread-ptr = threads + i
-			err = thread-ptr.as-cell pthread-create null, &thread-fun<?t>, thread-arg-ptr.as-any-ptr
-			when
-				err zero?
-					i.noctx-incr run-threads-recur n-threads, threads, thread-args, arg, fun
-				err == eagain
-					| TODO: warn and make do with the threads it does let us create (so long as there's at least one)
-					todo
-				else
-					| Fatal error
-					todo
-
-thread-fun<?t> any-ptr(args-ptr any-ptr) noctx unsafe
-	args = args-ptr as-ref<thread-args<?t>>
-	args.fun call args.thread-id, args.arg
-	null
-
-join-threads-recur void(i nat, n-threads nat, threads ptr pthread-t) noctx unsafe
-	when
-		i == n-threads
-			pass
-		else
-			(threads + i).deref join-one-thread
-			i.noctx-incr join-threads-recur n-threads, threads
-
-join-one-thread void(tid pthread-t) noctx unsafe
-	thread-return = new<by-val<cell<any-ptr>>> null
-	err = tid pthread-join thread-return.ref-of-val
-	when
-		err zero?
-			pass
-		err == einval
-			todo
-		err == esrch
-			todo
-		else
-			todo
-	hard-assert: thread-return.ref-of-val.get == null
+import
+	.arr-utils
+	.bootstrap
+	.cell
+	.exceptions
+	.fut-low-level
+	.gc
+	.io
+	.mut-bag
+	.number-utils
+	.posix
+	.str-utils
+	.thread-utils
 
 get-gctx global-ctx() unsafe
 	get-ctx.gctx-ptr as-ref
@@ -132,6 +38,9 @@ global-ctx record mut
 	n-live-threads mut nat
 	may-be-work-to-do by-val condition
 	is-shut-down mut bool
+	| Set to true the first time the default exception handler is invoked.
+	| Can never be unset.
+	any-unhandled-exceptions? mut bool
 
 vat record mut
 	gctx global-ctx
@@ -148,6 +57,10 @@ vat record mut
 
 	| not protected by tasks-lock, thread-safe on its own
 	next-actor-id by-val thread-safe-counter
+
+	| When there's an exception, we'll enqueue this as a task.
+	| Default is to print it and set `gctx.any-unhandled-exceptions`
+	exception-handler mut fun-mut1 void exception
 
 
 task record mut
@@ -180,6 +93,15 @@ new-vat by-val vat(gctx global-ctx, id vat-id, max-threads nat) noctx unsafe
 		currently-running-actors. actors
 		n-threads-running. zero
 		next-actor-id. new-thread-safe-counter
+		exception-handler. &default-exception-handler
+
+default-exception-handler void(e exception) summon unsafe
+	print-err-sync-no-newline: "uncaught exception: "
+	print-err-sync: e.message.empty? if "<<empty message>>", e.message
+	get-gctx.any-unhandled-exceptions? := true
+
+set-this-vats-exception-handler void(exception-handler fun-mut1 void exception) summon trusted
+	get-cur-vat.exception-handler := exception-handler
 
 | Unsafe because you must ensure 'task' is safe to run in parallel.
 add-task void(v vat, t task) unsafe
@@ -192,24 +114,17 @@ add-task void(v vat, t task) unsafe
 
 	v.gctx.may-be-work-to-do.ref-of-val broadcast
 
-| TODO: if mut-bag-node is in unmanaged memory, don't need ctx for this
-add-first-task void(vat vat, args arr c-str, user-main-ptr fun-ptr2 fut<int32> ctx arr<str>) unsafe
-	| TODO: store the main fut somewhere so we can test for errors
-	vat add-task new<task> vat.new-actor-id, \
-		| TODO: &to-str (requires overload resolution in funaslambda)
-		real-args = args map {it.to-str}
-		drop: user-main-ptr call get-ctx, real-args
-
-
 thread-local-stuff record mut
 	by-ref
-	ignore-me nat
+	| Reusing the exception ctx to avoid needing to allocate it every time
+	exception-ctx exception-ctx
 
-thread-function void(thread-id nat, gctx global-ctx) noctx unsafe
-	tls = as<by-val<thread-local-stuff>>: new zero
+thread-function void(thread-id nat, gctx global-ctx) noctx unsafe summon
+	ectx = new-exception-ctx
+	tls = as<by-val<thread-local-stuff>>: new ectx.ref-of-val
 	thread-function-recur: thread-id, gctx, tls.ref-of-val
 
-thread-function-recur void(thread-id nat, gctx global-ctx, tls thread-local-stuff) noctx unsafe
+thread-function-recur void(thread-id nat, gctx global-ctx, tls thread-local-stuff) noctx unsafe summon
 	when
 		gctx is-shut-down
 			gctx.lk.ref-of-val acquire-lock
@@ -243,17 +158,18 @@ thread-function-recur void(thread-id nat, gctx global-ctx, tls thread-local-stuf
 			| Do another task
 			thread-function-recur: thread-id, gctx, tls
 
-new-ctx by-val ctx(gctx global-ctx, vat vat, actor-id actor-id) noctx unsafe
+new-ctx by-val ctx(gctx global-ctx, tls thread-local-stuff, vat vat, actor-id actor-id) noctx unsafe
 	new
 		gctx-ptr. gctx.as-any-ptr
 		vat-id. vat.id
 		actor-id. actor-id
 		gc-ctx-ptr. vat.gc.ref-of-val.get-gc-ctx.as-any-ptr
+		exception-ctx-ptr. tls.exception-ctx.as-any-ptr
 
 return-ctx void(c ctx) noctx unsafe
 	c.gc-ctx-ptr.as-ref return-gc-ctx
 
-do-task void(gctx global-ctx, tls thread-local-stuff, chosen-task chosen-task) noctx unsafe
+do-task void(gctx global-ctx, tls thread-local-stuff, chosen-task chosen-task) noctx unsafe summon
 	vat = chosen-task.vat
 	match chosen-task.task-or-gc
 		none
@@ -264,7 +180,9 @@ do-task void(gctx global-ctx, tls thread-local-stuff, chosen-task chosen-task) n
 			gctx.may-be-work-to-do.ref-of-val broadcast
 		some some-task
 			task = some-task.value
-			ctx = new-ctx: gctx, vat, task.actor-id
+			ctx = new-ctx: gctx, tls, vat, task.actor-id
+			| TODO: parens should not be necessary
+			| ctx.ref-of-val call-with-ctx (&do-task-with-ctx).as<fun-mut1<void, fun-mut0<void>>>, task.fun
 			ctx.ref-of-val call-with-ctx task.fun
 			vat.tasks-lock.ref-of-val acquire-lock
 			vat.currently-running-actors.ref-of-val noctx-must-remove-unordered task.actor-id
@@ -276,6 +194,12 @@ do-task void(gctx global-ctx, tls thread-local-stuff, chosen-task chosen-task) n
 	vat.n-threads-running := vat.n-threads-running.noctx-decr
 	vat.tasks-lock.ref-of-val release-lock
 
+| do-task-with-ctx void(task-fun fun-mut0 void) unsafe summon
+| 	{task-fun call} catch \exception
+| 		{get-cur-vat.exception-handler call exception} catch \exception-handler-exception
+| 			| TODO: can print throw exceptions? Should have an unfailable version.
+| 			print-err-sync: "exception handler threw an exception!"
+| 			print-err-sync: exception-handler-exception.message
 
 task-or-gc alias
 	opt task
@@ -390,7 +314,7 @@ find-and-remove-first-doable-task-recur opt task-and-nodes(vat vat, opt-node opt
 			| shouldn't be starting a new task anyway.)
 			actors = vat.currently-running-actors ref-of-val
 			task-ok = when
-				actors contains task.actor-id
+				actors contains? task.actor-id
 					false
 				else
 					actors push-capacity-must-be-sufficient task.actor-id

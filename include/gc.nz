@@ -1,4 +1,4 @@
-import .bootstrap .thread-utils
+import .bootstrap .posix .thread-utils
 
 gc record mut
 	lk by-val lock
@@ -67,15 +67,12 @@ gc-alloc any-ptr(gc gc, size nat)
 		some s
 			s.value
 
-malloc any-ptr(size nat) unsafe extern
-free void(p any-ptr) unsafe extern
-
 alloc any-ptr(size nat) unsafe
 	get-gc gc-alloc size
 
 unmanaged-alloc-bytes any-ptr(size nat) noctx unsafe
 	res = size malloc
-	hard-forbid: res == null
+	hard-forbid: res null?
 	res
 
 unmanaged-alloc-elements ptr ?t(size-elements nat) noctx unsafe

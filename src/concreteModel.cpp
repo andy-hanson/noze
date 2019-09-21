@@ -70,18 +70,11 @@ ConcreteExpr::LambdaToDynamic::LambdaToDynamic(const ConcreteFun* _fun, const Co
 }
 
 const Constant* ConstantKind::Ptr::deref() const {
-	return at(array->kind.asArray().elements(), index.value);
+	return at(array->elements, index);
 }
 
 void debugWriteConstant(Writer* writer, const Constant* c) {
 	c->kind.match(
-		[&](const ConstantKind::Array a) {
-			writeChar(writer, '[');
-			writeWithCommas(writer, a.elements(), [&](const Constant* element) {
-				debugWriteConstant(writer, element);
-			});
-			writeChar(writer, ']');
-		},
 		[&](const Bool b) {
 			writeBool(writer, b);
 		},

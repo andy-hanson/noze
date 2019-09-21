@@ -16,12 +16,19 @@ int spawnAndWaitSync(
 	const Arr<const Str> args,
 	const Environ environ);
 
+// Replaces this process with the given executable.
+// DOES NOT RETURN!
+void replaceCurrentProcess(
+	const AbsolutePath executable,
+	const Arr<const Str> args,
+	const Environ environ);
+
 struct CommandLineArgs {
-	const AbsolutePath cwd;
 	const AbsolutePath pathToThisExecutable;
 	const Arr<const Str> args;
 	const Environ environ;
 };
-const CommandLineArgs parseArgs(Arena* arena, const int argc, CStr const* const argv);
+const CommandLineArgs parseCommandLineArgs(Arena* arena, const int argc, CStr const* const argv);
 
+const AbsolutePath getCwd(Arena* arena);
 const Environ getEnviron(Arena* arena);

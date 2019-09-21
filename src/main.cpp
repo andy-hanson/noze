@@ -48,9 +48,5 @@ namespace {
 
 int main(const int argc, CStr const* const argv) {
 	setLimits();
-
-	if (true)
-		return cli(argc, argv);
-	else
-		return 0;
+	return cli(argc, argv);
 }

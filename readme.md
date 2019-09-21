@@ -3,39 +3,27 @@ The readme describes the repository as a whole.
 See [doc/language.md](doc/language.md) for a description of the language
 and [doc/implementation.md](doc/implementation.md) for an overview of the code.
 
-WARN: The language is not usable yet. Most programs you might try writing will result in a compiler crash on a `todo`.
+WARN: The language is not usable yet!
+Most programs you might try writing will result in a compiler crash on a `todo`.
 
 
-### Building
+### Build and install
 
-First set up libFIRM:
+The only prerequisite for building is a C++ compiler aliased to `c++`.
 
-```sh
-cd libfirm
-make
-cd ..
-```
+Build with `./build.sh`.
 
-You can then do a simple build using `./build-once.sh`, or incremental builds using `scons`.
-You can do an optimized build using `./build-optimized.sh` --
-this is not recommended as it removes assertions, making it less safe.
+This builds libFIRM, then builds noze itself.
 (libFIRM is currently not used at runtime, noze compiles to C instead.
 But libfirm support is planned and you can't build without it.)
 
+Then add `bin` to your PATH.
+WARN: `bin/node` depends on `include` and `libfirm` being in its grandparent directory.
 
 
-### Running
+### Usage
 
-
-* `noze build foo.nz` compiles the file `foo.nz` and either prints compile errors,
-  or writes to C source code `foo.c` and an executable file `foo`.
-* `noze run foo.nz` does the same as build, then runs the resulting executable (if the build succeeded).
-* `noze run foo.nz -- arg` provides an argument `arg` to the program. The `--` is mandatory.
-* `noze test` is shorthand to run the test program in `test/a.nz`.
-
-The directory of the file you pass in must be the root of the whole program --
-you can't import from any parent directory of that.
-(Excluding the modules in `noze/include` which are always available.)
+See `noze help` for all commands.
 
 
 ### Editing

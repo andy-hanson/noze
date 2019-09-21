@@ -1,15 +1,9 @@
-# CMake build directory
-build
-# Built executable from ./build.sh
-noze
-noze-optimized
+# Ignore extensionless files (executables)
+# https://stackoverflow.com/questions/19023550/how-do-i-add-files-without-dots-in-them-all-extension-less-files-to-the-gitign
+*
+!/**/
+!*.*
 
-# Ignore executables in test/, but do include the .nz and .c files
-# (cpp files are to ensure we know when compiler's output changes)
-test
-!test/**/*.nz
-!test/**/*.c
-
-# scons cache
+# Ignore scons cache
 .sconsign.dblite
 *.o
